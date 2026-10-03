@@ -274,7 +274,7 @@ public final class ClientControls {
                         DevelopmentWorld.open(next);
                     }
                     case "vanilla_chat" -> client.setScreen(new ChatScreen(""));
-                    case "mod_settings" -> client.setScreen(new TooManyAgentsSettingsScreen(null, agents));
+                    case "mod_settings" -> client.setScreen(TooManyAgentsSettingsScreen.open(null));
                     case "archive_view" -> client.setScreen(new toomanyagents.ui.ArchiveScreen(agents, null));
                     case "inventory" -> {
                         if (agentId == null || agentId.isBlank()) throw new IllegalArgumentException("agentId is required");

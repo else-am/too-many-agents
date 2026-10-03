@@ -38,6 +38,8 @@ public final class ProjectScreen extends SettingsFormScreen {
         return new JsonObject();
     }
     // The world's own project keeps its managed folder.
+    @Override protected String heading(){return projectId.isBlank()?"New project":name.isBlank()?"Project settings":name;}
+    public String projectId(){return projectId;}
     private boolean automatic(){return !text(project(),"minecraftWorldId").isBlank();}
 
     @Override protected void init(){
@@ -74,7 +76,7 @@ public final class ProjectScreen extends SettingsFormScreen {
         choosing=true;rebuildForm();
         String start=primary&&!directory.isBlank()?directory:System.getProperty("user.home");
         CompletableFuture.supplyAsync(()->TinyFileDialogs.tinyfd_selectFolderDialog(primary?"Primary folder":"Additional folder",start+"/"))
-            .whenComplete((path,error)->screenExecutor.execute(()->{
+            .whenComplete((path,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
                 choosing=false;
                 String folder=path==null?"":path.replaceAll("/+$","");
                 if(!folder.isBlank()&&primary)directory=folder;
@@ -120,26 +122,31 @@ public final class ProjectScreen extends SettingsFormScreen {
         }
         boolean creating=projectId.isBlank();
         // A new project stays open so its place can be set up next.
-        run(req,r->{if(creating){projectId=r.has("projectId")?text(r,"projectId"):text(r,"id");minecraft.setScreen(edit(access,parent,projectId));}else minecraft.setScreen(parent);});
+        run(req,r->{
+            if(!creating){leave(parent);return;}
+            String id=r.has("projectId")?text(r,"projectId"):text(r,"id");
+            if(!docked()){minecraft.setScreen(edit(access,parent,id));return;}
+            projectId=id;saved=fields();
+        });
     }
     // Removes the registration only; folders stay on disk.
     private void remove(){
         if(!confirmRemove){confirmRemove=true;rebuildForm();return;}
-        var req=request("remove");req.addProperty("projectId",projectId);run(req,r->minecraft.setScreen(parent));
+        var req=request("remove");req.addProperty("projectId",projectId);run(req,r->leave(parent));
     }
     private void resolve(String choice){var req=request("world-resolve");req.addProperty("choice",choice);run(req,r->{});}
     private void run(JsonObject req,Consumer<JsonObject> done){
         busy=true;feedback="Working…";rebuildForm();
-        access.projectCommand(req).whenComplete((result,error)->screenExecutor.execute(()->{
+        access.projectCommand(req).whenComplete((result,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             busy=false;data=access.projects();feedback=error==null?"":AgentModels.error(error);
             if(error==null)done.accept(result);
-            if(minecraft.screen==this)rebuildForm();
+            if(docked()||minecraft.screen==this)rebuildForm();
         }));
     }
     // Edits save on the way out; leaving a new project unsubmitted discards it.
     @Override public void onClose(){
         if(busy)return;
-        if(projectId.isBlank()||world().has("needsDecision")&&world().get("needsDecision").getAsBoolean()||fields().equals(saved))minecraft.setScreen(parent);
+        if(projectId.isBlank()||world().has("needsDecision")&&world().get("needsDecision").getAsBoolean()||fields().equals(saved))leave(parent);
         else save();
     }
 }

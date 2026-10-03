@@ -70,7 +70,7 @@ public final class TooManyAgents {
     }
 
     public TooManyAgents(IEventBus modBus, ModContainer container) {
-        container.registerExtensionPoint(IConfigScreenFactory.class, (IConfigScreenFactory) (mod, parent) -> new TooManyAgentsSettingsScreen(parent));
+        container.registerExtensionPoint(IConfigScreenFactory.class, (IConfigScreenFactory) (mod, parent) -> TooManyAgentsSettingsScreen.open(parent));
         AgentInventoryMenu.MENUS.register(modBus);
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));

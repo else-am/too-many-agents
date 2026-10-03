@@ -34,12 +34,15 @@ abstract class SettingsFormScreen extends Screen {
     private boolean draggingScroll;
     // Set while the form is a pane beside or over a chat rather than its own screen.
     private Runnable close;
-    private boolean side;
+    private boolean side, header;
 
     protected SettingsFormScreen(Component title) { super(title); }
 
     /** Shows the form as a bare pane: no title or Done; closing runs the callback instead of changing screens. */
     public void dock(Runnable close) { this.close = close; }
+    /** A docked form that stands in for the chat, with its own heading and close button. */
+    public void dockWithHeader(Runnable close) { this.close = close; header = true; }
+    protected String heading() { return title.getString(); }
     protected boolean docked() { return close != null; }
     /** Side panes use tighter padding than a pane covering a chat. */
     public void side(boolean value) { if (side != value) { side = value; if (minecraft != null) rebuildForm(); } }
@@ -50,10 +53,12 @@ abstract class SettingsFormScreen extends Screen {
 
     protected void begin() {
         closeDropdown(); controls.clear(); labels.clear(); rowY = 0;
-        if (docked()) { left = side ? 4 : 10; contentWidth = Math.max(60, width - left - (side ? 12 : 18)); formTop = 6; formBottom = height - 16; }
+        if (docked()) { left = side ? 4 : 10; contentWidth = Math.max(60, width - left - (side ? 12 : 18)); formTop = header ? 36 : 6; formBottom = height - 16; }
         else { contentWidth = Math.min(600, width - 32); left = (width - contentWidth) / 2; formTop = 34; formBottom = height - 48; }
         int labelWidth = Math.min(164, contentWidth * 2 / 5);
         controlX = left + labelWidth + 12; controlWidth = contentWidth - labelWidth - 12;
+        // The chat's close button sits in the same place.
+        if (header) addRenderableWidget(Button.builder(Component.literal("×"), b -> onClose()).bounds(left+contentWidth-20,7,20,20).build());
     }
 
     /** Minecraft's centered Done; screens save as they close. */
@@ -243,6 +248,7 @@ abstract class SettingsFormScreen extends Screen {
         layout();
         super.render(g,x,y,delta);
         if (!docked()) g.drawCenteredString(font,title,width/2,12,0xFFFFFF);
+        if (header) g.drawString(font,heading(),left,12,0xFFFFFF);
         g.fill(left-8,formTop-5,left+contentWidth+8,side?height:Math.min(formBottom,formTop+rowY)+3,0xA0101010);
         g.enableScissor(left-2,formTop,left+contentWidth+2,formBottom);
         for(var label:labels) {

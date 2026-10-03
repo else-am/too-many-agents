@@ -35,6 +35,8 @@ public final class InventoryAgentSidebar extends Screen {
     private final Screen parent;
     private final Consumer<String> select;
     private final Consumer<String> newAgent;
+    private final Consumer<String> editProject;
+    private final Runnable openSettings;
     private final Set<String> collapsed = new HashSet<>();
     private final Set<String> minecraftProjects = new HashSet<>();
     private final Map<String, JsonObject> projects = new LinkedHashMap<>();
@@ -51,12 +53,15 @@ public final class InventoryAgentSidebar extends Screen {
     private boolean providerMenu;
     private ProviderUsagePopup usagePopup;
 
-    public InventoryAgentSidebar(AgentUiAccess access, Screen parent, Consumer<String> select, Consumer<String> newAgent) {
+    /** editProject receives a project id, or "" to create one. */
+    public InventoryAgentSidebar(AgentUiAccess access, Screen parent, Consumer<String> select, Consumer<String> newAgent, Consumer<String> editProject, Runnable openSettings) {
         super(Component.literal("Agents"));
         this.access = access;
         this.parent = parent;
         this.select = select;
         this.newAgent = newAgent;
+        this.editProject = editProject;
+        this.openSettings = openSettings;
     }
 
     public void selected(String id) {
@@ -117,7 +122,7 @@ public final class InventoryAgentSidebar extends Screen {
         });
         providerButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Default provider for new chats")));
         addRenderableWidget(Button.builder(Component.literal("New project"), button ->
-            minecraft.setScreen(ProjectScreen.create(access, parent))).bounds(62, 7, width - 73, 20).build());
+            editProject.accept("")).bounds(62, 7, width - 73, 20).build());
         int choiceWidth = Math.min(width - 43, font.width("Claude Code") + font.width("✓ ") + ProviderIcon.SIZE + 24);
         for (String provider : List.of("codex", "claude")) {
             var choice = new Button(36, 33 + providerChoices.size() * 24, choiceWidth - 8, 22,
@@ -148,8 +153,7 @@ public final class InventoryAgentSidebar extends Screen {
         }
         int footerY = height - 33;
         int footerWidth = (width - 26) / 2;
-        addRenderableWidget(footer(10, footerY, footerWidth, "Settings…", () ->
-            minecraft.setScreen(new TooManyAgentsSettingsScreen(parent, access))));
+        addRenderableWidget(footer(10, footerY, footerWidth, "Settings…", openSettings));
         usageButton = addRenderableWidget(footer(16 + footerWidth, footerY, footerWidth, "Usage", () -> {
             setProviderMenu(false);
             usagePopup.toggle();
@@ -520,7 +524,7 @@ public final class InventoryAgentSidebar extends Screen {
         }
 
         @Override public void onPress() {
-            if (edit) minecraft.setScreen(ProjectScreen.edit(access, parent, projectId()));
+            if (edit) editProject.accept(projectId());
             else startAgent(projectId());
         }
 

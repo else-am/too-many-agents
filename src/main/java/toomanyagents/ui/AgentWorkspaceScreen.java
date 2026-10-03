@@ -13,6 +13,7 @@ public final class AgentWorkspaceScreen extends Screen {
     private final String initialAgentId;
     private final JsonObject pointing;
     private Consumer<List<Path>> fileDropHandler;
+    private boolean modSettings;
 
     public AgentWorkspaceScreen(String agentId, JsonObject pointing) {
         super(Component.literal("Agents"));
@@ -20,6 +21,14 @@ public final class AgentWorkspaceScreen extends Screen {
         this.pointing = pointing == null ? null : pointing.deepCopy();
     }
 
+    /** Opens with the mod settings in the chat's place. */
+    public static AgentWorkspaceScreen modSettings() {
+        var screen = new AgentWorkspaceScreen(null, null);
+        screen.modSettings = true;
+        return screen;
+    }
+
+    public boolean opensModSettings() { return modSettings; }
     public String initialAgentId() { return initialAgentId; }
     public JsonObject pointingContext() { return pointing == null ? null : pointing.deepCopy(); }
     public void setFileDropHandler(Consumer<List<Path>> handler) { fileDropHandler = handler; }

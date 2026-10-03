@@ -36,7 +36,10 @@ public final class InventoryAgents {
     private AgentChatScreen chat;
     private String selected;
     private String inventoryTarget, inventoryPending;
-    private Pane left, right, settings, focus, pressed;
+    private Pane left, right, settings, formPane, focus, pressed;
+    // Project or mod settings take the chat's place while open.
+    private SettingsFormScreen form;
+    private boolean pendingModSettings;
     private boolean hostOpen;
     // Settings sit beside the chat when the chat keeps its minimum width; unscaled units.
     private static final int SETTINGS_WIDTH = 400, SETTINGS_MIN_WIDTH = 320, CHAT_MIN_WIDTH = 360;
@@ -95,13 +98,15 @@ public final class InventoryAgents {
         if (screen != client.screen || !supports(screen)) return false;
         if (world != client.level) {
             world = client.level;
-            chats.clear(); drafts.clear(); selected = null; chat = null; parent = null;
+            chats.clear(); drafts.clear(); selected = null; chat = null; parent = null; form = null;
             inventoryTarget = inventoryPending = null;
         }
         if (parent != screen) {
             parent = screen;
-            sidebar = new InventoryAgentSidebar(access.get(), parent, this::open, this::newAgent);
+            sidebar = new InventoryAgentSidebar(access.get(), parent, this::open, this::newAgent, this::openProject, this::openModSettings);
+            if (form instanceof TooManyAgentsSettingsScreen) form = null;
             if (screen instanceof AgentWorkspaceScreen workspace) {
+                pendingModSettings = workspace.opensModSettings();
                 boolean keepDraft = workspace.initialAgentId().isBlank() && chat != null && chat.draft();
                 selected = workspace.initialAgentId().isBlank() ? null : workspace.initialAgentId();
                 if (!keepDraft) chat = selected == null ? null : chats.computeIfAbsent(selected, key -> new AgentChatScreen(access.get(), key));
@@ -130,7 +135,12 @@ public final class InventoryAgents {
             }
             sidebar.selected(selected);
             if (chat != null) chat.dock(parent, this::closeChat, this::toggleInventory);
-            left = right = settings = focus = pressed = null;
+            left = right = settings = formPane = focus = pressed = null;
+        }
+        if (pendingModSettings) {
+            pendingModSettings = false;
+            openModSettings();
+            return true;
         }
         if (screen instanceof AgentWorkspaceScreen) {
             prepareStandalone(screen);
@@ -159,12 +169,14 @@ public final class InventoryAgents {
         int settingsWidth = settingsWidth(rightSpace, scale);
         boolean beside = settingsWidth > 0;
         if (beside) chatWidth = Math.min(chatWidth, rightSpace - settingsWidth);
-        right = chat == null ? null : layout(right, chat, rightEdge + margin, margin, chatWidth, availableHeight, scale);
+        right = chat == null || form != null ? null : layout(right, chat, rightEdge + margin, margin, chatWidth, availableHeight, scale);
+        formPane = form == null ? null : layout(formPane, form, rightEdge + margin, margin,
+            Math.min(rightSpace, Math.round(540 * scale)), availableHeight, scale);
         layoutSettings(rightEdge + margin + chatWidth, beside ? settingsWidth : 0);
         return true;
     }
 
-    private boolean settingsOpen() { return chat != null && chat.settingsPanel() != null; }
+    private boolean settingsOpen() { return form == null && chat != null && chat.settingsPanel() != null; }
 
     /** Width for side settings within the space shared with the chat, or 0 when they must cover the chat. */
     private int settingsWidth(int space, float scale) {
@@ -220,7 +232,8 @@ public final class InventoryAgents {
         left = layout(left, sidebar, x, 8, sidebarWidth, collapsed ? Math.max(12, Math.round(32 * scale)) : height, scale);
         int chatX = x + sidebarWidth + gap;
         int chatWidth = totalWidth - sidebarWidth - gap - (beside ? settingsWidth : 0);
-        right = chat == null ? null : layout(right, chat, chatX, 8, chatWidth, height, scale);
+        right = chat == null || form != null ? null : layout(right, chat, chatX, 8, chatWidth, height, scale);
+        formPane = form == null ? null : layout(formPane, form, chatX, 8, totalWidth - sidebarWidth - gap, height, scale);
         if (focusChat && right != null) focus = right;
         layoutSettings(chatX + chatWidth, beside ? settingsWidth : 0);
     }
@@ -229,10 +242,40 @@ public final class InventoryAgents {
         Minecraft.getInstance().setScreen(new AgentWorkspaceScreen(id, pointing));
     }
 
+    /** Opens a project's settings, or a new project for "", in the chat's place. */
+    private void openProject(String projectId) {
+        showForm(projectId.isBlank() ? ProjectScreen.create(access.get(), parent) : ProjectScreen.edit(access.get(), parent, projectId));
+    }
+
+    private void openModSettings() { showForm(new TooManyAgentsSettingsScreen(parent, access.get())); }
+
+    private void showForm(SettingsFormScreen next) {
+        if (chat != null) chat.closeSettings();
+        var previous = form;
+        next.dockWithHeader(() -> {
+            if (form != next) return;
+            form = null;
+            if (focus == formPane) focus = null;
+            formPane = null;
+            if (prepare(parent) && focus == null) focus = right;
+        });
+        form = next;
+        // An earlier form saves on its way out.
+        if (previous != null) previous.onClose();
+        if (focus != null) focus.screen.setFocused(null);
+        prepare(parent);
+        focus = formPane;
+        parent.setFocused(null);
+    }
+
+    /** Saves and closes the open form; a failed save leaves it open with the error. */
+    private void closeForm() { if (form != null) form.onClose(); }
+
     public void newAgent(String projectId) {
         var client = Minecraft.getInstance();
         if (!supports(client.screen)) openStandalone(null, null);
         if (!prepare(client.screen)) return;
+        closeForm();
         String project = projectId == null || projectId.equals("minecraft") ? "" : projectId;
         if (project.isBlank()) {
             var data = access.get().projects();
@@ -289,6 +332,7 @@ public final class InventoryAgents {
     }
 
     private void open(String id) {
+        closeForm();
         boolean keepInventory = inventoryTarget != null || parent instanceof AgentInventoryScreen;
         selected = id;
         select.accept(id);
@@ -358,13 +402,17 @@ public final class InventoryAgents {
         var client = Minecraft.getInstance();
         if (client.level == null) {
             world = null; parent = null; sidebar = null; chat = null;
-            left = right = settings = focus = pressed = null; selected = null; chats.clear(); drafts.clear();
+            left = right = settings = formPane = focus = pressed = null; selected = null; chats.clear(); drafts.clear(); form = null;
             inventoryTarget = inventoryPending = null;
             return;
         }
         boolean open = prepare(client.screen);
         // Leaving the agent screens saves open settings, once.
-        if (!open && hostOpen && chat != null) chat.closeSettings();
+        if (!open && hostOpen) {
+            if (chat != null) chat.closeSettings();
+            // Mod settings save as they change and stay open across their linked screens.
+            if (form instanceof ProjectScreen) closeForm();
+        }
         hostOpen = open;
         if (!open) {
             if (client.screen == null) inventoryTarget = null;
@@ -380,7 +428,8 @@ public final class InventoryAgents {
         draw(event.getGuiGraphics(), left, event.getMouseX(), event.getMouseY(), event.getPartialTick());
         draw(event.getGuiGraphics(), right, event.getMouseX(), event.getMouseY(), event.getPartialTick());
         draw(event.getGuiGraphics(), settings, event.getMouseX(), event.getMouseY(), event.getPartialTick());
-        if (parent instanceof AgentWorkspaceScreen && chat == null) {
+        draw(event.getGuiGraphics(), formPane, event.getMouseX(), event.getMouseY(), event.getPartialTick());
+        if (parent instanceof AgentWorkspaceScreen && chat == null && form == null) {
             String hint = TooManyAgentsClientSettings.get().sidebarCollapsed()
                 ? "Expand the sidebar to choose an agent" : "Choose an agent to start chatting";
             int start = left == null ? 8 : left.x + left.width + 12;
@@ -403,6 +452,7 @@ public final class InventoryAgents {
         // An open chat picker may extend over covering settings.
         if (right != null && right.contains(x, y) && chat != null && chat.pickerOpen()) return right;
         if (settings != null && settings.contains(x, y)) return settings;
+        if (formPane != null && formPane.contains(x, y)) return formPane;
         return left != null && left.contains(x, y) ? left : right != null && right.contains(x, y) ? right : null;
     }
 
@@ -455,7 +505,7 @@ public final class InventoryAgents {
         // Escape dismisses a picker before leaving the whole screen.
         else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && sidebar.pickerOpen()) sidebar.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
         // Escape in settings closes a dropdown, then the settings themselves.
-        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
+        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && focus != formPane && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
         else focus.screen.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
     }
 
@@ -487,6 +537,7 @@ public final class InventoryAgents {
             if (left != null) describe(left, "sidebar", result, widgets);
             if (right != null) describe(right, "chat", result, widgets);
             if (settings != null) describe(settings, "settings", result, widgets);
+            if (formPane != null) describe(formPane, "form", result, widgets);
             if (parent instanceof AgentWorkspaceScreen) {
                 result.addProperty("sidebarCollapsed", TooManyAgentsClientSettings.get().sidebarCollapsed());
                 if (chat != null) result.add("pointing", chat.pointingContext());
