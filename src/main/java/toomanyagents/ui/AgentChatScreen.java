@@ -29,6 +29,9 @@ public final class AgentChatScreen extends Screen {
     private final List<String> bodies = new ArrayList<>();
     private int catalogVersion;
     private EditBox nameField, bodySearch;
+    // A random starter name clears when the field is first clicked, until something is typed.
+    private String suggestedName = "";
+    private boolean nameSuggested;
     private Button providerButton, bodyButton;
     private List<PickerChoice> bodyChoices;
     private Screen dockParent;
@@ -208,7 +211,14 @@ public final class AgentChatScreen extends Screen {
         this.creationSettings = creationSettings.deepCopy();
         this.created = created;
         readCreationProject();
-        for (String[] defaultValue : new String[][]{{"name", "Agent"}, {"body", "minecraft:villager"}, {"providerId", "codex"}, {"mode", "survival"}, {"projectId", ""}}) {
+        if (AgentModels.text(this.creationSettings, "name").isBlank()) {
+            var taken = new java.util.HashSet<String>();
+            for (var agent : access.worldAgents()) taken.add(AgentModels.text(agent.getAsJsonObject(), "name"));
+            suggestedName = toomanyagents.StarterAgents.name(taken);
+            nameSuggested = true;
+            this.creationSettings.addProperty("name", suggestedName);
+        }
+        for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"providerId", "codex"}, {"mode", "survival"}, {"projectId", ""}}) {
             if (AgentModels.text(this.creationSettings, defaultValue[0]).isBlank()) this.creationSettings.addProperty(defaultValue[0], defaultValue[1]);
         }
         for (String key : new String[]{"cheats", "following", "nativeSubagentsEnabled"}) {
@@ -375,6 +385,7 @@ public final class AgentChatScreen extends Screen {
             var screen=new AgentSettingsScreen(access,returnScreen(),settings(),changes -> {
                 if(draft()){
                     creationSettings=changes.deepCopy();state=creationSettings;readCreationProject();
+                    if(!AgentModels.text(creationSettings,"name").equals(suggestedName))nameSuggested=false;
                     if(nameField!=null)nameField.setValue(AgentModels.text(creationSettings,"name"));
                     models.model=AgentModels.text(creationSettings,"model");models.effort=AgentModels.text(creationSettings,"effort");
                     return java.util.concurrent.CompletableFuture.completedFuture(null);
@@ -387,11 +398,22 @@ public final class AgentChatScreen extends Screen {
             refreshButtons();
         }).bounds(left+contentWidth-(compact?80:106),controlsY,80,20).build());
         if (draft()) {
-            nameField = addRenderableWidget(new EditBox(font, left, 7, contentWidth - 30, 20, Component.literal("Agent name")));
+            nameField = addRenderableWidget(new EditBox(font, left, 7, contentWidth - 30, 20, Component.literal("Agent name")) {
+                @Override public void setFocused(boolean focused) {
+                    super.setFocused(focused);
+                    if (!nameSuggested) return;
+                    if (focused) setValue("");
+                    else if (getValue().isBlank()) setValue(suggestedName);
+                }
+            });
             nameField.setMaxLength(80);
             nameField.setValue(AgentModels.text(creationSettings, "name"));
             nameField.setHint(Component.literal("New agent"));
-            nameField.setResponder(value -> { creationSettings.addProperty("name", value); refreshButtons(); });
+            nameField.setResponder(value -> {
+                if (nameField.isFocused() && !value.isBlank()) nameSuggested = false;
+                creationSettings.addProperty("name", value);
+                refreshButtons();
+            });
             bodyButton = addRenderableWidget(Button.builder(Component.empty(), button -> requestModels(() -> togglePicker(bodyButton)))
                 .bounds(left, compact ? 55 : 29, 120, 20).build());
             minecraftBox = Checkbox.builder(Component.literal("Can act in Minecraft"), font)

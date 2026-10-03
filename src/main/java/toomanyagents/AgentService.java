@@ -578,6 +578,13 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     /** A child's station is assigned before its body spawns, so the body appears inside it; a failed creation frees it. */
     private CompletableFuture<String> spawn(JsonObject spec, Agent parent, GameAccess.ToolScope callerScope, String stationId) {
         var settings = spec.deepCopy(); validateSettings(settings);
+        // Creation without a chosen name or body gets random starters.
+        if (text(settings,"name").isBlank()) {
+            var taken = new HashSet<String>();
+            synchronized (this) { for (Agent other : agents.values()) taken.add(other.name); }
+            settings.addProperty("name", StarterAgents.name(taken));
+        }
+        if (text(settings,"body").isBlank()) settings.addProperty("body", StarterAgents.body());
         String projectId = text(settings, "projectId");
         if (!projectId.isBlank()) {
             boolean worldProject = !text(projects.project(projectId), "minecraftWorldId").isBlank();
@@ -1551,7 +1558,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if (!text(station,"agentId").isBlank()) return failed("Station " + text(station,"label") + " is occupied.");
         }
         var spec = object("providerId",provider,"projectId",parent.projectId,"name",text(args,"name"),"checkoutId",parent.checkoutId,
-            "body",text(parent.settings,"body"),"mode",text(parent.settings,"mode"),"cheats",parent.settings.get("cheats"),"following",false,
+            "mode",text(parent.settings,"mode"),"cheats",parent.settings.get("cheats"),"following",false,
             "minecraftAccess",minecraftAccess(parent),"nativeSubagentsEnabled",parent.nativeSubagentsEnabled,"communication",communication(parent),"initialTask",text(args,"task"),"title",text(args,"title"));
         // A profile replaces inherited presentation settings. It can turn capabilities off, never on; permissions and communication stay the parent's.
         for (String key : List.of("body","mode","followReturn","behaviors")) if (profile.has(key)) spec.add(key,profile.get(key).deepCopy());
