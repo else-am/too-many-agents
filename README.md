@@ -1,3 +1,6 @@
+> [!WARNING]
+> Super alpha, expect hella breaking changes and general confusion
+
 <p align="center"><img src="docs/logo-3d.png" width="200" alt=""></p>
 
 # Too Many Agents
