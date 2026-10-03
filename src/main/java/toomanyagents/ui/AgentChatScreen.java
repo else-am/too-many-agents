@@ -420,7 +420,6 @@ public final class AgentChatScreen extends Screen {
                 .selected(creationSettings.get("minecraftAccess").getAsBoolean())
                 .onValueChange((box, value) -> {
                     creationSettings.addProperty("minecraftAccess", value);
-                    creationSettings.remove("strategy");
                     refreshButtons();
                 }).build();
             addRenderableWidget(minecraftBox);

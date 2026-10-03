@@ -50,14 +50,10 @@ final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
     enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, CHAT, NOTIFY, FOLLOW }
-    record Perception(double observeRadius, int entityLimit, double lookDistance, PovCapture.Settings pov) {
-        Perception {
-            if (!Double.isFinite(observeRadius) || observeRadius < 1 || observeRadius > 64
-                || entityLimit < 1 || entityLimit > 64 || !Double.isFinite(lookDistance) || lookDistance < 1 || lookDistance > 64)
-                throw new IllegalArgumentException("Unsupported observation bounds");
-            Objects.requireNonNull(pov);
-        }
-    }
+    // What an agent's body perceives by default.
+    private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
+    private static final int ENTITY_LIMIT = 64;
+    private static final PovCapture.Settings POV = new PovCapture.Settings(960, 540, 70);
     record Body(String entityUuid, String world, String dimension) {}
     /** An agent's project and activity (working, needs_input, done, idle), published by AgentService. */
     record AgentState(String projectId, String activity) {}
@@ -121,16 +117,14 @@ final class GameAccess {
         final ToolScope scope;
         final Body body;
         final Operation operation;
-        final Perception perception;
         final JsonObject args;
         final long deadline;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
 
-        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, Perception perception) {
+        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args) {
             this.scope = scope;
             this.body = body;
             this.operation = operation;
-            this.perception = perception;
             this.args = args;
             deadline = activeNanos + TimeUnit.SECONDS.toNanos(QUEUE_SECONDS);
         }
@@ -148,7 +142,7 @@ final class GameAccess {
         }
     }
 
-    CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, Perception perception) {
+    CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args) {
         var arguments = args == null ? new JsonObject() : args.deepCopy();
         synchronized (queueLock) {
             updateQueueClock();
@@ -159,7 +153,7 @@ final class GameAccess {
             if (scope.pending >= 16 || toolQueue.size() >= 256) {
                 return CompletableFuture.failedFuture(error("world_tool_queue_full"));
             }
-            var call = new PendingCall(scope, body, operation, arguments, perception);
+            var call = new PendingCall(scope, body, operation, arguments);
             toolQueue.addLast(call);
             scope.pending++;
             return call.result;
@@ -222,11 +216,11 @@ final class GameAccess {
             try {
                 if (call.operation == Operation.POV) {
                     body(current, call.body);
-                    pov.capture(UUID.fromString(call.body.entityUuid()), call.scope.session, call.perception.pov()).whenComplete((result, failure) -> {
+                    pov.capture(UUID.fromString(call.body.entityUuid()), call.scope.session, POV).whenComplete((result, failure) -> {
                         if (failure != null) call.result.completeExceptionally(failure);
                         else call.result.complete(result);
                     });
-                } else call.result.complete(executeOperation(current, call.body, call.operation, call.args, call.perception));
+                } else call.result.complete(executeOperation(current, call.body, call.operation, call.args));
             } catch (Exception | LinkageError failure) { call.result.completeExceptionally(failure); }
         }
     }
@@ -615,22 +609,22 @@ final class GameAccess {
         });
     }
 
-    CompletableFuture<JsonObject> call(Body body, String expectedSession, Operation operation, JsonObject args, Perception perception) {
+    CompletableFuture<JsonObject> call(Body body, String expectedSession, Operation operation, JsonObject args) {
         // Do not allow callers to mutate queued arguments after validation.
         var arguments = args == null ? new JsonObject() : args.deepCopy();
         if (operation == Operation.POV) {
             return schedule(expectedSession, current -> { body(current, body); return UUID.fromString(body.entityUuid()); })
-                .thenCompose(id -> pov.capture(id,expectedSession,perception.pov()));
+                .thenCompose(id -> pov.capture(id,expectedSession,POV));
         }
-        return schedule(expectedSession, current -> executeOperation(current, body, operation, arguments, perception));
+        return schedule(expectedSession, current -> executeOperation(current, body, operation, arguments));
     }
 
-    private JsonObject executeOperation(MinecraftServer current, Body body, Operation operation, JsonObject arguments, Perception perception) {
+    private JsonObject executeOperation(MinecraftServer current, Body body, Operation operation, JsonObject arguments) {
         var mob = body(current, body);
         var controller = actions(body,mob);
         return switch (operation) {
             case OBSERVE -> {
-                var observation = observe(current,mob,arguments,perception);
+                var observation = observe(current,mob,arguments);
                 observation.add("hands",controller.hands.snapshot());
                 cacheBody(body,mob);
                 observation.add("settings",settings(body));
@@ -1123,8 +1117,8 @@ final class GameAccess {
         return level.hasChunksAt(BlockPos.containing(box.minX, box.minY, box.minZ), BlockPos.containing(box.maxX, box.maxY, box.maxZ));
     }
 
-    private JsonObject observe(MinecraftServer current, Mob mob, JsonObject args, Perception perception) {
-        double radius = args.has("radius") ? number(args.get("radius"), "radius") : perception.observeRadius();
+    private JsonObject observe(MinecraftServer current, Mob mob, JsonObject args) {
+        double radius = args.has("radius") ? number(args.get("radius"), "radius") : OBSERVE_RADIUS;
         if (radius < 1 || radius > 64) throw error("radius_must_be_between_1_and_64");
         var result = new JsonObject();
         result.addProperty("session", worldSession.get());
@@ -1155,11 +1149,11 @@ final class GameAccess {
         var nearby = mob.level().getEntities(mob, mob.getBoundingBox().inflate(radius), entity -> entity.isAlive() && mob.distanceToSqr(entity) <= radius * radius);
         nearby.sort(Comparator.comparingDouble(mob::distanceToSqr));
         var entities = new JsonArray();
-        nearby.stream().limit(perception.entityLimit()).forEach(entity -> entities.add(Observations.entity(entity)));
+        nearby.stream().limit(ENTITY_LIMIT).forEach(entity -> entities.add(Observations.entity(entity)));
         result.add("entities", entities);
-        result.addProperty("entitiesTruncated", nearby.size() > perception.entityLimit());
+        result.addProperty("entitiesTruncated", nearby.size() > ENTITY_LIMIT);
         var from = mob.getEyePosition();
-        var to = from.add(mob.getLookAngle().scale(perception.lookDistance()));
+        var to = from.add(mob.getLookAngle().scale(LOOK_DISTANCE));
         var target = new JsonObject();
         if (!loaded((ServerLevel) mob.level(), new AABB(from, to))) {
             target.addProperty("kind", "unloaded");

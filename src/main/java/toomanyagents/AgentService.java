@@ -77,12 +77,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if (!Objects.equals(agent.scriptSession,worldSession.get()) || !Objects.equals(text(request,"session"),agent.scriptSession)) return failed("world_session_changed");
             if (agent.stopping) return failed("agent_stopping");
             String operation = text(request, "operation");
-            if (operation.equals("listTools")) return CompletableFuture.completedFuture(MinecraftStrategy.resolve(agent.strategy).catalog());
+            if (operation.equals("listTools")) return CompletableFuture.completedFuture(AgentSurface.catalog(minecraftAccess(agent)));
             if (!operation.isBlank()) return failed("unknown_operation");
             if (agent.turnSession == null || !agent.activeTurn || agent.toolScope == null) return failed("tool_turn_no_longer_active");
             String tool = text(request,"tool");
-            if (MinecraftStrategy.resolve(agent.strategy).isAgentTool(tool)) return agentTool(agent, tool, obj(request,"arguments"));
-            return MinecraftStrategy.resolve(agent.strategy).call(game, agent.body, agent.turnSession, agent.toolScope, tool, obj(request,"arguments")).thenApply(result -> filterDiscovery(agent,result));
+            if (AgentSurface.isAgentTool(tool)) return agentTool(agent, tool, obj(request,"arguments"));
+            return AgentSurface.call(minecraftAccess(agent), game, agent.body, agent.turnSession, agent.toolScope, tool, obj(request,"arguments")).thenApply(result -> filterDiscovery(agent,result));
         }
     }
     @Override public synchronized JsonArray profiles() {
@@ -153,7 +153,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if (copy.has("minecraftAccess") && copy.get("minecraftAccess").getAsBoolean() != minecraftAccess(require(id)))
             return failed("Minecraft access is fixed when the agent is spawned.");
         copy.remove("minecraftAccess");
-        if (copy.has("strategy")) return failed("A strategy is fixed when the agent is spawned.");
         String expectedSession = worldSession.get();
         return ready.thenCompose(unused -> {
             Agent agent;
@@ -222,7 +221,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         String historyError = "";
         int backgroundRunning;
         String serviceTier = "default";
-        JsonElement strategy = MinecraftStrategy.CURRENT.reference();
+        boolean minecraftAccess = true;
         JsonObject settings = new JsonObject();
         JsonObject permissions = new JsonObject();
         JsonObject sessionPermissions = new JsonObject(), turnPermissions = new JsonObject();
@@ -271,7 +270,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         ready = CompletableFuture.runAsync(() -> {
             try { projects.load(); } catch (IOException e) { throw new CompletionException(e); }
             load();
-            try (var resource = AgentService.class.getResourceAsStream(MinecraftStrategy.CURRENT.clientResource())) {
+            try (var resource = AgentService.class.getResourceAsStream(AgentSurface.clientResource())) {
                 Files.createDirectories(storageDirectory);
                 if (resource == null) throw new IOException("Bundled JavaScript API missing");
                 Files.copy(resource,scriptApi,StandardCopyOption.REPLACE_EXISTING);
@@ -518,7 +517,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     "defaultEffort", model.defaultEffort(), "serviceTiers", model.serviceTiers(),"descriptor",model.descriptor(),"supportsAutoMode",model.supportsAutoMode())));
                 JsonArray types = new JsonArray();
                 for (JsonElement body : bodies) types.add(text(body.getAsJsonObject(), "id"));
-                return object("models", choices, "bodies", types, "strategies", List.of(MinecraftStrategy.CURRENT.description()),
+                return object("models", choices, "bodies", types,
                     "provider", connection.description(), "providers", List.of(connection("codex").description(), connection("claude").description()));
             });
         });
@@ -548,7 +547,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private AgentHarness.Options options(Agent agent) {
         return new AgentHarness.Options(Path.of(directory(agent)), additionalDirectories(agent), instructions(agent), agent.model, agent.effort,
             agent.turnSession == null ? agent.permissions : agent.turnPermissions,
-            MinecraftStrategy.resolve(agent.strategy).tools(), agent.serviceTier, agent.nativeSubagentsEnabled);
+            AgentSurface.tools(minecraftAccess(agent)), agent.serviceTier, agent.nativeSubagentsEnabled);
     }
     private void initializeModel(Agent agent) {
         agent.history = new ConversationHistory(historyDirectory(agent),agent.id);
@@ -588,7 +587,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         String projectId = text(settings, "projectId");
         if (!projectId.isBlank()) {
             boolean worldProject = !text(projects.project(projectId), "minecraftWorldId").isBlank();
-            if (worldProject || !settings.has("minecraftAccess") && !settings.has("strategy"))
+            if (worldProject || !settings.has("minecraftAccess"))
                 settings.addProperty("minecraftAccess", worldProject);
         }
         String name=text(settings,"name"),body=text(settings,"body"),model=text(settings,"model"),effort=text(settings,"effort");
@@ -598,12 +597,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         String expectedSession = worldSession.get();
         if (expectedSession == null) return failed("Enter a singleplayer world before spawning an agent.");
         Agent agent = new Agent();
-        if (settings.has("minecraftAccess") && !settings.get("minecraftAccess").getAsBoolean()) agent.strategy = MinecraftStrategy.WORK.reference();
-        if (settings.has("strategy")) agent.strategy = MinecraftStrategy.resolve(settings.get("strategy")).reference();
-        if (settings.has("minecraftAccess") && settings.get("minecraftAccess").getAsBoolean() != minecraftAccess(agent))
-            return failed("Minecraft access does not match the selected strategy.");
+        agent.minecraftAccess = !settings.has("minecraftAccess") || settings.get("minecraftAccess").getAsBoolean();
         settings.remove("minecraftAccess");
-        settings.remove("strategy");
         agent.id = UUID.randomUUID().toString();
         if (!settings.has("communication")) settings.addProperty("communication", "project");
         agent.settings = settings;
@@ -713,7 +708,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         });
         agent.asyncQuestions.values().forEach(question -> requests.add(question.deepCopy()));
         JsonObject result = object("id", agent.id, "name", agent.name, "directory", directory(agent), "projectId",agent.projectId,"checkoutId",agent.checkoutId,
-                "model", agent.model, "effort", agent.effort, "serviceTier", agent.serviceTier, "threadId", agent.id, "providerSessionId", agent.providerSessionId, "providerId", agent.providerId, "provider", connection(agent).description(), "strategy", agent.strategy,
+                "model", agent.model, "effort", agent.effort, "serviceTier", agent.serviceTier, "threadId", agent.id, "providerSessionId", agent.providerSessionId, "providerId", agent.providerId, "provider", connection(agent).description(),
                 "body", agent.body, "status", agent.status, "requests", requests,
                 "lifecycle", agent.lifecycle, "conversationArchived", agent.conversationArchived, "bodyRemoved", agent.bodyRemoved, "bodyLost", agent.bodyLost, "archiveRequested", agent.archiveRequested, "threadArchived", agent.threadArchived);
         result.addProperty("currentWorld", game.belongsToCurrentWorld(agent.body));
@@ -949,7 +944,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     return CompletableFuture.failedFuture(new AgentHarness.RequestFailure("Coordination delivery was held before submission.","staleTurn",true,new JsonObject()));
                 selectedTier = serviceTier == null || serviceTier.isBlank() ? agent.serviceTier : tier(serviceTier);
                 selectedModel = model == null || model.isBlank() ? agent.model : model;
-                MinecraftStrategy.resolve(agent.strategy);
                 if (!agent.historyError.isBlank()) return failed("Conversation history is unavailable: " + agent.historyError);
                 if (checkoutBusy(agent) || agent.updatingSettings || agent.recoveringBody != null && !agent.recoveringBody.isDone()) return failed("Wait for checkout operations or agent settings to finish saving before sending a message.");
                 if (agent.turnSession != null || !agent.requests.isEmpty()) return failed("The agent already has an active turn. Stop it before sending another message.");
@@ -975,7 +969,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }).thenCompose(session -> {
                 if (!Objects.equals(expectedSession, worldSession.get())) return failed("World changed before the message could start.");
                 // Also verify the saved body belongs to this world before spending a model turn.
-                return game.call(agent.body, expectedSession, GameAccess.Operation.OBSERVE, object("radius", 1), MinecraftStrategy.resolve(agent.strategy).perception()).thenCompose(observation -> {
+                return game.call(agent.body, expectedSession, GameAccess.Operation.OBSERVE, object("radius", 1)).thenCompose(observation -> {
                     filterDiscovery(agent,observation);
                     synchronized (this) {
                         if (agent.submission != submission || agent.stopping) return AgentService.<Void>failed("turn_no_longer_active");
@@ -990,7 +984,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                         + "Current settings: " + observation.get("settings") + "\n"
                         + "Pointing when chat opened: " + captured + "\n"
                         + (text(captured,"source").equals("minecraft_chat") ? "This message was addressed to you in Minecraft chat. Use the registered notification/chat tool for brief updates when finished or when you need help. Keep full details in this conversation.\n" : "")
-                        + MinecraftStrategy.resolve(agent.strategy).turnInstructions() + "\n[User message]\n" + text;
+                        + AgentSurface.turnInstructions() + "\n[User message]\n" + text;
                     return scriptConnection(agent,expectedSession).thenCompose(ready -> {
                         synchronized (this) {
                             if (agent.submission != submission || agent.stopping || !Objects.equals(agent.turnSession, expectedSession)) return failed("agent_stopping");
@@ -1424,7 +1418,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         String expectedSession = worldSession.get();
         return ready.thenCompose(unused -> {
             Agent agent;
-            synchronized (this) { agent = require(id); return MinecraftStrategy.resolve(agent.strategy).call(game, agent.body, expectedSession, null, tool, arguments); }
+            synchronized (this) { agent = require(id); return AgentSurface.call(minecraftAccess(agent), game, agent.body, expectedSession, null, tool, arguments); }
         });
     }
 
@@ -1475,8 +1469,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
 
     private CompletableFuture<JsonObject> agentTool(Agent caller, String tool, JsonObject args) {
-        var strategy = MinecraftStrategy.resolve(caller.strategy);
-        var definition = strategy.tools().stream().filter(t -> t.name().equals(tool)).findFirst().orElseThrow();
+        var definition = AgentSurface.definition(tool);
         SharedModel.validateJsonSchema(definition.inputSchema(), args);
         if (caller.stopping || caller.toolScope == null || !Objects.equals(caller.turnSession,worldSession.get())) return failed("tool_turn_no_longer_active");
         return switch (tool) {
@@ -1737,12 +1730,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if (agent == null || !agent.providerId.equals(provider) || !active(agent) || agent.turnSession == null) return failed("No active turn is associated with this thread.");
             if (agent.stopping || agent.toolScope == null) return failed("agent_stopping");
             if (!Objects.equals(agent.activeTurnId, agent.assembler.canonicalTurnId(turnId))) return failed("tool_turn_no_longer_active");
-            if (MinecraftStrategy.resolve(agent.strategy).isAgentTool(tool)) return agentTool(agent, tool, arguments);
-            dispatched = MinecraftStrategy.resolve(agent.strategy).call(game, agent.body, agent.turnSession, agent.toolScope, tool, arguments);
+            if (AgentSurface.isAgentTool(tool)) return agentTool(agent, tool, arguments);
+            dispatched = AgentSurface.call(minecraftAccess(agent), game, agent.body, agent.turnSession, agent.toolScope, tool, arguments);
         }
         return dispatched.thenApply(result -> {
             filterDiscovery(agent,result);
-            if (MinecraftStrategy.resolve(agent.strategy).operation(tool) == GameAccess.Operation.OBSERVE) synchronized (this) {
+            if (AgentSurface.operation(minecraftAccess(agent), tool) == GameAccess.Operation.OBSERVE) synchronized (this) {
                 result.addProperty("directory", directory(agent));
                 result.addProperty("model", agent.model);
                 result.addProperty("effort", agent.effort);
@@ -1778,8 +1771,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     private synchronized CompletableFuture<AgentHarness.Session> ensureSession(Agent agent) {
         if (!active(agent)) return failed("agent_not_active: " + agent.lifecycle);
-        try { MinecraftStrategy.resolve(agent.strategy); }
-        catch (IllegalStateException unavailable) { return CompletableFuture.failedFuture(unavailable); }
         if (agent.opening != null) return agent.opening;
         var options = options(agent);
         if (agent.session != null && agent.sessionPermissions.equals(options.permissions())
@@ -2186,9 +2177,9 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 for (JsonElement value : orderedRows) {
                     JsonObject row = value.getAsJsonObject();
                     Agent agent = new Agent();
-                    agent.strategy = row.has("strategy") ? row.get("strategy").deepCopy() : JsonNull.INSTANCE;
-                    // Saves name only the package id; older pins are rewritten to the installed package.
-                    try { agent.strategy = MinecraftStrategy.resolve(agent.strategy).reference(); } catch (IllegalStateException ignored) {}
+                    // Older saves recorded a strategy package; "work" meant no Minecraft access.
+                    agent.minecraftAccess = row.has("minecraftAccess") ? row.get("minecraftAccess").getAsBoolean()
+                        : !(row.get("strategy") instanceof JsonObject strategy && text(strategy,"id").equals("work"));
                     agent.id = text(row, "id"); agent.name = text(row, "name");
                     agent.taskTitle = conciseTitle(text(row,"taskTitle"));
                     agent.taskTitleSource = agent.taskTitle.isBlank() ? "" : text(row,"taskTitleSource");
@@ -2259,7 +2250,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private synchronized CompletableFuture<Void> save() {
         JsonArray rows = new JsonArray();
         for (Agent agent : agents.values()) if (agent.body != null) rows.add(object("id", agent.id, "name", agent.name, "projectId",agent.projectId,"checkoutId",agent.checkoutId,
-                "strategy",agent.strategy,"body", agent.body, "providerId", agent.providerId, "providerSessionId", agent.providerSessionId, "resumeRequired", agent.resumeRequired, "model", agent.model, "effort", agent.effort,"settings",agent.settings,"permissions",agent.permissions,
+                "minecraftAccess",agent.minecraftAccess,"body", agent.body, "providerId", agent.providerId, "providerSessionId", agent.providerSessionId, "resumeRequired", agent.resumeRequired, "model", agent.model, "effort", agent.effort,"settings",agent.settings,"permissions",agent.permissions,
                 "serviceTier",agent.serviceTier,"replyVersion",agent.replyVersion,"readVersion",agent.readVersion,
                 "taskTitle",agent.taskTitle,"taskTitleSource",agent.taskTitleSource,
                 "answeredQuestions",agent.answeredQuestions,
@@ -2284,15 +2275,15 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
 
     private static boolean minecraftAccess(Agent agent) {
-        return !agent.strategy.isJsonObject() || !text(agent.strategy.getAsJsonObject(), "id").equals("work");
+        return agent.minecraftAccess;
     }
 
     private String instructions(Agent agent) {
-        if (!minecraftAccess(agent)) return MinecraftStrategy.resolve(agent.strategy).instructions(agent.providerId);
+        if (!minecraftAccess(agent)) return AgentSurface.instructions(false, agent.providerId);
         return "You are " + agent.name + ", a coding agent embodied as an NPC in the user's singleplayer Minecraft world. "
             + "Your working directory is " + directory(agent) + ". Follow its AGENTS.md and use ordinary coding tools for project work. "
             + "Initial model: " + agent.model + ", reasoning effort: " + agent.effort + ". "
-            + MinecraftStrategy.resolve(agent.strategy).instructions(agent.providerId);
+            + AgentSurface.instructions(true, agent.providerId);
     }
 
     private static JsonObject obj(JsonObject object, String key) { return object.has(key) && object.get(key).isJsonObject() ? object.getAsJsonObject(key) : new JsonObject(); }

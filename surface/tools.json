@@ -1,6 +1,7 @@
 [
   {
     "name": "minecraft_observe",
+    "minecraft": true,
     "description": "Observe body, nearby entities, live player, inventory, settings and current action. Radius 1–64.",
     "inputSchema": {
       "type": "object",
@@ -18,6 +19,7 @@
   },
   {
     "name": "minecraft_pov",
+    "minecraft": true,
     "description": "See a rendered image from your NPC body's actual eyes, without moving the human camera.",
     "inputSchema": {
       "type": "object",
@@ -29,6 +31,7 @@
   },
   {
     "name": "minecraft_blocks",
+    "minecraft": true,
     "description": "Inspect a loaded inclusive block box, at most 4096 blocks.",
     "inputSchema": {
       "type": "object",
@@ -87,6 +90,7 @@
   },
   {
     "name": "minecraft_action",
+    "minecraft": true,
     "description": "Start one physical intention. Walk/look target position or entity UUID/'player'. Mine position; place clicks supporting block position+face using held item. Equip inventory slot; creative_item item/count; pickup nearby or approach item entity/position; give entity/item/count; interact position/face or entity; menu inspect; menu_click menuId/slot/button/clickType; menu_close. Inspect results. Returns action ID; poll status. Local native control approaches targets. No retry on unknown outcome.",
     "inputSchema": {
       "type": "object",
@@ -170,6 +174,7 @@
   },
   {
     "name": "minecraft_action_status",
+    "minecraft": true,
     "description": "Read current or historical action, without repeating it.",
     "inputSchema": {
       "type": "object",
@@ -185,6 +190,7 @@
   },
   {
     "name": "minecraft_cancel",
+    "minecraft": true,
     "description": "Stop your current physical action or a specified ID.",
     "inputSchema": {
       "type": "object",
@@ -200,6 +206,7 @@
   },
   {
     "name": "minecraft_command",
+    "minecraft": true,
     "description": "Run a Minecraft command only when this agent has cheats enabled, using the human's existing permissions. @s is your body.",
     "inputSchema": {
       "type": "object",
@@ -237,6 +244,7 @@
   },
   {
     "name": "minecraft_follow",
+    "minecraft": true,
     "description": "Control following: pause for world work (remember whether you were following); resume when ready to return (apply saved return preference); on/off explicitly enable/disable. Coding-only tasks can keep following. Stay paused when help is needed at the worksite. Do not pause/resume between individual actions.",
     "inputSchema": {
       "type": "object",
@@ -279,7 +287,7 @@
   },
   {
     "name": "agent_spawn",
-    "description": "Create an embodied child agent near your body with a task. Provider is required unless a profile is given. A profile supplies saved settings, behaviors and its provider; explicit arguments override it, and it cannot grant more access than you have. station assigns a free station in your project; the child's body appears inside it. Returns the child's ID, checkout path and branch before its work finishes; results and attention requests arrive automatically. The child shares your checkout unless useWorktree is set. Never repeat creation after an unknown outcome; inspect existing children first.",
+    "description": "Create a child agent with a task; if you are embodied, it gets its own NPC near your body. Provider is required unless a profile is given. A profile supplies saved settings, behaviors and its provider; explicit arguments override it, and it cannot grant more access than you have. station assigns a free station in your project; an embodied child's body appears inside it. Returns the child's ID, checkout path and branch before its work finishes; results and attention requests arrive automatically. The child shares your checkout unless useWorktree is set. Never repeat creation after an unknown outcome; inspect existing children first.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -310,7 +318,8 @@
         },
         "body": {
           "type": "string",
-          "minLength": 1
+          "minLength": 1,
+          "description": "Entity type for an embodied child's NPC, such as minecraft:fox. Omit for a random one."
         },
         "title": {
           "type": "string",
@@ -431,7 +440,7 @@
   },
   {
     "name": "agent_stop",
-    "description": "Stop only the selected agent and its current world action. Its children remain independently controllable; its conversation and results remain available. This does not approve requests or delete a body.",
+    "description": "Stop only the selected agent and any world action it is running. Its children remain independently controllable; its conversation and results remain available. This does not approve requests or delete a body.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -449,7 +458,7 @@
   },
   {
     "name": "agent_stations",
-    "description": "List your project's stations: ID, label, box and occupant.",
+    "description": "List your project's stations: ID, label, occupant and, for embodied agents, box.",
     "inputSchema": {
       "type": "object",
       "properties": {},

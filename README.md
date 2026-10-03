@@ -81,7 +81,7 @@ Android Studio or IntelliJ, otherwise set `TMA_DEV_JAVA_HOME`.
 Saving a Java edit compiles and reloads it into the running game. Method and
 field changes generally work; constructors and static initializers do not rerun,
 new fields need explicit initialization, and screens built in `init()` need
-reopening. Strategy packages, resources, mixins, build files, deleted sources,
+reopening. Agent surface files (`surface/`), resources, mixins, build files, deleted sources,
 `AgentService`, and the `agent` package require a restart; the terminal says
 when. A failed reload never resets agents or replays world actions. Each game
 folder has `hot-reload-status.json` and logs. Validate releases with a fresh

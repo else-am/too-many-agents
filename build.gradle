@@ -116,7 +116,7 @@ tasks.named('processResources', ProcessResources) {
     inputs.property 'version', project.version
     from('tools/claude-bridge/dist/bridge.mjs') { into 'too_many_agents/claude' }
     from('tools/claude-bridge/dist/THIRD-PARTY-LICENSES.txt') { into 'too_many_agents/claude' }
-    from('strategies') { into 'too_many_agents/strategies' }
+    from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')
     filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
 }

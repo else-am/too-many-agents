@@ -43,7 +43,7 @@ def runtime():
 
 def sources():
     paths = []
-    for folder in ('src', 'strategies'):
+    for folder in ('src', 'surface'):
         paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
     bridge = ROOT / 'tools/claude-bridge'
     paths.extend(bridge.glob('*.mjs'))
@@ -170,7 +170,7 @@ def main():
                 # Recompiling their owners can remove those targets and silently lose turn events.
                 restart = [p for p in changed if not p.startswith('src/main/java/') or
                            p.startswith('src/main/java/toomanyagents/agent/') or
-                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/MinecraftStrategy.java', '/ProviderInstallations.java')) or '/mixin/' in p or p not in current]
+                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/AgentSurface.java', '/ProviderInstallations.java')) or '/mixin/' in p or p not in current]
                 if restart:
                     status('restart-required', 'Restart required for: ' + ', '.join(sorted(restart)))
                     continue
