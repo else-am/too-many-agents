@@ -1,6 +1,5 @@
 {
   "id": "current",
-  "revision": 14,
   "name": "Current behavior",
   "delivery": "harness-tools",
   "perception": {

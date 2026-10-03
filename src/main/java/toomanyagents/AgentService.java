@@ -2187,6 +2187,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     JsonObject row = value.getAsJsonObject();
                     Agent agent = new Agent();
                     agent.strategy = row.has("strategy") ? row.get("strategy").deepCopy() : JsonNull.INSTANCE;
+                    // Saves name only the package id; older pins are rewritten to the installed package.
+                    try { agent.strategy = MinecraftStrategy.resolve(agent.strategy).reference(); } catch (IllegalStateException ignored) {}
                     agent.id = text(row, "id"); agent.name = text(row, "name");
                     agent.taskTitle = conciseTitle(text(row,"taskTitle"));
                     agent.taskTitleSource = agent.taskTitle.isBlank() ? "" : text(row,"taskTitleSource");

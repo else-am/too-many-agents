@@ -4,8 +4,6 @@ import toomanyagents.agent.AgentHarness.ToolDefinition;
 import com.google.gson.*;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 
@@ -13,37 +11,28 @@ import java.util.concurrent.CompletableFuture;
 final class MinecraftStrategy {
     private static final Set<String> AGENT_TOOLS = Set.of(
         "agent_catalog", "agent_spawn", "agent_message", "agent_read", "agent_wait", "agent_stop", "agent_stations", "agent_archive");
-    static final MinecraftStrategy CURRENT = new MinecraftStrategy("current", 14);
-    static final MinecraftStrategy WORK = new MinecraftStrategy("work", 7);
+    static final MinecraftStrategy CURRENT = new MinecraftStrategy("current");
+    static final MinecraftStrategy WORK = new MinecraftStrategy("work");
     private final String root;
     private final JsonObject manifest;
-    private final String hash, instructions, codexInstructions, claudeInstructions, turnInstructions;
+    private final String instructions, codexInstructions, claudeInstructions, turnInstructions;
     private final List<ToolDefinition> tools;
     private final Map<String, GameAccess.Operation> operations;
     private final Set<String> agentTools;
     private final GameAccess.Perception perception;
 
-    private MinecraftStrategy(String directory, int revision) {
+    private MinecraftStrategy(String directory) {
         root = "/too_many_agents/strategies/" + directory + "/";
         try {
-            // Hash the complete package, including the optional JS client, to detect edits to a pinned revision.
-            var digest = MessageDigest.getInstance("SHA-256");
             var files = new HashMap<String, String>();
             for (String name : List.of("manifest.json", "instructions.md", "codex.md", "claude.md", "turn.md", "tools.json", "minecraft.mjs")) {
                 try (var input = MinecraftStrategy.class.getResourceAsStream(root + name)) {
                     if (input == null) throw new IOException("Missing strategy resource: " + name);
-                    byte[] bytes = input.readAllBytes();
-                    digest.update(name.getBytes(StandardCharsets.UTF_8));
-                    digest.update((byte) 0);
-                    digest.update(bytes);
-                    digest.update((byte) 0);
-                    files.put(name, new String(bytes, StandardCharsets.UTF_8));
+                    files.put(name, new String(input.readAllBytes(), StandardCharsets.UTF_8));
                 }
             }
-            hash = HexFormat.of().formatHex(digest.digest());
             manifest = JsonParser.parseString(files.get("manifest.json")).getAsJsonObject();
-            if (!manifest.get("id").getAsString().equals(directory.startsWith("work") ? "work" : "current") || manifest.get("revision").getAsInt() != revision
-                || !manifest.get("delivery").getAsString().equals("harness-tools"))
+            if (!manifest.get("id").getAsString().equals(directory) || !manifest.get("delivery").getAsString().equals("harness-tools"))
                 throw new IllegalArgumentException("Unsupported bundled strategy implementation");
             instructions = files.get("instructions.md").strip();
             codexInstructions = files.get("codex.md").strip();
@@ -75,22 +64,27 @@ final class MinecraftStrategy {
             tools = List.copyOf(definitions);
             operations = Map.copyOf(routes);
             agentTools = Set.copyOf(agentRoutes);
-        } catch (IOException | NoSuchAlgorithmException e) {
+        } catch (IOException e) {
             throw new IllegalStateException("Could not load current strategy", e);
         }
     }
 
+    /**
+     * Agents name a package by id and always run the installed version, so mod updates reach existing agents.
+     * Older saves also carry a revision and hash; those are ignored.
+     */
     static MinecraftStrategy resolve(JsonElement reference) {
-        if (CURRENT.reference().equals(reference)) return CURRENT;
-        if (WORK.reference().equals(reference)) return WORK;
-        throw new IllegalStateException("strategy_unavailable_or_changed: This agent's saved strategy does not match an installed package. Restore its package; the conversation has not been replaced.");
+        String id = reference != null && reference.isJsonObject() && reference.getAsJsonObject().get("id") instanceof JsonPrimitive p ? p.getAsString() : "";
+        return switch (id) {
+            case "current" -> CURRENT;
+            case "work" -> WORK;
+            default -> throw new IllegalStateException("strategy_unavailable: This agent's saved strategy is not installed; the conversation has not been replaced.");
+        };
     }
 
     JsonObject reference() {
         var result = new JsonObject();
         result.add("id", manifest.get("id"));
-        result.add("revision", manifest.get("revision"));
-        result.addProperty("contentHash", hash);
         return result;
     }
 
