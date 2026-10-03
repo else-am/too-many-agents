@@ -36,7 +36,10 @@ public final class InventoryAgents {
     private AgentChatScreen chat;
     private String selected;
     private String inventoryTarget, inventoryPending;
-    private Pane left, right, focus, pressed;
+    private Pane left, right, settings, focus, pressed;
+    private boolean hostOpen;
+    // Settings sit beside the chat when the chat keeps its minimum width; unscaled units.
+    private static final int SETTINGS_WIDTH = 400, SETTINGS_MIN_WIDTH = 320, CHAT_MIN_WIDTH = 360;
 
     private record Pane(Screen screen, int x, int y, int width, int height, float scale) {
         boolean contains(double px, double py) { return px >= x && px < x + width && py >= y && py < y + height; }
@@ -75,7 +78,7 @@ public final class InventoryAgents {
     public void forget(String id) {
         chats.remove(id);
         if (id.equals(selected)) {
-            chat = null; right = null; focus = null; pressed = null; selected = null;
+            chat = null; right = settings = null; focus = null; pressed = null; selected = null;
             if (sidebar != null) sidebar.selected(null);
         }
     }
@@ -127,7 +130,7 @@ public final class InventoryAgents {
             }
             sidebar.selected(selected);
             if (chat != null) chat.dock(parent, this::closeChat, this::toggleInventory);
-            left = right = focus = pressed = null;
+            left = right = settings = focus = pressed = null;
         }
         if (screen instanceof AgentWorkspaceScreen) {
             prepareStandalone(screen);
@@ -152,9 +155,46 @@ public final class InventoryAgents {
         left = layout(left, sidebar, margin, margin,
             collapsed ? Math.max(12, Math.round(28 * sidebarScale)) : Math.min(leftSpace, Math.round(260 * scale)),
             collapsed ? Math.max(12, Math.round(32 * sidebarScale)) : availableHeight, sidebarScale);
-        right = chat == null ? null : layout(right, chat, rightEdge + margin, margin,
-            Math.min(rightSpace, Math.round(540 * scale)), availableHeight, scale);
+        int chatWidth = Math.min(rightSpace, Math.round(540 * scale));
+        int settingsWidth = settingsWidth(rightSpace, scale);
+        boolean beside = settingsWidth > 0;
+        if (beside) chatWidth = Math.min(chatWidth, rightSpace - settingsWidth);
+        right = chat == null ? null : layout(right, chat, rightEdge + margin, margin, chatWidth, availableHeight, scale);
+        layoutSettings(rightEdge + margin + chatWidth, beside ? settingsWidth : 0);
         return true;
+    }
+
+    private boolean settingsOpen() { return chat != null && chat.settingsPanel() != null; }
+
+    /** Width for side settings within the space shared with the chat, or 0 when they must cover the chat. */
+    private int settingsWidth(int space, float scale) {
+        int width = Math.min(Math.round(SETTINGS_WIDTH * scale), space - Math.round(CHAT_MIN_WIDTH * scale));
+        return settingsOpen() && width >= Math.round(SETTINGS_MIN_WIDTH * scale) ? width : 0;
+    }
+
+    /** Settings sit beside the chat when both fit; otherwise they replace the chat between its top and bottom bars. */
+    private void layoutSettings(int sideX, int sideWidth) {
+        if (!settingsOpen() || right == null) {
+            if (settings != null && focus == settings) focus = right;
+            if (pressed == settings) pressed = null;
+            settings = null;
+            return;
+        }
+        var panel = chat.settingsPanel();
+        boolean fresh = settings == null || settings.screen != panel;
+        chat.cover(sideWidth == 0);
+        int[] bounds = chat.settingsBounds();
+        float scale = right.scale;
+        // Side settings run the chat's full height, with the chat's own padding as the gap.
+        panel.side(sideWidth > 0);
+        settings = sideWidth == 0
+            ? layout(settings, panel, right.x + Math.round(bounds[0] * scale), right.y + Math.round(bounds[1] * scale),
+                Math.round(bounds[2] * scale), Math.round(bounds[3] * scale), scale)
+            : layout(settings, panel, sideX, right.y, sideWidth, right.height, scale);
+        if (fresh && settings != null) {
+            if (focus != null) focus.screen.setFocused(null);
+            focus = settings;
+        }
     }
 
     private void prepareStandalone(Screen screen) {
@@ -169,11 +209,20 @@ public final class InventoryAgents {
         int sidebarWidth = collapsed ? Math.max(12, Math.round(28 * scale)) : Math.round(260 * scale);
         int totalWidth = Math.min(availableWidth, Math.round((collapsed ? 824 : 1056) * scale));
         int x = (screen.width - totalWidth) / 2;
+        int settingsWidth = settingsWidth(availableWidth - sidebarWidth - gap, scale);
+        boolean beside = settingsWidth > 0;
+        // The workspace widens for side settings as far as the window allows; the chat narrows for the rest.
+        if (beside) {
+            totalWidth = Math.min(availableWidth, totalWidth + settingsWidth);
+            x = (screen.width - totalWidth) / 2;
+        }
         boolean focusChat = right == null || collapsed && left != null && focus == left;
         left = layout(left, sidebar, x, 8, sidebarWidth, collapsed ? Math.max(12, Math.round(32 * scale)) : height, scale);
         int chatX = x + sidebarWidth + gap;
-        right = chat == null ? null : layout(right, chat, chatX, 8, totalWidth - sidebarWidth - gap, height, scale);
+        int chatWidth = totalWidth - sidebarWidth - gap - (beside ? settingsWidth : 0);
+        right = chat == null ? null : layout(right, chat, chatX, 8, chatWidth, height, scale);
         if (focusChat && right != null) focus = right;
+        layoutSettings(chatX + chatWidth, beside ? settingsWidth : 0);
     }
 
     public void openStandalone(String id, JsonObject pointing) {
@@ -198,6 +247,7 @@ public final class InventoryAgents {
         }
         String draftProject = project;
         String provider = TooManyAgentsClientSettings.get().defaultProvider();
+        if (chat != null) chat.closeSettings();
         chat = drafts.computeIfAbsent(project + ":" + provider, key -> {
             var settings = new JsonObject();
             settings.addProperty("projectId", draftProject);
@@ -243,7 +293,9 @@ public final class InventoryAgents {
         selected = id;
         select.accept(id);
         sidebar.selected(id);
-        chat = chats.computeIfAbsent(id, key -> new AgentChatScreen(access.get(), key));
+        var next = chats.computeIfAbsent(id, key -> new AgentChatScreen(access.get(), key));
+        if (chat != null && chat != next) chat.closeSettings();
+        chat = next;
         if (parent instanceof AgentWorkspaceScreen workspace) chat.capturePointing(workspace.pointingContext());
         chat.dock(parent, this::closeChat, this::toggleInventory);
         right = null;
@@ -296,7 +348,8 @@ public final class InventoryAgents {
             return;
         }
         hideInventory();
-        chat = null; right = null; focus = null; pressed = null;
+        if (chat != null) chat.closeSettings();
+        chat = null; right = settings = null; focus = null; pressed = null;
         selected = null;
         sidebar.selected(null);
     }
@@ -305,11 +358,15 @@ public final class InventoryAgents {
         var client = Minecraft.getInstance();
         if (client.level == null) {
             world = null; parent = null; sidebar = null; chat = null;
-            left = right = focus = pressed = null; selected = null; chats.clear(); drafts.clear();
+            left = right = settings = focus = pressed = null; selected = null; chats.clear(); drafts.clear();
             inventoryTarget = inventoryPending = null;
             return;
         }
-        if (!prepare(client.screen)) {
+        boolean open = prepare(client.screen);
+        // Leaving the agent screens saves open settings, once.
+        if (!open && hostOpen && chat != null) chat.closeSettings();
+        hostOpen = open;
+        if (!open) {
             if (client.screen == null) inventoryTarget = null;
             return;
         }
@@ -322,6 +379,7 @@ public final class InventoryAgents {
         if (!prepare(event.getScreen())) return;
         draw(event.getGuiGraphics(), left, event.getMouseX(), event.getMouseY(), event.getPartialTick());
         draw(event.getGuiGraphics(), right, event.getMouseX(), event.getMouseY(), event.getPartialTick());
+        draw(event.getGuiGraphics(), settings, event.getMouseX(), event.getMouseY(), event.getPartialTick());
         if (parent instanceof AgentWorkspaceScreen && chat == null) {
             String hint = TooManyAgentsClientSettings.get().sidebarCollapsed()
                 ? "Expand the sidebar to choose an agent" : "Choose an agent to start chatting";
@@ -342,6 +400,9 @@ public final class InventoryAgents {
     }
 
     private Pane at(double x, double y) {
+        // An open chat picker may extend over covering settings.
+        if (right != null && right.contains(x, y) && chat != null && chat.pickerOpen()) return right;
+        if (settings != null && settings.contains(x, y)) return settings;
         return left != null && left.contains(x, y) ? left : right != null && right.contains(x, y) ? right : null;
     }
 
@@ -393,7 +454,8 @@ public final class InventoryAgents {
         if (!(parent instanceof AgentWorkspaceScreen) && !text && Minecraft.getInstance().options.keyInventory.matches(event.getKeyCode(), event.getScanCode())) parent.onClose();
         // Escape dismisses a picker before leaving the whole screen.
         else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && sidebar.pickerOpen()) sidebar.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
-        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
+        // Escape in settings closes a dropdown, then the settings themselves.
+        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
         else focus.screen.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
     }
 
@@ -424,6 +486,7 @@ public final class InventoryAgents {
         if (prepare(Minecraft.getInstance().screen)) {
             if (left != null) describe(left, "sidebar", result, widgets);
             if (right != null) describe(right, "chat", result, widgets);
+            if (settings != null) describe(settings, "settings", result, widgets);
             if (parent instanceof AgentWorkspaceScreen) {
                 result.addProperty("sidebarCollapsed", TooManyAgentsClientSettings.get().sidebarCollapsed());
                 if (chat != null) result.add("pointing", chat.pointingContext());

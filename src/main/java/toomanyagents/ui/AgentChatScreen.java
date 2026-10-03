@@ -35,6 +35,9 @@ public final class AgentChatScreen extends Screen {
     private Runnable closePanel;
     private Runnable toggleInventory;
     private boolean compact;
+    // Docked settings sit beside this chat, or cover its transcript and composer when space is short.
+    private AgentSettingsScreen settingsPanel;
+    private boolean settingsCovering;
     private final AgentModels models = new AgentModels();
     private JsonObject state = new JsonObject(), request = new JsonObject(), question = new JsonObject(), pointing;
     private String draft = "", requestKey = "", feedback = "", transcriptKey = "";
@@ -263,6 +266,22 @@ public final class AgentChatScreen extends Screen {
     }
 
     public boolean docked() { return dockParent != null; }
+
+    public AgentSettingsScreen settingsPanel() { return settingsPanel; }
+    /** Saves and closes docked settings; a failed save leaves them open with the error. */
+    public void closeSettings() { if (settingsPanel != null) settingsPanel.onClose(); }
+
+    /** The transcript and composer area, in this chat's coordinates, that covering settings replace. */
+    public int[] settingsBounds() { return new int[]{left, transcriptTop, contentWidth, composerBaseline() + 20 - transcriptTop}; }
+
+    public void cover(boolean covering) {
+        if (settingsCovering == covering) return;
+        settingsCovering = covering;
+        if (covering) { setFocused(null); composer.setFocused(false); clearSelection(); }
+        refreshButtons();
+        transcriptKey = "";
+        rebuildTranscript();
+    }
     public Screen returnScreen() { return docked() ? dockParent : this; }
 
     private void executeUi(Runnable action) {
@@ -286,7 +305,7 @@ public final class AgentChatScreen extends Screen {
 
     @Override protected void setInitialFocus() {
         // Screen's default keyboard traversal would replace the composer's focus.
-        if (getFocused() == null && composer != null) setInitialFocus(composer);
+        if (getFocused() == null && composer != null && !settingsCovering) setInitialFocus(composer);
     }
 
     @Override protected void init() {
@@ -352,6 +371,7 @@ public final class AgentChatScreen extends Screen {
         archiveButton = addRenderableWidget(Button.builder(Component.literal("Archive"), button -> archive())
             .bounds(compact ? left + 148 : left + contentWidth - 170, controlsY, 58, 20).build());
         settingsButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
+            if(settingsPanel!=null){settingsPanel.onClose();return;}
             var screen=new AgentSettingsScreen(access,returnScreen(),settings(),changes -> {
                 if(draft()){
                     creationSettings=changes.deepCopy();state=creationSettings;readCreationProject();
@@ -361,7 +381,10 @@ public final class AgentChatScreen extends Screen {
                 }
                 return access.updateSettings(agentId,changes);
             },draft()?null:agentId);
-            minecraft.setScreen(screen);
+            if(!docked()){minecraft.setScreen(screen);return;}
+            settingsPanel=screen;
+            screen.dock(()->{if(settingsPanel==screen){settingsPanel=null;cover(false);refreshButtons();}});
+            refreshButtons();
         }).bounds(left+contentWidth-(compact?80:106),controlsY,80,20).build());
         if (draft()) {
             nameField = addRenderableWidget(new EditBox(font, left, 7, contentWidth - 30, 20, Component.literal("Agent name")));
@@ -402,7 +425,7 @@ public final class AgentChatScreen extends Screen {
         rebuildTranscript();
         requestTranscript();
         refreshButtons();
-        setInitialFocus(composer);
+        if (!settingsCovering) setInitialFocus(composer);
         if (!models.available()) requestModels(() -> {});
         if (!bodyChecked && state.has("currentWorld") && state.get("currentWorld").getAsBoolean()) {
             bodyChecked = true;
@@ -854,7 +877,8 @@ public final class AgentChatScreen extends Screen {
         providerButton.setTooltip(Tooltip.create(Component.literal(draft() ? provider : provider + " - Fixed for this conversation")));
         composer.active = active && !sending;
         settingsButton.visible = true;
-        settingsButton.active = !sending && (draft() || state.has("name"));
+        settingsButton.active = settingsPanel != null || !sending && (draft() || state.has("name"));
+        composer.visible = sendButton.visible = !settingsCovering;
         inventoryButton.visible = state.has("minecraftAccess") && state.get("minecraftAccess").getAsBoolean();
         boolean inventoryOpen = dockParent instanceof AgentInventoryScreen inventory && agentId.equals(inventory.agentId());
         inventoryButton.active = !draft() && (inventoryOpen || active && inventoryButton.visible);
@@ -866,7 +890,7 @@ public final class AgentChatScreen extends Screen {
         followButton.visible = true;
         followButton.active = active && !savingFollow && !sending;
         followButton.setMessage(Component.literal(savingFollow ? "…" : AgentModels.text(state,"followPauseReason").equals("work") ? "Resume" : following() ? "Following" : "Follow"));
-        settingsButton.setMessage(Component.literal("Settings…"));
+        settingsButton.setMessage(Component.literal(settingsPanel == null ? "Settings…" : settingsCovering ? "Back" : "Settings ✓"));
         if (worktreeBox != null) worktreeBox.active = !sending;
         if (draft()) {
             nameField.setEditable(!sending);
@@ -878,6 +902,8 @@ public final class AgentChatScreen extends Screen {
             bodyButton.setMessage(Component.literal(font.plainSubstrByWidth(bodyLabel(AgentModels.text(creationSettings, "body")), bodyButton.getWidth() - font.width(" ▾") - 12) + " ▾"));
             bodyButton.active = !sending && !loadingModels;
             minecraftBox.active = !sending;
+            minecraftBox.visible = !settingsCovering && !creationMinecraft;
+            worktreeBox.visible = !settingsCovering && creationGit;
         }
         boolean busy = working();
         boolean showStop = !hasDraft() && (busy || actionWorking());
@@ -1406,7 +1432,7 @@ public final class AgentChatScreen extends Screen {
         for(var entry:disclosures) {
             int y=transcriptTop+6+entry.line()*LINE_HEIGHT-scroll;
             entry.button().setY(y);
-            entry.button().visible=y>=transcriptTop+4&&y+entry.button().getHeight()<=transcriptBottom-4;
+            entry.button().visible=!settingsCovering&&y>=transcriptTop+4&&y+entry.button().getHeight()<=transcriptBottom-4;
         }
     }
 
@@ -1467,6 +1493,11 @@ public final class AgentChatScreen extends Screen {
             projectX = left + font.width(title) + 10;
         }
         graphics.drawString(font, font.plainSubstrByWidth(project, Math.max(0, left + headerWidth() - projectX)), projectX, 12, 0x8C8C8C);
+        if (settingsCovering) {
+            renderContext(graphics, mouseX, mouseY);
+            renderPicker(graphics, mouseX, mouseY, partialTick);
+            return;
+        }
         if (!docked()) graphics.fill(left, transcriptTop, left + contentWidth, transcriptBottom, 0xB0101010);
         graphics.enableScissor(left + 4, transcriptTop + 4, left + contentWidth - 8, transcriptBottom - 4);
         for(var bubble:messageBubbles) {

@@ -32,21 +32,34 @@ abstract class SettingsFormScreen extends Screen {
     private Button anchor;
     private int popupX, popupY, popupWidth, popupRows, choiceOffset, choiceIndex;
     private boolean draggingScroll;
+    // Set while the form is a pane beside or over a chat rather than its own screen.
+    private Runnable close;
+    private boolean side;
 
     protected SettingsFormScreen(Component title) { super(title); }
 
+    /** Shows the form as a bare pane: no title or Done; closing runs the callback instead of changing screens. */
+    public void dock(Runnable close) { this.close = close; }
+    protected boolean docked() { return close != null; }
+    /** Side panes use tighter padding than a pane covering a chat. */
+    public void side(boolean value) { if (side != value) { side = value; if (minecraft != null) rebuildForm(); } }
+    protected void leave(Screen parent) {
+        if (close != null) close.run();
+        else if (minecraft.screen == this) minecraft.setScreen(parent);
+    }
+
     protected void begin() {
         closeDropdown(); controls.clear(); labels.clear(); rowY = 0;
-        contentWidth = Math.min(600, width - 32); left = (width - contentWidth) / 2;
+        if (docked()) { left = side ? 4 : 10; contentWidth = Math.max(60, width - left - (side ? 12 : 18)); formTop = 6; formBottom = height - 16; }
+        else { contentWidth = Math.min(600, width - 32); left = (width - contentWidth) / 2; formTop = 34; formBottom = height - 48; }
         int labelWidth = Math.min(164, contentWidth * 2 / 5);
         controlX = left + labelWidth + 12; controlWidth = contentWidth - labelWidth - 12;
-        formTop = 34; formBottom = height - 48;
     }
 
     /** Minecraft's centered Done; screens save as they close. */
     protected void done() {
         int w=Math.min(200,contentWidth);
-        addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds((width-w)/2,height-26,w,20).build());
+        if (!docked()) addRenderableWidget(Button.builder(Component.literal("Done"), b -> onClose()).bounds((width-w)/2,height-26,w,20).build());
         layout();
     }
 
@@ -206,11 +219,31 @@ abstract class SettingsFormScreen extends Screen {
     @Override public boolean charTyped(char character,int modifiers) {
         return anchor!=null || super.charTyped(character,modifiers);
     }
+    @Override public void renderBackground(GuiGraphics g,int x,int y,float delta) {
+        if (!docked()) super.renderBackground(g,x,y,delta);
+    }
     @Override public void render(GuiGraphics g,int x,int y,float delta) {
+        if (!docked()) { renderForm(g,x,y,delta); return; }
+        // Widget tooltips normally go to Minecraft's current screen; keep them in this pane's coordinates.
+        var tooltips=new java.util.LinkedHashMap<AbstractWidget,Tooltip>();
+        Tooltip hovered=null;
+        for(var child:children()) {
+            if(!(child instanceof AbstractWidget widget)||widget.getTooltip()==null)continue;
+            tooltips.put(widget,widget.getTooltip());
+            if(anchor==null&&widget.visible&&widget.isMouseOver(x,y)&&y>=formTop&&y<formBottom)hovered=widget.getTooltip();
+            widget.setTooltip(null);
+        }
+        try { renderForm(g,x,y,delta); }
+        finally { tooltips.forEach(AbstractWidget::setTooltip); }
+        if(hovered!=null)setTooltipForNextRenderPass(hovered.toCharSequence(minecraft),
+            (screenWidth,screenHeight,tx,ty,tooltipWidth,tooltipHeight)->new org.joml.Vector2i(
+                Math.max(4,Math.min(tx+10,width-tooltipWidth-4)),Math.max(4,Math.min(ty+10,height-tooltipHeight-4))),true);
+    }
+    private void renderForm(GuiGraphics g,int x,int y,float delta) {
         layout();
         super.render(g,x,y,delta);
-        g.drawCenteredString(font,title,width/2,12,0xFFFFFF);
-        g.fill(left-8,formTop-5,left+contentWidth+8,Math.min(formBottom,formTop+rowY)+3,0xA0101010);
+        if (!docked()) g.drawCenteredString(font,title,width/2,12,0xFFFFFF);
+        g.fill(left-8,formTop-5,left+contentWidth+8,side?height:Math.min(formBottom,formTop+rowY)+3,0xA0101010);
         g.enableScissor(left-2,formTop,left+contentWidth+2,formBottom);
         for(var label:labels) {
             int yy=formTop+label.offset()-scroll;
@@ -223,8 +256,9 @@ abstract class SettingsFormScreen extends Screen {
         g.disableScissor();
         if(maxScroll()>0){int h=formBottom-formTop,thumb=Math.max(16,h*h/(h+maxScroll()));int yy=formTop+(h-thumb)*scroll/maxScroll();
             g.fill(left+contentWidth+7,formTop,left+contentWidth+9,formBottom,0xFF333333);g.fill(left+contentWidth+6,yy,left+contentWidth+10,yy+thumb,0xFFAAAAAA);}
-        g.drawString(font,font.plainSubstrByWidth(feedback,contentWidth),left,height-43,0xD8CFAF);
-        if(font.width(feedback)>contentWidth&&y>=height-46&&y<height-29)g.renderTooltip(font,font.split(Component.literal(feedback),contentWidth),x,y);
+        int feedbackY=docked()?height-11:height-43;
+        g.drawString(font,font.plainSubstrByWidth(feedback,contentWidth),left,feedbackY,0xD8CFAF);
+        if(font.width(feedback)>contentWidth&&y>=feedbackY-3&&y<feedbackY+14)g.renderTooltip(font,font.split(Component.literal(feedback),contentWidth),x,y);
         if(anchor!=null) {
             g.pose().pushPose();g.pose().translate(0,0,300);
             g.fill(popupX-1,popupY-1,popupX+popupWidth+1,popupY+popupRows*22+5,0xFFAAAAAA);

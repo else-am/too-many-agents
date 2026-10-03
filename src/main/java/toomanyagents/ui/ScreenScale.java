@@ -78,7 +78,8 @@ public final class ScreenScale {
     // Mod settings and agent inventories keep the game's scale.
     private static boolean scaled(Screen screen) {
         if (screen instanceof InventoryAgentSidebar || screen instanceof AgentWorkspaceScreen
-            || screen instanceof AgentChatScreen chat && chat.docked()) return false;
+            || screen instanceof AgentChatScreen chat && chat.docked()
+            || screen instanceof SettingsFormScreen form && form.docked()) return false;
         return screen != null && screen.getClass().getPackageName().equals(ScreenScale.class.getPackageName())
             && !(screen instanceof TooManyAgentsSettingsScreen || screen instanceof ProviderSettingsScreen || screen instanceof AgentInventoryScreen);
     }

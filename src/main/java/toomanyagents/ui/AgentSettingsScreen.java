@@ -105,7 +105,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
                         bodies.clear();
                         for (var body : AgentModels.array(catalog, "bodies")) bodies.add(body.getAsString());
                         bodies.sort(String::compareTo);
-                        if (minecraft != null && minecraft.screen == this) rebuildForm();
+                        if (minecraft != null && (docked() || minecraft.screen == this)) rebuildForm();
                     }
                 }));
         }
@@ -314,20 +314,20 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         run(access.setFollowing(agentId,true),"Following resumed.");
     }
     private void run(CompletableFuture<Void> future,String success){
-        busy=true;rebuildForm();future.whenComplete((unused,error)->screenExecutor.execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));
+        busy=true;rebuildForm();future.whenComplete((unused,error)->Minecraft.getInstance().execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));
     }
     private void apply(){
         if(!valid()){feedback="Enter a name and choose a body.";return;}
         if(!targetsChosen())return;
         var changes=draft.deepCopy();if(agentId!=null){changes.remove("minecraftAccess");if(!followEdited)changes.remove("following");}
-        busy=true;rebuildForm();apply.apply(changes).thenCompose(unused->saveStation()).whenComplete((unused,error)->screenExecutor.execute(()->{
-            busy=false;if(error==null){if(minecraft.screen==this)minecraft.setScreen(parent);}else{feedback=AgentModels.error(error);rebuildForm();}
+        busy=true;rebuildForm();apply.apply(changes).thenCompose(unused->saveStation()).whenComplete((unused,error)->Minecraft.getInstance().execute(()->{
+            busy=false;if(error==null)leave(parent);else{feedback=AgentModels.error(error);rebuildForm();}
         }));
     }
     // Changes save on the way out.
     @Override public void onClose(){
         if(busy)return;
-        if(!editable()||draft.equals(saved)&&(agentId==null||stationId.equals(assignedStation())))minecraft.setScreen(parent);
+        if(!editable()||draft.equals(saved)&&(agentId==null||stationId.equals(assignedStation())))leave(parent);
         else apply();
     }
 }
