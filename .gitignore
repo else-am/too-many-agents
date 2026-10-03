@@ -1,0 +1,16 @@
+# Local runs, caches and build output
+run/
+build/
+.gradle/
+.gradle-user/
+scratch/
+*.log
+__pycache__/
+
+# Local agent/editor state
+.claude/
+.local/
+.idea/
+.vscode/
+*.iml
+.DS_Store

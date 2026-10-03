@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+cd "$(dirname "$0")/.."
+# Ignore an inherited Java 17 when this project needs 21.
+is_java21() {
+    case "$("$1/bin/javac" -version 2>/dev/null || true)" in
+        'javac 21.'*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+if ! is_java21 "${JAVA_HOME:-/nonexistent}"; then
+    # Fall back to a system JDK 21, then Prism Launcher's downloaded runtime.
+    for candidate in \
+        "$( [ "$(uname)" = Darwin ] && /usr/libexec/java_home -v 21 2>/dev/null || true)" \
+        /usr/lib/jvm/*21* \
+        "$HOME/Library/Application Support/PrismLauncher/java/java-runtime-delta" \
+        "$HOME/.local/share/PrismLauncher/java/java-runtime-delta"; do
+        if [ -n "$candidate" ] && is_java21 "$candidate"; then
+            JAVA_HOME=$candidate
+            break
+        fi
+    done
+fi
+if ! is_java21 "${JAVA_HOME:-/nonexistent}"; then
+    echo 'Set JAVA_HOME to a JDK 21 installation.' >&2
+    exit 1
+fi
+export JAVA_HOME
+export GRADLE_USER_HOME="${GRADLE_USER_HOME:-$PWD/.gradle-user}"
+if [ "$#" -eq 0 ]; then set -- build; fi
+exec ./gradlew "$@"

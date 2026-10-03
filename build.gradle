@@ -1,0 +1,127 @@
+plugins {
+    id 'java'
+    id 'net.neoforged.moddev' version '2.0.147'
+}
+
+group = 'toomanyagents'
+version = '0.8.0'
+base.archivesName = 'too-many-agents'
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
+def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
+    delete fileTree('run/mods') { include 'too-many-agents*.jar' }
+}
+// A fresh test run starts muted, without the narrator prompt or tutorial toasts.
+// Existing options are left alone.
+def quietTestOptions = tasks.register('quietTestOptions') {
+    def options = file('run/options.txt')
+    onlyIf { !options.exists() }
+    doLast {
+        options.parentFile.mkdirs()
+        options.text = ['version:3955', 'onboardAccessibility:false', 'narrator:0', 'soundCategory_master:0.0',
+                        'tutorialStep:none', 'pauseOnLostFocus:false'].join('\n') + '\n'
+    }
+}
+def stagePackagedTooManyAgents = tasks.register('stagePackagedTooManyAgents', Copy) {
+    def artifact = layout.buildDirectory.file("libs/too-many-agents-${version}.jar")
+    from artifact
+    into 'run/mods'
+    doFirst {
+        if (!packagedJarRun) throw new GradleException('Use runPackagedClient -PpackagedJarRun after tools/build build.')
+        if (!artifact.get().asFile.isFile()) throw new GradleException('Build the TooManyAgents JAR first with tools/build build.')
+        delete fileTree('run/mods') { include 'too-many-agents*.jar' }
+    }
+}
+
+neoForge {
+    version = '21.1.251'
+    // Packaged runs must obtain access changes from the JAR, not the development sources.
+    if (packagedJarRun) accessTransformers.files.setFrom([])
+    runs {
+        client {
+            client()
+            taskBefore cleanStagedTooManyAgents
+            if (providers.gradleProperty('hotReload').isPresent()) {
+                gameDirectory = project.file(providers.gradleProperty('hotReloadTest').isPresent() ? 'run' : 'run/play')
+                jvmArgument '-XX:+AllowEnhancedClassRedefinition'
+                jvmArgument '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0'
+            }
+            if (providers.gradleProperty('devWorld').isPresent()) {
+                taskBefore quietTestOptions
+                systemProperty 'too_many_agents.devWorld', 'true'
+                systemProperty 'too_many_agents.dataDir', project.file('run/managed-data').absolutePath
+            }
+        }
+        packagedClient {
+            client()
+            loadedMods.set([])
+            taskBefore stagePackagedTooManyAgents
+            if (providers.gradleProperty('devWorld').isPresent()) {
+                taskBefore quietTestOptions
+                systemProperty 'too_many_agents.devWorld', 'true'
+                systemProperty 'too_many_agents.dataDir', project.file('run/managed-data').absolutePath
+            }
+        }
+    }
+    mods {
+        too_many_agents { sourceSet sourceSets.main }
+    }
+}
+
+// Prepare NeoForge's normal launch, then let tools/dev own the JVM so Gradle is
+// free to compile changes while Minecraft stays open.
+if (providers.gradleProperty('hotReload').isPresent()) {
+    tasks.named('runClient') {
+        doFirst {
+            classpath(classpathProvider)
+            def launchCommand = [javaLauncher.get().executablePath.asFile.absolutePath] + allJvmArgs +
+                jvmArgumentProviders.collectMany { it.asArguments().toList() } +
+                ['-cp', classpath.asPath, mainClass.get()] + args +
+                argumentProviders.collectMany { it.asArguments().toList() }
+            def launch = [command: launchCommand, environment: environmentProperty.get(),
+                          directory: gameDirectory.get().asFile.absolutePath]
+            def output = layout.buildDirectory.file('hot-reload/launch.json').get().asFile
+            output.parentFile.mkdirs()
+            output.text = groovy.json.JsonOutput.toJson(launch)
+            throw new StopExecutionException('Launch prepared for tools/dev')
+        }
+    }
+}
+
+tasks.named('runPackagedClient') {
+    // Empty loadedMods alone still lets FML discover main's processed resources on the classpath.
+    classpathProvider.setFrom(configurations.runtimeClasspath)
+    doFirst {
+        if (!packagedJarRun) throw new GradleException('Use runPackagedClient -PpackagedJarRun after tools/build build.')
+    }
+}
+
+// Bundle only the owned JS helper and SDK. The user's installed native CLI stays external.
+def bundleClaude = tasks.register('bundleClaude', Exec) {
+    workingDir 'tools/claude-bridge'
+    commandLine providers.environmentVariable('TOO_MANY_AGENTS_NODE').getOrElse('node'), 'build.mjs'
+    inputs.files(fileTree('tools/claude-bridge') {
+        include '*.mjs', 'protocol/**', 'package.json', 'package-lock.json'
+    })
+    outputs.files 'tools/claude-bridge/dist/bridge.mjs', 'tools/claude-bridge/dist/THIRD-PARTY-LICENSES.txt'
+    doFirst {
+        if (!file('tools/claude-bridge/node_modules/esbuild').isDirectory())
+            throw new GradleException('Claude helper dependencies missing: run npm ci --ignore-scripts in tools/claude-bridge.')
+    }
+}
+
+tasks.named('processResources', ProcessResources) {
+    dependsOn bundleClaude
+    inputs.property 'version', project.version
+    from('tools/claude-bridge/dist/bridge.mjs') { into 'too_many_agents/claude' }
+    from('tools/claude-bridge/dist/THIRD-PARTY-LICENSES.txt') { into 'too_many_agents/claude' }
+    from('strategies') { into 'too_many_agents/strategies' }
+    from('LICENSE')
+    filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}

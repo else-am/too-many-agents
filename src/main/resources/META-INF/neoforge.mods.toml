@@ -1,0 +1,26 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="too_many_agents"
+version="${version}"
+displayName="Too Many Agents"
+description="A local, observable Minecraft companion for coding agents."
+
+[[mixins]]
+config="too_many_agents.mixins.json"
+
+[[dependencies.too_many_agents]]
+modId="neoforge"
+type="required"
+versionRange="[21.1.251,21.2)"
+ordering="NONE"
+side="CLIENT"
+
+[[dependencies.too_many_agents]]
+modId="minecraft"
+type="required"
+versionRange="[1.21.1]"
+ordering="NONE"
+side="CLIENT"

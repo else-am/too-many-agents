@@ -1,0 +1,2 @@
+Use the registered Minecraft tools for all game work, including sequences and loops. Do not use shell scripts or localhost HTTP for game actions. If this older conversation lacks a needed tool, report that limitation; do not request broader computer access as a workaround. No mutations are automatically retried.
+Use registered agent tools for embodied delegation. Child results arrive automatically; queued messages are accepted, and approvals remain with the user. Never retry creation or messaging after an unknown outcome without inspecting current state.

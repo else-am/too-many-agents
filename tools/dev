@@ -1,0 +1,211 @@
+#!/usr/bin/env python3
+"""Launch a personal/test Minecraft client and reload Java edits after successful builds."""
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import select
+import subprocess
+import sys
+import time
+
+ROOT = Path(__file__).resolve().parents[1]
+JAVA_SOURCES = ROOT / 'src/main/java'
+CLASSES = ROOT / 'build/classes/java/main'
+
+
+def say(message):
+    print('[dev] ' + message, flush=True)
+
+
+def runtime():
+    # JetBrains IDEs bundle a suitable runtime (JBR).
+    candidates = [os.environ.get('TMA_DEV_JAVA_HOME'),
+                  '/Applications/Android Studio.app/Contents/jbr/Contents/Home',
+                  '/Applications/IntelliJ IDEA.app/Contents/jbr/Contents/Home',
+                  '/Applications/IntelliJ IDEA CE.app/Contents/jbr/Contents/Home',
+                  '/opt/android-studio/jbr',
+                  *map(str, Path.home().glob('.local/share/JetBrains/Toolbox/apps/*/jbr')),
+                  os.environ.get('JAVA_HOME')]
+    for candidate in filter(None, candidates):
+        home = Path(candidate)
+        if not (home / 'bin/javac').is_file():
+            continue
+        check = subprocess.run([str(home / 'bin/java'), '-XX:+AllowEnhancedClassRedefinition', '-version'],
+                               capture_output=True, text=True)
+        if check.returncode == 0 and re.search(r'version "21\.', check.stderr):
+            return home
+    raise RuntimeError('Set TMA_DEV_JAVA_HOME to a JetBrains Runtime 21 JDK with enhanced class redefinition.')
+
+
+def sources():
+    paths = []
+    for folder in ('src', 'strategies'):
+        paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
+    bridge = ROOT / 'tools/claude-bridge'
+    paths.extend(bridge.glob('*.mjs'))
+    paths.extend(bridge.glob('*.json'))
+    paths.extend(p for p in (bridge / 'protocol').rglob('*') if p.is_file())
+    paths.extend(ROOT / p for p in ('build.gradle', 'settings.gradle', 'gradle.properties', 'tools/HotReload.java', 'tools/dev'))
+    return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--test', action='store_true', help='Use run/ and automatically open the guarded test world; default: your worlds in run/play/')
+    args = parser.parse_args()
+    os.chdir(ROOT)
+    home = runtime()
+    env = dict(os.environ, JAVA_HOME=str(home))
+    folder = ROOT / ('run' if args.test else 'run/play')
+    folder.mkdir(parents=True, exist_ok=True)
+    # Hold this lock for the life of the client, including while it is at the title screen.
+    instance_lock = (folder / 'hot-reload.lock').open('a')
+    try:
+        fcntl.flock(instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        raise RuntimeError('This development profile is already running.') from None
+    output = ROOT / 'build/hot-reload'
+    output.mkdir(parents=True, exist_ok=True)
+    build_lock = (ROOT / '.gradle-user/hot-reload-build.lock')
+    build_lock.parent.mkdir(exist_ok=True)
+    log_path = folder / 'hot-reload.log'
+    status_path = folder / 'hot-reload-status.json'
+    state = dict(status='starting', gameDirectory=str(folder), runtime=str(home))
+
+    def status(value, message=''):
+        state.update(status=value, message=message)
+        temp = status_path.with_suffix('.tmp')
+        temp.write_text(json.dumps(state, indent=2))
+        temp.replace(status_path)
+        if message:
+            say(message)
+
+    def build(*tasks):
+        with build_lock.open('a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            with (folder / 'hot-reload-build.log').open('w') as log:
+                result = subprocess.run([str(ROOT / 'tools/build'), *tasks, '--console=plain'],
+                                        cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT)
+            if result.returncode:
+                say((folder / 'hot-reload-build.log').read_text()[-5000:])
+                return False
+            # Read the launch descriptor under the same lock that generated it.
+            if 'runClient' in tasks:
+                return json.loads((output / 'launch.json').read_text())
+            return True
+
+    def response(process):
+        if not select.select([process.stdout], [], [], 30)[0]:
+            return 'RESTART Reload debugger did not respond within 30 seconds; do not retry this session.'
+        return process.stdout.readline().strip()
+
+    baseline = sources()
+    status('starting', 'Preparing Minecraft with enhanced HotSwap…')
+    flags = ['-PhotReload'] + (['-PhotReloadTest', '-PdevWorld'] if args.test else [])
+    launch = build('runClient', *flags)
+    if not launch:
+        status('failed', 'Launch preparation failed; see hot-reload-build.log.')
+        return 1
+    subprocess.run([str(home / 'bin/javac'), '--add-modules', 'jdk.jdi', '-d', str(output),
+                    str(ROOT / 'tools/HotReload.java')], check=True)
+    command = launch['command']
+    command[0] = str(home / 'bin/java')
+    child_env = dict(env, **launch['environment'])
+    game_log = log_path.open('w')
+    game = subprocess.Popen(command, cwd=launch['directory'], env=child_env, stdout=game_log,
+                            stderr=subprocess.STDOUT, start_new_session=True)
+    state['pid'] = game.pid
+    status('starting', f'Minecraft PID {game.pid}. Your saves: {folder / "saves"}')
+    helper = None
+    try:
+        deadline = time.monotonic() + 90
+        port = None
+        while game.poll() is None and time.monotonic() < deadline:
+            match = re.search(r'Listening for transport dt_socket at address: (\d+)', log_path.read_text(errors='replace'))
+            if match:
+                port = match[1]
+                break
+            time.sleep(.25)
+        if port:
+            helper = subprocess.Popen([str(home / 'bin/java'), '--add-modules', 'jdk.jdi', '-cp', str(output),
+                                       'HotReload', port, str(CLASSES)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                      stderr=game_log, text=True)
+            ready = response(helper)
+            if ready != 'READY':
+                status('restart-required', 'Could not attach the reload debugger. Close Minecraft and check hot-reload.log.')
+            else:
+                status('watching', 'Hot reload ready. Save Java edits; successful builds reload automatically. Close Minecraft normally to exit.')
+        else:
+            status('failed', 'Minecraft did not open its debugger; see hot-reload.log.')
+        pending = None
+        changed_at = 0
+        while game.poll() is None:
+            try:
+                time.sleep(.3)
+                if state['status'] not in ('watching', 'build-failed'):
+                    continue
+                if helper.poll() is not None:
+                    status('restart-required', 'Reload debugger disconnected; restart required.')
+                    continue
+                try:
+                    current = sources()
+                except FileNotFoundError:
+                    # Editors may briefly rename files while saving.
+                    continue
+                if current == baseline:
+                    pending = None
+                    continue
+                if current != pending:
+                    pending = current
+                    changed_at = time.monotonic()
+                    continue
+                if time.monotonic() - changed_at < .7:
+                    continue
+                changed = {p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p)}
+                # Live provider callbacks retain compiler-generated lambda targets across reloads.
+                # Recompiling their owners can remove those targets and silently lose turn events.
+                restart = [p for p in changed if not p.startswith('src/main/java/') or
+                           p.startswith('src/main/java/toomanyagents/agent/') or
+                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/MinecraftStrategy.java', '/ProviderInstallations.java')) or '/mixin/' in p or p not in current]
+                if restart:
+                    status('restart-required', 'Restart required for: ' + ', '.join(sorted(restart)))
+                    continue
+                status('building', 'Compiling Java changes…')
+                success = build('compileJava')
+                baseline = current
+                pending = None
+                if not success:
+                    status('build-failed', 'Build failed. Running code is unchanged; fix and save to retry.')
+                    continue
+                helper.stdin.write('reload\n')
+                helper.stdin.flush()
+                answer = response(helper)
+                if answer.startswith('RELOADED '):
+                    state['reloads'] = state.get('reloads', 0) + 1
+                    status('watching', answer)
+                else:
+                    status('restart-required', answer or 'Reload debugger disconnected; restart required.')
+            except KeyboardInterrupt:
+                say('Close Minecraft normally to save your world and stop this session.')
+    finally:
+        if helper:
+            helper.stdin.close()
+            try:
+                helper.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                helper.terminate()
+        game_log.close()
+        status('stopped' if game.poll() == 0 else 'failed', f'Minecraft exited. Log: {log_path}')
+    return game.returncode or 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (RuntimeError, OSError, subprocess.SubprocessError) as error:
+        say(str(error))
+        sys.exit(1)
