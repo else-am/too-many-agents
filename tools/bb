@@ -41,8 +41,8 @@ def main():
         return result.stdout
 
     npm = os.environ.get('TOO_MANY_AGENTS_NPM', 'npm')
-    if not (PLUGIN / 'node_modules/@get-bb/plugin-sdk/package.json').is_file():
-        subprocess.run([npm, 'ci', '--prefix', str(PLUGIN), '--ignore-scripts', '--no-audit', '--no-fund'], cwd=ROOT, check=True)
+    # A checkout can add runtime worker dependencies while the SDK is already installed.
+    subprocess.run([npm, 'ci', '--prefix', str(PLUGIN), '--ignore-scripts', '--no-audit', '--no-fund'], cwd=ROOT, check=True)
     # BB loads the plugin from this folder; physical tool schemas are shared with Java.
     shutil.copyfile(ROOT / 'surface/tools.json', PLUGIN / 'surface/tools.json')
     subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], cwd=ROOT, check=True)

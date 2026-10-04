@@ -65,9 +65,95 @@ public final class AgentChatScreen extends Screen {
     private Button pickerAnchor;
     private int pickerX, pickerY, pickerWidth, pickerHeight;
 
-    private record Line(FormattedCharSequence text, int color, long replyVersion, int inset, String copyText) {
+    private record Line(FormattedCharSequence text, int color, long replyVersion, int inset, String copyText, ChatMarkdown.Row rich) {
+        Line(FormattedCharSequence text,int color,long replyVersion,int inset,String copyText) {this(text,color,replyVersion,inset,copyText,null);}
         Line(FormattedCharSequence text,int color,long replyVersion,int inset) {this(text,color,replyVersion,inset,null);}
         Line(FormattedCharSequence text,int color,long replyVersion) {this(text,color,replyVersion,0);}
+    }
+    private record RichPanel(ChatMarkdown.Panel panel, int lineOffset, int inset) {}
+    private final List<RichPanel> richPanels = new ArrayList<>();
+    private record RichMedia(ChatMarkdown.Media media,int lineOffset,int inset) {}
+    private final List<RichMedia> richMedia = new ArrayList<>();
+    private final ChatImages chatImages = new ChatImages(this::loadChatAsset);
+    private RichMedia pressedMedia;
+    private String pressedLink;
+    private boolean developmentTranscript;
+    private java.util.function.BiFunction<String,String,CompletableFuture<JsonObject>> developmentAssets;
+    private java.util.function.Function<String,CompletableFuture<Void>> developmentLinks;
+
+    public void developmentAssets(java.util.function.BiFunction<String,String,CompletableFuture<JsonObject>> assets,
+                                  java.util.function.Function<String,CompletableFuture<Void>> links) {
+        if(!Boolean.getBoolean("too_many_agents.devWorld"))throw new IllegalStateException("Development only");
+        developmentAssets=assets;developmentLinks=links;chatImages.close();
+    }
+
+    private CompletableFuture<JsonObject> loadChatAsset(String kind,String source) {
+        return developmentTranscript && developmentAssets!=null ? developmentAssets.apply(kind,source) : access.chatAsset(agentId,kind,source);
+    }
+
+    /** Called only by the guarded development-world UI controls. Uses the real transcript renderer. */
+    public JsonObject developmentTranscript(JsonObject request) {
+        if (!Boolean.getBoolean("too_many_agents.devWorld")) throw new IllegalStateException("Development only");
+        developmentTranscript=true;
+        if (request.has("rows")) {
+            transcript=new JsonObject();
+            transcript.add("rows",request.getAsJsonArray("rows").deepCopy());
+            loadedSequence++;
+            transcriptKey="";
+            rebuildTranscript();
+        }
+        if (request.has("scroll")) scroll=Math.clamp(request.get("scroll").getAsInt(),0,maxScroll);
+        var result=new JsonObject();
+        if(request.has("clipboardEquals")) result.addProperty("clipboardMatches",
+            minecraft.keyboardHandler.getClipboard().equals(request.get("clipboardEquals").getAsString()));
+        result.addProperty("scroll",scroll); result.addProperty("maxScroll",maxScroll);
+        result.addProperty("left",left); result.addProperty("width",contentWidth);
+        result.addProperty("top",transcriptTop); result.addProperty("bottom",transcriptBottom);
+        result.addProperty("selected",selectedText());
+        result.addProperty("feedback",feedback);
+        var rendered=new com.google.gson.JsonArray();
+        for(int i=0;i<lines.size();i++) {
+            var row=new JsonObject(); var line=lines.get(i);
+            row.addProperty("text",lineText(line)); row.addProperty("copy",line.copyText());
+            row.addProperty("x",lineX(line)); row.addProperty("y",transcriptTop+6+i*LINE_HEIGHT-scroll);
+            rendered.add(row);
+        }
+        result.add("lines",rendered);
+        var panels=new com.google.gson.JsonArray();
+        for(var entry:richPanels) {
+            var panel=entry.panel();var item=new JsonObject();
+            item.addProperty("label",panel.label);item.addProperty("source",panel.source);
+            item.addProperty("x",left+8+entry.inset()+panel.inset);
+            item.addProperty("y",transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll);
+            item.addProperty("width",panel.width);item.addProperty("scroll",panel.scroll);item.addProperty("maxScroll",panel.maxScroll());
+            panels.add(item);
+        }
+        result.add("panels",panels);
+        result.addProperty("textureBytes",chatImages.textureBytes());result.addProperty("imageCacheSize",chatImages.size());
+        var media=new com.google.gson.JsonArray();
+        for(var entry:richMedia) {
+            var item=new JsonObject();var m=entry.media();
+            int y=transcriptTop+6+(entry.lineOffset()+m.first())*LINE_HEIGHT-scroll;
+            item.addProperty("kind",m.kind());item.addProperty("source",m.source());item.addProperty("alt",m.alt());
+            item.addProperty("x",left+8+entry.inset()+m.inset());item.addProperty("y",y);item.addProperty("width",m.width());
+            item.addProperty("height",(m.end()-m.first())*LINE_HEIGHT);
+            if(y<transcriptBottom && y+(m.end()-m.first())*LINE_HEIGHT>transcriptTop) {
+                var image=chatImages.get(m.kind(),m.source());
+                item.addProperty("loading",image.loading);item.addProperty("error",image.error);item.addProperty("ready",image.texture!=null);
+            }
+            media.add(item);
+        }
+        result.add("media",media);
+        return result;
+    }
+
+    private int lineWidthAt(Line line, int character) {
+        return line.rich() == null ? ChatMarkdown.prefixWidth(font, line.text(), character)
+            : line.rich().widthAt(font, character);
+    }
+
+    private int lineX(Line line) {
+        return left + 8 + line.inset() - (line.rich() != null && line.rich().panel() != null ? line.rich().panel().scroll : 0);
     }
     private record Disclosure(AbstractWidget button, int line) {}
     private java.util.Map<String, String> questionDrafts = new java.util.HashMap<>();
@@ -148,11 +234,11 @@ public final class AgentChatScreen extends Screen {
         int index=Math.clamp((int)Math.floor((mouseY-transcriptTop-6+scroll)/LINE_HEIGHT),0,lines.size()-1);
         var line=lines.get(index);
         String text=lineText(line);
-        double target=mouseX-left-8-line.inset();
+        double target=mouseX-lineX(line);
         int offset=0;
         while(offset<text.length()) {
             int next=offset+Character.charCount(text.codePointAt(offset));
-            if(target<(font.width(text.substring(0,offset))+font.width(text.substring(0,next)))/2.0)break;
+            if(target<(lineWidthAt(line,offset)+lineWidthAt(line,next))/2.0)break;
             offset=next;
         }
         return new TextPosition(index,offset);
@@ -189,8 +275,8 @@ public final class AgentChatScreen extends Screen {
         var line=lines.get(index);String text=lineText(line);
         int from=index==start.line()?Math.min(start.character(),text.length()):0;
         int to=index==end.line()?Math.min(end.character(),text.length()):text.length();
-        int x=left+8+line.inset();
-        graphics.fill(x+font.width(text.substring(0,from)),y-1,x+font.width(text.substring(0,to)),y+font.lineHeight+1,0xB05A7EAA);
+        int x=lineX(line);
+        graphics.fill(x+lineWidthAt(line,from),y-1,x+lineWidthAt(line,to),y+font.lineHeight+1,0xB05A7EAA);
     }
 
 
@@ -302,7 +388,7 @@ public final class AgentChatScreen extends Screen {
     }
 
     private boolean backendAvailable() {
-        return !Set.of("disconnected", "unavailable").contains(AgentModels.text(state, "status"));
+        return !developmentTranscript && !Set.of("disconnected", "unavailable").contains(AgentModels.text(state, "status"));
     }
 
     private static String bodyLabel(String id) {
@@ -347,10 +433,14 @@ public final class AgentChatScreen extends Screen {
     boolean pickerOpen() { return pickerAnchor != null; }
 
     @Override public void onClose() {
+        chatImages.close();
         closePicker();
         if (docked()) closePanel.run();
         else super.onClose();
     }
+
+    @Override public void removed() { chatImages.close(); }
+    public static JsonObject imageResources() { return ChatImages.resources(); }
 
     @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (!docked()) super.renderBackground(graphics, mouseX, mouseY, partialTick);
@@ -1243,6 +1333,37 @@ public final class AgentChatScreen extends Screen {
 
     private void detail(JsonObject row) { detail(row,24,contentWidth-48); }
 
+    private void markdown(String text, int color, long replyVersion, int inset, int wrapWidth) {
+        appendMarkdown(ChatMarkdown.layout(font,text,wrapWidth),color,replyVersion,inset);
+    }
+
+    private void appendMarkdown(ChatMarkdown.Layout layout,int color,long replyVersion,int inset) {
+        int first = lines.size();
+        for (int i = 0; i < layout.rows().size(); i++) {
+            var row = layout.rows().get(i);
+            lines.add(new Line(row.text(), color, i == layout.rows().size() - 1 ? replyVersion : 0,
+                inset + row.inset(), row.copyText(), row));
+        }
+        for (var panel : layout.panels()) richPanels.add(new RichPanel(panel, first, inset));
+        for (var media : layout.media()) richMedia.add(new RichMedia(media, first, inset));
+    }
+
+    private void attachments(JsonObject row,int inset,int width) {
+        var attachments=AgentModels.object(row,"attachments");
+        var sources=new java.util.LinkedHashSet<String>();
+        for(String key:List.of("imageUrls","localImagePaths"))for(var value:AgentModels.array(attachments,key))
+            if(value.isJsonPrimitive() && value.getAsJsonPrimitive().isString())sources.add(value.getAsString());
+        for(String source:sources) appendMarkdown(ChatMarkdown.image(font,source,"Attached image",width),0xEEEEEE,0,inset);
+        for(var value:AgentModels.array(attachments,"localFilePaths")) {
+            String path=value.getAsString();
+            var component=Component.literal("↗ "+path).withStyle(style->style.withColor(0x96C9DB).withUnderlined(true)
+                .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,path)));
+            for(var line:font.split(component,width))lines.add(new Line(line,0x96C9DB,0,inset));
+        }
+        if(sources.isEmpty() && attachmentCount(row)>0 && AgentModels.array(attachments,"localFilePaths").isEmpty())
+            paragraph(attachmentCount(row)+" attachment(s) — open full message for details",0xAAAAAA,0,inset,width);
+    }
+
     private void detail(JsonObject row,int inset,int wrapWidth) {
         if(!AgentModels.text(row,"id").equals(expandedRow))return;
         String text = workDetail(row);
@@ -1283,14 +1404,10 @@ public final class AgentChatScreen extends Screen {
         int bubbleWidth=textWidth+16,inset=contentWidth-24-bubbleWidth;
         int firstLine=lines.size();
         lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
-        paragraph(text,0xEEEEEE,0,inset+8,textWidth);
+        markdown(text,0xEEEEEE,0,inset+8,textWidth);
         if(!error.isEmpty())paragraph(error,0xFFAAAA,0,inset+8,textWidth);
         if(attachments>0) {
-            var labels=new ArrayList<String>();
-            int imageCount=(int)(number(AgentModels.object(row,"attachments"),"webImages")+number(AgentModels.object(row,"attachments"),"localImages"));
-            for(int i=1;i<=imageCount;i++)labels.add("[Image "+i+"]");
-            if(attachments>imageCount)labels.add((attachments-imageCount)+" other attachment(s)");
-            paragraph(String.join(" ",labels),0xA9C9E0,0,inset+8,textWidth);
+            attachments(row,inset+8,textWidth);
         }
         if(hasDetail)disclosure((id.equals(expandedRow)?"▾ Hide":"▸ Read")+" full message",
             ()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}),inset+8);
@@ -1320,10 +1437,10 @@ public final class AgentChatScreen extends Screen {
             // Collapsed activity and off-page replies are never marked as read.
             long reply=role.equals("assistant") && !nested && id.equals(lastReplyId())
                 && !(row.has("truncated")&&row.get("truncated").getAsBoolean())?number(state,"replyVersion"):0;
-            paragraph(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0);
+            markdown(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0,contentWidth-24-(nested?12:0));
             if(AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected"))paragraph("Not sent: "+AgentModels.text(row,"detail"),0xFFAAAA,0,0);
             int attachments=attachmentCount(row);
-            if(attachments>0)paragraph(attachments+(attachments==1?" attachment":" attachments"),0xAAAAAA,0,0);
+            if(attachments>0)attachments(row,nested?12:0,contentWidth-24-(nested?12:0));
             if(attachments>0 || row.has("truncated")&&row.get("truncated").getAsBoolean())
                 disclosure((id.equals(expandedRow)?"▾ Hide":"▸ Read")+" full message",()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}));
         } else {
@@ -1360,7 +1477,8 @@ public final class AgentChatScreen extends Screen {
         boolean follow=!hasSelection() && !preserveScroll && scroll>=maxScroll-4;
         preserveScroll=false;transcriptKey=key;
         for(var entry:disclosures)removeWidget(entry.button());
-        disclosures.clear();lines.clear();messageBubbles.clear();thinkingLine=-1;
+        var previousPanels = new ArrayList<>(richPanels);
+        disclosures.clear();lines.clear();messageBubbles.clear();richPanels.clear();richMedia.clear();thinkingLine=-1;
         rebuildQueue();
         boolean hasRunningGroup=false;
         var page = AgentModels.object(transcript, "timelinePage");
@@ -1405,6 +1523,10 @@ public final class AgentChatScreen extends Screen {
             lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
         }
         inlineRequests();
+        for (int i = 0; i < Math.min(previousPanels.size(), richPanels.size()); i++) {
+            var old = previousPanels.get(i).panel(); var current = richPanels.get(i).panel();
+            if (old.source.equals(current.source)) current.scroll = Math.min(old.scroll, current.maxScroll());
+        }
         maxScroll=Math.max(0,lines.size()*LINE_HEIGHT-(transcriptBottom-transcriptTop-12));
         scroll=follow?maxScroll:Math.clamp(scroll,0,maxScroll);
         if(hasSelection()) {
@@ -1639,6 +1761,98 @@ public final class AgentChatScreen extends Screen {
 
     private record WidgetTooltip(AbstractWidget widget, Tooltip tooltip) {}
 
+    private String linkAt(double mouseX, double mouseY) {
+        if(settingsCovering || mouseY<transcriptTop+4 || mouseY>=transcriptBottom-4
+            || mouseX<left+4 || mouseX>=left+contentWidth-8) return null;
+        int index=(int)Math.floor((mouseY-transcriptTop-6+scroll)/LINE_HEIGHT);
+        if(index<0 || index>=lines.size()) return null;
+        var line=lines.get(index);
+        if(line.rich()!=null && line.rich().panel()!=null && (mouseX<left+8+line.inset()
+            || mouseX>=left+8+line.inset()+line.rich().panel().width))return null;
+        int x=(int)mouseX-lineX(line);
+        if(x<0) return null;
+        var style=line.rich()==null?font.getSplitter().componentStyleAtWidth(line.text(),x):line.rich().styleAt(font,x);
+        var click=style==null?null:style.getClickEvent();
+        return click==null?null:click.getValue();
+    }
+
+    private void openLink(String target) {
+        try {
+            if(target.matches("(?i)^https?://.*")) {
+                var uri=net.minecraft.Util.parseAndValidateUntrustedUri(target);
+                if(uri.getHost()==null)throw new java.net.URISyntaxException(target,"Missing host");
+                if(!minecraft.options.chatLinks().get()){feedback="Web links are disabled in Minecraft chat settings.";return;}
+                Screen parent=returnScreen();
+                if(minecraft.options.chatLinksPrompt().get())minecraft.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(accepted->{
+                    if(accepted)net.minecraft.Util.getPlatform().openUri(uri);
+                    minecraft.setScreen(parent);
+                },target,false));
+                else net.minecraft.Util.getPlatform().openUri(uri);
+            } else if(!target.matches("(?i)^[a-z][\\w+.-]*:.*") || target.startsWith("@thread:") || target.matches(".*:\\d+(?::\\d+)?$")) {
+                feedback="Opening in BB…";
+                (developmentTranscript && developmentLinks!=null ? developmentLinks.apply(target) : access.openChatLink(agentId,target)).whenComplete((ignored,failure)->executeUi(()->{
+                    feedback=failure==null?"Opened in BB":"Could not open link: "+AgentModels.error(failure);
+                }));
+            } else feedback="Unsupported link: "+target;
+        } catch(java.net.URISyntaxException failure) { feedback="Invalid link"; }
+    }
+
+    private void renderRichPanels(GuiGraphics graphics,int mouseX,int mouseY) {
+        for(var entry:richPanels) {
+            var panel=entry.panel();
+            int x=left+8+entry.inset()+panel.inset;
+            int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+            int bottom=y+(panel.end-panel.first)*LINE_HEIGHT;
+            if(bottom<transcriptTop || y>transcriptBottom) continue;
+            graphics.fill(x,y-2,x+panel.width,bottom-2,0xEF171C21);
+            graphics.fill(x,y-2,x+panel.width,y+LINE_HEIGHT-2,0xFF2A333A);
+            graphics.drawString(font,font.plainSubstrByWidth(panel.label,Math.max(8,panel.width-50)),x+6,y,0xAEBEC7);
+            graphics.drawString(font,"Copy",x+panel.width-30,y,0xC9D8DF);
+            graphics.enableScissor(x,transcriptTop+4,x+panel.width,transcriptBottom-4);
+            for(int column:panel.columns) graphics.fill(x+column-panel.scroll,y+LINE_HEIGHT-2,
+                x+column-panel.scroll+1,bottom-LINE_HEIGHT,0xFF36424A);
+            if(panel.maxScroll()>0) {
+                int track=panel.width-12;
+                int thumb=Math.max(12,track*panel.width/Math.max(panel.width,panel.contentWidth));
+                int start=x+6+(track-thumb)*panel.scroll/panel.maxScroll();
+                graphics.fill(x+6,bottom-6,x+panel.width-6,bottom-4,0xFF35414A);
+                graphics.fill(start,bottom-6,start+thumb,bottom-4,0xFF93A8B4);
+            }
+            graphics.disableScissor();
+        }
+    }
+
+    private RichMedia mediaAt(double mouseX,double mouseY) {
+        if(mouseY<transcriptTop+4 || mouseY>=transcriptBottom-4)return null;
+        for(var entry:richMedia) {
+            var media=entry.media();int x=left+8+entry.inset()+media.inset();
+            int y=transcriptTop+6+(entry.lineOffset()+media.first())*LINE_HEIGHT-scroll;
+            if(mouseX>=x && mouseX<x+media.width() && mouseY>=y && mouseY<y+(media.end()-media.first())*LINE_HEIGHT)return entry;
+        }
+        return null;
+    }
+
+    private void renderRichMedia(GuiGraphics graphics) {
+        for(var entry:richMedia) {
+            var media=entry.media();int x=left+8+entry.inset()+media.inset();
+            int y=transcriptTop+6+(entry.lineOffset()+media.first())*LINE_HEIGHT-scroll;
+            int height=(media.end()-media.first())*LINE_HEIGHT-4;
+            if(y+height<transcriptTop || y>transcriptBottom)continue;
+            var image=chatImages.get(media.kind(),media.source());
+            graphics.fill(x,y,x+media.width(),y+height,0xEF171C21);
+            if(image.texture!=null)ChatImages.draw(graphics,image,x+4,y+4,media.width()-8,height-22);
+            else {
+                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":image.error;
+                var wrapped=font.split(Component.literal(status),Math.max(24,media.width()-16));
+                for(int i=0;i<Math.min(wrapped.size(),(height-24)/LINE_HEIGHT);i++)
+                    graphics.drawString(font,wrapped.get(i),x+8,y+8+i*LINE_HEIGHT,0xBDB5A6);
+            }
+            String caption=image.texture!=null?(media.alt().isBlank()?"Image":media.alt())+" · Click to enlarge"
+                :image.loading?media.alt():"Click to retry · "+media.alt();
+            graphics.drawString(font,font.plainSubstrByWidth(caption,media.width()-12),x+6,y+height-12,0x96C9DB);
+        }
+    }
+
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (!docked()) {
             renderChat(graphics, mouseX, mouseY, partialTick);
@@ -1700,6 +1914,8 @@ public final class AgentChatScreen extends Screen {
             }
         }
         long seenReply = 0;
+        renderRichPanels(graphics, mouseX, mouseY);
+        renderRichMedia(graphics);
         if (lines.isEmpty()) {
             graphics.drawWordWrap(font, Component.literal(transcriptLoading ? "Loading conversation…" : draft() ? "" : "Your agent is ready. Ask about its project, or give it something to build."), left + 8, transcriptTop + 10, contentWidth - 24, 0xAAAAAA);
         } else {
@@ -1708,15 +1924,24 @@ public final class AgentChatScreen extends Screen {
             for (int i = first; i < last; i++) {
                 int y = transcriptTop + 6 + i * LINE_HEIGHT - scroll;
                 if (y >= transcriptTop - 11 && y < transcriptBottom) {
+                    var line = lines.get(i);
+                    var panel = line.rich() == null ? null : line.rich().panel();
+                    if (panel != null) graphics.enableScissor(left+8+line.inset(),transcriptTop+4,
+                        left+8+line.inset()+panel.width,transcriptBottom-4);
                     drawSelection(graphics,i,y);
                     if(i==thinkingLine)drawShimmer(graphics,"Thinking…",left+8,y,false);
-                    else graphics.drawString(font, lines.get(i).text(), left + 8 + lines.get(i).inset(), y, lines.get(i).color());
+                    else if(line.rich()!=null) line.rich().draw(graphics,font,lineX(line),y,line.color());
+                    else graphics.drawString(font, line.text(), lineX(line), y, line.color());
+                    if (panel != null) graphics.disableScissor();
                 }
                 if (y >= transcriptTop + 4 && y + font.lineHeight <= transcriptBottom - 4) seenReply = Math.max(seenReply, lines.get(i).replyVersion());
             }
         }
         for(var entry:disclosures)if(entry.button().visible)entry.button().render(graphics,mouseX,mouseY,partialTick);
         graphics.disableScissor();
+        String hoverLink = linkAt(mouseX, mouseY);
+        if (hoverLink != null && !selectingText && pickerAnchor == null)
+            renderTooltip(graphics, font.split(Component.literal(hoverLink), Math.max(80, contentWidth-24)), mouseX, mouseY);
         renderQueue(graphics,mouseX,mouseY,partialTick);
         if (maxScroll > 0) {
             int track = transcriptBottom - transcriptTop - 8;
@@ -1795,6 +2020,19 @@ public final class AgentChatScreen extends Screen {
         // Rebind existing widgets after HotSwap, which can invalidate old lambda methods.
         composer.setValueListener(this::draftChanged);
         if(button==0 && mouseX>=left+4 && mouseX<left+contentWidth-8 && mouseY>=transcriptTop+4 && mouseY<transcriptBottom-4 && !lines.isEmpty()) {
+            pressedMedia=mediaAt(mouseX,mouseY);
+            if(pressedMedia!=null){clearSelection();return true;}
+            for (var entry : richPanels) {
+                var panel=entry.panel();
+                int x=left+8+entry.inset()+panel.inset;
+                int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+                if(mouseY>=y && mouseY<y+LINE_HEIGHT && mouseX>=x+panel.width-36 && mouseX<x+panel.width) {
+                    minecraft.keyboardHandler.setClipboard(panel.source);
+                    feedback="Copied "+panel.label;
+                    clearSelection();
+                    return true;
+                }
+            }
             for(var entry:disclosures)if(entry.button().isMouseOver(mouseX,mouseY)) {
                 clearSelection();
                 return super.mouseClicked(mouseX,mouseY,button);
@@ -1808,7 +2046,7 @@ public final class AgentChatScreen extends Screen {
             if(selectionMode>1) {
                 String text=lineText(lines.get(position.line()));
                 int character=position.character();
-                if(character>0 && mouseX<left+8+lines.get(position.line()).inset()+font.width(text.substring(0,character)))
+                if(character>0 && mouseX<lineX(lines.get(position.line()))+lineWidthAt(lines.get(position.line()),character))
                     position=new TextPosition(position.line(),text.offsetByCodePoints(character,-1));
                 var unit=selectionUnit(position,selectionMode);
                 selectionAnchor=selectionUnitStart=unit[0];
@@ -1817,6 +2055,7 @@ public final class AgentChatScreen extends Screen {
                 selectionAnchor=position;
                 selectionEnd=position;
             }
+            pressedLink=selectionMode==1?linkAt(mouseX,mouseY):null;
             selectingText=true;
             setFocused(null);
             composer.setFocused(false);
@@ -1827,7 +2066,9 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public boolean mouseDragged(double mouseX,double mouseY,int button,double deltaX,double deltaY) {
+        pressedMedia=null;
         if(button==0 && selectingText) {
+            pressedLink=null;
             if(mouseY<transcriptTop+4)scroll=Math.max(0,scroll-LINE_HEIGHT);
             else if(mouseY>transcriptBottom-4)scroll=Math.min(maxScroll,scroll+LINE_HEIGHT);
             var position=textPosition(mouseX,mouseY);
@@ -1844,7 +2085,22 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public boolean mouseReleased(double mouseX,double mouseY,int button) {
-        if(button==0 && selectingText) {selectingText=false;return true;}
+        if(button==0 && pressedMedia!=null) {
+            var entry=pressedMedia;pressedMedia=null;
+            if(entry==mediaAt(mouseX,mouseY)) {
+                var media=entry.media();var image=chatImages.get(media.kind(),media.source());
+                if(!image.error.isBlank())chatImages.retry(media.kind(),media.source());
+                else if(image.texture!=null)minecraft.setScreen(new ChatImageScreen(returnScreen(),media.kind(),media.source(),media.alt(),this::loadChatAsset));
+            }
+            return true;
+        }
+        if(button==0 && selectingText) {
+            selectingText=false;
+            String target=pressedLink;
+            pressedLink=null;
+            if(target!=null && !hasSelection() && target.equals(linkAt(mouseX,mouseY))) openLink(target);
+            return true;
+        }
         return super.mouseReleased(mouseX,mouseY,button);
     }
 
@@ -1864,6 +2120,14 @@ public final class AgentChatScreen extends Screen {
             return true;
         }
         if (mouseX >= left && mouseX <= left + contentWidth && mouseY >= transcriptTop && mouseY <= transcriptBottom) {
+            if(horizontal!=0 || hasShiftDown()) for(var entry:richPanels) {
+                var panel=entry.panel();
+                int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+                if(mouseY>=y && mouseY<y+(panel.end-panel.first)*LINE_HEIGHT && panel.maxScroll()>0) {
+                    panel.scroll=Math.clamp(panel.scroll-(int)((horizontal!=0?horizontal:vertical)*33),0,panel.maxScroll());
+                    return true;
+                }
+            }
             scroll = Math.clamp(scroll - (int) (vertical * 33), 0, maxScroll);
             return true;
         }

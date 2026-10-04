@@ -485,15 +485,24 @@ final class GameAccess {
 
     CompletableFuture<JsonObject> development(JsonObject request) {
         if (!DevelopmentWorld.ENABLED) return CompletableFuture.failedFuture(error("development_interface_disabled"));
-        return schedule(worldSession.get(), current -> {
+        String session=worldSession.get(),action=request.get("action").getAsString();
+        return schedule(session, current -> {
             var human = player(current);
             if (!current.getWorldPath(LevelResource.ROOT).toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME)) throw error("not_development_world");
-            return switch (request.get("action").getAsString()) {
+            return switch (action) {
                 case "native_checks" -> DevelopmentChecks.start(human.serverLevel(),human);
+                case "pov" -> {
+                    var snapshot=DevelopmentChecks.snapshot();
+                    if(!snapshot.has("bodyUuid"))throw error("run_native_checks_first");
+                    var fixture=human.serverLevel().getEntity(UUID.fromString(snapshot.get("bodyUuid").getAsString()));
+                    if(fixture==null || !fixture.getPersistentData().getBoolean("too_many_agents_development_fixture"))throw error("development_fixture_missing");
+                    yield snapshot;
+                }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
                 default -> throw error("unknown_development_action");
             };
-        });
+        }).thenCompose(result->action.equals("pov") ? pov.capture(UUID.fromString(result.get("bodyUuid").getAsString()),session,POV)
+            : CompletableFuture.completedFuture(result));
     }
 
     CompletableFuture<JsonArray> bodies() {

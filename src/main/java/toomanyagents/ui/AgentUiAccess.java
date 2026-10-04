@@ -33,6 +33,8 @@ public interface AgentUiAccess {
     CompletableFuture<Void> cancelQueued(String agentId, String messageId);
     JsonObject snapshot(String agentId);
     CompletableFuture<JsonObject> transcript(String agentId, JsonObject query);
+    CompletableFuture<JsonObject> chatAsset(String agentId, String kind, String source);
+    CompletableFuture<Void> openChatLink(String agentId, String target);
     CompletableFuture<JsonObject> timelineTurnSummaryDetails(String agentId, JsonObject query);
     CompletableFuture<Void> checkBody(String agentId);
     CompletableFuture<Void> setFollowing(String agentId, boolean following);

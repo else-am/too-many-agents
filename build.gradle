@@ -9,6 +9,25 @@ base.archivesName = 'too-many-agents'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
+repositories { mavenCentral() }
+def imageLibraries = ['com.twelvemonkeys.imageio:imageio-webp', 'com.twelvemonkeys.imageio:imageio-core',
+    'com.twelvemonkeys.imageio:imageio-metadata', 'com.twelvemonkeys.common:common-lang',
+    'com.twelvemonkeys.common:common-io', 'com.twelvemonkeys.common:common-image']
+dependencies {
+    imageLibraries.each { artifact ->
+        jarJar(implementation(artifact)) { version { strictly '[3.12.0,3.13.0)'; prefer '3.12.0' } }
+    }
+    ['commonmark', 'commonmark-ext-gfm-tables', 'commonmark-ext-gfm-strikethrough',
+     'commonmark-ext-task-list-items', 'commonmark-ext-autolink'].each { artifact ->
+        jarJar(implementation("org.commonmark:${artifact}")) {
+            version { strictly '[0.30.0,0.31.0)'; prefer '0.30.0' }
+        }
+    }
+    // Autolink's transitive dependency must also be available in the packaged mod.
+    jarJar(implementation('org.nibor.autolink:autolink')) {
+        version { strictly '[0.12.0,0.13.0)'; prefer '0.12.0' }
+    }
+}
 def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
     delete fileTree('run/mods') { include 'too-many-agents*.jar' }
 }
@@ -64,6 +83,17 @@ neoForge {
     }
     mods {
         too_many_agents { sourceSet sourceSets.main }
+    }
+}
+
+if (!packagedJarRun) {
+    dependencies {
+        imageLibraries.each { artifact -> additionalRuntimeClasspath "${artifact}:3.12.0" }
+        ['commonmark', 'commonmark-ext-gfm-tables', 'commonmark-ext-gfm-strikethrough',
+         'commonmark-ext-task-list-items', 'commonmark-ext-autolink'].each { artifact ->
+            additionalRuntimeClasspath "org.commonmark:${artifact}:0.30.0"
+        }
+        additionalRuntimeClasspath 'org.nibor.autolink:autolink:0.12.0'
     }
 }
 
