@@ -106,6 +106,9 @@ The BB safety fixture requires an exclusive game window in the guarded `run/`
 test world. It probes physical callback boundaries and world switching; it never
 stops BB. The fixture is retained for persistence inspection.
 
+In the guarded test world, `ui dev_drop --json '{"paths":["/absolute/test/image.png"]}'`
+exercises native file drops; files must be inside this checkout's `run/` or `scratch/`.
+
 ## License
 
 [MIT](LICENSE). BB remains an external installed runtime; its dependencies are
