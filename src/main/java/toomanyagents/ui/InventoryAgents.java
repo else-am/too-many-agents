@@ -41,6 +41,7 @@ public final class InventoryAgents {
     private SettingsFormScreen form;
     private boolean pendingModSettings;
     private boolean hostOpen;
+    private long newAgentRequest;
     // Settings sit beside the chat when the chat keeps its minimum width; unscaled units.
     private static final int SETTINGS_WIDTH = 400, SETTINGS_MIN_WIDTH = 320, CHAT_MIN_WIDTH = 360;
 
@@ -102,6 +103,7 @@ public final class InventoryAgents {
             inventoryTarget = inventoryPending = null;
         }
         if (parent != screen) {
+            newAgentRequest++;
             parent = screen;
             sidebar = new InventoryAgentSidebar(access.get(), parent, this::open, this::newAgent, this::openProject, this::openModSettings);
             if (form instanceof TooManyAgentsSettingsScreen) form = null;
@@ -250,8 +252,11 @@ public final class InventoryAgents {
     private void openModSettings() { showForm(new TooManyAgentsSettingsScreen(parent, access.get())); }
 
     private void showForm(SettingsFormScreen next) {
-        if (chat != null) chat.closeSettings();
-        var previous = form;
+        navigate(() -> showClosedForm(next));
+    }
+
+    private void showClosedForm(SettingsFormScreen next) {
+        newAgentRequest++;
         next.dockWithHeader(() -> {
             if (form != next) return;
             form = null;
@@ -260,8 +265,6 @@ public final class InventoryAgents {
             if (prepare(parent) && focus == null) focus = right;
         });
         form = next;
-        // An earlier form saves on its way out.
-        if (previous != null) previous.onClose();
         if (focus != null) focus.screen.setFocused(null);
         prepare(parent);
         focus = formPane;
@@ -271,33 +274,59 @@ public final class InventoryAgents {
     /** Saves and closes the open form; a failed save leaves it open with the error. */
     private void closeForm() { if (form != null) form.onClose(); }
 
+    /** Keep the current pane visible until any edited settings have saved. */
+    private void navigate(Runnable next) {
+        Object requestWorld = world;
+        Screen requestParent = parent;
+        Runnable guarded = () -> {
+            if (world == requestWorld && parent == requestParent && Minecraft.getInstance().screen == requestParent) next.run();
+        };
+        if (form != null) form.closeThen(() -> navigate(guarded));
+        else if (chat != null && chat.settingsPanel() != null) chat.closeSettingsThen(() -> navigate(guarded));
+        else guarded.run();
+    }
+
     public void newAgent(String projectId) {
         var client = Minecraft.getInstance();
         if (!supports(client.screen)) openStandalone(null, null);
         if (!prepare(client.screen)) return;
-        closeForm();
-        String project = projectId == null || projectId.equals("minecraft") ? "" : projectId;
-        if (project.isBlank()) {
-            var data = access.get().projects();
-            String worldId = data.has("world") ? AgentModels.text(data.getAsJsonObject("world"), "id") : "";
-            for (var item : AgentModels.array(data, "projects")) {
-                var row = item.getAsJsonObject();
-                if (!worldId.isBlank() && worldId.equals(AgentModels.text(row, "minecraftWorldId"))) {
-                    project = AgentModels.text(row, "id");
-                    break;
-                }
-            }
-        }
+        navigate(() -> newClosedAgent(projectId));
+    }
+
+    private void newClosedAgent(String projectId) {
+        var client = Minecraft.getInstance();
+        // New agents belong to this world unless a project is chosen.
+        String project = projectId == null || projectId.isBlank() ? "minecraft" : projectId;
         String draftProject = project;
-        String provider = TooManyAgentsClientSettings.get().defaultProvider();
+        var requestWorld = client.level;
+        var requestScreen = parent;
+        var requestAccess = access.get();
+        long request = ++newAgentRequest;
+        requestAccess.backendConfig().thenCombine(requestAccess.projectExecutionOptions(draftProject), (config, defaults) -> {
+            var result = config.deepCopy();
+            result.add("draftDefaults", defaults);
+            return result;
+        }).whenComplete((config, failure) -> client.execute(() -> {
+            if (request != newAgentRequest || client.level != requestWorld || client.screen != requestScreen
+                    || world != requestWorld || parent != requestScreen || access.get() != requestAccess) return;
+            if (failure != null) {
+                sidebar.reportProviderError("Could not load BB defaults for a new chat: " + AgentModels.error(failure));
+                return;
+            }
+            String provider = InventoryAgentSidebar.defaultProvider(config);
+            if (provider.isBlank()) provider = AgentModels.text(AgentModels.object(config, "draftDefaults"), "providerId");
+            openDraft(draftProject, provider, requestAccess);
+        }));
+    }
+
+    private void openDraft(String project, String provider, AgentUiAccess draftAccess) {
         if (chat != null) chat.closeSettings();
         chat = drafts.computeIfAbsent(project + ":" + provider, key -> {
             var settings = new JsonObject();
-            settings.addProperty("projectId", draftProject);
-            settings.addProperty("providerId", provider);
-            settings.addProperty("permissionMode", access.get().defaultPermissionMode());
+            settings.addProperty("projectId", project);
+            if (!provider.isBlank()) settings.addProperty("providerId", provider);
             Object draftWorld = world;
-            return new AgentChatScreen(access.get(), settings, id -> {
+            return new AgentChatScreen(draftAccess, settings, id -> {
                 if (world != draftWorld) return;
                 var created = drafts.remove(key);
                 if (created == null) return;
@@ -332,7 +361,11 @@ public final class InventoryAgents {
     }
 
     private void open(String id) {
-        closeForm();
+        navigate(() -> openClosed(id));
+    }
+
+    private void openClosed(String id) {
+        newAgentRequest++;
         boolean keepInventory = inventoryTarget != null || parent instanceof AgentInventoryScreen;
         selected = id;
         select.accept(id);
@@ -387,6 +420,11 @@ public final class InventoryAgents {
     }
 
     private void closeChat() {
+        navigate(this::closeClosedChat);
+    }
+
+    private void closeClosedChat() {
+        newAgentRequest++;
         if (parent instanceof AgentWorkspaceScreen) {
             parent.onClose();
             return;
@@ -409,6 +447,7 @@ public final class InventoryAgents {
         boolean open = prepare(client.screen);
         // Leaving the agent screens saves open settings, once.
         if (!open && hostOpen) {
+            newAgentRequest++;
             if (chat != null) chat.closeSettings();
             // Mod settings save as they change and stay open across their linked screens.
             if (form instanceof ProjectScreen) closeForm();
@@ -501,11 +540,11 @@ public final class InventoryAgents {
         event.setCanceled(true);
         var focused = focus.screen.getFocused();
         boolean text = focused instanceof EditBox || focused instanceof MultiLineEditBox;
-        if (!(parent instanceof AgentWorkspaceScreen) && !text && Minecraft.getInstance().options.keyInventory.matches(event.getKeyCode(), event.getScanCode())) parent.onClose();
+        if (!(parent instanceof AgentWorkspaceScreen) && !text && Minecraft.getInstance().options.keyInventory.matches(event.getKeyCode(), event.getScanCode())) navigate(parent::onClose);
         // Escape dismisses a picker before leaving the whole screen.
         else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && sidebar.pickerOpen()) sidebar.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
         // Escape in settings closes a dropdown, then the settings themselves.
-        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && focus != formPane && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
+        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && focus != formPane && (focus == left || chat == null || !chat.pickerOpen())) navigate(parent::onClose);
         else focus.screen.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
     }
 

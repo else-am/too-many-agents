@@ -1,0 +1,24 @@
+package toomanyagents;
+
+import com.google.gson.JsonObject;
+import java.util.List;
+
+/** Minecraft settings saved separately from BB execution and conversation settings. */
+public final class BodySettings {
+    public static JsonObject copy(JsonObject settings) {
+        var result = new JsonObject();
+        if (settings == null) return result;
+        for (String key : List.of("name", "body", "mode", "cheats", "following", "followReturn", "color", "communication", "behaviors", "stationId", "minecraftAccess"))
+            if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
+        return result;
+    }
+
+    /** Profiles reuse body behavior without replacing identity or a world's station assignment. */
+    public static JsonObject profile(JsonObject settings) {
+        var result = copy(settings);
+        for (String key : List.of("name", "color", "stationId")) result.remove(key);
+        return result;
+    }
+
+    private BodySettings() {}
+}

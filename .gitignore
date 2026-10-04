@@ -6,6 +6,9 @@ build/
 scratch/
 *.log
 __pycache__/
+node_modules/
+bb-plugin/dist/
+bb-plugin/surface/tools.json
 
 # Local agent/editor state
 .claude/

@@ -14,7 +14,7 @@ final class ProviderIcon {
     /** Draws the mark for a provider id; y is the top of the text it sits beside. Returns the width drawn. */
     static int render(GuiGraphics g, String providerId, int x, int textY) {
         ResourceLocation icon = switch (providerId) {
-            case "claude" -> CLAUDE;
+            case "claude-code" -> CLAUDE;
             case "codex" -> OPENAI;
             default -> null;
         };

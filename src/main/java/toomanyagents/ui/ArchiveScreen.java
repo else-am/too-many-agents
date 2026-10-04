@@ -1,11 +1,9 @@
 package toomanyagents.ui;
 
-import net.minecraft.Util;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
-import toomanyagents.ManagedStorage;
 
-/** This world's archived agents, each restorable, and the folder where archives and worktrees accumulate. */
+/** This world's archived agents, each restorable. */
 public final class ArchiveScreen extends SettingsFormScreen {
     private final AgentUiAccess access;
     private final Screen parent;
@@ -32,9 +30,6 @@ public final class ArchiveScreen extends SettingsFormScreen {
         }
         if (count == 0) note("No archived agents in this world.");
         if (!feedback.isBlank()) note(feedback);
-        section("Files");
-        action(ManagedStorage.root().toString().replace(System.getProperty("user.home"), "~"), "Open folder",
-            () -> Util.getPlatform().openFile(ManagedStorage.root().toFile()), true);
         done();
     }
 

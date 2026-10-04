@@ -16,7 +16,7 @@ public final class ProjectScreen extends SettingsFormScreen {
     private final AgentUiAccess access;
     private final Screen parent;
     private JsonObject data;
-    private String projectId,name="",directory="",additional="",saved="";
+    private String projectId,name="",directory="",saved="";
     private boolean busy,choosing,confirmRemove;
 
     public static ProjectScreen create(AgentUiAccess access,Screen parent){return new ProjectScreen(access,parent,"");}
@@ -24,11 +24,14 @@ public final class ProjectScreen extends SettingsFormScreen {
     private ProjectScreen(AgentUiAccess access,Screen parent,String projectId){
         super(Component.literal(projectId.isBlank()?"New project":"Project settings"));
         this.access=access;this.parent=parent;this.projectId=projectId;data=access.projects();
-        var p=project();name=text(p,"name");directory=text(p,"primaryDirectory");
-        additional=String.join("; ",array(p,"additionalDirectories").asList().stream().map(JsonElement::getAsString).toList());
+        var p=project();name=text(p,"name");
+        for(var item:array(p,"sources")) {
+            var source=item.getAsJsonObject();
+            if(text(source,"type").equals("local_path")){directory=text(source,"path");break;}
+        }
         saved=fields();
     }
-    private String fields(){return name.strip()+"\n"+directory.strip()+"\n"+additional.strip();}
+    private String fields(){return name.strip()+"\n"+directory.strip();}
     private static JsonArray array(JsonObject o,String key){return AgentModels.array(o,key);}
     private static String text(JsonObject o,String key){return AgentModels.text(o,key);}
     private static JsonObject request(String operation){var o=new JsonObject();o.addProperty("operation",operation);return o;}
@@ -40,7 +43,7 @@ public final class ProjectScreen extends SettingsFormScreen {
     // The world's own project keeps its managed folder.
     @Override protected String heading(){return projectId.isBlank()?"New project":name.isBlank()?"Project settings":name;}
     public String projectId(){return projectId;}
-    private boolean automatic(){return !text(project(),"minecraftWorldId").isBlank();}
+    private boolean automatic(){return Set.of("personal","world").contains(text(project(),"kind"));}
 
     @Override protected void init(){
         begin();
@@ -54,34 +57,37 @@ public final class ProjectScreen extends SettingsFormScreen {
         }
         boolean creating=projectId.isBlank();
         section("Project");
-        var nameField=input("Name",name,80,v->name=v,!busy);
-        if(creating)setInitialFocus(nameField);
-        if(!automatic()){
-            folderRow("Primary folder",directory,4096,"/absolute/path",v->directory=v,true);
-            folderRow("Additional folders",additional,16384,"Optional - separate with ;",v->additional=v,false);
+        if(automatic())value("Name",name);
+        else {var nameField=input("Name",name,80,v->name=v,!busy);if(creating)setInitialFocus(nameField);}
+        if(creating)folderRow("Project folder",directory,4096,"/absolute/path",v->directory=v);
+        else {
+            for(var item:array(project(),"sources")) {
+                var source=item.getAsJsonObject();
+                value("Folder on "+text(source,"hostId"),text(source,"path"));
+            }
+            placeRows(world);
+            if(!automatic()){rowY+=12;action("",confirmRemove?"Confirm removal":"Remove project",this::remove,!busy);}
         }
-        if(!creating){placeRows(world);if(!automatic()){rowY+=12;action("",confirmRemove?"Confirm removal":"Remove project",this::remove,!busy);}}
         if(creating)submit("Create project",this::save,!busy);else done();
     }
-    private void folderRow(String label,String value,int limit,String hint,Consumer<String> change,boolean primary){
+    private void folderRow(String label,String value,int limit,String hint,Consumer<String> change){
         int y=row(label);
         var field=new EditBox(font,controlX,0,controlWidth-66,20,Component.literal(label));
         field.setMaxLength(limit);field.setValue(value);field.setResponder(change);field.setEditable(!busy);field.setHint(Component.literal(hint));
         place(field,y);
-        var choose=Button.builder(Component.literal("Choose…"),b->chooseFolder(primary)).bounds(controlX+controlWidth-60,0,60,20).build();
+        var choose=Button.builder(Component.literal("Choose…"),b->chooseFolder()).bounds(controlX+controlWidth-60,0,60,20).build();
         choose.active=!busy&&!choosing;place(choose,y);
     }
     // The native dialog blocks until closed, so it runs off the render thread.
-    private void chooseFolder(boolean primary){
+    private void chooseFolder(){
         choosing=true;rebuildForm();
-        String start=primary&&!directory.isBlank()?directory:System.getProperty("user.home");
-        CompletableFuture.supplyAsync(()->TinyFileDialogs.tinyfd_selectFolderDialog(primary?"Primary folder":"Additional folder",start+"/"))
+        String start=!directory.isBlank()?directory:System.getProperty("user.home");
+        CompletableFuture.supplyAsync(()->TinyFileDialogs.tinyfd_selectFolderDialog("Project folder",start+"/"))
             .whenComplete((path,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
                 choosing=false;
                 String folder=path==null?"":path.replaceAll("/+$","");
-                if(!folder.isBlank()&&primary)directory=folder;
-                else if(!folder.isBlank())additional=additional.isBlank()?folder:additional.strip()+"; "+folder;
-                if(primary)defaultName();
+                if(!folder.isBlank())directory=folder;
+                defaultName();
                 rebuildForm();
             }));
     }
@@ -114,11 +120,11 @@ public final class ProjectScreen extends SettingsFormScreen {
     }
     private void save(){
         if(projectId.isBlank())defaultName();
-        if(name.isBlank()||!automatic()&&directory.isBlank()){feedback="Enter a name and primary folder.";return;}
+        if(name.isBlank()||projectId.isBlank()&&directory.isBlank()){feedback="Enter a name and primary folder.";cancelClose();return;}
         var req=request(projectId.isBlank()?"create":"configure");req.addProperty("projectId",projectId);req.addProperty("name",name.strip());
-        if(!automatic()){
-            req.addProperty("primaryDirectory",directory.strip());
-            var folders=new JsonArray();for(String folder:additional.split(";"))if(!folder.isBlank())folders.add(folder.strip());req.add("additionalDirectories",folders);
+        if(projectId.isBlank()) {
+            var source=new JsonObject();source.addProperty("type","local_path");source.addProperty("path",directory.strip());
+            req.add("source",source);
         }
         boolean creating=projectId.isBlank();
         // A new project stays open so its place can be set up next.
@@ -139,6 +145,7 @@ public final class ProjectScreen extends SettingsFormScreen {
         busy=true;feedback="Working…";rebuildForm();
         access.projectCommand(req).whenComplete((result,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             busy=false;data=access.projects();feedback=error==null?"":AgentModels.error(error);
+            if(error!=null)cancelClose();
             if(error==null)done.accept(result);
             if(docked()||minecraft.screen==this)rebuildForm();
         }));

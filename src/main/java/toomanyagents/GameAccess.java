@@ -119,14 +119,16 @@ final class GameAccess {
         final Operation operation;
         final JsonObject args;
         final long deadline;
+        final long expiresAt;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
 
-        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args) {
+        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
             this.scope = scope;
             this.body = body;
             this.operation = operation;
             this.args = args;
             deadline = activeNanos + TimeUnit.SECONDS.toNanos(QUEUE_SECONDS);
+            this.expiresAt = expiresAt;
         }
     }
 
@@ -143,6 +145,10 @@ final class GameAccess {
     }
 
     CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args) {
+        return callInTurn(scope,body,operation,args,Long.MAX_VALUE);
+    }
+
+    CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
         var arguments = args == null ? new JsonObject() : args.deepCopy();
         synchronized (queueLock) {
             updateQueueClock();
@@ -153,7 +159,7 @@ final class GameAccess {
             if (scope.pending >= 16 || toolQueue.size() >= 256) {
                 return CompletableFuture.failedFuture(error("world_tool_queue_full"));
             }
-            var call = new PendingCall(scope, body, operation, arguments);
+            var call = new PendingCall(scope, body, operation, arguments, expiresAt);
             toolQueue.addLast(call);
             scope.pending++;
             return call.result;
@@ -175,7 +181,7 @@ final class GameAccess {
             toolQueue.removeIf(call -> {
                 String reason = call.scope.closed;
                 if (reason == null && call.result.isCancelled()) reason = "tool_call_cancelled";
-                if (reason == null && activeNanos >= call.deadline) reason = "expired_before_execution";
+                if (reason == null && (activeNanos >= call.deadline || System.currentTimeMillis() >= call.expiresAt)) reason = "expired_before_execution";
                 if (reason == null) return false;
                 call.scope.pending--;
                 rejected.add(call);
@@ -209,7 +215,7 @@ final class GameAccess {
                 // This is the start/close linearization point; started calls are never replayed.
                 if (call.scope.closed != null) rejection = call.scope.closed;
                 else if (call.scope.current != current || !Objects.equals(call.scope.session, worldSession.get())) rejection = "world_session_changed";
-                else if (activeNanos >= call.deadline) rejection = "expired_before_execution";
+                else if (activeNanos >= call.deadline || System.currentTimeMillis() >= call.expiresAt) rejection = "expired_before_execution";
             }
             if (call.result.isCancelled()) continue;
             if (rejection != null) { call.result.completeExceptionally(error(rejection)); continue; }
@@ -253,14 +259,26 @@ final class GameAccess {
     /** World identity published by the server thread, safe for UI and HTTP readers. */
     JsonObject worldInfo() { return worldInfo.deepCopy(); }
     CompletableFuture<JsonObject> worldCommand(JsonObject request, String expectedSession) {
-        return schedule(expectedSession, current -> {
+        return worldCommand(request,expectedSession,null,Long.MAX_VALUE);
+    }
+
+    CompletableFuture<JsonObject> worldCommand(JsonObject request, String expectedSession, ToolScope scope, long expiresAt) {
+        return schedule(expectedSession, expiresAt, current -> {
+            synchronized(queueLock) { if(scope!=null && scope.closed!=null) throw error(scope.closed); }
             var state = WorldState.get(current);
             JsonObject result;
-            String operation = ProjectStore.text(request,"operation"), dimension = player(current).level().dimension().location().toString();
-            try { result = operation.equals("world-resolve") ? state.resolve(ProjectStore.text(request,"choice"))
+            String operation = JsonState.text(request,"operation"), dimension = player(current).level().dimension().location().toString();
+            try { result = operation.equals("world-resolve") ? state.resolve(JsonState.text(request,"choice"))
+                : operation.equals("world-project") ? state.project(JsonState.text(request,"projectId"))
                 : operation.startsWith("station-") ? state.stations(request,dimension)
                 : state.bounds(request,dimension);
             } catch (java.io.IOException failure) { throw new IllegalStateException("Could not save world data.",failure); }
+            if (operation.equals("world-resolve") && JsonState.text(request,"choice").equals("copy")) {
+                for (var level : current.getAllLevels()) for (var entity : level.getAllEntities()) {
+                    var saved = entity.getPersistentData();
+                    if (saved.getString("too_many_agents_world").equals(state.copiedFrom())) saved.putString("too_many_agents_world",state.id());
+                }
+            }
             worldInfo = state.snapshot();
             publishedWorld = new PublishedWorld(state.activeId(),worldSession.get());
             return result;
@@ -456,6 +474,7 @@ final class GameAccess {
 
     void stopped(MinecraftServer current) {
         publishedWorld = null;
+        worldInfo = new JsonObject();
         List<ToolScope> scopes;
         synchronized (queueLock) { scopes = List.copyOf(toolScopes); }
         scopes.forEach(scope -> scope.close("world_closed"));
@@ -506,7 +525,11 @@ final class GameAccess {
     }
 
     CompletableFuture<Body> spawn(String name, String entityType, String agentId, String projectId, String expectedSession) {
-        return schedule(expectedSession, current -> {
+        return spawn(name,entityType,agentId,projectId,expectedSession,Long.MAX_VALUE);
+    }
+
+    CompletableFuture<Body> spawn(String name, String entityType, String agentId, String projectId, String expectedSession, long expiresAt) {
+        return schedule(expectedSession, expiresAt, current -> {
             var player = player(current);
             var mob = createBody(player, lookedAt(player), name, entityType, agentId, projectId);
             // Face the player who spawned it.
@@ -521,7 +544,12 @@ final class GameAccess {
 
     CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, String projectId, Body parent,
                                       String expectedSession, ToolScope callerScope) {
-        return schedule(expectedSession, current -> {
+        return spawnNear(name,entityType,agentId,projectId,parent,expectedSession,callerScope,Long.MAX_VALUE);
+    }
+
+    CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, String projectId, Body parent,
+                                      String expectedSession, ToolScope callerScope, long expiresAt) {
+        return schedule(expectedSession, expiresAt, current -> {
             synchronized (queueLock) {
                 if (callerScope != null) {
                     if (callerScope.closed != null) throw error(callerScope.closed);
@@ -738,7 +766,7 @@ final class GameAccess {
         publishedWorld = new PublishedWorld(world(current), worldSession.get());
         drainActionStops();
         drainTools(current);
-        Set<String> retainedAgents = registry == null ? null : registry.get();
+        Set<String> retiredAgents = registry == null ? null : registry.get();
         if (!Objects.equals(cleanupSession,worldSession.get()) || failedBodyCleanup == null) {
             cleanupSession = worldSession.get();
             failedBodyCleanup = new HashSet<>();
@@ -753,16 +781,19 @@ final class GameAccess {
                 var saved = mob.getPersistentData();
                 if (saved.getString("too_many_agents_world").isBlank()) saved.putString("too_many_agents_world",world);
                 if (!saved.getString("too_many_agents_world").equals(world)) {
+                    if (saved.getString("too_many_agents_world").equals(WorldState.get(current).copiedFrom())) {
+                        saved.putString("too_many_agents_world",world);
+                    } else {
                     // A copied body must not run its original world's following or agent controls.
                     saved.putString("too_many_agents_unassigned_agent",saved.getString("too_many_agents_agent"));
                     saved.remove("too_many_agents_agent"); saved.putBoolean("too_many_agents_following",false);
                     mob.setNoAi(true); mob.setInvulnerable(false); mob.setDeltaMovement(Vec3.ZERO);
                     mob.setCustomName(mob.getName().copy().append(" (unassigned)"));
                     continue;
+                    }
                 }
-                // The saved registry is authoritative after it finishes loading. This also cleans
-                // bodies restored by world saves after their agent was retired from the mod.
-                if (retainedAgents != null && !retainedAgents.contains(saved.getString("too_many_agents_agent"))) {
+                // Remove only known retired bodies. Unknown or disconnected NPCs remain intact.
+                if (retiredAgents != null && retiredAgents.contains(saved.getString("too_many_agents_agent"))) {
                     if (!failedBodyCleanup.contains(mob.getUUID())) {
                         try { removeBody(mob,current); }
                         catch (RuntimeException | LinkageError failure) {
@@ -974,7 +1005,12 @@ final class GameAccess {
     }
 
     CompletableFuture<Void> removeAgent(Body ref, String expectedSession, String agentId, boolean knownRemoved) {
-        return schedule(expectedSession, current -> {
+        return removeAgent(ref,expectedSession,agentId,knownRemoved,null,Long.MAX_VALUE);
+    }
+
+    CompletableFuture<Void> removeAgent(Body ref, String expectedSession, String agentId, boolean knownRemoved, ToolScope scope, long expiresAt) {
+        return schedule(expectedSession, expiresAt, current -> {
+            synchronized(queueLock) { if(scope!=null && scope.closed!=null) throw error(scope.closed); }
             if (ref == null || !worldMatches(ref.world(), world(current))) throw error("body_world_mismatch");
             var bodies = new ArrayList<Mob>();
             for (var level : current.getAllLevels()) for (var entity : level.getAllEntities()) {
@@ -1026,6 +1062,10 @@ final class GameAccess {
     }
 
     private <T> CompletableFuture<T> schedule(String expectedSession, Function<MinecraftServer, T> work) {
+        return schedule(expectedSession,Long.MAX_VALUE,work);
+    }
+
+    private <T> CompletableFuture<T> schedule(String expectedSession, long expiresAt, Function<MinecraftServer, T> work) {
         var current = server.get();
         if (current == null || expectedSession == null || !expectedSession.equals(worldSession.get())) {
             return CompletableFuture.failedFuture(error("world_session_changed"));
@@ -1043,7 +1083,7 @@ final class GameAccess {
                 if (!state.compareAndSet("queued", "running")) return;
                 if (result.isCancelled()) return;
                 try {
-                    if (System.nanoTime() > deadline) throw error("expired_before_execution");
+                    if (System.nanoTime() > deadline || System.currentTimeMillis() >= expiresAt) throw error("expired_before_execution");
                     if (server.get() != current || !expectedSession.equals(worldSession.get())) throw error("world_session_changed");
                     if (paused.getAsBoolean()) throw error("game_paused");
                     result.complete(work.apply(current));

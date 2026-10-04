@@ -21,8 +21,8 @@ def main():
     parser.add_argument('--timeout', type=float, default=120, help='HTTP timeout in seconds; timed out mutations must not be retried blindly')
     commands = parser.add_subparsers(dest='action', required=True)
     listing = commands.add_parser('list')
-    listing.add_argument('--archived', action='store_true', help='Show only locally archived conversations')
-    commands.add_parser('catalog').add_argument('--provider', choices=['codex', 'claude'])
+    listing.add_argument('--archived', action='store_true', help='Show only conversations archived in BB')
+    commands.add_parser('catalog').add_argument('--provider', help='Native BB provider ID, such as codex or claude-code')
     commands.add_parser('profiles')
     commands.add_parser('stations', help="List the current world's stations and occupants")
     profile = commands.add_parser('save-profile')
@@ -34,32 +34,30 @@ def main():
     dev = commands.add_parser('dev', help='Opt-in isolated development world checks')
     dev.add_argument('operation', choices=['status', 'native-checks', 'save'])
     spawn = commands.add_parser('spawn')
-    spawn.add_argument('--provider', choices=['codex', 'claude'], default='codex')
-    spawn.add_argument('--permission-mode', choices=['accept-edits', 'auto', 'full'], help='Approval mode; omit to use the last selected default')
+    spawn.add_argument('--provider', help='Native BB provider ID; omit to use BB defaults')
+    spawn.add_argument('--permission-mode', help='Native BB permission mode; omit to use BB defaults')
     spawn.add_argument('--name', default='', help='Omit for a random starter name')
-    spawn.add_argument('--directory', '--project', dest='directory', default='', help='Existing directory; omit for an automatic Minecraft project')
-    spawn.add_argument('--project-id')
-    spawn.add_argument('--use-worktree', action='store_true')
-    spawn.add_argument('--base-ref', default='')
+    spawn.add_argument('--project-id', help='Native BB project ID; omitted uses Personal')
+    spawn.add_argument('--environment', help='Native BB environment JSON; omitted uses the project default')
     spawn.add_argument('--body', default='', help='Omit for a random starter body')
-    spawn.add_argument('--model', required=True)
-    spawn.add_argument('--effort', required=True)
-    spawn.add_argument('--service-tier', default='default', help='Speed tier from catalog (default is Standard)')
+    spawn.add_argument('--model')
+    spawn.add_argument('--reasoning-level', '--effort', dest='reasoning_level', help='Native BB reasoning level')
+    spawn.add_argument('--json', default='{}', help='Additional native BB spawn fields as a JSON object')
+    spawn.add_argument('--service-tier', help='Native BB speed tier; omit to use BB defaults')
     spawn.add_argument('--mode', choices=['survival', 'creative'], default='survival')
     spawn.add_argument('--cheats', action='store_true')
-    spawn.add_argument('--native-subagents', action='store_true', help='Allow unembodied provider-native sub-agents')
     spawn.add_argument('--no-minecraft', action='store_true', help='Project work with collaboration tools and no Minecraft context or controls')
     spawn.add_argument('--follow', action='store_true', help='Start following the local player')
-    transcript = commands.add_parser('transcript', help='Read bounded chat/activity pages; tool payloads load only with a row ID')
+    transcript = commands.add_parser('transcript', help='Read the native BB conversation timeline')
     transcript.add_argument('id')
-    transcript.add_argument('--json', default='{}', help='Optional before, group, groupOffset, row and textOffset fields')
+    transcript.add_argument('--json', default='{}', help='Native BB timeline query fields')
     get = commands.add_parser('get')
     get.add_argument('id')
     send = commands.add_parser('send')
     send.add_argument('id')
     send.add_argument('text')
     send.add_argument('--model')
-    send.add_argument('--effort')
+    send.add_argument('--reasoning-level', '--effort', dest='reasoning_level')
     send.add_argument('--service-tier', help='Speed tier for a new turn; omitted inherits the agent setting')
     send.add_argument('--delivery', choices=['send', 'steer', 'queue'], default='send')
     cancel = commands.add_parser('cancel-queued')
@@ -67,9 +65,9 @@ def main():
     cancel.add_argument('message_id')
     for action, help_text in (
         ('remove', 'Remove the NPC body; keep the conversation'),
-        ('archive', 'Remove the body and archive with the native provider'),
-        ('conversation-archive', 'Archive the conversation locally; keep readable history'),
-        ('conversation-restore', 'Restore a locally archived conversation to the active list'),
+        ('archive', 'Remove the body and archive the native BB thread'),
+        ('conversation-archive', 'Archive the native BB thread; keep readable history'),
+        ('conversation-restore', 'Restore an archived BB thread to the active list'),
         ('inventory', 'Inspect body inventory'),
     ):
         commands.add_parser(action, help=help_text).add_argument('id')
@@ -81,7 +79,7 @@ def main():
     respond = commands.add_parser('respond')
     respond.add_argument('id')
     respond.add_argument('request')
-    respond.add_argument('answer')
+    respond.add_argument('resolution', help='Native BB interaction resolution JSON object')
     tool = commands.add_parser('tool')
     tool.add_argument('id')
     tool.add_argument('name')
@@ -135,17 +133,25 @@ def main():
                 data = {'action': args.operation.replace('-', '_')}
         elif args.action == 'spawn':
             path += '/spawn'
-            data = {key: getattr(args, key) for key in ('name', 'directory', 'body', 'model', 'effort', 'mode', 'cheats')}
+            data = {key: getattr(args, key) for key in ('name', 'body', 'mode', 'cheats')}
+            if args.model: data['model'] = args.model
+            if args.reasoning_level: data['reasoningLevel'] = args.reasoning_level
             if args.project_id: data['projectId'] = args.project_id
-            if args.use_worktree: data['useWorktree'] = True
-            if args.base_ref: data['baseRef'] = args.base_ref
-            data['providerId'] = args.provider
+            if args.environment:
+                environment = json.loads(args.environment)
+                if not isinstance(environment, dict):
+                    raise ValueError('environment must be a native BB JSON object')
+                data['environment'] = environment
+            if args.provider: data['providerId'] = args.provider
             if args.permission_mode:
                 data['permissionMode'] = args.permission_mode
-            data['nativeSubagentsEnabled'] = args.native_subagents
             data['minecraftAccess'] = not args.no_minecraft
             data['following'] = args.follow
-            data['serviceTier'] = args.service_tier
+            if args.service_tier: data['serviceTier'] = args.service_tier
+            values = json.loads(args.json)
+            if not isinstance(values, dict):
+                raise ValueError('spawn fields must be a JSON object')
+            data.update(values)
         elif args.action == 'ui':
             path = '/v1/ui'
             data = json.loads(args.json)
@@ -168,10 +174,11 @@ def main():
                 path += '/message'
                 data = {'text': args.text, 'delivery': args.delivery}
                 if args.service_tier is not None:
-                    data['serviceTier'] = args.service_tier
-                for key in ('model', 'effort'):
-                    if getattr(args, key) is not None:
-                        data[key] = getattr(args, key)
+                    if args.service_tier: data['serviceTier'] = args.service_tier
+                if args.model is not None:
+                    data['model'] = args.model
+                if args.reasoning_level is not None:
+                    data['reasoningLevel'] = args.reasoning_level
             elif args.action == 'cancel-queued':
                 path += '/cancel-queued'
                 data = {'messageId': args.message_id}
@@ -186,7 +193,10 @@ def main():
                 data = {'following': args.setting == 'on'}
             elif args.action == 'respond':
                 path += '/respond'
-                data = {'requestId': args.request, 'answer': args.answer}
+                resolution = json.loads(args.resolution)
+                if not isinstance(resolution, dict):
+                    raise ValueError('interaction resolution must be a JSON object')
+                data = {'requestId': args.request, 'resolution': resolution}
             elif args.action == 'tool':
                 path += '/tool'
                 arguments = json.loads(args.arguments)

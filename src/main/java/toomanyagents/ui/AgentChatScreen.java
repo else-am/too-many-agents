@@ -3,6 +3,7 @@ package toomanyagents.ui;
 import com.google.gson.JsonObject;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.components.EditBox;
 import java.util.concurrent.CompletableFuture;
@@ -22,12 +23,15 @@ public final class AgentChatScreen extends Screen {
     private final AgentUiAccess access;
     private String agentId;
     private JsonObject creationSettings;
-    private String creationProjectName="Minecraft";
-    private boolean creationGit, creationMinecraft;
+    private String creationProjectName="No project";
+    private boolean creationGit;
+    private String environmentProject, creationHost="";
     private Checkbox worktreeBox, minecraftBox;
     private Consumer<String> created;
     private final List<String> bodies = new ArrayList<>();
     private int catalogVersion;
+    private String permissionOverride;
+    private boolean executionEdited;
     private EditBox nameField, bodySearch;
     // A random starter name clears when the field is first clicked, until something is typed.
     private String suggestedName = "";
@@ -49,7 +53,7 @@ public final class AgentChatScreen extends Screen {
     private final List<Line> lines = new ArrayList<>();
     private ChatInput composer;
     private Button permissionsButton;
-    private boolean savingPermissions, savingFollow;
+    private boolean savingFollow;
     private List<PickerChoice> pickerChoices;
     private int pickerOffset, pickerPageSize, pickerRowHeight;
     private record PickerChoice(String label, String description, String icon, Runnable select) {
@@ -74,6 +78,9 @@ public final class AgentChatScreen extends Screen {
     private List<MessageBubble> messageBubbles = new ArrayList<>();
     private final List<Disclosure> disclosures = new ArrayList<>();
     private JsonObject transcript = new JsonObject();
+    private JsonObject catalog = new JsonObject(), turnDetails = new JsonObject(), olderCursor = new JsonObject();
+    private boolean detailsLoading;
+    private long markedReply;
     private String before = "", expandedGroup = "", expandedRow = "";
     private int groupOffset, textOffset, queryVersion;
     private int thinkingLine = -1;
@@ -197,9 +204,9 @@ public final class AgentChatScreen extends Screen {
         state = access.snapshot(agentId);
         this.pointing = pointing != null && state.has("minecraftAccess") && state.get("minecraftAccess").getAsBoolean()
             ? pointing.deepCopy() : null;
-        models.model = AgentModels.text(state, "model");
-        models.effort = AgentModels.text(state, "effort");
-        String serviceTier = AgentModels.text(state, "serviceTier");
+        models.model = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "model");
+        models.effort = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "reasoningLevel");
+        String serviceTier = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "serviceTier");
         models.serviceTier = serviceTier.isBlank() ? "default" : serviceTier;
         readRequest();
     }
@@ -218,49 +225,83 @@ public final class AgentChatScreen extends Screen {
             nameSuggested = true;
             this.creationSettings.addProperty("name", suggestedName);
         }
-        for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"providerId", "codex"}, {"mode", "survival"}, {"projectId", ""}}) {
+        for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"mode", "survival"}, {"projectId", ""}}) {
             if (AgentModels.text(this.creationSettings, defaultValue[0]).isBlank()) this.creationSettings.addProperty(defaultValue[0], defaultValue[1]);
         }
-        for (String key : new String[]{"cheats", "following", "nativeSubagentsEnabled"}) {
+        for (String key : new String[]{"cheats", "following"}) {
             if (!this.creationSettings.has(key)) this.creationSettings.addProperty(key, false);
         }
-        if (!this.creationSettings.has("permissionMode")) this.creationSettings.addProperty("permissionMode", access.defaultPermissionMode());
         state = this.creationSettings;
-        models.model = AgentModels.text(state, "model");
-        models.effort = AgentModels.text(state, "effort");
-        String tier = AgentModels.text(state, "serviceTier");
+        models.model = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "model");
+        models.effort = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "reasoningLevel");
+        String tier = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "serviceTier");
         models.serviceTier = tier.isBlank() ? "default" : tier;
     }
 
     private void readCreationProject(){
-        creationProjectName="Minecraft";creationGit=false;
-        var projects = access.projects();
-        creationMinecraft = AgentModels.minecraftProject(projects, AgentModels.text(creationSettings, "projectId"));
-        if (creationMinecraft || !creationSettings.has("minecraftAccess"))
-            creationSettings.addProperty("minecraftAccess", creationMinecraft);
-        for(var item:AgentModels.array(projects,"projects")){
+        creationProjectName="No project";
+        if (!creationSettings.has("minecraftAccess")) creationSettings.addProperty("minecraftAccess", true);
+        String projectId=AgentModels.text(creationSettings,"projectId"), sourceHost="", kind="";
+        for(var item:AgentModels.array(access.projects(),"projects")){
             var project=item.getAsJsonObject();
-            if(!AgentModels.text(project,"id").equals(AgentModels.text(creationSettings,"projectId")))continue;
-            creationProjectName=AgentModels.text(project,"name");
-            creationGit=project.has("isGitRepository")&&project.get("isGitRepository").isJsonPrimitive()&&project.get("isGitRepository").getAsBoolean();
+            if(!AgentModels.text(project,"id").equals(projectId))continue;
+            creationProjectName=AgentModels.text(project,"name"); kind=AgentModels.text(project,"kind");
+            for(var source:AgentModels.array(project,"sources")) {
+                var row=source.getAsJsonObject();
+                if(sourceHost.isBlank() || row.has("isDefault") && row.get("isDefault").getAsBoolean())
+                    sourceHost=AgentModels.text(row,"hostId");
+            }
         }
+        if(projectId.equals(environmentProject))return;
+        environmentProject=projectId;creationGit=false;creationHost="";
+        // This world's agents always share its workspace folder; no worktree choice.
+        if(kind.equals("world"))return;
+        if(!sourceHost.isBlank())readWorktreeProviders(projectId,sourceHost);
+        else access.backendConfig().whenComplete((config,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
+            if(!projectId.equals(environmentProject))return;
+            if(failure!=null){feedback="Worktree availability unavailable: "+AgentModels.error(failure);return;}
+            readWorktreeProviders(projectId,AgentModels.text(config,"primaryHostId"));
+        }));
+    }
+
+    private void readWorktreeProviders(String projectId,String hostId) {
+        if(hostId.isBlank()){feedback="No BB host is available for a worktree.";return;}
+        creationHost=hostId;
+        access.environmentProviders(projectId,hostId).whenComplete((providers,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
+            if(!projectId.equals(environmentProject)||!hostId.equals(creationHost)||failure!=null)return;
+            creationGit=providers.asList().stream().filter(com.google.gson.JsonElement::isJsonObject)
+                .anyMatch(provider->{
+                    var info=provider.getAsJsonObject();
+                    String availability=AgentModels.text(AgentModels.object(info,"availability"),"status");
+                    return AgentModels.text(info,"id").equals("git-worktree") && (availability.isBlank()||availability.equals("available"));
+                });
+            if(font!=null)refreshButtons();
+        }));
     }
 
     public String agentId() { return agentId; }
     public boolean draft() { return agentId.isBlank(); }
 
     private JsonObject settings() {
-        if (!draft()) return AgentSettingsScreen.settings(state);
+        if (!draft()) {
+            var result=AgentSettingsScreen.settings(state);
+            result.add("provider", selectedProvider());
+            if (permissionOverride != null) result.addProperty("permissionMode", permissionOverride);
+            return result;
+        }
         var result = creationSettings.deepCopy();
         result.addProperty("model", models.model);
-        result.addProperty("effort", models.effort);
+        result.addProperty("reasoningLevel", models.effort);
         result.addProperty("serviceTier", models.serviceTier);
-        AgentModels.permissionDefaults(result);
         return result;
     }
 
     private boolean availableHere() {
         return draft() || activeAgent() && state.has("currentWorld") && state.get("currentWorld").getAsBoolean();
+    }
+
+    private boolean backendAvailable() {
+        return !Set.of("disconnected", "unavailable").contains(AgentModels.text(state, "status"));
     }
 
     private static String bodyLabel(String id) {
@@ -280,6 +321,7 @@ public final class AgentChatScreen extends Screen {
     public AgentSettingsScreen settingsPanel() { return settingsPanel; }
     /** Saves and closes docked settings; a failed save leaves them open with the error. */
     public void closeSettings() { if (settingsPanel != null) settingsPanel.onClose(); }
+    void closeSettingsThen(Runnable next) { if (settingsPanel == null) next.run(); else settingsPanel.closeThen(next); }
 
     /** The transcript and composer area, in this chat's coordinates, that covering settings replace. */
     public int[] settingsBounds() { return new int[]{left, transcriptTop, contentWidth, composerBaseline() + 20 - transcriptTop}; }
@@ -345,13 +387,14 @@ public final class AgentChatScreen extends Screen {
         speedButton = addRenderableWidget(new Button(left, controlY, 20, 20,
                 Component.literal("Increase speed"), button -> {
                     closePicker();
-                    models.serviceTier = models.serviceTier.equals("priority") ? "default" : "priority";
+                    executionEdited = true;
+                    models.nextServiceTier();
                     refreshButtons();
                 }, message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
                 graphics.blitSprite(net.minecraft.resources.ResourceLocation.withDefaultNamespace(!active ? "widget/button_disabled"
                     : isHoveredOrFocused() ? "widget/button_highlighted" : "widget/button"), getX(), getY(), 20, 20);
-                int color = !active ? 0xFF666666 : models.serviceTier.equals("priority") ? 0xFFFFD45A : 0xFFAAAAAA;
+                int color = !active ? 0xFF666666 : !models.serviceTier.isBlank() && !models.serviceTier.equals("default") ? 0xFFFFD45A : 0xFFAAAAAA;
                 int x = getX() + 6, y = getY() + 3;
                 // A small pixel bolt avoids depending on a font's symbol coverage.
                 for (int row = 0; row < 6; row++) {
@@ -387,7 +430,7 @@ public final class AgentChatScreen extends Screen {
                     creationSettings=changes.deepCopy();state=creationSettings;readCreationProject();
                     if(!AgentModels.text(creationSettings,"name").equals(suggestedName))nameSuggested=false;
                     if(nameField!=null)nameField.setValue(AgentModels.text(creationSettings,"name"));
-                    models.model=AgentModels.text(creationSettings,"model");models.effort=AgentModels.text(creationSettings,"effort");
+                    models.model=AgentModels.text(creationSettings,"model");models.effort=AgentModels.text(creationSettings,"reasoningLevel");
                     return java.util.concurrent.CompletableFuture.completedFuture(null);
                 }
                 return access.updateSettings(agentId,changes);
@@ -423,11 +466,22 @@ public final class AgentChatScreen extends Screen {
                     refreshButtons();
                 }).build();
             addRenderableWidget(minecraftBox);
-            minecraftBox.visible = !creationMinecraft;
+            minecraftBox.visible = true;
             // The project comes from where creation started; a worktree is the one choice about it.
-            boolean worktree = creationSettings.has("useWorktree") && creationSettings.get("useWorktree").getAsBoolean();
+            boolean worktree = AgentModels.text(AgentModels.object(creationSettings,"environment"),"environmentProviderId").equals("git-worktree");
             worktreeBox = Checkbox.builder(Component.literal("Worktree"), font).selected(worktree)
-                .onValueChange((box, value) -> creationSettings.addProperty("useWorktree", value)).build();
+                 .onValueChange((box, value) -> {
+                    var environment=new JsonObject();
+                    environment.addProperty("type",value?"provider":"project-default");
+                    if(value) {
+                        environment.addProperty("environmentProviderId","git-worktree");
+                        var machine=new JsonObject();machine.addProperty("type","existing");machine.addProperty("hostId",creationHost);
+                        environment.add("machine",machine);
+                        var inputs=new JsonObject();var branch=new JsonObject();branch.addProperty("kind","default");
+                        inputs.add("branch",branch);environment.add("inputs",inputs);
+                    }
+                    creationSettings.add("environment",environment);
+                }).build();
             worktreeBox.setTooltip(Tooltip.create(Component.literal("Work in a separate Git worktree instead of the project folder")));
             worktreeBox.visible = creationGit;
             addRenderableWidget(worktreeBox);
@@ -541,23 +595,47 @@ public final class AgentChatScreen extends Screen {
         refreshButtons();
         String provider = AgentModels.text(state, "providerId");
         int version = ++catalogVersion;
-        var catalog = provider.isBlank() ? access.catalog() : access.catalog(provider);
-        catalog.whenComplete((result, failure) -> executeUi(() -> {
+        var catalog = access.catalog(provider, AgentModels.text(AgentModels.object(state,"thread"),"environmentId"));
+        var defaults = draft() ? access.projectExecutionOptions(AgentModels.text(creationSettings,"projectId")) : CompletableFuture.completedFuture(new JsonObject());
+        catalog.thenCombine(defaults, (result, options) -> {
+            var copy = result.deepCopy(); copy.add("draftDefaults",options); return copy;
+        }).whenComplete((result, failure) -> executeUi(() -> {
             if (version != catalogVersion || !provider.equals(AgentModels.text(state, "providerId"))) return;
             loadingModels = false;
             if (failure != null) feedback = "Model list unavailable: " + AgentModels.error(failure);
             else {
+                this.catalog = result;
+                if (draft()) {
+                    String selected = "";
+                    boolean available = false;
+                    for (var item : AgentModels.array(result, "providers")) {
+                        var info = item.getAsJsonObject();
+                        if (!info.has("available") || !info.get("available").getAsBoolean()) continue;
+                        String id = AgentModels.text(info, "id");
+                        if (selected.isBlank()) selected = id;
+                        if (id.equals(provider)) available = true;
+                    }
+                    if (!available && !selected.isBlank()) {
+                        creationSettings.addProperty("providerId", selected);
+                        models.load(new JsonObject());
+                        requestModels(change);
+                        return;
+                    }
+                }
+                if (draft()) {
+                    var options = AgentModels.object(result,"draftDefaults");
+                    if (provider.equals(AgentModels.text(options,"providerId"))) {
+                        if(models.model.isBlank()) models.model=AgentModels.text(options,"model");
+                        if(models.effort.isBlank()) models.effort=AgentModels.text(options,"reasoningLevel");
+                        if(!creationSettings.has("serviceTier") && options.has("serviceTier")) models.serviceTier=AgentModels.text(options,"serviceTier");
+                        if(!creationSettings.has("permissionMode") && options.has("permissionMode")) creationSettings.add("permissionMode",options.get("permissionMode"));
+                    }
+                }
                 models.load(result);
                 if (draft()) {
-                    creationSettings.add("provider", AgentModels.provider(result).deepCopy());
-                    AgentModels.permissionDefaults(creationSettings);
-                    for (var item : AgentModels.array(AgentModels.provider(creationSettings), "permissionFields")) {
-                        var field = item.getAsJsonObject();
-                        String key = AgentModels.text(field, "key");
-                        var options = AgentModels.array(field, "options");
-                        if (!options.isEmpty() && options.asList().stream().noneMatch(option -> AgentModels.text(option.getAsJsonObject(), "id").equals(AgentModels.text(creationSettings, key)))) {
-                            if (field.has("default")) creationSettings.add(key, field.get("default").deepCopy());
-                        }
+                    for (var item : AgentModels.array(result, "providers")) {
+                        var info = item.getAsJsonObject();
+                        if (AgentModels.text(info, "id").equals(provider)) creationSettings.add("provider", info.deepCopy());
                     }
                     bodies.clear();
                     for (var item : AgentModels.array(result, "bodies")) bodies.add(item.getAsString());
@@ -593,18 +671,22 @@ public final class AgentChatScreen extends Screen {
         pickerOffset = 0;
         if (anchor == modelButton) {
             for (var model : models.choices()) {
-                String id = AgentModels.text(model, "id");
-                String name = AgentModels.text(model, "name");
+                String id = AgentModels.text(model, "model");
+                String name = AgentModels.text(model, "displayName");
                 pickerChoices.add(new PickerChoice((id.equals(models.model) ? "✓ " : "") + (name.isBlank() ? id : name), "", () -> {
+                    executionEdited = true;
                     models.model = id;
                     models.normalize();
                 }));
             }
         } else if (anchor == providerButton) {
             if (!draft()) return;
-            for (String provider : List.of("codex", "claude")) {
+            for (var item : AgentModels.array(catalog, "providers")) {
+                var info = item.getAsJsonObject();
+                String provider = AgentModels.text(info, "id");
+                if (!info.has("available") || !info.get("available").getAsBoolean()) continue;
                 pickerChoices.add(new PickerChoice((provider.equals(AgentModels.text(state, "providerId")) ? "✓ " : "")
-                    + providerName(provider), "", provider, () -> selectProvider(provider)));
+                    + AgentModels.text(info, "displayName"), "", provider, () -> selectProvider(provider)));
             }
         } else if (anchor == bodyButton) {
             String selected = AgentModels.text(creationSettings, "body");
@@ -612,17 +694,14 @@ public final class AgentChatScreen extends Screen {
                 () -> creationSettings.addProperty("body", body)));
             bodyChoices = List.copyOf(pickerChoices);
         } else if (anchor == permissionsButton) {
-            var field = permissionField();
             String selected = AgentModels.text(settings(), "permissionMode");
-            for (var item : AgentModels.array(field, "options")) {
-                var option = item.getAsJsonObject();
-                String id = AgentModels.text(option, "id");
-                pickerChoices.add(new PickerChoice((id.equals(selected) ? "✓ " : "") + AgentModels.text(option, "label"),
+            for (String id : permissionModes()) {
+                pickerChoices.add(new PickerChoice((id.equals(selected) ? "✓ " : "") + AgentModels.permissionLabel(id),
                     switch (id) {
                         case "accept-edits" -> "Work in project folders; ask for extra access.";
                         case "auto" -> "Automatically review requests for extra access.";
                         case "full" -> "No sandbox or approval prompts.";
-                        default -> AgentModels.text(option, "description");
+                        default -> "";
                     }, () -> savePermission(id)));
             }
         }
@@ -658,6 +737,7 @@ public final class AgentChatScreen extends Screen {
                 @Override protected void applyValue() {
                     int index = (int) Math.round(value * (choices.size() - 1));
                     value = (double) index / (choices.size() - 1);
+                    executionEdited = true;
                     models.effort = choices.get(index);
                     refreshButtons();
                 }
@@ -692,10 +772,7 @@ public final class AgentChatScreen extends Screen {
 
     private void selectProvider(String provider) {
         if (!draft() || sending || provider.equals(AgentModels.text(state, "providerId"))) return;
-        // Permission keys belong to the provider that supplied their choices.
-        for (var item : AgentModels.array(AgentModels.provider(creationSettings), "permissionFields")) {
-            creationSettings.remove(AgentModels.text(item.getAsJsonObject(), "key"));
-        }
+        for (String key : List.of("permissionMode","model","reasoningLevel","serviceTier")) creationSettings.remove(key);
         creationSettings.remove("provider");
         creationSettings.addProperty("providerId", provider);
         models.model = ""; models.effort = ""; models.serviceTier = "default";
@@ -705,26 +782,20 @@ public final class AgentChatScreen extends Screen {
         requestModels(() -> {});
     }
 
-    private JsonObject permissionField() {
-        for (var item : AgentModels.array(AgentModels.provider(state), "permissionFields")) {
-            var field = item.getAsJsonObject();
-            if (AgentModels.text(field, "key").equals("permissionMode")) return field;
+    private JsonObject selectedProvider() {
+        for(var item:AgentModels.array(catalog,"providers")) {
+            var info=item.getAsJsonObject();
+            if(AgentModels.text(info,"id").equals(AgentModels.text(state,"providerId")))return info;
         }
-        return new JsonObject();
+        return AgentModels.provider(state);
     }
 
+    private List<String> permissionModes() { return AgentModels.permissionModes(selectedProvider()); }
+
     private void savePermission(String id) {
-        if (draft()) { creationSettings.addProperty("permissionMode", id); refreshButtons(); return; }
-        var settings = new JsonObject();
-        settings.addProperty("permissionMode", id);
-        savingPermissions = true;
-        access.updateSettings(agentId, settings).whenComplete((unused, failure) -> executeUi(() -> {
-            savingPermissions = false;
-            state = access.snapshot(agentId);
-            feedback = failure != null ? AgentModels.error(failure)
-                : state.has("permissionsPending") && state.get("permissionsPending").getAsBoolean() ? "Approval settings saved for the next turn." : "";
-            refreshButtons();
-        }));
+        if (draft()) creationSettings.addProperty("permissionMode", id);
+        else permissionOverride = id;
+        refreshButtons();
     }
 
     private void populatePicker() {
@@ -786,7 +857,17 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public void tick() {
-        if (!draft()) state = access.snapshot(agentId);
+        if (!draft()) {
+            state = access.snapshot(agentId);
+            if (!executionEdited && !sending) {
+                var execution = AgentModels.execution(state);
+                if (!AgentModels.text(execution,"model").isBlank()) {
+                    models.model = AgentModels.text(execution,"model");
+                    models.effort = AgentModels.text(execution,"reasoningLevel");
+                    models.serviceTier = AgentModels.text(execution,"serviceTier");
+                }
+            }
+        }
         readRequest();
         requestTranscript();
         rebuildTranscript();
@@ -796,13 +877,14 @@ public final class AgentChatScreen extends Screen {
     private void readRequest() {
         request = new JsonObject();
         question = new JsonObject();
-        for (var item : AgentModels.array(state, "requests")) {
+        for (var item : AgentModels.interactions(state)) {
             var pending = item.getAsJsonObject();
-            if (AgentModels.text(pending, "kind").equals("approval")) {
+            if (!Set.of("pending", "resolving").contains(AgentModels.text(pending,"status"))) continue;
+            if (AgentModels.text(AgentModels.object(pending, "payload"), "kind").equals("approval")) {
                 if (request.isEmpty()) request = pending;
             } else if (question.isEmpty()) question = pending;
         }
-        requestKey = AgentModels.array(state, "requests").toString();
+        requestKey = AgentModels.interactions(state).toString();
     }
 
     private boolean approval() { return !request.isEmpty(); }
@@ -825,22 +907,29 @@ public final class AgentChatScreen extends Screen {
     private boolean working() {
         if (state.has("turnActive")) return state.get("turnActive").getAsBoolean();
         String status = AgentModels.text(state, "status").toLowerCase(java.util.Locale.ROOT);
-        return status.equals("running") || status.equals("working") || status.equals("busy") || status.equals("starting")
+        return status.equals("active") || status.equals("stopping") || status.equals("running") || status.equals("working") || status.equals("busy") || status.equals("starting")
             || status.equals("inprogress") || approval()
             || (!question.isEmpty() && !(question.has("async") && question.get("async").getAsBoolean()));
     }
 
-    private static String providerName(String id) { return id.equals("claude") ? "Claude Code" : "Codex"; }
+    private String providerName(String id) {
+        for (var item : AgentModels.array(catalog, "providers")) {
+            var info = item.getAsJsonObject();
+            if (AgentModels.text(info, "id").equals(id)) return AgentModels.text(info, "displayName");
+        }
+        String name = AgentModels.text(AgentModels.provider(state), "displayName");
+        return name.isBlank() ? id : name;
+    }
 
     /** Approval sits left; speed, context, provider, model and effort sit right, each as wide as its widest choice. */
     private void layoutControls() {
         int gap = 4;
         var permissionLabels = new ArrayList<String>(List.of("Permissions"));
-        for (var item : AgentModels.array(permissionField(), "options")) permissionLabels.add(AgentModels.text(item.getAsJsonObject(), "label"));
+        for (String mode : permissionModes()) permissionLabels.add(AgentModels.permissionLabel(mode));
         var modelLabels = new ArrayList<String>(List.of(models.modelLabel().isBlank() ? loadingModels ? "Loading models…" : "Choose model…" : models.modelLabel()));
         for (var model : models.choices()) {
-            String name = AgentModels.text(model, "name");
-            modelLabels.add(name.isBlank() ? AgentModels.text(model, "id") : name);
+            String name = AgentModels.text(model, "displayName");
+            modelLabels.add(name.isBlank() ? AgentModels.text(model, "model") : name);
         }
         var effortLabels = new ArrayList<String>(List.of("Default"));
         effortLabels.addAll(models.efforts());
@@ -863,12 +952,11 @@ public final class AgentChatScreen extends Screen {
 
     private void refreshButtons() {
         if (sendButton == null) return;
-        boolean increasedSpeed = models.serviceTier.equals("priority");
+        boolean increasedSpeed = !models.serviceTier.isBlank() && !models.serviceTier.equals("default");
         String speedHint = increasedSpeed ? "turn off increased speed" : "increase speed (consumes extra usage)";
         speedButton.setMessage(Component.literal(speedHint));
         speedButton.setTooltip(Tooltip.create(Component.literal(speedHint)));
-        speedButton.visible = models.serviceTiers().stream().anyMatch(tier -> AgentModels.text(tier, "id").equals("priority"))
-            && models.serviceTiers().stream().anyMatch(tier -> AgentModels.text(tier, "id").equals("default"));
+        speedButton.visible = models.hasSpeedChoices();
         layoutControls();
         String label = models.modelLabel();
         modelButton.setMessage(Component.literal(font.plainSubstrByWidth(label.isBlank() ? loadingModels ? "Loading models…" : "Choose model…" : label, modelButton.getWidth() - 20) + " ▾"));
@@ -876,21 +964,17 @@ public final class AgentChatScreen extends Screen {
         effortButton.setMessage(Component.literal((models.effort.isBlank() ? "Default" : models.effort) + " ▾"));
         effortButton.setTooltip(null);
         boolean active = availableHere();
-        modelButton.active = effortButton.active = active && !loadingModels && !sending;
-        speedButton.active = active && speedButton.visible && !loadingModels && !sending;
+        modelButton.active = effortButton.active = active && backendAvailable() && !loadingModels && !sending;
+        speedButton.active = active && backendAvailable() && speedButton.visible && !loadingModels && !sending;
         effortButton.active &= !models.available() || models.efforts().size() > 1;
         String permission = AgentModels.text(settings(), "permissionMode");
-        var permissionField = permissionField();
-        for (var item : AgentModels.array(permissionField, "options")) {
-            var option = item.getAsJsonObject();
-            if (AgentModels.text(option, "id").equals(permission)) { permission = AgentModels.text(option, "label"); break; }
-        }
-        boolean permissionsPending = state.has("permissionsPending") && state.get("permissionsPending").getAsBoolean();
-        permissionsButton.setMessage(Component.literal(font.plainSubstrByWidth(permission.isBlank() ? "Permissions" : permission, permissionsButton.getWidth() - (permissionsPending ? 28 : 20)) + (permissionsPending ? " * ▾" : " ▾")));
-        permissionsButton.active = active && !sending && !loadingModels && !savingPermissions && !permissionField.isEmpty();
+        permission = AgentModels.permissionLabel(permission);
+        boolean permissionsPending = permissionOverride != null;
+        permissionsButton.setMessage(Component.literal(font.plainSubstrByWidth(permission.isBlank() ? "BB default" : permission, permissionsButton.getWidth() - (permissionsPending ? 28 : 20)) + (permissionsPending ? " * ▾" : " ▾")));
+        permissionsButton.active = active && backendAvailable() && !sending && !loadingModels && !permissionModes().isEmpty();
         permissionsButton.setTooltip(Tooltip.create(Component.literal(permissionsPending
-            ? "Saved for the next turn. The running turn keeps its approval settings."
-            : "Also used for new conversations")));
+            ? "Selected for your next message. The running turn keeps its approval settings."
+            : "BB approval mode for the next message")));
         if (pickerAnchor != null && !pickerAnchor.active) closePicker();
         String provider = providerName(AgentModels.text(state, "providerId"));
         providerButton.setMessage(Component.literal(provider));
@@ -906,8 +990,8 @@ public final class AgentChatScreen extends Screen {
         inventoryButton.setMessage(Component.literal(inventoryOpen ? "Inventory ✓" : "Inventory"));
         followButton.setX(compact ? left : left + contentWidth - (inventoryButton.visible ? 320 : 244));
         archiveButton.visible = true;
-        archiveButton.active = !draft() && active && !working() && !sending;
-        archiveButton.setTooltip(Tooltip.create(Component.literal(draft() ? "Available after creating the agent" : working() ? "Stop the agent's work to archive it" : "Archive: removes the body and keeps the chat. Restore it from Mod settings → Archive.")));
+        archiveButton.active = !draft() && active && backendAvailable() && !working() && !sending;
+        archiveButton.setTooltip(Tooltip.create(Component.literal(draft() ? "Available after creating the agent" : working() ? "Stop the agent's work to archive it" : "Archive conversation. Restore it from Mod settings → Archive.")));
         followButton.visible = true;
         followButton.active = active && !savingFollow && !sending;
         followButton.setMessage(Component.literal(savingFollow ? "…" : AgentModels.text(state,"followPauseReason").equals("work") ? "Resume" : following() ? "Following" : "Follow"));
@@ -923,13 +1007,16 @@ public final class AgentChatScreen extends Screen {
             bodyButton.setMessage(Component.literal(font.plainSubstrByWidth(bodyLabel(AgentModels.text(creationSettings, "body")), bodyButton.getWidth() - font.width(" ▾") - 12) + " ▾"));
             bodyButton.active = !sending && !loadingModels;
             minecraftBox.active = !sending;
-            minecraftBox.visible = !settingsCovering && !creationMinecraft;
+            minecraftBox.visible = !settingsCovering;
+            boolean worktreeShown = worktreeBox.visible;
             worktreeBox.visible = !settingsCovering && creationGit;
+            // Worktree support arrives after layout; place the options beside each other once it does.
+            if (worktreeBox.visible != worktreeShown) rebuildQueue();
         }
         boolean busy = working();
         boolean showStop = !hasDraft() && (busy || actionWorking());
-        sendButton.active = active && !savingPermissions && !sending && !stopping && !importingImages
-            && (showStop || hasDraft() && !models.model.isBlank() && models.permissionError(AgentModels.text(settings(),"permissionMode")).isBlank());
+        sendButton.active = active && backendAvailable() && !sending && !stopping && !importingImages
+            && (showStop || hasDraft() && !models.model.isBlank());
         if (draft()) sendButton.active &= !loadingModels && models.available() && !AgentModels.text(creationSettings, "name").isBlank()
             && !AgentModels.text(creationSettings, "body").isBlank();
         sendButton.setMessage(Component.literal(sending || stopping ? "…" : showStop ? "Stop" : "Send"));
@@ -960,7 +1047,7 @@ public final class AgentChatScreen extends Screen {
         if (draft()) {
             var creation = settings();
             creation.addProperty("name", AgentModels.text(creation, "name").trim());
-            creation.addProperty("initialTask", message); // names a new worktree; the message itself is sent below
+            creation.remove("initialTask");
             access.spawn(creation).whenComplete((id, failure) -> executeUi(() -> {
                 if (failure != null) {
                     sending = false;
@@ -982,7 +1069,18 @@ public final class AgentChatScreen extends Screen {
     }
 
     private void deliver(String message, String model, String effort, String tier, JsonObject captured, List<String> attachments) {
-        access.send(agentId, message, model, effort, captured, "queue", tier, attachments).whenComplete((unused, failure) -> executeUi(() -> {
+        var request = new JsonObject();
+        request.addProperty("text", message);
+        request.addProperty("model", model);
+        request.addProperty("reasoningLevel", effort);
+        request.addProperty("serviceTier", tier);
+        request.addProperty("permissionMode", AgentModels.text(settings(), "permissionMode"));
+        request.addProperty("delivery", "queue-if-active");
+        if (captured != null) request.add("pointing", captured);
+        var images = new com.google.gson.JsonArray();
+        attachments.forEach(images::add);
+        request.add("images", images);
+        access.send(agentId, request).whenComplete((unused, failure) -> executeUi(() -> {
             sending = false;
             if (failure != null) feedback = "Send failed: " + AgentModels.error(failure);
             else {
@@ -991,6 +1089,8 @@ public final class AgentChatScreen extends Screen {
                     if (composer != null) composer.setValue("");
                 }
                 images().removeAll(attachments);
+                permissionOverride = null;
+                executionEdited = false;
                 transcriptKey = "";
                 pointing = null;
                 feedback = "";
@@ -1032,20 +1132,22 @@ public final class AgentChatScreen extends Screen {
     }
 
     private void requestTranscript() {
-        if (draft()) return;
+        if (draft() || !backendAvailable() || AgentModels.text(state,"threadId").isBlank()) return;
         long now=System.currentTimeMillis();
-        JsonObject conversation=state.has("conversation")?state.getAsJsonObject("conversation"):new JsonObject();
-        long sequence=conversation.has("sequence")?conversation.get("sequence").getAsLong():0;
-        if(transcriptLoading || now<nextTranscriptPoll || loadedSequence==sequence) return;
-        transcriptLoading=true; nextTranscriptPoll=now+250;
+        if(transcriptLoading || now<nextTranscriptPoll) return;
+        transcriptLoading=true; nextTranscriptPoll=now+750;
         int version=queryVersion;
-        var query=new JsonObject();query.addProperty("before",before);query.addProperty("group",expandedGroup);
-        query.addProperty("groupOffset",groupOffset);query.addProperty("row",expandedRow);query.addProperty("textOffset",textOffset);
+        var query=new JsonObject();
+        query.addProperty("segmentLimit", "40");
+        if (!olderCursor.isEmpty()) {
+            query.addProperty("beforeAnchorSeq", AgentModels.text(olderCursor,"anchorSeq"));
+            query.add("beforeAnchorId", olderCursor.get("anchorId"));
+        }
         access.transcript(agentId,query).whenComplete((result,failure)->executeUi(()->{
             transcriptLoading=false;
             if(version!=queryVersion)return;
             if(failure!=null){feedback="History unavailable: "+AgentModels.error(failure);nextTranscriptPoll=System.currentTimeMillis()+2000;return;}
-            transcript=result;loadedSequence=result.get("sequence").getAsLong();
+            transcript=result;loadedSequence=number(result,"maxSeq");
             transcriptKey="";rebuildTranscript();
         }));
     }
@@ -1117,19 +1219,37 @@ public final class AgentChatScreen extends Screen {
     private void detail(JsonObject row) { detail(row,24,contentWidth-48); }
 
     private void detail(JsonObject row,int inset,int wrapWidth) {
-        if(!AgentModels.text(row,"id").equals(expandedRow) || !transcript.has("detail"))return;
-        var detail=transcript.getAsJsonObject("detail");
-        if(!AgentModels.text(detail,"id").equals(expandedRow))return;
-        int offset=detail.get("offset").getAsInt();
+        if(!AgentModels.text(row,"id").equals(expandedRow))return;
+        String text = workDetail(row);
+        int offset = Math.clamp(textOffset, 0, Math.max(0, text.length() - 1));
         if(offset>0)disclosure("↑ Previous output",()->changeTranscript(()->textOffset=Math.max(0,offset-8000)),inset);
-        paragraph(AgentModels.text(detail,"text"),0xBDBDBD,0,inset,wrapWidth);
-        if(detail.get("hasMore").getAsBoolean())disclosure("↓ More output",()->changeTranscript(()->textOffset=offset+8000),inset);
+        paragraph(text.substring(offset,Math.min(text.length(),offset+8000)),0xBDBDBD,0,inset,wrapWidth);
+        if(offset+8000<text.length())disclosure("↓ More output",()->changeTranscript(()->textOffset=offset+8000),inset);
+        for (var child : AgentModels.array(row, "childRows")) transcriptRow(child.getAsJsonObject(), true);
+    }
+
+    private static String workDetail(JsonObject row) {
+        var parts = new ArrayList<String>();
+        for (String key : new String[]{"command", "cwd", "path", "query", "url", "prompt", "description", "text", "detail", "output", "stdout", "stderr", "error", "summary", "explanation"}) {
+            String text = AgentModels.text(row, key);
+            if (!text.isBlank()) parts.add(text);
+        }
+        String presentation = AgentModels.text(AgentModels.object(row, "presentation"), "detail");
+        if (!presentation.isBlank()) parts.add(presentation);
+        for (String key : new String[]{"toolArgs", "change", "steps", "payload", "answers"})
+            if (row.has(key) && !row.get(key).isJsonNull()) parts.add(new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(row.get(key)));
+        return String.join("\n\n", parts);
+    }
+
+    private static int attachmentCount(JsonObject row) {
+        var attachments = AgentModels.object(row, "attachments");
+        return (int)(number(attachments,"webImages") + number(attachments,"localImages") + number(attachments,"localFiles"));
     }
 
     private void userMessage(JsonObject row) {
         String id=AgentModels.text(row,"id"),text=AgentModels.text(row,"text");
-        String error=AgentModels.text(row,"status").equals("rejected")?"Not sent: "+AgentModels.text(row,"detail"):"";
-        int attachments=row.has("attachments")?row.get("attachments").getAsInt():0;
+        String error=AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected")?"Not sent: "+AgentModels.text(row,"detail"):"";
+        int attachments=attachmentCount(row);
         boolean hasDetail=attachments>0 || row.has("truncated")&&row.get("truncated").getAsBoolean();
         int maxWidth=Math.max(40,(contentWidth-40)*3/4);
         int textWidth=Math.min(maxWidth,100);
@@ -1142,7 +1262,7 @@ public final class AgentChatScreen extends Screen {
         if(!error.isEmpty())paragraph(error,0xFFAAAA,0,inset+8,textWidth);
         if(attachments>0) {
             var labels=new ArrayList<String>();
-            int imageCount=row.has("images")?row.get("images").getAsInt():0;
+            int imageCount=(int)(number(AgentModels.object(row,"attachments"),"webImages")+number(AgentModels.object(row,"attachments"),"localImages"));
             for(int i=1;i<=imageCount;i++)labels.add("[Image "+i+"]");
             if(attachments>imageCount)labels.add((attachments-imageCount)+" other attachment(s)");
             paragraph(String.join(" ",labels),0xA9C9E0,0,inset+8,textWidth);
@@ -1155,22 +1275,40 @@ public final class AgentChatScreen extends Screen {
         lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
     }
 
+    private String lastReplyId() {
+        if (!olderCursor.isEmpty()) return "";
+        String id="";
+        for(var value:AgentModels.array(transcript,"rows")) {
+            var row=value.getAsJsonObject();
+            if(AgentModels.text(row,"role").equals("assistant"))id=AgentModels.text(row,"id");
+        }
+        return id;
+    }
+
     private void transcriptRow(JsonObject row,boolean nested) {
+        var presentation=AgentModels.object(row,"presentation");
+        if(presentation.has("suppress")&&presentation.get("suppress").getAsBoolean())return;
         String id=AgentModels.text(row,"id"),role=AgentModels.text(row,"role");
         if(role.equals("user")) { userMessage(row); return; }
         boolean message=role.equals("assistant");
         if(message) {
             // Collapsed activity and off-page replies are never marked as read.
-            long reply=role.equals("assistant") && !nested && id.equals(AgentModels.text(transcript,"lastReplyId"))
-                && !(row.has("truncated")&&row.get("truncated").getAsBoolean())?transcript.get("replyVersion").getAsLong():0;
+            long reply=role.equals("assistant") && !nested && id.equals(lastReplyId())
+                && !(row.has("truncated")&&row.get("truncated").getAsBoolean())?number(state,"replyVersion"):0;
             paragraph(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0);
-            if(AgentModels.text(row,"status").equals("rejected"))paragraph("Not sent: "+AgentModels.text(row,"detail"),0xFFAAAA,0,0);
-            int attachments=row.has("attachments")?row.get("attachments").getAsInt():0;
+            if(AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected"))paragraph("Not sent: "+AgentModels.text(row,"detail"),0xFFAAAA,0,0);
+            int attachments=attachmentCount(row);
             if(attachments>0)paragraph(attachments+(attachments==1?" attachment":" attachments"),0xAAAAAA,0,0);
             if(attachments>0 || row.has("truncated")&&row.get("truncated").getAsBoolean())
                 disclosure((id.equals(expandedRow)?"▾ Hide":"▸ Read")+" full message",()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}));
         } else {
-            String label=AgentModels.text(row,"title");if(label.isBlank())label=AgentModels.text(row,"kind");
+            String label=AgentModels.text(AgentModels.object(row,"presentation"),"title");
+            if(label.isBlank())label=AgentModels.text(AgentModels.object(presentation,"label"),AgentModels.text(row,"status").equals("pending")?"pending":"completed");
+            if(label.isBlank())label=AgentModels.text(row,"title");
+            if(label.isBlank())label=AgentModels.text(row,"command");
+            if(label.isBlank())label=AgentModels.text(row,"toolName");
+            if(label.isBlank())label=AgentModels.text(row,"workKind");
+            if(label.isBlank())label=AgentModels.text(row,"kind");
             disclosure((id.equals(expandedRow)?"▾ ":"▸ ")+label+" - "+AgentModels.text(row,"status"),()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}),nested?12:0);
         }
         detail(row);
@@ -1190,7 +1328,7 @@ public final class AgentChatScreen extends Screen {
             transcriptKey="";
         }
         if(queueControls==null) { queueControls=new ArrayList<>(); transcriptKey=""; }
-        String key=loadedSequence+":"+queryVersion+":"+contentWidth+":"+AgentModels.text(state,"color")+":"+working()+":"+AgentModels.array(state,"queuedMessages")+":"+AgentModels.text(state,"canSteer")+":"+images()+":"+pointing+":"+composerFeedback()+":"+requestKey+":"+respondingRequests+":"+requestErrors;
+        String key=loadedSequence+":"+queryVersion+":"+contentWidth+":"+AgentModels.text(state,"color")+":"+working()+":"+AgentModels.queuedMessages(state)+":"+AgentModels.text(state,"canSteer")+":"+images()+":"+pointing+":"+composerFeedback()+":"+requestKey+":"+respondingRequests+":"+requestErrors;
         if(key.equals(transcriptKey))return;
         if(selectingText)return;
         var previousLines=new ArrayList<>(lines);
@@ -1200,26 +1338,44 @@ public final class AgentChatScreen extends Screen {
         disclosures.clear();lines.clear();messageBubbles.clear();thinkingLine=-1;
         rebuildQueue();
         boolean hasRunningGroup=false;
-        if(transcript.has("hasOlder")&&transcript.get("hasOlder").getAsBoolean())
-            disclosure("↑ Older messages",()->changeTranscript(()->{before=AgentModels.text(transcript,"firstId");expandedGroup="";expandedRow="";scroll=0;}));
-        if(!before.isBlank())disclosure("↓ Latest messages",()->changeTranscript(()->{before="";expandedGroup="";expandedRow="";scroll=Integer.MAX_VALUE;}));
-        for(var value:AgentModels.array(transcript,"entries")) {
+        var page = AgentModels.object(transcript, "timelinePage");
+        if (page.has("hasOlderRows") && page.get("hasOlderRows").getAsBoolean())
+            disclosure("↑ Older messages",()->changeTranscript(()->{
+                olderCursor = AgentModels.object(page,"olderCursor").deepCopy(); before="older";
+                expandedGroup=""; expandedRow=""; scroll=0;
+            }));
+        if(!olderCursor.isEmpty())disclosure("↓ Latest messages",()->changeTranscript(()->{
+            olderCursor=new JsonObject();before="";expandedGroup="";expandedRow="";scroll=Integer.MAX_VALUE;
+        }));
+        for(var value:AgentModels.array(transcript,"rows")) {
             var row=value.getAsJsonObject();String id=AgentModels.text(row,"id");
-            if(!AgentModels.text(row,"kind").equals("work")){transcriptRow(row,false);continue;}
-            boolean expanded=id.equals(expandedGroup),running=row.has("running")&&row.get("running").getAsBoolean();
+            if(!AgentModels.text(row,"kind").equals("turn")){transcriptRow(row,false);continue;}
+            boolean expanded=id.equals(expandedGroup),running=AgentModels.text(row,"status").equals("pending");
             hasRunningGroup|=running;
-            long seconds=Math.max(0,(row.get("updatedAt").getAsLong()-row.get("createdAt").getAsLong())/1000);
+            long seconds=Math.max(0,(number(row,"completedAt")-number(row,"startedAt"))/1000);
             String duration=seconds<60?seconds+"s":seconds/60+"m "+seconds%60+"s";
-            String title=(expanded?"▾ ":"▸ ")+(running?"Working":"Worked for "+duration);
-            disclosure(title,()->changeTranscript(()->{expandedGroup=expanded?"":id;expandedRow="";groupOffset=0;textOffset=0;}),0,running);
-            if(expanded && transcript.has("group")) {
-                var group=transcript.getAsJsonObject("group");int offset=group.get("offset").getAsInt();
-                if(offset>0)disclosure("↑ Previous activities",()->changeTranscript(()->{groupOffset=Math.max(0,offset-24);expandedRow="";}));
-                for(var member:AgentModels.array(group,"entries"))transcriptRow(member.getAsJsonObject(),true);
-                if(group.get("hasMore").getAsBoolean())disclosure("↓ More activities",()->changeTranscript(()->{groupOffset=offset+24;expandedRow="";}));
+            String label=(expanded?"▾ ":"▸ ")+(running?"Working":"Worked for "+duration);
+            disclosure(label,()->{
+                expandedGroup=expanded?"":id;expandedRow="";textOffset=0;turnDetails=new JsonObject();
+                transcriptKey="";rebuildTranscript();
+                if(!expanded && AgentModels.array(row,"children").isEmpty()) requestTurnDetails(row, "");
+            },0,running);
+            if(expanded) {
+                for(var member:AgentModels.array(row,"children"))transcriptRow(member.getAsJsonObject(),true);
+                for(var member:AgentModels.array(turnDetails,"rows"))transcriptRow(member.getAsJsonObject(),true);
+                String cursor=AgentModels.text(turnDetails,"olderCursor");
+                if(!cursor.isBlank())disclosure("↑ Earlier activities",()->requestTurnDetails(row,cursor));
+                if(detailsLoading)paragraph("Loading activities…",0xBBBBBB,0,12);
             }
         }
-        if(working() && before.isBlank() && !hasRunningGroup) {
+        var thinking=AgentModels.object(transcript,"activeThinking");
+        if(!thinking.isEmpty() && olderCursor.isEmpty()) {
+            String id=AgentModels.text(thinking,"id");
+            disclosure((id.equals(expandedRow)?"▾ ":"▸ ")+"Thinking…",()->{
+                expandedRow=id.equals(expandedRow)?"":id;transcriptKey="";rebuildTranscript();
+            },0,true);
+            if(id.equals(expandedRow))paragraph(AgentModels.text(thinking,"text"),0xBBBBBB,0,12);
+        } else if(working() && olderCursor.isEmpty() && !hasRunningGroup) {
             thinkingLine=lines.size();
             lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
         }
@@ -1236,70 +1392,53 @@ public final class AgentChatScreen extends Screen {
         positionDisclosures();
     }
 
+    private void requestTurnDetails(JsonObject row, String cursor) {
+        if (detailsLoading) return;
+        String id = AgentModels.text(row,"id");
+        var query=new JsonObject();
+        for (String key : new String[]{"turnId","sourceSeqStart","sourceSeqEnd"}) query.addProperty(key,AgentModels.text(row,key));
+        if(!cursor.isBlank())query.addProperty("beforeCursor",cursor);
+        detailsLoading=true;
+        access.timelineTurnSummaryDetails(agentId,query).whenComplete((result,failure)->executeUi(()->{
+            detailsLoading=false;
+            if(!id.equals(expandedGroup))return;
+            if(failure!=null)feedback=AgentModels.error(failure);
+            else turnDetails=result;
+            transcriptKey="";rebuildTranscript();
+        }));
+    }
+
     private void inlineRequests() {
-        for (var item : AgentModels.array(state, "requests")) {
+        for (var item : AgentModels.interactions(state)) {
             var pending = item.getAsJsonObject();
+            String status=AgentModels.text(pending,"status");
+            if(!status.equals("pending") && !status.equals("resolving"))continue;
             String id = AgentModels.text(pending, "id");
-            boolean approval = AgentModels.text(pending, "kind").equals("approval");
-            boolean busy = respondingRequests.contains(id);
-            lines.add(new Line(Component.empty().getVisualOrderText(), 0, 0));
-            paragraph(approval ? "Approval requested" : "Question", 0xE3CAA0, 0, 0);
-            paragraph(AgentModels.text(pending, "title"), 0xEEEEEE, 0, 0);
-            String details = AgentModels.text(pending, "details");
-            if (!details.isBlank()) paragraph(details, 0xBBBBBB, 0, 0);
-            for (var choice : AgentModels.array(pending, "options")) {
-                String label = choice.getAsString();
-                var wrapped = font.split(Component.literal(label), contentWidth - 40);
-                int h = Math.max(24, ((wrapped.size() * LINE_HEIGHT + 12 + LINE_HEIGHT - 1) / LINE_HEIGHT) * LINE_HEIGHT);
-                var button = new Button(left + 8, 0, contentWidth - 24, h - 2, Component.literal(label),
-                    unused -> respondInline(id, label), narration -> narration.get()) {
-                    @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-                        graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(),
-                            isHoveredOrFocused() ? 0xFF40505B : 0xFF29333B);
-                        for (int i = 0; i < wrapped.size(); i++)
-                            graphics.drawString(font, wrapped.get(i), getX() + 8, getY() + 6 + i * LINE_HEIGHT,
-                                active ? 0xEEEEEE : 0x888888);
-                    }
-                };
-                button.active = !busy && activeAgent();
-                inlineWidget(button, h);
+            var payload=AgentModels.object(pending,"payload");
+            boolean approval=AgentModels.text(payload,"kind").equals("approval");
+            boolean busy=respondingRequests.contains(id)||status.equals("resolving");
+            lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
+            paragraph(approval?"Approval requested":"Question",0xE3CAA0,0,0);
+            if(approval) {
+                paragraph(AgentInteractions.approvalDetails(pending),0xEEEEEE,0,0);
+                for(var value:AgentModels.array(payload,"availableDecisions")) {
+                    String decision=value.getAsString();
+                    var button=Button.builder(Component.literal(AgentInteractions.decisionLabel(decision)),unused->respondInline(id,AgentInteractions.approvalResolution(pending,decision)))
+                        .bounds(left+8,0,contentWidth-24,20).build();
+                    button.active=!busy&&activeAgent()&&backendAvailable();inlineWidget(button,24);
+                }
+            } else if(AgentModels.text(payload,"kind").equals("user_question")) {
+                for(var value:AgentModels.array(payload,"questions"))paragraph(AgentModels.text(value.getAsJsonObject(),"prompt"),0xEEEEEE,0,0);
+                var button=Button.builder(Component.literal("Answer questions…"),unused->minecraft.setScreen(new AgentQuestionScreen(access,minecraft.screen,agentId,pending)))
+                    .bounds(left+8,0,contentWidth-24,20).build();
+                button.active=!busy&&activeAgent()&&backendAvailable();inlineWidget(button,24);
+            } else {
+                paragraph(AgentModels.text(payload,"title"),0xEEEEEE,0,0);
+                paragraph("Open this interaction in BB.",0xBBBBBB,0,0);
             }
-            if (!approval) {
-                var field = questionFields.computeIfAbsent(id, unused -> new EditBox(font, left + 8, 0, contentWidth - 86, 20, Component.literal("Your answer")) {
-                    @Override public boolean keyPressed(int key, int scanCode, int modifiers) {
-                        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-                            respondInline(id, getValue());
-                            return true;
-                        }
-                        return super.keyPressed(key, scanCode, modifiers);
-                    }
-                    @Override public void setFocused(boolean focused) {
-                        super.setFocused(focused);
-                        if (focused) focusedQuestion = id;
-                        else if (focusedQuestion.equals(id)) focusedQuestion = "";
-                    }
-                });
-                field.setX(left + 8);
-                field.setWidth(contentWidth - 86);
-                field.setMaxLength(16384);
-                field.setHint(Component.literal("Write an answer…"));
-                if (!field.getValue().equals(questionDrafts.getOrDefault(id, "")))
-                    field.setValue(questionDrafts.getOrDefault(id, ""));
-                field.setEditable(!busy);
-                var send = Button.builder(Component.literal("Send"), unused -> respondInline(id, field.getValue()))
-                    .bounds(left + contentWidth - 70, 0, 54, 20).build();
-                send.active = !busy && !field.getValue().isBlank() && activeAgent();
-                field.setResponder(value -> {
-                    questionDrafts.put(id, value);
-                    send.active = !respondingRequests.contains(id) && !value.isBlank() && activeAgent();
-                });
-                disclosures.add(new Disclosure(addWidget(send), lines.size()));
-                inlineWidget(field, 24);
-                if (focusedQuestion.equals(id)) setFocused(field);
-            }
-            if (busy) paragraph("Sending…", 0xBBBBBB, 0, 0);
-            String error = requestErrors.getOrDefault(id, "");
-            if (!error.isBlank()) paragraph(error, 0xFFAAAA, 0, 0);
+            if(busy)paragraph("Sending…",0xBBBBBB,0,0);
+            String error=requestErrors.getOrDefault(id,"");
+            if(!error.isBlank())paragraph(error,0xFFAAAA,0,0);
         }
     }
 
@@ -1309,13 +1448,13 @@ public final class AgentChatScreen extends Screen {
             lines.add(new Line(Component.empty().getVisualOrderText(), 0, 0));
     }
 
-    private void respondInline(String id, String answer) {
-        if (answer.isBlank() || !activeAgent() || !respondingRequests.add(id)) return;
+    private void respondInline(String id, JsonObject resolution) {
+        if (resolution.isEmpty() || !activeAgent() || !respondingRequests.add(id)) return;
         requestErrors.remove(id);
         // Disable every choice immediately, before the next render can rebuild the card.
         rebuildTranscript();
         CompletableFuture<Void> operation;
-        try { operation = access.respond(agentId, id, answer); }
+        try { operation = access.respond(agentId, id, resolution); }
         catch (RuntimeException failure) { inlineResponseCompleted(id, failure); return; }
         operation.whenComplete((unused, failure) -> executeUi(() -> inlineResponseCompleted(id, failure)));
     }
@@ -1338,7 +1477,7 @@ public final class AgentChatScreen extends Screen {
     private void rebuildQueue() {
         for(var button:queueControls)removeWidget(button);
         queueControls.clear();
-        var queued=AgentModels.array(state,"queuedMessages");
+        var queued=AgentModels.queuedMessages(state);
         queueRows=Math.min(queued.size(),Math.max(1,Math.min(4,(height-240)/22)));
         queueOffset=Math.clamp(queueOffset,0,Math.max(0,queued.size()-queueRows));
         int attachmentCount = images().size() + (pointing == null ? 0 : 1);
@@ -1389,8 +1528,6 @@ public final class AgentChatScreen extends Screen {
     }
 
     private String composerFeedback() {
-        String permissionError = models.permissionError(AgentModels.text(settings(),"permissionMode"));
-        if (!permissionError.isBlank()) return permissionError;
         return feedback.isBlank() ? AgentModels.text(state, "error") : feedback;
     }
 
@@ -1429,12 +1566,11 @@ public final class AgentChatScreen extends Screen {
     }
 
     private void renderQueue(GuiGraphics graphics,int mouseX,int mouseY,float partialTick) {
-        var queued=AgentModels.array(state,"queuedMessages");
+        var queued=AgentModels.queuedMessages(state);
         for(int row=0;row<queueRows && queueOffset+row<queued.size();row++) {
             int y=transcriptBottom+4+row*22;
-            String text=AgentModels.text(queued.get(queueOffset+row).getAsJsonObject(),"text");
-            var attached=AgentModels.array(queued.get(queueOffset+row).getAsJsonObject(),"images");
-            for(int i=0;i<attached.size();i++)text+=(text.isBlank()?"":" ")+"[Image "+(i+1)+"]";
+            String text=AgentInteractions.queuedText(queued.get(queueOffset+row).getAsJsonObject());
+
             String preview=text.replace('\n',' ').replace('\r',' ');
             int available=contentWidth-104;
             if(font.width(preview)>available)preview=font.plainSubstrByWidth(preview,available-font.width("…"))+"…";
@@ -1444,7 +1580,7 @@ public final class AgentChatScreen extends Screen {
                 renderTooltip(graphics, font.split(Component.literal(text), contentWidth - 24), mouseX, mouseY);
         }
         for(var button:queueControls) {
-            button.active=!sending && activeAgent();
+            button.active=!sending && activeAgent() && backendAvailable();
             button.render(graphics,mouseX,mouseY,partialTick);
         }
     }
@@ -1565,15 +1701,13 @@ public final class AgentChatScreen extends Screen {
         renderContext(graphics, mouseX, mouseY);
         renderPicker(graphics, mouseX, mouseY, partialTick);
         if (minecraft.screen == returnScreen() && minecraft.isWindowActive()) {
-            if (seenReply > 0) access.markRead(agentId, seenReply);
-            if (!message.isBlank() && message.equals(AgentModels.text(state, "error")))
-                access.markErrorRead(agentId, number(state, "errorVersion"));
+            if (seenReply > markedReply) { markedReply=seenReply;access.markRead(agentId, seenReply); }
         }
     }
 
     /** A button-sized square left of the provider fills from the bottom as the context window is used. */
     private void renderContext(GuiGraphics graphics, int mouseX, int mouseY) {
-        var usage = AgentModels.object(AgentModels.object(AgentModels.object(state, "conversation"), "state"), "contextWindowUsage");
+        var usage = AgentModels.object(transcript, "contextWindowUsage");
         long used = number(usage, "usedTokens"), size = number(usage, "modelContextWindow");
         int x = providerButton.getX() - 24, y = providerButton.getY();
         double fraction = size > 0 ? Math.clamp((double) used / size, 0, 1) : 0;
@@ -1690,7 +1824,7 @@ public final class AgentChatScreen extends Screen {
         }
         if (composer.isMouseOver(mouseX, mouseY)) return composer.mouseScrolled(mouseX, mouseY, horizontal, vertical);
         if(queueRows>0 && mouseX>=left && mouseX<=left+contentWidth && mouseY>=transcriptBottom+4 && mouseY<transcriptBottom+4+queueRows*22) {
-            queueOffset=Math.clamp(queueOffset-(int)Math.signum(vertical),0,Math.max(0,AgentModels.array(state,"queuedMessages").size()-queueRows));
+            queueOffset=Math.clamp(queueOffset-(int)Math.signum(vertical),0,Math.max(0,AgentModels.queuedMessages(state).size()-queueRows));
             transcriptKey="";
             rebuildTranscript();
             return true;
@@ -1753,7 +1887,7 @@ public final class AgentChatScreen extends Screen {
     private boolean actionWorking() {
         if (!state.has("action") || !state.get("action").isJsonObject()) return false;
         String status = AgentModels.text(state.getAsJsonObject("action"), "status");
-        return status.equals("running") || status.equals("queued") || status.equals("in_progress");
+        return status.equals("active") || status.equals("starting") || status.equals("stopping") || status.equals("running") || status.equals("queued") || status.equals("in_progress");
     }
 
     private int headerWidth() {

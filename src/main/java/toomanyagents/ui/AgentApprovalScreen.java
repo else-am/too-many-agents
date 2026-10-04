@@ -37,7 +37,7 @@ public final class AgentApprovalScreen extends Screen {
     @Override protected void init() {
         contentWidth = Math.min(760, width - 24);
         left = (width - contentWidth) / 2;
-        var options = AgentModels.array(request, "options");
+        var options = AgentModels.array(AgentModels.object(request,"payload"), "availableDecisions");
         int columns = options.size() > 1 ? 2 : 1;
         int rows = (options.size() + columns - 1) / columns;
         detailsTop = 34;
@@ -48,17 +48,18 @@ public final class AgentApprovalScreen extends Screen {
             .bounds(left + contentWidth - 20, 8, 20, 20).build());
         decisions.clear();
         for (int i = 0; i < options.size(); i++) {
-            String label = options.get(i).getAsString();
+            String decisionId = options.get(i).getAsString();
+            String label = AgentInteractions.decisionLabel(decisionId);
             int w = (contentWidth - (columns - 1) * 6) / columns;
-            Button decision = addRenderableWidget(Button.builder(Component.literal(label), button -> respond(label))
+            Button decision = addRenderableWidget(Button.builder(Component.literal(label), button -> respond(decisionId))
                 .bounds(left + (i % columns) * (w + 6), detailsBottom + 8 + (i / columns) * 24, w, 20).build());
             if (font.width(label) > w - 8) decision.setTooltip(Tooltip.create(Component.literal(label)));
             decisions.add(decision);
         }
         var back = addRenderableWidget(Button.builder(Component.literal("Back to chat"), button -> onClose())
             .bounds(left, height - 31, contentWidth, 20).build());
-        String title = AgentModels.text(request, "title");
-        String details = AgentModels.text(request, "details");
+        String title = "Approval requested";
+        String details = AgentInteractions.approvalDetails(request);
         lines = font.split(Component.literal(title + "\n\n" + (details.isBlank() ? "No additional details provided." : details)), contentWidth - 24);
         maxScroll = Math.max(0, lines.size() * 11 - (detailsBottom - detailsTop - 12));
         scroll = Math.clamp(scroll, 0, maxScroll);
@@ -68,8 +69,8 @@ public final class AgentApprovalScreen extends Screen {
 
     @Override public void tick() {
         JsonObject current = null;
-        for (var item : AgentModels.array(access.snapshot(agentId), "requests")) {
-            if (requestId.equals(AgentModels.text(item.getAsJsonObject(), "id"))) current = item.getAsJsonObject();
+        for (var item : AgentModels.interactions(access.snapshot(agentId))) {
+            if (requestId.equals(AgentModels.text(item.getAsJsonObject(), "id")) && java.util.Set.of("pending","resolving").contains(AgentModels.text(item.getAsJsonObject(),"status"))) current = item.getAsJsonObject();
         }
         if (current == null) {
             if (!resolved && !responding) feedback = "This request is no longer pending.";
@@ -82,18 +83,18 @@ public final class AgentApprovalScreen extends Screen {
     }
 
     private void refresh() {
-        for (Button decision : decisions) decision.active = !responding && !resolved;
+        for (Button decision : decisions) decision.active = !responding && !resolved && !AgentModels.text(request,"status").equals("resolving") && !AgentModels.text(access.snapshot(agentId),"status").equals("disconnected");
         upButton.active = scroll > 0;
         downButton.active = scroll < maxScroll;
     }
 
     private void respond(String label) {
-        if (responding || resolved) return;
+        if (responding || resolved || AgentModels.text(access.snapshot(agentId),"status").equals("disconnected")) return;
         responding = true;
         feedback = "Sending decision…";
         refresh();
         CompletableFuture<Void> operation;
-        try { operation = access.respond(agentId, requestId, label); }
+        try { operation = access.respond(agentId, requestId, AgentInteractions.approvalResolution(request,label)); }
         catch (RuntimeException failure) { completed(failure); return; }
         operation.whenComplete((unused, failure) -> screenExecutor.execute(() -> completed(failure)));
     }

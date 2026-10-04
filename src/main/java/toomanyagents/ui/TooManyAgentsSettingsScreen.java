@@ -45,7 +45,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
             v -> { settings.setScreenScale(Integer.parseInt(v)); rebuildForm(); }, true)
             .setTooltip(Tooltip.create(Component.literal("GUI scale for the agent sidebar, chat and settings. Agent inventories use the game's scale.")));
         section("More");
-        action("Providers", "Agent providers…", () -> minecraft.setScreen(new ProviderSettingsScreen(back())), true);
+        action("Providers", "Agent providers…", () -> minecraft.setScreen(new ProviderSettingsScreen(back(), access)), true);
         action("Key binds", "Minecraft key binds…", () -> minecraft.setScreen(new KeyBindsScreen(back(), minecraft.options)), true);
         if (access != null) action("Archive", "Archive…", () -> minecraft.setScreen(new ArchiveScreen(access, back())), true);
         feedback = settings.error();

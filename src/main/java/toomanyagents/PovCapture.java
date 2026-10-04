@@ -7,7 +7,6 @@ import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
@@ -32,7 +31,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.util.profiling.InactiveProfiler;
 import net.minecraft.world.entity.Entity;
-import net.neoforged.fml.loading.FMLPaths;
 import net.neoforged.neoforge.client.GlStateBackup;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
@@ -176,6 +174,10 @@ public final class PovCapture {
                 throw new IllegalStateException("Terrain around the NPC is outside the client's loaded render area. Move closer to the NPC.");
             }
             if (section.isDirty() || section.getCompiled() == SectionRenderDispatcher.CompiledSection.UNCOMPILED) {
+                // Vanilla cancels rebuilds without neighboring chunks; waiting cannot produce a mesh.
+                if (!section.hasAllNeighbors()) {
+                    throw new IllegalStateException("Terrain around the NPC needs neighboring chunks outside the client's loaded render area. Move closer to the NPC.");
+                }
                 waiting = true;
                 if (section.isDirty() && scheduled++ < 8) {
                     section.rebuildSectionAsync(renderer.sectionRenderDispatcher, regionCache);
@@ -244,10 +246,6 @@ public final class PovCapture {
         try (image) {
             if (request.result.isDone()) return;
             byte[] png = image.asByteArray();
-            var path = FMLPaths.GAMEDIR.get().resolve("too-many-agents/pov-" + request.body + ".png").toAbsolutePath();
-            Files.createDirectories(path.getParent());
-            Files.write(path, png);
-            metadata.addProperty("path", path.toString());
             metadata.addProperty("imageDataUrl", "data:image/png;base64," + Base64.getEncoder().encodeToString(png));
             Minecraft.getInstance().execute(() -> {
                 if (request.result.isDone()) return;

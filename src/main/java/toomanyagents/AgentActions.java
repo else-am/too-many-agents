@@ -251,6 +251,7 @@ final class AgentActions {
             return;
         }
         if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
+        if (!level.isPositionEntityTicking(pos)) throw error("target_outside_simulated_chunks");
         if (ticks == 1 || ticks % 10 == 0 || mob.getNavigation().isDone()) {
             boolean found = false, outsideOnly = false;
             if (workingPosition) {
@@ -275,19 +276,21 @@ final class AgentActions {
                     // Interactions may reach out of the box, but the body works from inside it.
                     if (confined != null && !confined.holdsFeet(candidate)) { outsideOnly = true; continue; }
                     outsideOnly = false;
-                    var path = mob.getNavigation().createPath(candidate, 0);
+                    var path = mob.getNavigation().createPath(candidate, 0, 64);
                     if (path != null && path.canReach() && GameAccess.staysInside(path, confined)) { found = mob.getNavigation().moveTo(path, 1.0); if (found) break; }
                 }
             } else {
                 // The convenience moveTo overload accepts a neighboring tile (accuracy 1).
                 // Coordinate goals need the actual target tile before our arrival check.
-                var path = mob.getNavigation().createPath(pos, 0);
+                // Use the physical tool's range rather than this mob species' follow range.
+                var path = mob.getNavigation().createPath(pos, 0, 64);
                 found = path != null && path.canReach() && GameAccess.staysInside(path, confined) && mob.getNavigation().moveTo(path, 1.0);
             }
             if (!found) throw error(outsideOnly ? "target_out_of_reach_from_box" : confined != null ? "unreachable_inside_box" : "unreachable");
         }
         var path = mob.getNavigation().getPath();
         if (path != null && !path.isDone() && !level.hasChunkAt(path.getNextNodePos())) throw error("path_enters_unloaded_chunk");
+        if (path != null && !path.isDone() && !level.isPositionEntityTicking(path.getNextNodePos())) throw error("path_leaves_simulated_chunks");
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
         mob.getNavigation().tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
         GameAccess.travelFollowingBody(mob, confined);

@@ -8,7 +8,7 @@ import net.minecraft.world.phys.Vec3;
 /** A block-inclusive box in one dimension that confines a body's position. */
 record BodyBox(String dimension, BlockPos min, BlockPos max) {
     static BodyBox of(JsonObject row) {
-        return new BodyBox(ProjectStore.text(row,"dimension"), pos(row.getAsJsonArray("min")), pos(row.getAsJsonArray("max")));
+        return new BodyBox(JsonState.text(row,"dimension"), pos(row.getAsJsonArray("min")), pos(row.getAsJsonArray("max")));
     }
     private static BlockPos pos(JsonArray xyz) { return new BlockPos(xyz.get(0).getAsInt(), xyz.get(1).getAsInt(), xyz.get(2).getAsInt()); }
 

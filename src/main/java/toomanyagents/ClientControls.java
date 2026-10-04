@@ -250,6 +250,13 @@ public final class ClientControls {
                     result.complete(widgets());
                     return;
                 }
+                if ("dev_open_world".equals(action)) {
+                    if(!DevelopmentWorld.ENABLED || client.getSingleplayerServer()!=null || !(client.screen instanceof TitleScreen))
+                        throw new IllegalStateException("Opening a test world requires the development title screen");
+                    DevelopmentWorld.open(JsonState.text(request,"name"));
+                    result.complete(new JsonObject());
+                    return;
+                }
                 var agents = service.get();
                 if (agents == null || !client.hasSingleplayerServer() || client.level == null) {
                     throw new IllegalStateException("Open a local singleplayer world first");
@@ -294,13 +301,30 @@ public final class ClientControls {
                         survey.corner(blockPos(request));
                     }
                     case "survey_edit" -> { if (!survey.editAt(blockPos(request))) throw new IllegalArgumentException("No box holds that block"); }
-                    case "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press" -> {
+                    case "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop" -> {
                         var server = client.getSingleplayerServer();
                         if (!DevelopmentWorld.ENABLED || server == null || !server.getWorldPath(LevelResource.ROOT)
                             .toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME)) {
                             throw new IllegalStateException("Development controls require the exact development world");
                         }
-                        if (action.equals("dev_input_state")) {
+                        if (action.equals("dev_drop")) {
+                            if (!(client.screen instanceof toomanyagents.ui.AgentWorkspaceScreen || client.screen instanceof AgentChatScreen))
+                                throw new IllegalStateException("Open an agent chat before dropping test files");
+                            var files = request.getAsJsonArray("paths");
+                            if (files == null || files.isEmpty() || files.size() > 8) throw new IllegalArgumentException("Drop between 1 and 8 test files");
+                            var gameDir = FMLPaths.GAMEDIR.get().toRealPath();
+                            var scratchFolder = gameDir.getParent().resolve("scratch");
+                            var scratch = Files.isDirectory(scratchFolder) ? scratchFolder.toRealPath() : null;
+                            var paths = new java.util.ArrayList<java.nio.file.Path>();
+                            for (var file : files) {
+                                var path = java.nio.file.Path.of(file.getAsString()).toRealPath();
+                                if ((!path.startsWith(gameDir) && (scratch == null || !path.startsWith(scratch))) || !Files.isRegularFile(path))
+                                    throw new IllegalArgumentException("Drop only files from the test run or scratch folder");
+                                paths.add(path);
+                            }
+                            client.screen.onFilesDrop(paths);
+                        }
+                        else if (action.equals("dev_input_state")) {
                             long window = client.getWindow().getWindow();
                             var input = new JsonObject();
                             input.addProperty("leftCommand", GLFW.glfwGetKey(window, GLFW.GLFW_KEY_LEFT_SUPER) == GLFW.GLFW_PRESS);

@@ -18,7 +18,6 @@ public final class TooManyAgentsClientSettings {
     // Agent screen GUI scale; 0 follows the game.
     private int screenScale;
     private boolean sidebarCollapsed;
-    private String defaultProvider = "codex";
     private String error = "";
 
     public static TooManyAgentsClientSettings get() {
@@ -28,16 +27,18 @@ public final class TooManyAgentsClientSettings {
 
     private TooManyAgentsClientSettings() {
         if (!Files.exists(path)) return;
+        boolean obsoleteProvider = false;
         try (var reader = Files.newBufferedReader(path)) {
             var json = JsonParser.parseReader(reader).getAsJsonObject();
             if (json.has("notificationSound")) notificationSound = json.get("notificationSound").getAsBoolean();
             if (json.has("showAgentCommunication")) showAgentCommunication = json.get("showAgentCommunication").getAsBoolean();
             if (json.has("screenScale")) screenScale = Math.max(0, json.get("screenScale").getAsInt());
             if (json.has("sidebarCollapsed")) sidebarCollapsed = json.get("sidebarCollapsed").getAsBoolean();
-            if (json.has("defaultProvider") && json.get("defaultProvider").getAsString().equals("claude")) defaultProvider = "claude";
+            obsoleteProvider = json.has("defaultProvider");
         } catch (Exception failure) {
             error = "Could not read display settings. Changes will replace the unreadable file.";
         }
+        if (obsoleteProvider) save();
     }
 
     public boolean notificationSound() { return notificationSound; }
@@ -47,11 +48,6 @@ public final class TooManyAgentsClientSettings {
     public void setScreenScale(int scale) { screenScale = scale; save(); }
     public boolean sidebarCollapsed() { return sidebarCollapsed; }
     public void setSidebarCollapsed(boolean collapsed) { sidebarCollapsed = collapsed; save(); }
-    public String defaultProvider() { return defaultProvider == null ? "codex" : defaultProvider; }
-    public void setDefaultProvider(String provider) {
-        if (!provider.equals("codex") && !provider.equals("claude")) throw new IllegalArgumentException("Unknown provider");
-        defaultProvider = provider; save();
-    }
     public String error() { return error; }
     public void setNotificationSound(boolean enabled) { notificationSound = enabled; save(); }
 
@@ -61,7 +57,6 @@ public final class TooManyAgentsClientSettings {
         result.addProperty("showAgentCommunication", showAgentCommunication);
         result.addProperty("screenScale", screenScale);
         result.addProperty("sidebarCollapsed", sidebarCollapsed);
-        result.addProperty("defaultProvider", defaultProvider());
         result.addProperty("error", error);
         return result;
     }
@@ -74,7 +69,6 @@ public final class TooManyAgentsClientSettings {
             json.addProperty("showAgentCommunication", showAgentCommunication);
             json.addProperty("screenScale", screenScale);
             json.addProperty("sidebarCollapsed", sidebarCollapsed);
-            json.addProperty("defaultProvider", defaultProvider());
             var temporary = path.resolveSibling(path.getFileName() + ".tmp");
             Files.writeString(temporary, new GsonBuilder().setPrettyPrinting().create().toJson(json) + "\n");
             try {
