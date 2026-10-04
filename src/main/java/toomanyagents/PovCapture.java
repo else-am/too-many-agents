@@ -174,6 +174,10 @@ public final class PovCapture {
                 throw new IllegalStateException("Terrain around the NPC is outside the client's loaded render area. Move closer to the NPC.");
             }
             if (section.isDirty() || section.getCompiled() == SectionRenderDispatcher.CompiledSection.UNCOMPILED) {
+                // Vanilla cancels rebuilds without neighboring chunks; waiting cannot produce a mesh.
+                if (!section.hasAllNeighbors()) {
+                    throw new IllegalStateException("Terrain around the NPC needs neighboring chunks outside the client's loaded render area. Move closer to the NPC.");
+                }
                 waiting = true;
                 if (section.isDirty() && scheduled++ < 8) {
                     section.rebuildSectionAsync(renderer.sectionRenderDispatcher, regionCache);
