@@ -40,10 +40,23 @@ final class AgentInteractions {
             String text = AgentModels.text(presentation, key);
             if (!text.isBlank()) parts.add(text);
         }
-        if (subject.has("permissions")) parts.add(new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(subject.get("permissions")));
+        String permissions = permissionsText(AgentModels.object(subject, "permissions"));
+        if (!permissions.isBlank()) parts.add(permissions);
         String reason = AgentModels.text(payload, "reason");
         if (!reason.isBlank()) parts.add(reason);
         return parts.isEmpty() ? AgentModels.text(subject, "kind") : String.join("\n\n", parts);
+    }
+
+    /** BB permission grants as plain lines, e.g. "Network access" or "Write: /path". */
+    private static String permissionsText(JsonObject permissions) {
+        var lines = new ArrayList<String>();
+        var network = AgentModels.object(permissions, "network");
+        if (network.has("enabled") && network.get("enabled").isJsonPrimitive() && network.get("enabled").getAsBoolean()) lines.add("Network access");
+        var files = AgentModels.object(permissions, "fileSystem");
+        for (String key : new String[]{"read", "write"})
+            for (var path : AgentModels.array(files, key))
+                lines.add((key.equals("read") ? "Read: " : "Write: ") + path.getAsString());
+        return String.join("\n", lines);
     }
 
     static String queuedText(JsonObject message) {

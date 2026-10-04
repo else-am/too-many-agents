@@ -67,6 +67,8 @@ public final class AgentQuestionScreen extends Screen {
             var option=options.get(i).getAsJsonObject();
             String value=AgentModels.text(option,"value"),label=AgentModels.text(option,"label");
             String description=AgentModels.text(option,"description");
+            // Claude repeats the label as its description; show only real descriptions.
+            if(description.equals(label))description="";
             if(!description.isBlank())details.append("\n\n").append(label).append(": ").append(description);
             var button=Button.builder(Component.literal(label),unused->{
                 var selection=selected.get(id);
