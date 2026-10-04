@@ -46,7 +46,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         profiles.put("Survival",object("mode","survival","cheats",false,"following",false));
         profiles.put("Creative",object("mode","creative","cheats",false,"following",false));
         try {
-            var file=directory.resolve("body-profiles-v1.json");
+            var file=directory.resolve("body-profiles.json");
             if(Files.exists(file)) {
                 for(var entry:JsonParser.parseString(Files.readString(file)).getAsJsonObject().entrySet()) profiles.put(entry.getKey(),BodySettings.profile(entry.getValue().getAsJsonObject()));
                 JsonState.write(file,JSON.toJsonTree(profiles).getAsJsonObject());
@@ -120,7 +120,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         closeScopes(null,"world_session_changed");
         agents.clear(); cancelled.clear(); connected=false;
         String worldId=text(world,"id");
-        records=Path.of(text(world,"directory")).resolve("too-many-agents/bb-bodies-v1.json");
+        records=Path.of(text(world,"directory")).resolve("too-many-agents/bb-bodies.json");
         if(Files.exists(records)) {
             var saved=JsonParser.parseString(Files.readString(records)).getAsJsonObject();
             if(!text(saved,"worldId").equals(worldId)) throw new IllegalStateException("Saved bodies belong to a different world identity.");
@@ -147,7 +147,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         for(var agent:agents.values()) rows.add(object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,
             "minecraftAccess",agent.minecraftAccess,"projectId",agent.projectId,"threadId",agent.threadId,"suspendedBody",agent.suspendedBody,"deleted",agent.deleted,
             "startNonce",agent.startNonce,"spawn",agent.spawn,"archived",agent.archived,"bodyRemoved",agent.removed,"bodyLost",agent.lost));
-        var data=object("version",2,"worldId",loadedWorldId,"agents",rows); var file=records;
+        var data=object("worldId",loadedWorldId,"agents",rows); var file=records;
         return CompletableFuture.runAsync(() -> { try { JsonState.write(file,data); } catch(Exception failure) { throw new CompletionException(failure); } },disk);
     }
     private synchronized CompletableFuture<JsonElement> rpc(String op,JsonObject arguments) {
@@ -235,7 +235,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public synchronized CompletableFuture<Void> saveProfile(String name,JsonObject settings) {
         if(name==null || name.isBlank() || name.length()>80) return failed("Profile name must contain 1–80 characters.");
         profiles.put(name,BodySettings.profile(settings)); var saved=JSON.toJsonTree(profiles).getAsJsonObject();
-        return CompletableFuture.runAsync(() -> { try { JsonState.write(directory.resolve("body-profiles-v1.json"),saved); } catch(Exception e) { throw new CompletionException(e); } },disk);
+        return CompletableFuture.runAsync(() -> { try { JsonState.write(directory.resolve("body-profiles.json"),saved); } catch(Exception e) { throw new CompletionException(e); } },disk);
     }
 
     @Override public CompletableFuture<String> spawn(JsonObject request) {

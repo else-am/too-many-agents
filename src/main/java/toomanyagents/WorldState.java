@@ -35,7 +35,7 @@ final class WorldState {
     private WorldState(MinecraftServer server) throws IOException {
         folder = server.getWorldPath(LevelResource.ROOT).toRealPath();
         file = folder.resolve("too-many-agents/world.json");
-        registryFile = FMLPaths.GAMEDIR.get().resolve("too-many-agents/worlds-v1.json");
+        registryFile = FMLPaths.GAMEDIR.get().resolve("too-many-agents/worlds.json");
         registry = Files.exists(registryFile) ? JsonParser.parseString(Files.readString(registryFile)).getAsJsonObject() : new JsonObject();
         data = Files.exists(file) ? JsonParser.parseString(Files.readString(file)).getAsJsonObject()
             : JsonState.object("id",UUID.randomUUID().toString(),"bounds",new JsonArray(),"paths",new JsonArray());
@@ -84,7 +84,7 @@ final class WorldState {
     }
     /** A disconnected spawn may reserve a station before it ever saves a body. */
     private void releaseOrphanStations() throws IOException {
-        Path bodiesFile = folder.resolve("too-many-agents/bb-bodies-v1.json");
+        Path bodiesFile = folder.resolve("too-many-agents/bb-bodies.json");
         var active = new HashSet<String>();
         if (Files.exists(bodiesFile)) {
             var bodies = JsonParser.parseString(Files.readString(bodiesFile)).getAsJsonObject();
@@ -112,7 +112,7 @@ final class WorldState {
         } else if (choice.equals("copy")) {
             String previousWorld = id(), newWorld = UUID.randomUUID().toString();
             // The copy keeps its bodies; each starts a new conversation while the original keeps its own.
-            Path bodiesFile = folder.resolve("too-many-agents/bb-bodies-v1.json");
+            Path bodiesFile = folder.resolve("too-many-agents/bb-bodies.json");
             if (Files.exists(bodiesFile)) {
                 var bodies = JsonParser.parseString(Files.readString(bodiesFile)).getAsJsonObject();
                 for (var value : JsonState.array(bodies,"agents")) {
@@ -131,7 +131,7 @@ final class WorldState {
             data = JsonState.object("id",newWorld,"bounds",new JsonArray(),"paths",new JsonArray(),"stations",new JsonArray(),"copiedFrom",previousWorld);
         } else throw new IllegalArgumentException("Choose move or copy for this relocated world.");
         register(); needsDecision = false;
-        if (copiedBodies != null) JsonState.write(folder.resolve("too-many-agents/bb-bodies-v1.json"),copiedBodies);
+        if (copiedBodies != null) JsonState.write(folder.resolve("too-many-agents/bb-bodies.json"),copiedBodies);
         return snapshot();
     }
     JsonObject bounds(JsonObject request, String dimension) throws IOException {

@@ -98,7 +98,7 @@ def main():
     threads_before = {row['id'] for row in bb('thread', 'list', '--project', agent['projectId'], '--include-hidden')}
     inventory = request(path + '/inventory', {})
     request('/v1/ui', {'action': 'dev_leave'})
-    records = folder / 'too-many-agents/bb-bodies-v1.json'
+    records = folder / 'too-many-agents/bb-bodies.json'
     saved = json.loads(records.read_text())
     backup = ROOT / 'run/too-many-agents/bb-recovery-backup.json'
     backup.write_text(json.dumps(saved, indent=2) + '\n')
