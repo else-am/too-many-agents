@@ -1,84 +1,84 @@
-# Minecraft–BB local protocol v2
+# Minecraft–BB local protocol v3
 
-Plugin id `minecraft`, installed BB 0.45.0 or newer, SDK 0.6.15. Minecraft owns
-agents, bodies and each agent's BB thread link; BB owns everything about the
-conversation. The plugin stores only a delivered-message cursor per thread in BB plugin storage.
+Plugin id `minecraft`, BB 0.45.0 or newer, SDK 0.6.15. The plugin owns BB
+request preparation, project/workspace selection, conversation creation and
+lifecycle interpretation. Java owns bodies, saved world records, physical
+execution and native rendering. Both UI and CLI creation use `agents.ts`.
 
 ## Minecraft → plugin
 
-Minecraft reads BB's address (`serverUrl`) from BB's own `~/.bb/bb-app-runtime.json`.
-One JSON endpoint:
-`POST /api/v1/plugins/minecraft/http/v1/rpc`, with BB's default local check:
-browser origins are refused, as on BB's own API. Request `{op, ...arguments}`; response
-`{ok:true,result}` or `{ok:false,error:{code,message}}`. Mutations are sent
-once. A lost response has an unknown outcome; callers inspect state and never
-automatically resend.
+Minecraft reads `serverUrl` from BB's `~/.bb/bb-app-runtime.json` and calls
+`POST /api/v1/plugins/minecraft/http/v1/rpc`. BB's default local check refuses
+browser origins. Requests are `{op,worldId,worldSessionId,...arguments}`;
+responses are `{ok:true,result}` or `{ok:false,error:{code,message}}`.
+Mutations are sent once. A lost response has an unknown outcome; inspect state
+before any retry.
 
-- `session.attach`: `{worldId,worldSessionId,callbackUrl,callbackToken}`.
-  Idempotent; Minecraft repeats it every few seconds so a restarted plugin
-  learns the world again. `callbackUrl` must be literal loopback HTTP.
-  `session.detach`: `{worldId,worldSessionId}`.
-- BB passthroughs, returning native payloads: `catalog`, `projects`,
-  `system.config`, `system.defaultProvider.set`, `project.executionOptions`,
-  `environment.providers`, `usage`, `backend.status`,
-  `project.create/configure/remove` (the create host `local` resolves to BB's
-  primary host), `project.source.update` `{projectId,sourceId,path}`.
-- A spawn environment `{environmentProviderId:"project-checkout"}` works in the
-  project's own folder: the plugin reuses that folder's existing environment, or
-  creates it on the folder's machine. Minecraft uses this for each world's
-  project, whose folder is `<save>/too-many-agents/workspace`.
-- `threads.read`: `{threadIds}` → `{[threadId]: {thread,executionOptions,
-  interactions,queuedMessages} | {deleted:true} | {error}}`. `agent.read` adds `timeline`.
-- `agent.start`: `{worldId,agentId,minecraftAccess,nonce,spawn: BB ThreadSpawnArgs}` starts an agent's thread with its first message.
-- Thread operations take `{threadId}` plus BB's own arguments: `agent.send`
-  `{send}`, `agent.update` `{patch}`, `agent.markRead`, `agent.stop`,
-  `agent.archive`, `agent.unarchive`, `timeline` `{query?}`,
-  `timeline.summary` `{query}`, `interaction.resolve` `{interactionId,
-  resolution}`, `interaction.respond` `{interactionId,value}`,
-  `interaction.cancel` `{interactionId}`, and `queue.create/update/delete/send/
-  reorder` `{args}`.
+- `session.attach`: `{protocol:3,worldId,worldSessionId,callbackUrl,callbackToken}`.
+  Idempotent and repeated periodically to reconnect after plugin reload.
+  The callback URL must be literal loopback HTTP. `session.detach` takes the
+  world and session IDs.
+- `world.sync` reconciles associated BB threads and returns display-ready
+  project rows. The plugin creates a world's BB project lazily, using the
+  save's workspace folder, and resolves BB environments. Java saves its ID.
+- `agent.create`: `{request}` combines body choices with BB execution choices.
+  The plugin separates these, creates a body with an opaque saved draft, and
+  starts a conversation only when there is initial input. The UI's optional
+  `worktree` boolean is translated here; CLI native environments stay native.
+- `agent.message`: `{agentId,message:{text,images?,pointing?,delivery?,...}}`.
+  The plugin prepares native input and image uploads, starts the first thread
+  or sends to the existing one. `agent.settings` takes `{agentId,settings}` and
+  separates physical settings from native BB updates or an unstarted draft.
+- `agent.archive`: `{agentId,archived}`; `agent.stop`, `agent.markRead`:
+  `{agentId}`. `agent.queue.steer/cancel`: `{agentId,messageId}`.
+- Native UI data and actions: `catalog`, `system.config`,
+  `system.defaultProvider.set`, `project.executionOptions`, `usage`,
+  `backend.status`, `timeline`, `timeline.summary`, `interaction.resolve`,
+  `interaction.respond`, `interaction.cancel`, `chat.asset`, `chat.open`.
+  Thread-specific operations resolve the body's `agentId` inside the plugin.
+  Native `threadId` requests remain available for development diagnostics.
+  Java renders these payloads; it does not orchestrate BB calls.
+- `project.creationOptions`: `{projectId}` → `{worktreeAvailable}`.
+  `project.create`: `{name,folder}`; `project.configure`: `{projectId,name}`;
+  `project.remove`: `{projectId}`. Host/source/provider details stay in the plugin.
 
 ## Plugin → Minecraft
 
-`POST callbackUrl` with `Authorization: Bearer callbackToken`. Body `{protocol:2,
-op,worldId,worldSessionId,requestId,expiresAt,...arguments}`; reply
-`{ok:true,result}`. Java rejects a stale world session, and rejects a
-physical request after `expiresAt` without touching the world.
+`POST callbackUrl` uses `Authorization: Bearer callbackToken`. Body:
+`{protocol:3,op,worldId,worldSessionId,requestId,expiresAt,...arguments}`.
+Java rejects stale sessions and expires physical requests before execution.
 
-- `agents` → `{agents:[{agentId,name,threadId,projectId,
-  minecraftAccess,settings}]}` for coordination checks.
-- `changed`: `{agentId,threadId,bind?,nonce?}`. The plugin pushes it on each BB event
-  for an agent's thread; Java rereads that thread. `bind` links a thread the
-  plugin started to an agent that has none yet, including when the start
-  request's reply was lost. Java persists its nonce before requesting the start;
-  binding must match that nonce. On reconnect, the plugin reads its own BB
-  threads and metadata to recover missed bindings without repeating a spawn.
-- `tool`: `{agentId,threadId,tool,arguments}` → BB tool result.
-  `spawn_agent`: `{agentId,threadId,request}` creates a body and BB thread through
-  the same Java path as the in-game UI. Each must come from the acting agent's
-  own thread.
+- `agents` returns saved body associations, physical settings and opaque drafts.
+- `body.create`: `{settings,projectId,minecraftAccess,draft}` creates and saves
+  a physical body. CLI calls also carry the acting `agentId` and `threadId`;
+  Java checks ownership, physical permission inheritance and cancellation.
+- `body.begin`: `{agentId,nonce}` persists a start nonce before BB creation.
+  `body.bind`: `{agentId,threadId,nonce}` accepts only that saved nonce. On
+  reconnect the plugin finds its own BB threads by metadata, recovers missed
+  bindings, and never repeats creation. A pending unknown start is not retried.
+- `body.draft`: `{agentId,patch}` saves opaque BB choices for an unstarted body.
+  `body.settings`: `{agentId,settings}` applies physical settings.
+- `body.sync`: `{agentId,threadId,view?,state?,running?,projectId?}`. `view` is the
+  plugin's ready-to-display agent state. `state` is `present`, `suspended` or
+  `deleted`. Java cancels physical actions when `running` is false, saves full
+  entity data before suspension, restores it on return, and releases stations
+  on suspension/deletion. BB lifecycle fields are interpreted only in the plugin.
+- `world_metadata`, `world.workspace`, `world.project` expose the saved world
+  record, create its owned workspace directory, and persist the BB project ID.
+- `tool`: `{agentId,threadId,tool,arguments}` executes only for the body's own
+  BB thread. `cancel`: `{cancelRequestId}` cancels a physical request, even if
+  cancellation arrives first.
 - `communication`: `{senderAgentId,senderThreadId,recipientAgentId,
   recipientThreadId,message}` displays a delivered BB message. Java checks both
-  body/thread associations and the player's display setting. This never sends
-  another message to BB.
-- `cancel`: `{cancelRequestId}`. Sent when BB aborts a tool call (request
-  cancelled, thread stopped or deleted, plugin disposed). Java stops that
-  request's actions, including one whose cancel arrives first.
-- `world_metadata` returns Java's world record for station queries.
-  `notify`: `{agentId,message}` shows a player notice.
+  associations and the player's display preference; it never sends another BB
+  message. The plugin persists a delivered-message cursor to avoid replay.
 
-Thread plugin metadata `{worldId,agentId,minecraftAccess,nonce}` decides which
-tools BB offers, but any client can write it, so it grants nothing: Java checks
-every physical request against the agent's own thread.
+Thread metadata `{worldId,agentId,minecraftAccess,nonce}` controls tool offering,
+but grants no authority: Java validates every physical request. Connection
+failures do not delete bodies; only definite BB deletion does.
 
-`bb minecraft spawn` uses BB's public CLI builder and thread SDK. It adds body
-creation; the plugin does not replace BB's other coordination commands. Parent
-and lifecycle-owner IDs are native BB fields, and omitting a parent creates an
-independent thread. BB 0.45 only supports `startedOnBehalfOf` for forks, so the
-initial prompt explicitly identifies agent delegation rather than human
-approval. BB owns child completion and attention notifications.
-
-BB lifecycle events prompt a fresh thread read; periodic sync catches missed
-events. Java cancels physical actions on stop, saves and suspends archived bodies,
-restores them on unarchive, and retires deleted bodies. Only a definite missing
-thread response clears a link; connection failures do not delete bodies.
+`bb minecraft spawn` uses BB's public CLI builder and SDK. Parent and lifecycle
+owner are native BB fields; omitting a parent creates an independent thread.
+BB 0.45 supports `startedOnBehalfOf` only for forks, so the initial prompt
+identifies agent delegation rather than human approval. All other coordination
+uses ordinary BB commands. BB owns queues, child results and attention notices.

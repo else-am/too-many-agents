@@ -1,4 +1,6 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
+import type { MinecraftAgents } from "./agents.js";
+import type { MinecraftProjects } from "./projects.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import type { MinecraftThreads } from "./threads.js";
 import { chatAssets } from "./chat-assets.js";
@@ -22,12 +24,25 @@ export function registerGameApi(
   bb: BbPluginApi,
   worlds: MinecraftWorlds,
   threads: MinecraftThreads,
+  agents: MinecraftAgents,
+  projects: MinecraftProjects,
 ) {
   const chat = chatAssets(bb);
   async function dispatch(data: ObjectValue): Promise<unknown> {
     const op = string(data.op, "op");
-    const threadId = () => string(data.threadId, "threadId");
-    const args = () => ({ ...object(data.args, "args"), threadId: threadId() });
+    const live = () => {
+      const session = worlds.session(uuid(data.worldId, "worldId"));
+      if (session.worldSessionId !== data.worldSessionId)
+        throw new ApiError("world_session_changed", "Minecraft world session changed");
+      return session;
+    };
+    const agent =
+      typeof data.agentId === "string" ? await agents.get(live(), data.agentId) : undefined;
+    const requireAgent = () => {
+      if (!agent) throw new ApiError("agent_missing", "A Minecraft agent is required");
+      return agent;
+    };
+    const threadId = () => string(agent?.threadId ?? data.threadId, "threadId");
     switch (op) {
       case "hello":
         return {
@@ -41,8 +56,25 @@ export function registerGameApi(
             Sdk["providers"]["models"]
           >,
         );
-      case "projects":
-        return bb.sdk.projects.list({ includePersonal: true });
+      case "world.sync":
+        return agents.sync(live());
+      case "agent.create":
+        return agents.create(live(), object(data.request));
+      case "agent.message":
+        return agents.send(live(), requireAgent(), object(data.message));
+      case "agent.settings":
+        return agents.settings(live(), requireAgent(), object(data.settings));
+      case "agent.queue.steer":
+        return bb.sdk.threads.queuedMessages.send({
+          threadId: threadId(),
+          queuedMessageId: string(data.messageId, "messageId"),
+          mode: "steer",
+        });
+      case "agent.queue.cancel":
+        return bb.sdk.threads.queuedMessages.delete({
+          threadId: threadId(),
+          queuedMessageId: string(data.messageId, "messageId"),
+        });
       case "system.config":
         return bb.sdk.system.config();
       case "system.defaultProvider.set": {
@@ -54,12 +86,16 @@ export function registerGameApi(
         });
         return bb.sdk.system.config();
       }
-      case "project.executionOptions":
-        return bb.sdk.projects.defaultExecutionOptions({
-          projectId: string(data.projectId, "projectId"),
-        });
-      case "environment.providers":
-        return bb.sdk.environments.listProviders(optional(data, "projectId", "hostId"));
+      case "project.executionOptions": {
+        const world = await projects.metadata(live());
+        const id =
+          !data.projectId || data.projectId === "minecraft" ? world.worldProjectId : data.projectId;
+        return id
+          ? bb.sdk.projects.defaultExecutionOptions({ projectId: string(id, "projectId") })
+          : {};
+      }
+      case "project.creationOptions":
+        return projects.creationOptions(live(), string(data.projectId, "projectId"));
       case "usage":
         return bb.sdk.system.usageLimits(optional(data, "providerId", "hostId"));
       case "backend.status":
@@ -69,17 +105,13 @@ export function registerGameApi(
           providers: await bb.sdk.providers.catalog(),
         };
       case "project.create": {
-        const source = object(data.source, "source");
-        if (source.hostId === "local" || source.hostId === undefined) {
-          const config = await bb.sdk.system.config();
-          if (!config.primaryHostId)
-            throw new ApiError("host_unavailable", "BB local host daemon is unavailable");
-          source.hostId = config.primaryHostId;
-        }
+        const { primaryHostId } = await bb.sdk.system.config();
+        if (!primaryHostId)
+          throw new ApiError("host_unavailable", "BB local host daemon is unavailable");
         return bb.sdk.projects.create({
           name: string(data.name, "name"),
-          source,
-        } as Args<Sdk["projects"]["create"]>);
+          source: { type: "local_path", hostId: primaryHostId, path: string(data.folder, "folder") },
+        });
       }
       case "project.configure":
         return bb.sdk.projects.update({
@@ -90,15 +122,13 @@ export function registerGameApi(
         return bb.sdk.projects.delete({
           projectId: string(data.projectId, "projectId"),
         });
-      case "project.source.update":
-        return bb.sdk.projects.sources.update({
-          projectId: string(data.projectId, "projectId"),
-          sourceId: string(data.sourceId, "sourceId"),
-          type: "local_path",
-          path: string(data.path, "path"),
-        });
       // Attaching is idempotent; Java repeats it to notice a restarted plugin.
       case "session.attach": {
+        if (data.protocol !== PROTOCOL)
+          throw new ApiError(
+            "protocol_mismatch",
+            "Minecraft plugin protocol changed; rebuild and restart the mod.",
+          );
         const worldId = uuid(data.worldId, "worldId");
         const joined = worlds.attach({
           worldId,
@@ -113,56 +143,12 @@ export function registerGameApi(
         worlds.detach(uuid(data.worldId, "worldId"), string(data.worldSessionId, "worldSessionId"));
         return {};
       }
-      case "threads.read": {
-        if (!Array.isArray(data.threadIds))
-          throw new ApiError("invalid_request", "threadIds must be an array");
-        const ids = data.threadIds.map((id) => string(id, "threadId"));
-        const rows = await Promise.all(ids.map((id) => threads.snapshot(id)));
-        return Object.fromEntries(ids.map((id, index) => [id, rows[index]]));
-      }
-      case "agent.read":
-        return threads.read(threadId(), true);
-      case "agent.start": {
-        return threads.start(
-          worlds.session(uuid(data.worldId, "worldId")),
-          uuid(data.agentId, "agentId"),
-          data.minecraftAccess === true,
-          uuid(data.nonce, "nonce"),
-          object(data.spawn, "spawn"),
-        );
-      }
-      case "agent.send": {
-        const id = threadId();
-        const send = object(data.send, "send");
-        if (
-          !Array.isArray(send.input) ||
-          !send.input.some(
-            (value) =>
-              value &&
-              typeof value === "object" &&
-              !Array.isArray(value) &&
-              value.type === "localImage",
-          )
-        )
-          return bb.sdk.threads.send({ ...send, threadId: id } as Args<Sdk["threads"]["send"]>);
-        const thread = await bb.sdk.threads.get({ threadId: id });
-        return threads.withImages(thread.projectId, send, (prepared) =>
-          bb.sdk.threads.send({ ...prepared, threadId: id } as Args<Sdk["threads"]["send"]>),
-        );
-      }
-      case "agent.update":
-        return bb.sdk.threads.update({
-          ...object(data.patch, "patch"),
-          threadId: threadId(),
-        } as Args<Sdk["threads"]["update"]>);
       case "agent.markRead":
         return bb.sdk.threads.markRead({ threadId: threadId() });
       case "agent.stop":
-        return bb.sdk.threads.stop({ threadId: threadId() });
+        return agent && !agent.threadId ? {} : bb.sdk.threads.stop({ threadId: threadId() });
       case "agent.archive":
-        return bb.sdk.threads.archive({ threadId: threadId() });
-      case "agent.unarchive":
-        return bb.sdk.threads.unarchive({ threadId: threadId() });
+        return agents.archive(live(), requireAgent(), data.archived === true);
       case "timeline":
         return bb.sdk.threads.timeline({
           ...(data.query === undefined ? {} : object(data.query, "query")),
@@ -196,26 +182,6 @@ export function registerGameApi(
           threadId: threadId(),
           interactionId: string(data.interactionId, "interactionId"),
         });
-      case "queue.create":
-        return bb.sdk.threads.queuedMessages.create(
-          args() as Args<Sdk["threads"]["queuedMessages"]["create"]>,
-        );
-      case "queue.update":
-        return bb.sdk.threads.queuedMessages.update(
-          args() as Args<Sdk["threads"]["queuedMessages"]["update"]>,
-        );
-      case "queue.delete":
-        return bb.sdk.threads.queuedMessages.delete(
-          args() as Args<Sdk["threads"]["queuedMessages"]["delete"]>,
-        );
-      case "queue.send":
-        return bb.sdk.threads.queuedMessages.send(
-          args() as Args<Sdk["threads"]["queuedMessages"]["send"]>,
-        );
-      case "queue.reorder":
-        return bb.sdk.threads.queuedMessages.reorder(
-          args() as Args<Sdk["threads"]["queuedMessages"]["reorder"]>,
-        );
       default:
         throw new ApiError("unknown_operation", `Unknown operation ${op}`);
     }

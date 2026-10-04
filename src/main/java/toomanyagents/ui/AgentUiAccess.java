@@ -15,8 +15,7 @@ public interface AgentUiAccess {
     CompletableFuture<JsonObject> setDefaultProvider(String providerId);
     CompletableFuture<JsonObject> projectExecutionOptions(String projectId);
     JsonObject projects();
-    CompletableFuture<JsonArray> environmentProviders(String projectId);
-    CompletableFuture<JsonArray> environmentProviders(String projectId, String hostId);
+    CompletableFuture<JsonObject> projectCreationOptions(String projectId);
     CompletableFuture<JsonObject> projectCommand(JsonObject request);
     CompletableFuture<String> spawn(JsonObject settings);
     JsonArray list();

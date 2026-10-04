@@ -38,7 +38,7 @@ def main():
     spawn.add_argument('--provider', help='Native BB provider ID; omit to use BB defaults')
     spawn.add_argument('--permission-mode', help='Native BB permission mode; omit to use BB defaults')
     spawn.add_argument('--name', default='', help='Omit for a random starter name')
-    spawn.add_argument('--project-id', help='Native BB project ID; omitted uses Personal')
+    spawn.add_argument('--project-id', help='Native BB project ID; omitted uses this world')
     spawn.add_argument('--environment', help='Native BB environment JSON; omitted uses the project default')
     spawn.add_argument('--body', default='', help='Omit for a random starter body')
     spawn.add_argument('--model')

@@ -5,14 +5,18 @@ import { registerGameApi } from "./game-api.js";
 import { registerMinecraftCli } from "./cli.js";
 import { minecraftWorlds } from "./minecraft.js";
 import { minecraftThreads } from "./threads.js";
+import { minecraftAgents } from "./agents.js";
+import { minecraftProjects } from "./projects.js";
 import { describe } from "./protocol.js";
 
 export default async function minecraft(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
   const threads = minecraftThreads(bb, worlds);
-  registerGameApi(bb, worlds, threads);
+  const projects = minecraftProjects(bb, worlds);
+  const agents = minecraftAgents(bb, worlds, threads, projects);
+  registerGameApi(bb, worlds, threads, agents, projects);
   communicationNotices(bb, worlds);
-  registerMinecraftCli(bb, worlds);
+  registerMinecraftCli(bb, worlds, agents);
 
   const tools = JSON.parse(
     await readFile(new URL("./surface/tools.json", import.meta.url), "utf8"),

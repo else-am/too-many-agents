@@ -5,6 +5,7 @@ import { ApiError, PROTOCOL, object, type Session, type Identity, type Agent } f
 const START_EXPIRY_MS = 10_000;
 
 export function minecraftWorlds(bb: BbPluginApi) {
+  const lifetime = new AbortController();
   const sessions = new Map<string, Session>();
   // Thread metadata is writable by others, so it only names a candidate. Java checks each thread against its own record.
   const identities = new Map<string, Identity | null>();
@@ -47,7 +48,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
           expiresAt: Date.now() + START_EXPIRY_MS,
           ...args,
         }),
-        signal: signal ?? AbortSignal.timeout(120_000),
+        signal: AbortSignal.any([lifetime.signal, signal ?? AbortSignal.timeout(120_000)]),
       });
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
@@ -108,7 +109,8 @@ export function minecraftWorlds(bb: BbPluginApi) {
     const live = session(identity.worldId);
     const all = await agents(live);
     const agent = all.find((row) => row.agentId === identity.agentId && row.threadId === threadId);
-    if (!agent) throw new ApiError("access_denied", "This thread is not the body's conversation.");
+    if (!agent || agent.removed || agent.archived)
+      throw new ApiError("access_denied", "This thread is not the body's conversation.");
     return { live, agent };
   }
 
@@ -123,6 +125,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
   }
 
   bb.onDispose(() => {
+    lifetime.abort();
     sessions.clear();
     identities.clear();
   });

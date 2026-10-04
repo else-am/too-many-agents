@@ -25,10 +25,7 @@ public final class ProjectScreen extends SettingsFormScreen {
         super(Component.literal(projectId.isBlank()?"New project":"Project settings"));
         this.access=access;this.parent=parent;this.projectId=projectId;data=access.projects();
         var p=project();name=text(p,"name");
-        for(var item:array(p,"sources")) {
-            var source=item.getAsJsonObject();
-            if(text(source,"type").equals("local_path")){directory=text(source,"path");break;}
-        }
+        directory=text(p,"folder");
         saved=fields();
     }
     private String fields(){return name.strip()+"\n"+directory.strip();}
@@ -61,9 +58,9 @@ public final class ProjectScreen extends SettingsFormScreen {
         else {var nameField=input("Name",name,80,v->name=v,!busy);if(creating)setInitialFocus(nameField);}
         if(creating)folderRow("Project folder",directory,4096,"/absolute/path",v->directory=v);
         else {
-            for(var item:array(project(),"sources")) {
+            for(var item:array(project(),"folders")) {
                 var source=item.getAsJsonObject();
-                value("Folder on "+text(source,"hostId"),text(source,"path"));
+                value(text(source,"label"),text(source,"path"));
             }
             placeRows(world);
             if(!automatic()){rowY+=12;action("",confirmRemove?"Confirm removal":"Remove project",this::remove,!busy);}
@@ -122,10 +119,7 @@ public final class ProjectScreen extends SettingsFormScreen {
         if(projectId.isBlank())defaultName();
         if(name.isBlank()||projectId.isBlank()&&directory.isBlank()){feedback="Enter a name and primary folder.";cancelClose();return;}
         var req=request(projectId.isBlank()?"create":"configure");req.addProperty("projectId",projectId);req.addProperty("name",name.strip());
-        if(projectId.isBlank()) {
-            var source=new JsonObject();source.addProperty("type","local_path");source.addProperty("path",directory.strip());
-            req.add("source",source);
-        }
+        if(projectId.isBlank())req.addProperty("folder",directory.strip());
         boolean creating=projectId.isBlank();
         // A new project stays open so its place can be set up next.
         run(req,r->{

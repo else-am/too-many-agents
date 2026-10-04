@@ -77,6 +77,12 @@ for a child, or omit `--parent-self` for an independent thread. Use
 `bb minecraft spawn --help` for BB execution/environment options and Minecraft
 body/station options. `bb minecraft bodies` and `bb minecraft stations` describe
 the current world. Other coordination uses ordinary `bb thread` commands.
+The plugin prepares BB requests for both the native UI and CLI, including
+project and environment selection, first messages, and lifecycle changes. The
+mod owns physical bodies and saved world records, and renders the plugin’s UI
+data. BB integration changes belong in `bb-plugin/`; the mod asks for actions
+such as creating an agent or choosing a worktree.
+
 Minecraft instructions ask agents to use embodied spawning; they do not disable
 native subagents or change unrelated BB threads' settings.
 
@@ -131,6 +137,8 @@ python3 tools/too_many_agents.py --game-dir run state
 python3 tools/smoke.py run --command
 python3 tools/bb-smoke.py --model gpt-6.1-sol --children
 python3 tools/bb-lifecycle-smoke.py --model gpt-6.1-sol
+python3 tools/bb-boundary-smoke.py --model gpt-6.1-sol
+python3 tools/bb-recovery-smoke.py --agent-id AGENT_ID_FROM_BOUNDARY_CHECK
 ```
 
 These diagnostics exercise the real mod and native UI. Validate releases with

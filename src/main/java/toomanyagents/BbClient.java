@@ -12,7 +12,7 @@ import java.util.concurrent.*;
 final class BbClient implements AutoCloseable {
     // BB's desktop app records its server address here.
     private static final Path ADDRESS = Path.of(System.getProperty("user.home"),".bb","bb-app-runtime.json");
-    private static final Set<String> QUICK = Set.of("session.attach","threads.read","projects","backend.status","hello");
+    private static final Set<String> QUICK = Set.of("backend.status","hello");
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(3)).build();
 
     CompletableFuture<JsonElement> call(JsonObject request) {

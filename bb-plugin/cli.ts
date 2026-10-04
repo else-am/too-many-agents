@@ -1,6 +1,7 @@
 import { cliCommand, defineCli, PluginCliError, type BbPluginApi } from "@get-bb/plugin-sdk";
+import type { MinecraftAgents } from "./agents.js";
 import type { MinecraftWorlds } from "./minecraft.js";
-import { object, type SpawnOptions } from "./protocol.js";
+import { object, type SpawnOptions, type ObjectValue } from "./protocol.js";
 
 const text = (description: string) => ({
   type: "string" as const,
@@ -8,7 +9,11 @@ const text = (description: string) => ({
 });
 
 /** BB owns parsing, help, errors and thread creation. These options only translate CLI names to SDK fields. */
-export function registerMinecraftCli(bb: BbPluginApi, worlds: MinecraftWorlds) {
+export function registerMinecraftCli(
+  bb: BbPluginApi,
+  worlds: MinecraftWorlds,
+  agents: MinecraftAgents,
+) {
   bb.cli.register(
     defineCli({
       name: "minecraft",
@@ -184,24 +189,15 @@ export function registerMinecraftCli(bb: BbPluginApi, worlds: MinecraftWorlds) {
                 workspace: { type: "unmanaged", path: null },
               };
             }
-            const result = object(
-              await worlds.toolCallback(
-                live,
-                {
-                  threadId: ctx.threadId,
-                  signal: ctx.signal ?? AbortSignal.timeout(120_000),
-                },
-                "spawn_agent",
-                {
-                  agentId: agent.agentId,
-                  request: {
-                    ...spawn,
-                    name: o.name,
-                    body: o.body,
-                    stationId: o.station,
-                  },
-                },
-              ),
+            const result = await agents.create(
+              live,
+              {
+                ...spawn,
+                name: o.name,
+                body: o.body,
+                stationId: o.station,
+              } as unknown as ObjectValue,
+              { threadId: ctx.threadId, signal: ctx.signal ?? AbortSignal.timeout(120_000) },
             );
             return {
               exitCode: 0,

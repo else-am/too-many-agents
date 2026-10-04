@@ -329,7 +329,7 @@ public final class InventoryAgentSidebar extends Screen {
         }
         var projectIds = new ArrayList<>(groups.keySet());
         // This world's project first and no project last, around BB's projects.
-        projectIds.sort(Comparator.comparing((String id) -> text(projects.getOrDefault(id, new JsonObject()), "kind").equals("world") ? 0 : id.equals("proj_personal") ? 2 : 1)
+        projectIds.sort(Comparator.comparing((String id) -> text(projects.getOrDefault(id, new JsonObject()), "kind").equals("world") ? 0 : text(projects.getOrDefault(id, new JsonObject()), "kind").equals("personal") ? 2 : 1)
             .thenComparing(id -> projectName(id, groups.get(id)), String.CASE_INSENSITIVE_ORDER));
         var next = new ArrayList<Entry>();
         var nextStructure = new StringBuilder();
@@ -381,13 +381,7 @@ public final class InventoryAgentSidebar extends Screen {
     private String projectTooltip(Entry entry) {
         var project = projects.get(entry.projectId);
         if (project == null) return entry.name;
-        JsonObject primary = null;
-        for (var value : AgentModels.array(project, "sources")) {
-            var source = value.getAsJsonObject();
-            if (primary == null) primary = source;
-            if (flag(source, "isDefault")) { primary = source; break; }
-        }
-        String folder = primary == null ? "" : text(primary, "path");
+        String folder = text(project, "folder");
         return folder.isBlank() ? entry.name : entry.name + "\n\n" + folder;
     }
 

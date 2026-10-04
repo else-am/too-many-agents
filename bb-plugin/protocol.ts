@@ -19,6 +19,11 @@ export interface Agent {
   projectId: string;
   minecraftAccess: boolean;
   settings: ObjectValue;
+  draft: ObjectValue;
+  body: ObjectValue;
+  archived: boolean;
+  removed: boolean;
+  startNonce: string;
 }
 export interface Identity {
   worldId: string;
@@ -33,7 +38,7 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export const PROTOCOL = 2;
+export const PROTOCOL = 3;
 export const MAX_BODY_BYTES = 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export function object(value: unknown, label = "arguments"): ObjectValue {

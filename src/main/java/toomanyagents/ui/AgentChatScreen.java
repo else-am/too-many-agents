@@ -25,7 +25,7 @@ public final class AgentChatScreen extends Screen {
     private JsonObject creationSettings;
     private String creationProjectName="Choose project";
     private boolean creationGit;
-    private String environmentProject, creationHost="";
+    private String environmentProject;
     private Checkbox worktreeBox, minecraftBox;
     private Button projectButton;
     private Consumer<String> created;
@@ -315,7 +315,7 @@ public final class AgentChatScreen extends Screen {
         for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"mode", "survival"}, {"projectId", ""}}) {
             if (AgentModels.text(this.creationSettings, defaultValue[0]).isBlank()) this.creationSettings.addProperty(defaultValue[0], defaultValue[1]);
         }
-        for (String key : new String[]{"cheats", "following"}) {
+        for (String key : new String[]{"cheats", "following", "worktree"}) {
             if (!this.creationSettings.has(key)) this.creationSettings.addProperty(key, false);
         }
         state = this.creationSettings;
@@ -328,40 +328,18 @@ public final class AgentChatScreen extends Screen {
     private void readCreationProject(){
         creationProjectName="Choose project";
         if (!creationSettings.has("minecraftAccess")) creationSettings.addProperty("minecraftAccess", true);
-        String projectId=AgentModels.text(creationSettings,"projectId"), sourceHost="", kind="";
+        String projectId=AgentModels.text(creationSettings,"projectId");
         for(var item:AgentModels.array(access.projects(),"projects")){
             var project=item.getAsJsonObject();
-            if(!AgentModels.text(project,"id").equals(projectId))continue;
-            creationProjectName=AgentModels.text(project,"name"); kind=AgentModels.text(project,"kind");
-            for(var source:AgentModels.array(project,"sources")) {
-                var row=source.getAsJsonObject();
-                if(sourceHost.isBlank() || row.has("isDefault") && row.get("isDefault").getAsBoolean())
-                    sourceHost=AgentModels.text(row,"hostId");
-            }
+            if(AgentModels.text(project,"id").equals(projectId))creationProjectName=AgentModels.text(project,"name");
         }
         if(projectId.equals(environmentProject))return;
-        environmentProject=projectId;creationGit=false;creationHost="";
-        // This world's agents always share its workspace folder; no worktree choice.
-        if(projectId.isBlank() || kind.equals("world"))return;
-        if(!sourceHost.isBlank())readWorktreeProviders(projectId,sourceHost);
-        else access.backendConfig().whenComplete((config,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
+        environmentProject=projectId;creationGit=false;
+        if(projectId.isBlank())return;
+        access.projectCreationOptions(projectId).whenComplete((options,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             if(!projectId.equals(environmentProject))return;
             if(failure!=null){feedback="Worktree availability unavailable: "+AgentModels.error(failure);return;}
-            readWorktreeProviders(projectId,AgentModels.text(config,"primaryHostId"));
-        }));
-    }
-
-    private void readWorktreeProviders(String projectId,String hostId) {
-        if(hostId.isBlank()){feedback="No BB host is available for a worktree.";return;}
-        creationHost=hostId;
-        access.environmentProviders(projectId,hostId).whenComplete((providers,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
-            if(!projectId.equals(environmentProject)||!hostId.equals(creationHost)||failure!=null)return;
-            creationGit=providers.asList().stream().filter(com.google.gson.JsonElement::isJsonObject)
-                .anyMatch(provider->{
-                    var info=provider.getAsJsonObject();
-                    String availability=AgentModels.text(AgentModels.object(info,"availability"),"status");
-                    return AgentModels.text(info,"id").equals("git-worktree") && (availability.isBlank()||availability.equals("available"));
-                });
+            creationGit=options.has("worktreeAvailable") && options.get("worktreeAvailable").getAsBoolean();
             if(font!=null)refreshButtons();
         }));
     }
@@ -560,20 +538,9 @@ public final class AgentChatScreen extends Screen {
             minecraftBox.visible = true;
             projectButton = addRenderableWidget(Button.builder(Component.empty(), button -> togglePicker(projectButton))
                 .bounds(left, 0, Math.min(180, contentWidth), 20).build());
-            boolean worktree = AgentModels.text(AgentModels.object(creationSettings,"environment"),"environmentProviderId").equals("git-worktree");
+            boolean worktree = creationSettings.has("worktree") && creationSettings.get("worktree").getAsBoolean();
             worktreeBox = Checkbox.builder(Component.literal("Worktree"), font).selected(worktree)
-                 .onValueChange((box, value) -> {
-                    var environment=new JsonObject();
-                    environment.addProperty("type",value?"provider":"project-default");
-                    if(value) {
-                        environment.addProperty("environmentProviderId","git-worktree");
-                        var machine=new JsonObject();machine.addProperty("type","existing");machine.addProperty("hostId",creationHost);
-                        environment.add("machine",machine);
-                        var inputs=new JsonObject();var branch=new JsonObject();branch.addProperty("kind","default");
-                        inputs.add("branch",branch);environment.add("inputs",inputs);
-                    }
-                    creationSettings.add("environment",environment);
-                }).build();
+                .onValueChange((box, value) -> creationSettings.addProperty("worktree", value)).build();
             worktreeBox.setTooltip(Tooltip.create(Component.literal("Work in a separate Git worktree instead of the project folder")));
             worktreeBox.visible = creationGit;
             addRenderableWidget(worktreeBox);
@@ -788,7 +755,7 @@ public final class AgentChatScreen extends Screen {
                 pickerChoices.add(new PickerChoice((id.equals(selected) ? "✓ " : "") + AgentModels.text(project, "name"), "", () -> {
                     if (id.equals(AgentModels.text(creationSettings, "projectId"))) return;
                     creationSettings.addProperty("projectId", id);
-                    creationSettings.remove("environment");
+                    creationSettings.addProperty("worktree", false);
                     readCreationProject();
                     // Ignore defaults still arriving for the previous project.
                     catalogVersion++;
@@ -1190,7 +1157,7 @@ public final class AgentChatScreen extends Screen {
         request.addProperty("reasoningLevel", effort);
         request.addProperty("serviceTier", tier);
         request.addProperty("permissionMode", AgentModels.text(settings(), "permissionMode"));
-        request.addProperty("delivery", "queue-if-active");
+        request.addProperty("delivery", "queue");
         if (captured != null) request.add("pointing", captured);
         var images = new com.google.gson.JsonArray();
         attachments.forEach(images::add);

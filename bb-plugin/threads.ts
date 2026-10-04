@@ -1,111 +1,114 @@
+import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { imageUploads } from "./images.js";
 import type { MinecraftWorlds } from "./minecraft.js";
-import {
-  ApiError,
-  describe,
-  type ObjectValue,
-  type Session,
-  type SpawnOptions,
-} from "./protocol.js";
+import { describe, type ObjectValue, type Session, type SpawnOptions, type Thread } from "./protocol.js";
 
+/** Translate native BB state once, into the view and physical state Minecraft needs. */
 export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const withImages = imageUploads(bb);
+  const pending = new Map<string, Promise<void>>();
+  let disposed = false;
 
-  async function read(threadId: string, includeTimeline = false) {
-    const thread = await bb.sdk.threads.get({ threadId });
-    const [executionOptions, interactions, queuedMessages, timeline] = await Promise.all([
+  async function read(thread: Thread) {
+    const threadId = thread.id;
+    const [executionOptions, interactions, queuedMessages] = await Promise.all([
       bb.sdk.threads.defaultExecutionOptions({ threadId }),
       bb.sdk.threads.interactions.list({ threadId }),
       bb.sdk.threads.queuedMessages.list({ threadId }),
-      includeTimeline ? bb.sdk.threads.timeline({ threadId }) : undefined,
     ]);
+    const active = ["active", "pending", "starting", "stopping"].includes(thread.status);
     return {
       thread,
       executionOptions,
       interactions,
       queuedMessages,
-      ...(includeTimeline ? { timeline } : {}),
+      parentThreadId: thread.parentThreadId ?? "",
+      status: thread.status,
+      turnActive: active,
+      canSteer: active,
+      conversationArchived: thread.archivedAt != null,
+      unread:
+        thread.latestAttentionAt != null &&
+        (thread.lastReadAt == null || thread.latestAttentionAt > thread.lastReadAt),
+      replyVersion: thread.latestAttentionAt ?? 0,
+      attention: interactions.length ? "input" : "",
+      taskTitle: thread.title ?? "",
+      providerId: thread.providerId,
     };
   }
 
-  async function snapshot(threadId: string) {
-    try {
-      return await read(threadId);
-    } catch (error) {
-      // Only a definite missing-thread response permits deleting a body association.
-      const missing = error instanceof Error && "status" in error && error.status === 404;
-      return missing ? { deleted: true } : { error: describe(error) };
-    }
+  function sync(live: Session, agentId: string, threadId: string): Promise<void> {
+    const previous = pending.get(threadId) ?? Promise.resolve();
+    const next = previous
+      .catch(() => undefined)
+      .then(async () => {
+        if (disposed) return;
+        let update;
+        let thread: Thread | undefined;
+        try {
+          thread = await bb.sdk.threads.get({ threadId });
+          const view = await read(thread);
+          update = {
+            view,
+            state:
+              view.thread.deletedAt != null
+                ? "deleted"
+                : view.conversationArchived
+                  ? "suspended"
+                  : "present",
+            running: view.thread.status === "active",
+            projectId: view.thread.projectId,
+          };
+        } catch (error) {
+          // Disconnection must never be mistaken for deletion.
+          update =
+            !thread && error instanceof Error && "status" in error && error.status === 404
+              ? { state: "deleted" }
+              : { view: { error: describe(error) } };
+        }
+        if (!disposed) await worlds.callback(live, "body.sync", { agentId, threadId, ...update });
+      });
+    pending.set(threadId, next);
+    void next
+      .finally(() => {
+        if (pending.get(threadId) === next) pending.delete(threadId);
+      })
+      .catch(() => undefined);
+    return next;
   }
 
   async function start(
     live: Session,
     agentId: string,
     minecraftAccess: boolean,
-    nonce: string,
-    request: ObjectValue,
+    spawn: SpawnOptions,
   ) {
-    request.environment ??= { type: "project-default" };
-    const spawn = request as unknown as SpawnOptions;
-    // The in-game project-folder choice needs the machine which owns that folder.
-    if (
-      spawn.environment.type === "provider" &&
-      spawn.environment.environmentProviderId === "project-checkout" &&
-      !spawn.environment.machine
-    ) {
-      const project = await bb.sdk.projects.get({ projectId: spawn.projectId });
-      const source = project.sources.find((row) => row.isDefault) ?? project.sources[0];
-      if (!source) throw new ApiError("project_folder_missing", "This project has no folder");
-      const [existing] = await bb.sdk.environments.list({
-        projectId: spawn.projectId,
-        environmentProviderId: "project-checkout",
-        hostId: source.hostId,
-        path: source.path,
-      });
-      spawn.environment = existing
-        ? { type: "reuse", environmentId: existing.id }
-        : {
-            ...spawn.environment,
-            machine: { type: "existing", hostId: source.hostId },
-          };
-    }
-    const created = await withImages(spawn.projectId, request, (prepared) =>
-      bb.sdk.threads.spawn({
+    const nonce = randomUUID();
+    const created = await withImages(spawn.projectId, spawn as unknown as ObjectValue, async (prepared) => {
+      // Uploads can fail without starting a thread; record the nonce only at the mutation boundary.
+      await worlds.callback(live, "body.begin", { agentId, nonce });
+      return bb.sdk.threads.spawn({
         ...(prepared as unknown as SpawnOptions),
-        origin: "plugin",
-        originPluginId: bb.pluginId,
-        pluginMetadata: {
-          worldId: live.worldId,
-          agentId,
-          minecraftAccess,
-          nonce,
-        },
-      }),
-    );
-    worlds.identities.set(created.id, { worldId: live.worldId, agentId });
-    await worlds.callback(live, "changed", {
-      agentId,
-      threadId: created.id,
-      bind: true,
-      nonce,
+        pluginMetadata: { worldId: live.worldId, agentId, minecraftAccess, nonce },
+      });
     });
+    worlds.identities.set(created.id, { worldId: live.worldId, agentId });
+    await worlds.callback(live, "body.bind", { agentId, threadId: created.id, nonce });
+    await sync(live, agentId, created.id);
     return created;
   }
 
   async function changed(threadId: string) {
     const identity = await worlds.identify(threadId);
     if (!identity) return;
-    let live: Session;
+    let live;
     try {
       live = worlds.session(identity.worldId);
     } catch {
       return;
     }
-    await worlds.callback(live, "changed", {
-      agentId: identity.agentId,
-      threadId,
-    });
+    await sync(live, identity.agentId, threadId);
   }
 
   async function bind(threadId: string, worldId?: string) {
@@ -123,21 +126,17 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
     } catch {
       return;
     }
-    worlds.identities.set(threadId, {
-      worldId: metadata.worldId,
-      agentId: metadata.agentId,
-    });
-    // Java accepts only the nonce it saved before requesting this thread.
-    await worlds.callback(live, "changed", {
+    worlds.identities.set(threadId, { worldId: metadata.worldId, agentId: metadata.agentId });
+    // Java accepts only the nonce it saved before this start.
+    await worlds.callback(live, "body.bind", {
       agentId: metadata.agentId,
       threadId,
-      bind: true,
       nonce: metadata.nonce,
     });
+    await sync(live, metadata.agentId, threadId);
   }
 
   async function reconnect(worldId: string) {
-    // Recover a start whose response/event was lost, without repeating creation.
     for (const archived of [false, true]) {
       for (let offset = 0; ; offset += 100) {
         const rows = await bb.sdk.threads.list({
@@ -154,7 +153,6 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   }
 
   bb.events.on("thread.created", ({ thread }) => bind(thread.id));
-
   for (const event of [
     "thread.active",
     "thread.idle",
@@ -163,15 +161,14 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
     "thread.unarchived",
     "thread.deleted",
     "interaction.pending",
-  ] as const) {
+  ] as const)
     bb.events.on(event, ({ thread }) => changed(thread.id));
-  }
   bb.events.on("experimental_thread.events", ({ thread }) => changed(thread.id));
-  for (const event of ["message.queued", "message.dispatched", "message.cancelled"] as const) {
+  for (const event of ["message.queued", "message.dispatched", "message.cancelled"] as const)
     bb.events.on(event, ({ entry }) => changed(entry.threadId));
-  }
-
-  return { read, snapshot, start, withImages, reconnect };
+  bb.onDispose(() => {
+    disposed = true;
+  });
+  return { sync, start, withImages, reconnect };
 }
-
 export type MinecraftThreads = ReturnType<typeof minecraftThreads>;
