@@ -252,9 +252,11 @@ public final class InventoryAgents {
     private void openModSettings() { showForm(new TooManyAgentsSettingsScreen(parent, access.get())); }
 
     private void showForm(SettingsFormScreen next) {
+        navigate(() -> showClosedForm(next));
+    }
+
+    private void showClosedForm(SettingsFormScreen next) {
         newAgentRequest++;
-        if (chat != null) chat.closeSettings();
-        var previous = form;
         next.dockWithHeader(() -> {
             if (form != next) return;
             form = null;
@@ -263,8 +265,6 @@ public final class InventoryAgents {
             if (prepare(parent) && focus == null) focus = right;
         });
         form = next;
-        // An earlier form saves on its way out.
-        if (previous != null) previous.onClose();
         if (focus != null) focus.screen.setFocused(null);
         prepare(parent);
         focus = formPane;
@@ -274,11 +274,27 @@ public final class InventoryAgents {
     /** Saves and closes the open form; a failed save leaves it open with the error. */
     private void closeForm() { if (form != null) form.onClose(); }
 
+    /** Keep the current pane visible until any edited settings have saved. */
+    private void navigate(Runnable next) {
+        Object requestWorld = world;
+        Screen requestParent = parent;
+        Runnable guarded = () -> {
+            if (world == requestWorld && parent == requestParent && Minecraft.getInstance().screen == requestParent) next.run();
+        };
+        if (form != null) form.closeThen(() -> navigate(guarded));
+        else if (chat != null && chat.settingsPanel() != null) chat.closeSettingsThen(() -> navigate(guarded));
+        else guarded.run();
+    }
+
     public void newAgent(String projectId) {
         var client = Minecraft.getInstance();
         if (!supports(client.screen)) openStandalone(null, null);
         if (!prepare(client.screen)) return;
-        closeForm();
+        navigate(() -> newClosedAgent(projectId));
+    }
+
+    private void newClosedAgent(String projectId) {
+        var client = Minecraft.getInstance();
         // New agents belong to this world unless a project is chosen.
         String project = projectId == null || projectId.isBlank() ? "minecraft" : projectId;
         String draftProject = project;
@@ -345,8 +361,11 @@ public final class InventoryAgents {
     }
 
     private void open(String id) {
+        navigate(() -> openClosed(id));
+    }
+
+    private void openClosed(String id) {
         newAgentRequest++;
-        closeForm();
         boolean keepInventory = inventoryTarget != null || parent instanceof AgentInventoryScreen;
         selected = id;
         select.accept(id);
@@ -401,6 +420,10 @@ public final class InventoryAgents {
     }
 
     private void closeChat() {
+        navigate(this::closeClosedChat);
+    }
+
+    private void closeClosedChat() {
         newAgentRequest++;
         if (parent instanceof AgentWorkspaceScreen) {
             parent.onClose();
@@ -517,11 +540,11 @@ public final class InventoryAgents {
         event.setCanceled(true);
         var focused = focus.screen.getFocused();
         boolean text = focused instanceof EditBox || focused instanceof MultiLineEditBox;
-        if (!(parent instanceof AgentWorkspaceScreen) && !text && Minecraft.getInstance().options.keyInventory.matches(event.getKeyCode(), event.getScanCode())) parent.onClose();
+        if (!(parent instanceof AgentWorkspaceScreen) && !text && Minecraft.getInstance().options.keyInventory.matches(event.getKeyCode(), event.getScanCode())) navigate(parent::onClose);
         // Escape dismisses a picker before leaving the whole screen.
         else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && sidebar.pickerOpen()) sidebar.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
         // Escape in settings closes a dropdown, then the settings themselves.
-        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && focus != formPane && (focus == left || chat == null || !chat.pickerOpen())) parent.onClose();
+        else if (event.getKeyCode() == GLFW.GLFW_KEY_ESCAPE && focus != settings && focus != formPane && (focus == left || chat == null || !chat.pickerOpen())) navigate(parent::onClose);
         else focus.screen.keyPressed(event.getKeyCode(), event.getScanCode(), event.getModifiers());
     }
 

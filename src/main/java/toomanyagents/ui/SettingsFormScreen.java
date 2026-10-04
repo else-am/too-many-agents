@@ -34,6 +34,7 @@ abstract class SettingsFormScreen extends Screen {
     private boolean draggingScroll;
     // Set while the form is a pane beside or over a chat rather than its own screen.
     private Runnable close;
+    private Runnable afterClose;
     private boolean side, header;
 
     protected SettingsFormScreen(Component title) { super(title); }
@@ -47,9 +48,15 @@ abstract class SettingsFormScreen extends Screen {
     /** Side panes use tighter padding than a pane covering a chat. */
     public void side(boolean value) { if (side != value) { side = value; if (minecraft != null) rebuildForm(); } }
     protected void leave(Screen parent) {
+        var next = afterClose;
+        afterClose = null;
         if (close != null) close.run();
         else if (minecraft.screen == this) minecraft.setScreen(parent);
+        if (next != null) next.run();
     }
+    /** Navigation waits for a successful save; validation errors keep this form visible. */
+    void closeThen(Runnable next) { afterClose = next; onClose(); }
+    protected void cancelClose() { afterClose = null; }
 
     protected void begin() {
         closeDropdown(); controls.clear(); labels.clear(); rowY = 0;

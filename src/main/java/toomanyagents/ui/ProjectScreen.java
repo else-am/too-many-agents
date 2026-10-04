@@ -120,7 +120,7 @@ public final class ProjectScreen extends SettingsFormScreen {
     }
     private void save(){
         if(projectId.isBlank())defaultName();
-        if(name.isBlank()||projectId.isBlank()&&directory.isBlank()){feedback="Enter a name and primary folder.";return;}
+        if(name.isBlank()||projectId.isBlank()&&directory.isBlank()){feedback="Enter a name and primary folder.";cancelClose();return;}
         var req=request(projectId.isBlank()?"create":"configure");req.addProperty("projectId",projectId);req.addProperty("name",name.strip());
         if(projectId.isBlank()) {
             var source=new JsonObject();source.addProperty("type","local_path");source.addProperty("path",directory.strip());
@@ -145,6 +145,7 @@ public final class ProjectScreen extends SettingsFormScreen {
         busy=true;feedback="Working…";rebuildForm();
         access.projectCommand(req).whenComplete((result,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             busy=false;data=access.projects();feedback=error==null?"":AgentModels.error(error);
+            if(error!=null)cancelClose();
             if(error==null)done.accept(result);
             if(docked()||minecraft.screen==this)rebuildForm();
         }));

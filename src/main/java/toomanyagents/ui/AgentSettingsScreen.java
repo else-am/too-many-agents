@@ -302,15 +302,15 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         busy=true;rebuildForm();future.whenComplete((unused,error)->Minecraft.getInstance().execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));
     }
     private void apply(){
-        if(!valid()){feedback="Enter a name and choose a body.";return;}
-        if(!targetsChosen())return;
+        if(!valid()){feedback="Enter a name and choose a body.";cancelClose();return;}
+        if(!targetsChosen()){cancelClose();return;}
         var changes=agentId==null?draft.deepCopy():BodySettings.copy(draft);
         if(agentId!=null){
             if(!value("title").equals(AgentModels.text(saved,"title")))changes.addProperty("title",value("title"));
             changes.remove("minecraftAccess");if(!followEdited)changes.remove("following");
         }
         busy=true;rebuildForm();apply.apply(changes).thenCompose(unused->saveStation()).whenComplete((unused,error)->Minecraft.getInstance().execute(()->{
-            busy=false;if(error==null)leave(parent);else{feedback=AgentModels.error(error);rebuildForm();}
+            busy=false;if(error==null)leave(parent);else{cancelClose();feedback=AgentModels.error(error);rebuildForm();}
         }));
     }
     // Changes save on the way out.

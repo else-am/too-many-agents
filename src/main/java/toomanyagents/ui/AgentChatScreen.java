@@ -321,6 +321,7 @@ public final class AgentChatScreen extends Screen {
     public AgentSettingsScreen settingsPanel() { return settingsPanel; }
     /** Saves and closes docked settings; a failed save leaves them open with the error. */
     public void closeSettings() { if (settingsPanel != null) settingsPanel.onClose(); }
+    void closeSettingsThen(Runnable next) { if (settingsPanel == null) next.run(); else settingsPanel.closeThen(next); }
 
     /** The transcript and composer area, in this chat's coordinates, that covering settings replace. */
     public int[] settingsBounds() { return new int[]{left, transcriptTop, contentWidth, composerBaseline() + 20 - transcriptTop}; }
