@@ -301,13 +301,31 @@ public final class ClientControls {
                         survey.corner(blockPos(request));
                     }
                     case "survey_edit" -> { if (!survey.editAt(blockPos(request))) throw new IllegalArgumentException("No box holds that block"); }
-                    case "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop" -> {
+                    case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop" -> {
                         var server = client.getSingleplayerServer();
                         if (!DevelopmentWorld.ENABLED || server == null || !server.getWorldPath(LevelResource.ROOT)
                             .toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME)) {
                             throw new IllegalStateException("Development controls require the exact development world");
                         }
-                        if (action.equals("dev_drop")) {
+                        if (action.equals("dev_chat")) {
+                            if (!(client.screen instanceof AgentChatScreen)) {
+                                var settings=new JsonObject();settings.addProperty("name","Rich chat acceptance");
+                                client.setScreen(new AgentChatScreen(agents,settings,ignored->{}));
+                            }
+                            result.complete(((AgentChatScreen)client.screen).developmentTranscript(request));
+                            return;
+                        }
+                        else if (action.equals("dev_drag")) {
+                            if (!(client.screen instanceof AgentChatScreen screen)) throw new IllegalStateException("Open a standalone chat first");
+                            double x=request.get("x").getAsDouble(), y=request.get("y").getAsDouble();
+                            double endX=request.get("endX").getAsDouble(), endY=request.get("endY").getAsDouble();
+                            if(!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(endX) || !Double.isFinite(endY))
+                                throw new IllegalArgumentException("Invalid drag");
+                            screen.mouseClicked(x,y,0);
+                            screen.mouseDragged(endX,endY,0,endX-x,endY-y);
+                            screen.mouseReleased(endX,endY,0);
+                        }
+                        else if (action.equals("dev_drop")) {
                             if (!(client.screen instanceof toomanyagents.ui.AgentWorkspaceScreen || client.screen instanceof AgentChatScreen))
                                 throw new IllegalStateException("Open an agent chat before dropping test files");
                             var files = request.getAsJsonArray("paths");
@@ -476,11 +494,12 @@ public final class ClientControls {
                     case "scroll" -> {
                         double x = request.get("x").getAsDouble(), y = request.get("y").getAsDouble();
                         double delta = request.get("delta").getAsDouble();
-                        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(delta)) throw new IllegalArgumentException("Invalid scroll");
+                        double horizontal = request.has("horizontal") ? request.get("horizontal").getAsDouble() : 0;
+                        if (!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(delta) || !Double.isFinite(horizontal)) throw new IllegalArgumentException("Invalid scroll");
                         float factor = toomanyagents.ui.ScreenScale.factor(screen);
-                        var before = new ScreenEvent.MouseScrolled.Pre(screen, x * factor, y * factor, 0, delta);
+                        var before = new ScreenEvent.MouseScrolled.Pre(screen, x * factor, y * factor, horizontal, delta);
                         NeoForge.EVENT_BUS.post(before);
-                        if (!before.isCanceled()) screen.mouseScrolled(x,y,0,delta);
+                        if (!before.isCanceled()) screen.mouseScrolled(x,y,horizontal,delta);
                     }
                     default -> throw new IllegalArgumentException("Unknown input action");
                 }

@@ -65,9 +65,63 @@ public final class AgentChatScreen extends Screen {
     private Button pickerAnchor;
     private int pickerX, pickerY, pickerWidth, pickerHeight;
 
-    private record Line(FormattedCharSequence text, int color, long replyVersion, int inset, String copyText) {
+    private record Line(FormattedCharSequence text, int color, long replyVersion, int inset, String copyText, ChatMarkdown.Row rich) {
+        Line(FormattedCharSequence text,int color,long replyVersion,int inset,String copyText) {this(text,color,replyVersion,inset,copyText,null);}
         Line(FormattedCharSequence text,int color,long replyVersion,int inset) {this(text,color,replyVersion,inset,null);}
         Line(FormattedCharSequence text,int color,long replyVersion) {this(text,color,replyVersion,0);}
+    }
+    private record RichPanel(ChatMarkdown.Panel panel, int lineOffset, int inset) {}
+    private final List<RichPanel> richPanels = new ArrayList<>();
+    private String pressedLink;
+    private boolean developmentTranscript;
+
+    /** Called only by the guarded development-world UI controls. Uses the real transcript renderer. */
+    public JsonObject developmentTranscript(JsonObject request) {
+        if (!Boolean.getBoolean("too_many_agents.devWorld")) throw new IllegalStateException("Development only");
+        developmentTranscript=true;
+        if (request.has("rows")) {
+            transcript=new JsonObject();
+            transcript.add("rows",request.getAsJsonArray("rows").deepCopy());
+            loadedSequence++;
+            transcriptKey="";
+            rebuildTranscript();
+        }
+        if (request.has("scroll")) scroll=Math.clamp(request.get("scroll").getAsInt(),0,maxScroll);
+        var result=new JsonObject();
+        if(request.has("clipboardEquals")) result.addProperty("clipboardMatches",
+            minecraft.keyboardHandler.getClipboard().equals(request.get("clipboardEquals").getAsString()));
+        result.addProperty("scroll",scroll); result.addProperty("maxScroll",maxScroll);
+        result.addProperty("left",left); result.addProperty("width",contentWidth);
+        result.addProperty("top",transcriptTop); result.addProperty("bottom",transcriptBottom);
+        result.addProperty("selected",selectedText());
+        var rendered=new com.google.gson.JsonArray();
+        for(int i=0;i<lines.size();i++) {
+            var row=new JsonObject(); var line=lines.get(i);
+            row.addProperty("text",lineText(line)); row.addProperty("copy",line.copyText());
+            row.addProperty("x",lineX(line)); row.addProperty("y",transcriptTop+6+i*LINE_HEIGHT-scroll);
+            rendered.add(row);
+        }
+        result.add("lines",rendered);
+        var panels=new com.google.gson.JsonArray();
+        for(var entry:richPanels) {
+            var panel=entry.panel();var item=new JsonObject();
+            item.addProperty("label",panel.label);item.addProperty("source",panel.source);
+            item.addProperty("x",left+8+entry.inset()+panel.inset);
+            item.addProperty("y",transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll);
+            item.addProperty("width",panel.width);item.addProperty("scroll",panel.scroll);item.addProperty("maxScroll",panel.maxScroll());
+            panels.add(item);
+        }
+        result.add("panels",panels);
+        return result;
+    }
+
+    private int lineWidthAt(Line line, int character) {
+        return line.rich() == null ? ChatMarkdown.prefixWidth(font, line.text(), character)
+            : line.rich().widthAt(font, character);
+    }
+
+    private int lineX(Line line) {
+        return left + 8 + line.inset() - (line.rich() != null && line.rich().panel() != null ? line.rich().panel().scroll : 0);
     }
     private record Disclosure(AbstractWidget button, int line) {}
     private java.util.Map<String, String> questionDrafts = new java.util.HashMap<>();
@@ -148,11 +202,11 @@ public final class AgentChatScreen extends Screen {
         int index=Math.clamp((int)Math.floor((mouseY-transcriptTop-6+scroll)/LINE_HEIGHT),0,lines.size()-1);
         var line=lines.get(index);
         String text=lineText(line);
-        double target=mouseX-left-8-line.inset();
+        double target=mouseX-lineX(line);
         int offset=0;
         while(offset<text.length()) {
             int next=offset+Character.charCount(text.codePointAt(offset));
-            if(target<(font.width(text.substring(0,offset))+font.width(text.substring(0,next)))/2.0)break;
+            if(target<(lineWidthAt(line,offset)+lineWidthAt(line,next))/2.0)break;
             offset=next;
         }
         return new TextPosition(index,offset);
@@ -189,8 +243,8 @@ public final class AgentChatScreen extends Screen {
         var line=lines.get(index);String text=lineText(line);
         int from=index==start.line()?Math.min(start.character(),text.length()):0;
         int to=index==end.line()?Math.min(end.character(),text.length()):text.length();
-        int x=left+8+line.inset();
-        graphics.fill(x+font.width(text.substring(0,from)),y-1,x+font.width(text.substring(0,to)),y+font.lineHeight+1,0xB05A7EAA);
+        int x=lineX(line);
+        graphics.fill(x+lineWidthAt(line,from),y-1,x+lineWidthAt(line,to),y+font.lineHeight+1,0xB05A7EAA);
     }
 
 
@@ -302,7 +356,7 @@ public final class AgentChatScreen extends Screen {
     }
 
     private boolean backendAvailable() {
-        return !Set.of("disconnected", "unavailable").contains(AgentModels.text(state, "status"));
+        return !developmentTranscript && !Set.of("disconnected", "unavailable").contains(AgentModels.text(state, "status"));
     }
 
     private static String bodyLabel(String id) {
@@ -1243,6 +1297,17 @@ public final class AgentChatScreen extends Screen {
 
     private void detail(JsonObject row) { detail(row,24,contentWidth-48); }
 
+    private void markdown(String text, int color, long replyVersion, int inset, int wrapWidth) {
+        var layout = ChatMarkdown.layout(font, text, wrapWidth);
+        int first = lines.size();
+        for (int i = 0; i < layout.rows().size(); i++) {
+            var row = layout.rows().get(i);
+            lines.add(new Line(row.text(), color, i == layout.rows().size() - 1 ? replyVersion : 0,
+                inset + row.inset(), row.copyText(), row));
+        }
+        for (var panel : layout.panels()) richPanels.add(new RichPanel(panel, first, inset));
+    }
+
     private void detail(JsonObject row,int inset,int wrapWidth) {
         if(!AgentModels.text(row,"id").equals(expandedRow))return;
         String text = workDetail(row);
@@ -1283,7 +1348,7 @@ public final class AgentChatScreen extends Screen {
         int bubbleWidth=textWidth+16,inset=contentWidth-24-bubbleWidth;
         int firstLine=lines.size();
         lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
-        paragraph(text,0xEEEEEE,0,inset+8,textWidth);
+        markdown(text,0xEEEEEE,0,inset+8,textWidth);
         if(!error.isEmpty())paragraph(error,0xFFAAAA,0,inset+8,textWidth);
         if(attachments>0) {
             var labels=new ArrayList<String>();
@@ -1320,7 +1385,7 @@ public final class AgentChatScreen extends Screen {
             // Collapsed activity and off-page replies are never marked as read.
             long reply=role.equals("assistant") && !nested && id.equals(lastReplyId())
                 && !(row.has("truncated")&&row.get("truncated").getAsBoolean())?number(state,"replyVersion"):0;
-            paragraph(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0);
+            markdown(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0,contentWidth-24-(nested?12:0));
             if(AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected"))paragraph("Not sent: "+AgentModels.text(row,"detail"),0xFFAAAA,0,0);
             int attachments=attachmentCount(row);
             if(attachments>0)paragraph(attachments+(attachments==1?" attachment":" attachments"),0xAAAAAA,0,0);
@@ -1360,7 +1425,8 @@ public final class AgentChatScreen extends Screen {
         boolean follow=!hasSelection() && !preserveScroll && scroll>=maxScroll-4;
         preserveScroll=false;transcriptKey=key;
         for(var entry:disclosures)removeWidget(entry.button());
-        disclosures.clear();lines.clear();messageBubbles.clear();thinkingLine=-1;
+        var previousPanels = new ArrayList<>(richPanels);
+        disclosures.clear();lines.clear();messageBubbles.clear();richPanels.clear();thinkingLine=-1;
         rebuildQueue();
         boolean hasRunningGroup=false;
         var page = AgentModels.object(transcript, "timelinePage");
@@ -1405,6 +1471,10 @@ public final class AgentChatScreen extends Screen {
             lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
         }
         inlineRequests();
+        for (int i = 0; i < Math.min(previousPanels.size(), richPanels.size()); i++) {
+            var old = previousPanels.get(i).panel(); var current = richPanels.get(i).panel();
+            if (old.source.equals(current.source)) current.scroll = Math.min(old.scroll, current.maxScroll());
+        }
         maxScroll=Math.max(0,lines.size()*LINE_HEIGHT-(transcriptBottom-transcriptTop-12));
         scroll=follow?maxScroll:Math.clamp(scroll,0,maxScroll);
         if(hasSelection()) {
@@ -1639,6 +1709,54 @@ public final class AgentChatScreen extends Screen {
 
     private record WidgetTooltip(AbstractWidget widget, Tooltip tooltip) {}
 
+    private String linkAt(double mouseX, double mouseY) {
+        if(settingsCovering || mouseY<transcriptTop+4 || mouseY>=transcriptBottom-4
+            || mouseX<left+4 || mouseX>=left+contentWidth-8) return null;
+        int index=(int)Math.floor((mouseY-transcriptTop-6+scroll)/LINE_HEIGHT);
+        if(index<0 || index>=lines.size()) return null;
+        var line=lines.get(index);
+        int x=(int)mouseX-lineX(line);
+        if(x<0) return null;
+        var style=line.rich()==null?font.getSplitter().componentStyleAtWidth(line.text(),x):line.rich().styleAt(font,x);
+        var click=style==null?null:style.getClickEvent();
+        return click==null?null:click.getValue();
+    }
+
+    private void openLink(String target) {
+        try {
+            var uri=new java.net.URI(target);
+            if("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) {
+                handleComponentClicked(net.minecraft.network.chat.Style.EMPTY.withClickEvent(
+                    new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,target)));
+            } else feedback="Cannot open this link yet: "+target;
+        } catch(java.net.URISyntaxException failure) { feedback="Invalid link"; }
+    }
+
+    private void renderRichPanels(GuiGraphics graphics,int mouseX,int mouseY) {
+        for(var entry:richPanels) {
+            var panel=entry.panel();
+            int x=left+8+entry.inset()+panel.inset;
+            int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+            int bottom=y+(panel.end-panel.first)*LINE_HEIGHT;
+            if(bottom<transcriptTop || y>transcriptBottom) continue;
+            graphics.fill(x,y-2,x+panel.width,bottom-2,0xEF171C21);
+            graphics.fill(x,y-2,x+panel.width,y+LINE_HEIGHT-2,0xFF2A333A);
+            graphics.drawString(font,font.plainSubstrByWidth(panel.label,Math.max(8,panel.width-50)),x+6,y,0xAEBEC7);
+            graphics.drawString(font,"Copy",x+panel.width-30,y,0xC9D8DF);
+            graphics.enableScissor(x,transcriptTop+4,x+panel.width,transcriptBottom-4);
+            for(int column:panel.columns) graphics.fill(x+column-panel.scroll,y+LINE_HEIGHT-2,
+                x+column-panel.scroll+1,bottom-LINE_HEIGHT,0xFF36424A);
+            if(panel.maxScroll()>0) {
+                int track=panel.width-12;
+                int thumb=Math.max(12,track*panel.width/Math.max(panel.width,panel.contentWidth));
+                int start=x+6+(track-thumb)*panel.scroll/panel.maxScroll();
+                graphics.fill(x+6,bottom-6,x+panel.width-6,bottom-4,0xFF35414A);
+                graphics.fill(start,bottom-6,start+thumb,bottom-4,0xFF93A8B4);
+            }
+            graphics.disableScissor();
+        }
+    }
+
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (!docked()) {
             renderChat(graphics, mouseX, mouseY, partialTick);
@@ -1700,6 +1818,7 @@ public final class AgentChatScreen extends Screen {
             }
         }
         long seenReply = 0;
+        renderRichPanels(graphics, mouseX, mouseY);
         if (lines.isEmpty()) {
             graphics.drawWordWrap(font, Component.literal(transcriptLoading ? "Loading conversation…" : draft() ? "" : "Your agent is ready. Ask about its project, or give it something to build."), left + 8, transcriptTop + 10, contentWidth - 24, 0xAAAAAA);
         } else {
@@ -1708,15 +1827,24 @@ public final class AgentChatScreen extends Screen {
             for (int i = first; i < last; i++) {
                 int y = transcriptTop + 6 + i * LINE_HEIGHT - scroll;
                 if (y >= transcriptTop - 11 && y < transcriptBottom) {
+                    var line = lines.get(i);
+                    var panel = line.rich() == null ? null : line.rich().panel();
+                    if (panel != null) graphics.enableScissor(left+8+line.inset(),transcriptTop+4,
+                        left+8+line.inset()+panel.width,transcriptBottom-4);
                     drawSelection(graphics,i,y);
                     if(i==thinkingLine)drawShimmer(graphics,"Thinking…",left+8,y,false);
-                    else graphics.drawString(font, lines.get(i).text(), left + 8 + lines.get(i).inset(), y, lines.get(i).color());
+                    else if(line.rich()!=null) line.rich().draw(graphics,font,lineX(line),y,line.color());
+                    else graphics.drawString(font, line.text(), lineX(line), y, line.color());
+                    if (panel != null) graphics.disableScissor();
                 }
                 if (y >= transcriptTop + 4 && y + font.lineHeight <= transcriptBottom - 4) seenReply = Math.max(seenReply, lines.get(i).replyVersion());
             }
         }
         for(var entry:disclosures)if(entry.button().visible)entry.button().render(graphics,mouseX,mouseY,partialTick);
         graphics.disableScissor();
+        String hoverLink = linkAt(mouseX, mouseY);
+        if (hoverLink != null && !selectingText && pickerAnchor == null)
+            renderTooltip(graphics, font.split(Component.literal(hoverLink), Math.max(80, contentWidth-24)), mouseX, mouseY);
         renderQueue(graphics,mouseX,mouseY,partialTick);
         if (maxScroll > 0) {
             int track = transcriptBottom - transcriptTop - 8;
@@ -1795,6 +1923,17 @@ public final class AgentChatScreen extends Screen {
         // Rebind existing widgets after HotSwap, which can invalidate old lambda methods.
         composer.setValueListener(this::draftChanged);
         if(button==0 && mouseX>=left+4 && mouseX<left+contentWidth-8 && mouseY>=transcriptTop+4 && mouseY<transcriptBottom-4 && !lines.isEmpty()) {
+            for (var entry : richPanels) {
+                var panel=entry.panel();
+                int x=left+8+entry.inset()+panel.inset;
+                int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+                if(mouseY>=y && mouseY<y+LINE_HEIGHT && mouseX>=x+panel.width-36 && mouseX<x+panel.width) {
+                    minecraft.keyboardHandler.setClipboard(panel.source);
+                    feedback="Copied "+panel.label;
+                    clearSelection();
+                    return true;
+                }
+            }
             for(var entry:disclosures)if(entry.button().isMouseOver(mouseX,mouseY)) {
                 clearSelection();
                 return super.mouseClicked(mouseX,mouseY,button);
@@ -1808,7 +1947,7 @@ public final class AgentChatScreen extends Screen {
             if(selectionMode>1) {
                 String text=lineText(lines.get(position.line()));
                 int character=position.character();
-                if(character>0 && mouseX<left+8+lines.get(position.line()).inset()+font.width(text.substring(0,character)))
+                if(character>0 && mouseX<lineX(lines.get(position.line()))+lineWidthAt(lines.get(position.line()),character))
                     position=new TextPosition(position.line(),text.offsetByCodePoints(character,-1));
                 var unit=selectionUnit(position,selectionMode);
                 selectionAnchor=selectionUnitStart=unit[0];
@@ -1817,6 +1956,7 @@ public final class AgentChatScreen extends Screen {
                 selectionAnchor=position;
                 selectionEnd=position;
             }
+            pressedLink=selectionMode==1?linkAt(mouseX,mouseY):null;
             selectingText=true;
             setFocused(null);
             composer.setFocused(false);
@@ -1828,6 +1968,7 @@ public final class AgentChatScreen extends Screen {
 
     @Override public boolean mouseDragged(double mouseX,double mouseY,int button,double deltaX,double deltaY) {
         if(button==0 && selectingText) {
+            pressedLink=null;
             if(mouseY<transcriptTop+4)scroll=Math.max(0,scroll-LINE_HEIGHT);
             else if(mouseY>transcriptBottom-4)scroll=Math.min(maxScroll,scroll+LINE_HEIGHT);
             var position=textPosition(mouseX,mouseY);
@@ -1844,7 +1985,13 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public boolean mouseReleased(double mouseX,double mouseY,int button) {
-        if(button==0 && selectingText) {selectingText=false;return true;}
+        if(button==0 && selectingText) {
+            selectingText=false;
+            String target=pressedLink;
+            pressedLink=null;
+            if(target!=null && !hasSelection() && target.equals(linkAt(mouseX,mouseY))) openLink(target);
+            return true;
+        }
         return super.mouseReleased(mouseX,mouseY,button);
     }
 
@@ -1864,6 +2011,14 @@ public final class AgentChatScreen extends Screen {
             return true;
         }
         if (mouseX >= left && mouseX <= left + contentWidth && mouseY >= transcriptTop && mouseY <= transcriptBottom) {
+            if(horizontal!=0 || hasShiftDown()) for(var entry:richPanels) {
+                var panel=entry.panel();
+                int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
+                if(mouseY>=y && mouseY<y+(panel.end-panel.first)*LINE_HEIGHT && panel.maxScroll()>0) {
+                    panel.scroll=Math.clamp(panel.scroll-(int)((horizontal!=0?horizontal:vertical)*33),0,panel.maxScroll());
+                    return true;
+                }
+            }
             scroll = Math.clamp(scroll - (int) (vertical * 33), 0, maxScroll);
             return true;
         }
