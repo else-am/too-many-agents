@@ -180,7 +180,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var result=new HashMap<String,GameAccess.AgentState>();
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed) {
-            var state=snapshot(agent.id); String activity=flag(state,"turnActive")?"working":!text(state,"attention").isBlank()?"needs_input":flag(state,"unread")?"done":"idle";
+            var state=snapshot(agent.id); String activity=!text(state,"attention").isBlank()?"needs_input":flag(state,"turnActive")?"working":flag(state,"unread")?"done":"idle";
             result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity));
         }
         return result;
