@@ -251,6 +251,7 @@ final class AgentActions {
             return;
         }
         if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
+        if (!level.isPositionEntityTicking(pos)) throw error("target_outside_simulated_chunks");
         if (ticks == 1 || ticks % 10 == 0 || mob.getNavigation().isDone()) {
             boolean found = false, outsideOnly = false;
             if (workingPosition) {
@@ -289,6 +290,7 @@ final class AgentActions {
         }
         var path = mob.getNavigation().getPath();
         if (path != null && !path.isDone() && !level.hasChunkAt(path.getNextNodePos())) throw error("path_enters_unloaded_chunk");
+        if (path != null && !path.isDone() && !level.isPositionEntityTicking(path.getNextNodePos())) throw error("path_leaves_simulated_chunks");
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
         mob.getNavigation().tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
         GameAccess.travelFollowingBody(mob, confined);
