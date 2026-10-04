@@ -40,13 +40,13 @@ public final class AgentQueueScreen extends Screen {
             .bounds(left + 60, height - 31, 112, 20).build());
         var back = addRenderableWidget(Button.builder(Component.literal("Back to chat"), button -> onClose())
             .bounds(left + 178, height - 31, contentWidth - 178, 20).build());
-        messages = AgentModels.array(access.snapshot(agentId), "queuedMessages").deepCopy();
+        messages = AgentModels.queuedMessages(access.snapshot(agentId)).deepCopy();
         select(selected);
         setInitialFocus(back);
     }
 
     @Override public void tick() {
-        var current = AgentModels.array(access.snapshot(agentId), "queuedMessages");
+        var current = AgentModels.queuedMessages(access.snapshot(agentId));
         if (!current.equals(messages)) {
             messages = current.deepCopy();
             int index = selected;
@@ -63,7 +63,7 @@ public final class AgentQueueScreen extends Screen {
     private void select(int index) {
         selected = Math.clamp(index, 0, Math.max(0, messages.size() - 1));
         selectedId = AgentModels.text(message(), "id");
-        lines = font.split(Component.literal(messages.isEmpty() ? "No messages waiting." : AgentModels.text(message(), "text")), contentWidth - 24);
+        lines = font.split(Component.literal(messages.isEmpty() ? "No messages waiting." : AgentInteractions.queuedText(message())), contentWidth - 24);
         scroll = 0;
         maxScroll = Math.max(0, lines.size() * 11 - (height - 118));
         refresh();
@@ -72,7 +72,7 @@ public final class AgentQueueScreen extends Screen {
     private void refresh() {
         previousButton.active = !cancelling && selected > 0;
         nextButton.active = !cancelling && selected + 1 < messages.size();
-        cancelButton.active = !cancelling && !messages.isEmpty();
+        cancelButton.active = !cancelling && !messages.isEmpty() && !AgentModels.text(access.snapshot(agentId),"status").equals("disconnected");
         cancelButton.setMessage(Component.literal(cancelling ? "Cancelling…" : "Cancel message"));
     }
 
@@ -91,7 +91,7 @@ public final class AgentQueueScreen extends Screen {
     @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         graphics.drawString(font, messages.isEmpty() ? "Queued messages" : "Queued " + (selected + 1) + " of " + messages.size(), left, 12, 0xFFFFFF);
-        String details = AgentModels.text(message(), "model") + " - " + AgentModels.text(message(), "effort")
+        String details = AgentModels.text(message(), "model") + " - " + AgentModels.text(message(), "reasoningLevel")
             + " - " + AgentModels.speedLabel(AgentModels.text(message(), "serviceTier"));
         graphics.drawString(font, font.plainSubstrByWidth(messages.isEmpty() ? "" : details, contentWidth), left, 29, 0xAAAAAA);
         int top = 45, bottom = height - 61;
@@ -109,7 +109,7 @@ public final class AgentQueueScreen extends Screen {
             graphics.fill(left + contentWidth - 5, top + 4, left + contentWidth - 3, bottom - 4, 0xFF444444);
             graphics.fill(left + contentWidth - 5, y, left + contentWidth - 3, y + thumb, 0xFFAAAAAA);
         }
-        String footer = feedback.isBlank() ? "Runs in order after success; Stop or failure clears the queue." : feedback;
+        String footer = feedback.isBlank() ? AgentInteractions.waitingReason(message()) : feedback;
         graphics.drawString(font, font.plainSubstrByWidth(footer, contentWidth), left, height - 49, 0xAAAAAA);
         if (font.width(footer) > contentWidth && mouseY >= height - 53 && mouseY < height - 33) graphics.renderTooltip(font, font.split(Component.literal(footer), contentWidth), mouseX, mouseY);
     }

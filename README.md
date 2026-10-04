@@ -6,93 +6,107 @@
 # Too Many Agents
 
 A Minecraft mod that gives coding agents NPC bodies in a singleplayer world.
-Agents (Codex or Claude Code) see the world from their own point of view, act on
-it, and keep doing ordinary coding work in your projects.
+[BB](https://github.com/get-bb/bb) owns projects, threads, providers, permissions,
+worktrees and conversation history. The mod gives those threads Minecraft bodies
+and physical tools. Current support is a physical singleplayer client with an
+integrated server.
 
 ## Requirements
 
 - Minecraft 1.21.1 with NeoForge 21.1.251+, singleplayer.
-- At least one signed-in agent CLI: [Codex](https://github.com/openai/codex), or the
-  native [Claude Code](https://docs.claude.com/en/docs/claude-code) CLI
-  (`claude auth login`). Claude agents also need Node 20+ at runtime.
-- To build: Java 21 and Node 20+.
+- Java 21 to build the mod.
+- Your installed, running BB 0.45.0 or newer.
+- Node.js and npm to build the Minecraft TypeScript plugin.
+- At least one signed-in coding agent supported by BB, such as Codex or Claude Code.
 
-Developed on macOS; Linux should work. Windows is untested, and `tools/dev` does
-not support it. Pasting images/files into chat is macOS-only.
+The TypeScript plugin in `bb-plugin/` uses the BB plugin SDK. BB remains your
+existing external dependency: these tools never download, install, start, stop,
+or update it. `scratch/bb/` is reference material and never a build or runtime
+input. Developed on macOS; `tools/dev` requires macOS or Linux.
 
-## Build and install
+## Build and run
 
 ```sh
-(cd tools/claude-bridge && npm ci --ignore-scripts)
+tools/bb                                 # build our plugin; install or reload it in your running BB
 tools/build build
+tools/build runClient -PdevWorld          # isolated flat test world
 ```
 
-Copy `build/libs/too-many-agents-<version>.jar` into your NeoForge instance's
-`mods/` folder. `tools/build` uses `JAVA_HOME` if it is a JDK 21, otherwise it
-looks for one in common locations.
+`tools/build` uses a Java 21 `JAVA_HOME`, or finds a JDK in common locations.
+The mod JAR is `build/libs/too-many-agents-<version>.jar`.
+
+To use your own NeoForge installation, copy only that JAR into its `mods/`
+folder.
+
+Any game finds BB by itself through the address BB records in
+`~/.bb/bb-app-runtime.json`; running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR or
+changing physical tools in `surface/`. After editing plugin code or its prompts,
+run `tools/bb` again.
+
+`tools/bb` finds `bb` on PATH, or the CLI bundled with the installed macOS BB app.
+Use `--bb-cli /path/to/bb` for another installed CLI.
+
+The plugin's route accepts only local, non-browser JSON requests, as BB's own API
+does. The mod's physical API has a private `<game dir>/too-many-agents/connection.json`
+with its token; never share it.
 
 ## Using it
 
-**Mod settings → Agent providers** shows each harness's selected version,
-executable and source. Automatic mode picks the newest version found on PATH,
-in common install directories, and in supported desktop installs; it never
-installs or updates anything. Use Custom path to pin an executable. Custom
-settings override `TOO_MANY_AGENTS_CODEX` / `TOO_MANY_AGENTS_CLAUDE`, which
-override discovery; `TOO_MANY_AGENTS_NODE` selects Node. Changes apply after
-restarting Minecraft.
+Create a body in Minecraft and choose a native BB project, provider and model.
+Each body belongs to its world's stable ID and one BB thread. Conversations,
+queued messages, provider settings and archives live in BB. Minecraft saves
+agents, their BB thread links, body settings, inventories, project bounds and
+stations with the world.
 
-**Projects** have a primary folder and optional additional folders. Agents work
-in the primary folder, or in their own Git worktree when created with
-**Worktree** checked; child agents share their parent's checkout unless they ask
-for a new one. Worktrees are named from the agent's title (or first task) plus a
-short id, e.g. `login-redirect-fix-4e7c`, and start from the current commit
-without uncommitted files. Archiving or removing an agent keeps its files and
-branch.
+New agents belong to **This world** unless you choose another project. Each world
+gets a BB project ("Minecraft: <save name>") the first time it is used, and its
+agents share one folder inside the save, `too-many-agents/workspace/`, so their
+files travel with the world. Agents with **No project** use BB's Personal project.
 
-**In the world**, each project can have a bounding box and stations: labeled
-boxes that each hold one agent. A body never leaves its station (or project box),
-though it can reach blocks just outside. Press B for survey mode to see and draw
-boxes. Idle behaviors (stand, wander, look, swing) are cosmetic and never change
-the world.
+A separate world copy keeps its bodies and workspace files; its agents start new
+conversations in the copy's own project.
 
-**Data.** Managed folders live in `~/.too-many-agents/` (`worlds/<world-id>/`,
-`worktrees/`, and `archive/` for archived chats). Override with
-`TOO_MANY_AGENTS_DATA_DIR` or `-Dtoo_many_agents.dataDir`. Runtime state stays in
-the game directory. Mod settings → Archive lists and restores archived agents.
-
-**Local API.** The mod serves a loopback-only HTTP API for its tools, protected by
-a random token in `<game dir>/too-many-agents/connection.json`.
+Project bounds and stations keep bodies within their assigned space. Press B
+for survey mode to see and draw boxes. Idle behaviors are cosmetic and never
+change the world. Agents with Minecraft access receive the plugin's Minecraft
+prompts and installed physical tools; other threads continue ordinary project
+work in BB.
 
 ## Development
 
-See [AGENTS.md](AGENTS.md) for the development rules and test workflow, and
-[TODO.md](TODO.md) for outstanding work.
+See [AGENTS.md](AGENTS.md) for development rules and packaged-JAR verification,
+and [TODO.md](TODO.md) for outstanding work.
 
 ```sh
-tools/build runClient -PdevWorld   # isolated flat test world in run/
-tools/dev                          # personal dev game in run/play/ with hot reload
-tools/dev --test                   # hot reload in the test world
+tools/dev --test                         # hot reload in the guarded run/ test world
+tools/dev                                # personal development game in run/play/
 ```
 
-`tools/Play.command` launches `tools/dev` by double-click on macOS. `tools/dev`
-needs a JetBrains Runtime 21 (enhanced HotSwap); it finds the one bundled with
-Android Studio or IntelliJ, otherwise set `TMA_DEV_JAVA_HOME`.
+Both first run `tools/bb`, so BB always has the current plugin.
 
-Saving a Java edit compiles and reloads it into the running game. Method and
-field changes generally work; constructors and static initializers do not rerun,
-new fields need explicit initialization, and screens built in `init()` need
-reopening. Agent surface files (`surface/`), resources, mixins, build files, deleted sources,
-`AgentService`, and the `agent` package require a restart; the terminal says
-when. A failed reload never resets agents or replays world actions. Each game
-folder has `hot-reload-status.json` and logs. Validate releases with a fresh
-packaged-JAR run (see AGENTS.md).
+`tools/dev` needs a JetBrains Runtime 21 with enhanced HotSwap; it finds Android
+Studio or IntelliJ's bundled runtime, or uses `TMA_DEV_JAVA_HOME`. Saving supported
+Java edits compiles and reloads them. Resources, surface prompts, mixins, build
+files and live callback owners require a restart; the terminal reports this.
+`tools/Play.command` opens the personal development game on macOS.
 
-Diagnostics: `tools/agents.py --game-dir run …` (`list`, `projects`, `stations`,
-`transcript AGENT_ID`, `ui …`) and `tools/too_many_agents.py --game-dir run state`.
+```sh
+python3 tools/agents.py --game-dir run list
+python3 tools/agents.py --game-dir run ui widgets
+python3 tools/too_many_agents.py --game-dir run state
+python3 tools/smoke.py run --command
+python3 tools/bb-smoke.py --model gpt-6.1-sol --children
+```
 
-`node tools/claude-bridge/bridge-smoke.mjs <empty absolute dir>` checks the
-built Claude helper against the installed Claude Code with real model turns.
+These diagnostics exercise the real mod and native UI. Validate releases with
+`tools/build build`, followed separately by
+`tools/build runPackagedClient -PpackagedJarRun -PdevWorld`. Game runs, installed npm
+dependencies and generated plugin bundles are ignored.
+The BB safety fixture requires an exclusive game window in the guarded `run/`
+test world. It probes physical callback boundaries and world switching; it never
+stops BB. The fixture is retained for persistence inspection.
 
 ## License
 
-[MIT](LICENSE). Licenses of npm packages bundled into the Claude helper ship in the JAR at `too_many_agents/claude/THIRD-PARTY-LICENSES.txt`.
+[MIT](LICENSE). BB remains an external installed runtime; its dependencies are
+not bundled into the Minecraft mod JAR.

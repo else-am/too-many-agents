@@ -25,20 +25,17 @@ import java.util.function.Supplier;
 final class LocalBridge implements AutoCloseable {
     record Reply(int status, String body) {}
     interface AgentRoutes { Reply handle(String method, String path, JsonObject request); }
-    interface ScopedRoute { Reply handle(String token, JsonObject request); }
+    String token() { return token; }
     String url() { return "http://127.0.0.1:" + http.getAddress().getPort(); }
     private static final Gson JSON = new com.google.gson.GsonBuilder().serializeNulls().create();
     private final HttpServer http;
-    private final ExecutorService workers = Executors.newFixedThreadPool(2, runnable -> {
-        var thread = new Thread(runnable, "too_many_agents-http");
-        thread.setDaemon(true);
-        return thread;
-    });
+    // A plugin callback must be able to complete while its initiating UI request waits for BB.
+    private final ExecutorService workers = Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("minecraft-http-",0).factory());
     private final Path discovery;
     private final String token;
 
     LocalBridge(Path directory, Supplier<String> snapshot,
-                Function<JsonObject, Reply> command, AgentRoutes agents, ScopedRoute scoped) throws IOException {
+                Function<JsonObject, Reply> command, AgentRoutes agents) throws IOException {
         byte[] bytes = new byte[32];
         new SecureRandom().nextBytes(bytes);
         token = HexFormat.of().formatHex(bytes);
@@ -49,15 +46,6 @@ final class LocalBridge implements AutoCloseable {
         http.createContext("/", exchange -> {
             try (exchange) {
                 String path = exchange.getRequestURI().getPath();
-                if (path.equals("/v1/agent-tool") && exchange.getRequestMethod().equals("POST") && !exchange.getRequestHeaders().containsKey("Origin")) {
-                    String auth = exchange.getRequestHeaders().getFirst("Authorization");
-                    byte[] bytesIn = exchange.getRequestBody().readNBytes(65537);
-                    if (bytesIn.length > 65536) { send(exchange,error(413,"request_too_large")); return; }
-                    if (auth == null || !auth.startsWith("Bearer ")) { send(exchange,error(401,"unauthorized")); return; }
-                    try { send(exchange,scoped.handle(auth.substring(7),JsonParser.parseString(new String(bytesIn,StandardCharsets.UTF_8)).getAsJsonObject())); }
-                    catch (RuntimeException invalid) { send(exchange,error(400,"invalid_request")); }
-                    return;
-                }
                 if (exchange.getRequestHeaders().containsKey("Origin") ||
                     !MessageDigest.isEqual(("Bearer " + token).getBytes(StandardCharsets.UTF_8),
                         exchange.getRequestHeaders().getFirst("Authorization") == null ? new byte[0] :
@@ -87,7 +75,7 @@ final class LocalBridge implements AutoCloseable {
                         return;
                     }
                     send(exchange, command.apply(request));
-                } else if (path.equals("/v1/dev") || path.equals("/v1/ui") || path.equals("/v1/agents") || path.startsWith("/v1/agents/")) {
+                } else if (path.equals("/v1/bb") || path.equals("/v1/dev") || path.equals("/v1/ui") || path.equals("/v1/agents") || path.startsWith("/v1/agents/")) {
                     String method = exchange.getRequestMethod();
                     if (!method.equals("GET") && !method.equals("POST")) {
                         send(exchange, error(405, "method_not_allowed"));

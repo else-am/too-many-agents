@@ -38,12 +38,10 @@ public final class InventoryAgentSidebar extends Screen {
     private final Consumer<String> editProject;
     private final Runnable openSettings;
     private final Set<String> collapsed = new HashSet<>();
-    private final Set<String> minecraftProjects = new HashSet<>();
     private final Map<String, JsonObject> projects = new LinkedHashMap<>();
     private final List<SidebarButton> rows = new ArrayList<>();
     private List<Entry> entries = List.of();
     private String selected = "", structure = "";
-    private String worldId = "", worldName = "", minecraftProjectId = "";
     private boolean revealSelected;
     private int scroll, contentHeight;
     private long projectsReadMs, hoverStartedNs;
@@ -51,6 +49,11 @@ public final class InventoryAgentSidebar extends Screen {
     private Button providerButton, usageButton;
     private final List<Button> providerChoices = new ArrayList<>();
     private boolean providerMenu;
+    private JsonObject catalog = new JsonObject();
+    private JsonObject backendConfig = new JsonObject();
+    private boolean catalogRequested, catalogLoaded, providerLoading, providerSaving;
+    private long providerRequest;
+    private String providerError = "";
     private ProviderUsagePopup usagePopup;
 
     /** editProject receives a project id, or "" to create one. */
@@ -85,6 +88,42 @@ public final class InventoryAgentSidebar extends Screen {
         if (usagePopup == null) usagePopup = new ProviderUsagePopup(access);
         rebuild();
         refresh();
+        loadProviders(false);
+    }
+
+    private void loadProviders(boolean refresh) {
+        if (providerLoading || providerSaving || catalogRequested && !refresh) return;
+        catalogRequested = true;
+        providerLoading = true;
+        providerError = "";
+        long request = ++providerRequest;
+        var requestWorld = minecraft.level;
+        updateProviderButton();
+        // This sidebar is embedded, so Screen.screenExecutor would discard the result.
+        var providers = catalogLoaded ? java.util.concurrent.CompletableFuture.completedFuture(catalog) : access.catalog();
+        providers.thenCombine(access.backendConfig(), (providerCatalog, config) -> {
+            var result = new JsonObject();
+            result.add("catalog", providerCatalog);
+            result.add("config", config);
+            return result;
+        }).whenComplete((result, failure) -> minecraft.execute(() -> {
+            if (request != providerRequest) return;
+            providerLoading = false;
+            if (minecraft.level != requestWorld || minecraft.screen != parent) { catalogRequested = false; return; }
+            if (failure != null) {
+                catalogRequested = false;
+                catalogLoaded = false;
+                setProviderMenu(false);
+                reportProviderError("Could not load BB provider defaults: " + AgentModels.error(failure) + ". Click to retry.");
+                return;
+            }
+            boolean wasOpen = providerMenu;
+            catalog = result.getAsJsonObject("catalog");
+            catalogLoaded = true;
+            backendConfig = result.getAsJsonObject("config");
+            rebuild();
+            setProviderMenu(wasOpen);
+        }));
     }
 
     private int listBottom() { return height - 47; }
@@ -114,23 +153,35 @@ public final class InventoryAgentSidebar extends Screen {
         toggle.setTooltip(net.minecraft.client.gui.components.Tooltip.create(toggle.getMessage()));
         if (sidebarCollapsed()) return;
         providerButton = addRenderableWidget(new Button(32, 7, 24, 20, Component.literal(providerName(defaultProvider())),
-            button -> { setProviderMenu(!providerMenu); usagePopup.close(); }, message -> message.get()) {
+            button -> {
+                boolean open = !providerMenu;
+                setProviderMenu(open);
+                if (open) loadProviders(true);
+                usagePopup.close();
+            }, message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
                 g.blitSprite(ResourceLocation.withDefaultNamespace(isHoveredOrFocused() ? "widget/button_highlighted" : "widget/button"), getX(), getY(), getWidth(), getHeight());
-                ProviderIcon.render(g, defaultProvider(), getX() + (getWidth() - ProviderIcon.SIZE) / 2, getY() + 6);
+                String provider = defaultProvider();
+                if (provider.isBlank()) g.drawString(font, "BB", getX() + (getWidth() - font.width("BB")) / 2, getY() + 6, 0xFFFFFFFF, false);
+                else ProviderIcon.render(g, provider, getX() + (getWidth() - ProviderIcon.SIZE) / 2, getY() + 6);
             }
         });
-        providerButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Default provider for new chats")));
+        updateProviderButton();
         addRenderableWidget(Button.builder(Component.literal("New project"), button ->
             editProject.accept("")).bounds(62, 7, width - 73, 20).build());
-        int choiceWidth = Math.min(width - 43, font.width("Claude Code") + font.width("✓ ") + ProviderIcon.SIZE + 24);
-        for (String provider : List.of("codex", "claude")) {
+        int longest=font.width("BB default");
+        for(var item:AgentModels.array(catalog,"providers"))longest=Math.max(longest,font.width(AgentModels.text(item.getAsJsonObject(),"displayName")));
+        int choiceWidth = Math.min(width - 43, longest + font.width("✓ ") + ProviderIcon.SIZE + 24);
+        var providerIds = new ArrayList<String>();
+        providerIds.add("");
+        for (var item : AgentModels.array(catalog,"providers")) {
+            var info=item.getAsJsonObject();
+            if(!info.has("available")||!info.get("available").getAsBoolean())continue;
+            providerIds.add(AgentModels.text(info,"id"));
+        }
+        for (String provider : providerIds) {
             var choice = new Button(36, 33 + providerChoices.size() * 24, choiceWidth - 8, 22,
-                Component.literal(providerName(provider)), button -> {
-                    TooManyAgentsClientSettings.get().setDefaultProvider(provider);
-                    providerButton.setMessage(Component.literal(providerName(provider)));
-                    setProviderMenu(false);
-                }, message -> message.get()) {
+                Component.literal(providerName(provider)), button -> saveDefaultProvider(provider), message -> message.get()) {
                 @Override protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
                     if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF454545);
                     int x = getX() + 6, y = getY() + 6;
@@ -141,6 +192,7 @@ public final class InventoryAgentSidebar extends Screen {
                 }
             };
             choice.visible = false;
+            choice.active = !providerLoading && !providerSaving;
             providerChoices.add(addWidget(choice));
         }
         for (Entry entry : entries) {
@@ -161,8 +213,54 @@ public final class InventoryAgentSidebar extends Screen {
         layout();
     }
 
-    private String defaultProvider() { return TooManyAgentsClientSettings.get().defaultProvider(); }
-    private static String providerName(String provider) { return provider.equals("claude") ? "Claude Code" : "Codex"; }
+    static String defaultProvider(JsonObject config) {
+        return text(AgentModels.object(config, "generalSettings"), "defaultProviderId");
+    }
+
+    private String defaultProvider() { return defaultProvider(backendConfig); }
+
+    void reportProviderError(String message) {
+        providerError = message;
+        updateProviderButton();
+    }
+
+    private void updateProviderButton() {
+        if (providerButton == null) return;
+        providerButton.setMessage(Component.literal(providerName(defaultProvider())));
+        String tooltip = !providerError.isBlank() ? providerError : providerSaving ? "Saving BB default provider…"
+            : providerLoading ? "Loading BB provider defaults…" : "BB default provider for new chats";
+        providerButton.setTooltip(Tooltip.create(Component.literal(tooltip)));
+        for (var choice : providerChoices) choice.active = !providerLoading && !providerSaving;
+    }
+
+    private void saveDefaultProvider(String provider) {
+        if (providerLoading || providerSaving) return;
+        providerSaving = true;
+        providerError = "";
+        long request = ++providerRequest;
+        var requestWorld = minecraft.level;
+        setProviderMenu(false);
+        updateProviderButton();
+        access.setDefaultProvider(provider.isBlank() ? null : provider).whenComplete((config, failure) -> minecraft.execute(() -> {
+            if (request != providerRequest) return;
+            providerSaving = false;
+            if (minecraft.level != requestWorld || minecraft.screen != parent) { catalogRequested = false; return; }
+            if (failure != null) {
+                reportProviderError("Could not save BB default provider: " + AgentModels.error(failure) + ". Click to retry.");
+                return;
+            }
+            backendConfig = config;
+            updateProviderButton();
+        }));
+    }
+    private String providerName(String provider) {
+        if (provider.isBlank()) return "BB default";
+        for(var item:AgentModels.array(catalog,"providers")) {
+            var info=item.getAsJsonObject();
+            if(AgentModels.text(info,"id").equals(provider))return AgentModels.text(info,"displayName");
+        }
+        return provider;
+    }
     public boolean pickerOpen() { return providerMenu || usagePopup != null && usagePopup.visible(); }
     private void setProviderMenu(boolean open) {
         providerMenu = open;
@@ -171,7 +269,7 @@ public final class InventoryAgentSidebar extends Screen {
     }
 
     private void startAgent(String projectId) {
-        newAgent.accept(projectId.equals("minecraft") ? minecraftProjectId : projectId);
+        newAgent.accept(projectId);
     }
 
     private Button footer(int x, int y, int w, String label, Runnable action) {
@@ -183,6 +281,10 @@ public final class InventoryAgentSidebar extends Screen {
         };
     }
 
+    private static String parent(JsonObject agent) {
+        return text(agent, "parentAgentId");
+    }
+
     @Override public void tick() { refresh(); }
 
     private void refresh() {
@@ -191,20 +293,12 @@ public final class InventoryAgentSidebar extends Screen {
         long now = System.currentTimeMillis();
         if (now - projectsReadMs >= 1_000) {
             projectsReadMs = now;
-            minecraftProjects.clear();
             projects.clear();
-            minecraftProjectId = "";
             JsonObject data = access.projects();
-            worldId = data.has("world") ? text(data.getAsJsonObject("world"), "id") : "";
-            worldName = data.has("world") ? text(data.getAsJsonObject("world"), "name") : "";
             for (var value : AgentModels.array(data, "projects")) {
                 var project = value.getAsJsonObject();
-                String id = text(project, "id"), projectWorld = text(project, "minecraftWorldId");
+                String id = text(project, "id");
                 projects.put(id, project);
-                if (!projectWorld.isBlank()) {
-                    minecraftProjects.add(id);
-                    if (projectWorld.equals(worldId)) minecraftProjectId = id;
-                }
             }
         }
         var visible = new LinkedHashMap<String, JsonObject>();
@@ -218,20 +312,16 @@ public final class InventoryAgentSidebar extends Screen {
         for (var agent : visible.values()) {
             var root = agent;
             var ancestors = new HashSet<String>();
-            while (visible.containsKey(text(root, "parentId")) && ancestors.add(text(root, "id")))
-                root = visible.get(text(root, "parentId"));
+            while (visible.containsKey(parent(root)) && ancestors.add(text(root, "id")))
+                root = visible.get(parent(root));
             String projectId = text(root, "projectId");
-            if (projectId.isBlank() || projectId.equals("minecraft"))
-                projectId = minecraftProjectId.isBlank() ? "minecraft" : minecraftProjectId;
+            if (projectId.isBlank()) projectId = "proj_personal";
             groups.computeIfAbsent(projectId, key -> new ArrayList<>()).add(agent);
         }
-        for (var project : projects.values()) {
-            String projectWorld = text(project, "minecraftWorldId");
-            if (projectWorld.isBlank() || projectWorld.equals(worldId))
-                groups.computeIfAbsent(text(project, "id"), key -> new ArrayList<>());
-        }
+        for (var project : projects.values()) groups.computeIfAbsent(text(project,"id"),key->new ArrayList<>());
         var projectIds = new ArrayList<>(groups.keySet());
-        projectIds.sort(Comparator.comparing((String id) -> !minecraftProjects.contains(id) && !id.equals("minecraft"))
+        // This world's project first and no project last, around BB's projects.
+        projectIds.sort(Comparator.comparing((String id) -> text(projects.getOrDefault(id, new JsonObject()), "kind").equals("world") ? 0 : id.equals("proj_personal") ? 2 : 1)
             .thenComparing(id -> projectName(id, groups.get(id)), String.CASE_INSENSITIVE_ORDER));
         var next = new ArrayList<Entry>();
         var nextStructure = new StringBuilder();
@@ -245,10 +335,10 @@ public final class InventoryAgentSidebar extends Screen {
             var children = new LinkedHashMap<String, List<JsonObject>>();
             for (var agent : agents) {
                 members.add(text(agent, "id"));
-                children.computeIfAbsent(text(agent, "parentId"), key -> new ArrayList<>()).add(agent);
+                children.computeIfAbsent(parent(agent), key -> new ArrayList<>()).add(agent);
             }
             var added = new HashSet<String>();
-            for (var agent : agents) if (!members.contains(text(agent, "parentId")))
+            for (var agent : agents) if (!members.contains(parent(agent)))
                 appendFamily(id, agent, 0, children, added, next, nextStructure);
             // Keep every agent reachable even if an incomplete snapshot has a broken parent link.
             for (var agent : agents) appendFamily(id, agent, 0, children, added, next, nextStructure);
@@ -277,9 +367,7 @@ public final class InventoryAgentSidebar extends Screen {
     private String projectName(String id, List<JsonObject> agents) {
         String name = projects.containsKey(id) ? text(projects.get(id), "name")
             : agents.isEmpty() ? "" : text(agents.getFirst(), "projectName");
-        if ((minecraftProjects.contains(id) || id.equals("minecraft"))
-            && name.equals("Minecraft - " + worldName)) return "Minecraft";
-        return name.isBlank() ? "Minecraft" : name;
+        return name.isBlank() ? "No project" : name;
     }
 
     private void layout() {
@@ -371,11 +459,6 @@ public final class InventoryAgentSidebar extends Screen {
         }
         String hoverKey = "", hoverText = "";
         for (SidebarButton button : rows) {
-            if (button.visible && button.isMouseOver(mouseX, mouseY) && button.entry.agent == null
-                    && (minecraftProjects.contains(button.entry.projectId) || button.entry.projectId.equals("minecraft"))) {
-                hoverKey = "project:" + button.entry.projectId;
-                hoverText = "Special project for agents only interacting with the world";
-            }
             if (button.visible && button.isMouseOver(mouseX, mouseY) && button.entry.agent != null) {
                 hoverKey = text(button.entry.agent, "id");
                 hoverText = age(button.entry.agent);
@@ -399,7 +482,7 @@ public final class InventoryAgentSidebar extends Screen {
                     Math.max(6, Math.min(x + 10, width - tooltipWidth - 6)),
                     Math.max(6, Math.min(y + 10, height - tooltipHeight - 6))), mouseX, mouseY);
         }
-        if (providerMenu) {
+        if (providerMenu && !providerChoices.isEmpty()) {
             int menuWidth = providerChoices.getFirst().getWidth() + 8;
             int menuHeight = providerChoices.size() * 24 + 8;
             g.pose().pushPose();
@@ -416,7 +499,7 @@ public final class InventoryAgentSidebar extends Screen {
         if (sidebarCollapsed()) return super.mouseClicked(x, y, button);
         if (providerMenu) {
             for (var choice : providerChoices) if (choice.mouseClicked(x, y, button)) return true;
-            if (x >= 32 && x < 40 + providerChoices.getFirst().getWidth()
+            if (!providerChoices.isEmpty() && x >= 32 && x < 40 + providerChoices.getFirst().getWidth()
                     && y >= 29 && y < 37 + providerChoices.size() * 24) return true;
             if (!providerButton.isMouseOver(x, y)) setProviderMenu(false);
         }
@@ -465,14 +548,9 @@ public final class InventoryAgentSidebar extends Screen {
             g.enableScissor(5, LIST_TOP, panelWidth - 6, listBottom());
             try {
                 if (entry.agent == null) {
-                    boolean worldProject = minecraftProjects.contains(entry.projectId) || entry.projectId.equals("minecraft");
-                    if (worldProject) g.fill(getX(), rowTop + 1, panelWidth - 7, rowTop + 23, 0xFF202C25);
                     if (isHoveredOrFocused()) g.fill(getX(), rowTop + 2, getX() + getWidth(), rowTop + 22, 0xFF262F30);
                     drawChevron(g, 13, rowTop + 9, !collapsed.contains(entry.projectId), 0x929E9C);
-                    if (worldProject) g.renderItem(new ItemStack(Items.GRASS_BLOCK), 24, rowTop + 4);
-                    int textX = worldProject ? 44 : 25;
-                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - textX - 6), textX, rowTop + 8,
-                        worldProject ? 0xC9D8BB : 0xBDC6C2, false);
+                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - 31), 25, rowTop + 8, 0xBDC6C2, false);
                     return;
                 }
                 var agent = entry.agent;
@@ -509,7 +587,7 @@ public final class InventoryAgentSidebar extends Screen {
         }
 
         private String projectId() {
-            return row.entry.projectId.equals("minecraft") ? minecraftProjectId : row.entry.projectId;
+            return row.entry.projectId;
         }
 
         void layout() {
@@ -618,8 +696,7 @@ public final class InventoryAgentSidebar extends Screen {
     }
 
     private static String age(JsonObject agent) {
-        if (!agent.has("conversation") || !agent.get("conversation").isJsonObject()) return "";
-        var conversation = agent.getAsJsonObject("conversation");
+        var conversation = AgentModels.object(agent,"thread");
         if (!conversation.has("createdAt")) return "";
         long createdAt = conversation.get("createdAt").getAsLong();
         if (createdAt <= 0) return "";
@@ -638,7 +715,8 @@ public final class InventoryAgentSidebar extends Screen {
         String task = text(agent, "taskTitle");
         if (!task.isBlank()) result += "\n" + task;
         String attention = text(agent, "attention");
-        String state = flag(agent, "waitingForGame") ? "Waiting for game to resume"
+        String state = text(agent, "status").equals("disconnected") ? "BB disconnected"
+            : flag(agent, "waitingForGame") ? "Waiting for game to resume"
             : attention.equals("approval") ? "Approval needed" : attention.equals("input") ? "Input needed"
             : attention.equals("error") ? "Needs attention" : flag(agent, "turnActive") ? "Working" : "Ready";
         result += "\n" + state;

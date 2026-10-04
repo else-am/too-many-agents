@@ -50,7 +50,6 @@ neoForge {
             if (providers.gradleProperty('devWorld').isPresent()) {
                 taskBefore quietTestOptions
                 systemProperty 'too_many_agents.devWorld', 'true'
-                systemProperty 'too_many_agents.dataDir', project.file('run/managed-data').absolutePath
             }
         }
         packagedClient {
@@ -60,7 +59,6 @@ neoForge {
             if (providers.gradleProperty('devWorld').isPresent()) {
                 taskBefore quietTestOptions
                 systemProperty 'too_many_agents.devWorld', 'true'
-                systemProperty 'too_many_agents.dataDir', project.file('run/managed-data').absolutePath
             }
         }
     }
@@ -97,25 +95,8 @@ tasks.named('runPackagedClient') {
     }
 }
 
-// Bundle only the owned JS helper and SDK. The user's installed native CLI stays external.
-def bundleClaude = tasks.register('bundleClaude', Exec) {
-    workingDir 'tools/claude-bridge'
-    commandLine providers.environmentVariable('TOO_MANY_AGENTS_NODE').getOrElse('node'), 'build.mjs'
-    inputs.files(fileTree('tools/claude-bridge') {
-        include '*.mjs', 'protocol/**', 'package.json', 'package-lock.json'
-    })
-    outputs.files 'tools/claude-bridge/dist/bridge.mjs', 'tools/claude-bridge/dist/THIRD-PARTY-LICENSES.txt'
-    doFirst {
-        if (!file('tools/claude-bridge/node_modules/esbuild').isDirectory())
-            throw new GradleException('Claude helper dependencies missing: run npm ci --ignore-scripts in tools/claude-bridge.')
-    }
-}
-
 tasks.named('processResources', ProcessResources) {
-    dependsOn bundleClaude
     inputs.property 'version', project.version
-    from('tools/claude-bridge/dist/bridge.mjs') { into 'too_many_agents/claude' }
-    from('tools/claude-bridge/dist/THIRD-PARTY-LICENSES.txt') { into 'too_many_agents/claude' }
     from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')
     filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }

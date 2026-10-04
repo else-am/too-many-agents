@@ -41,6 +41,7 @@ public final class InventoryAgents {
     private SettingsFormScreen form;
     private boolean pendingModSettings;
     private boolean hostOpen;
+    private long newAgentRequest;
     // Settings sit beside the chat when the chat keeps its minimum width; unscaled units.
     private static final int SETTINGS_WIDTH = 400, SETTINGS_MIN_WIDTH = 320, CHAT_MIN_WIDTH = 360;
 
@@ -102,6 +103,7 @@ public final class InventoryAgents {
             inventoryTarget = inventoryPending = null;
         }
         if (parent != screen) {
+            newAgentRequest++;
             parent = screen;
             sidebar = new InventoryAgentSidebar(access.get(), parent, this::open, this::newAgent, this::openProject, this::openModSettings);
             if (form instanceof TooManyAgentsSettingsScreen) form = null;
@@ -250,6 +252,7 @@ public final class InventoryAgents {
     private void openModSettings() { showForm(new TooManyAgentsSettingsScreen(parent, access.get())); }
 
     private void showForm(SettingsFormScreen next) {
+        newAgentRequest++;
         if (chat != null) chat.closeSettings();
         var previous = form;
         next.dockWithHeader(() -> {
@@ -276,28 +279,38 @@ public final class InventoryAgents {
         if (!supports(client.screen)) openStandalone(null, null);
         if (!prepare(client.screen)) return;
         closeForm();
-        String project = projectId == null || projectId.equals("minecraft") ? "" : projectId;
-        if (project.isBlank()) {
-            var data = access.get().projects();
-            String worldId = data.has("world") ? AgentModels.text(data.getAsJsonObject("world"), "id") : "";
-            for (var item : AgentModels.array(data, "projects")) {
-                var row = item.getAsJsonObject();
-                if (!worldId.isBlank() && worldId.equals(AgentModels.text(row, "minecraftWorldId"))) {
-                    project = AgentModels.text(row, "id");
-                    break;
-                }
-            }
-        }
+        // New agents belong to this world unless a project is chosen.
+        String project = projectId == null || projectId.isBlank() ? "minecraft" : projectId;
         String draftProject = project;
-        String provider = TooManyAgentsClientSettings.get().defaultProvider();
+        var requestWorld = client.level;
+        var requestScreen = parent;
+        var requestAccess = access.get();
+        long request = ++newAgentRequest;
+        requestAccess.backendConfig().thenCombine(requestAccess.projectExecutionOptions(draftProject), (config, defaults) -> {
+            var result = config.deepCopy();
+            result.add("draftDefaults", defaults);
+            return result;
+        }).whenComplete((config, failure) -> client.execute(() -> {
+            if (request != newAgentRequest || client.level != requestWorld || client.screen != requestScreen
+                    || world != requestWorld || parent != requestScreen || access.get() != requestAccess) return;
+            if (failure != null) {
+                sidebar.reportProviderError("Could not load BB defaults for a new chat: " + AgentModels.error(failure));
+                return;
+            }
+            String provider = InventoryAgentSidebar.defaultProvider(config);
+            if (provider.isBlank()) provider = AgentModels.text(AgentModels.object(config, "draftDefaults"), "providerId");
+            openDraft(draftProject, provider, requestAccess);
+        }));
+    }
+
+    private void openDraft(String project, String provider, AgentUiAccess draftAccess) {
         if (chat != null) chat.closeSettings();
         chat = drafts.computeIfAbsent(project + ":" + provider, key -> {
             var settings = new JsonObject();
-            settings.addProperty("projectId", draftProject);
-            settings.addProperty("providerId", provider);
-            settings.addProperty("permissionMode", access.get().defaultPermissionMode());
+            settings.addProperty("projectId", project);
+            if (!provider.isBlank()) settings.addProperty("providerId", provider);
             Object draftWorld = world;
-            return new AgentChatScreen(access.get(), settings, id -> {
+            return new AgentChatScreen(draftAccess, settings, id -> {
                 if (world != draftWorld) return;
                 var created = drafts.remove(key);
                 if (created == null) return;
@@ -332,6 +345,7 @@ public final class InventoryAgents {
     }
 
     private void open(String id) {
+        newAgentRequest++;
         closeForm();
         boolean keepInventory = inventoryTarget != null || parent instanceof AgentInventoryScreen;
         selected = id;
@@ -387,6 +401,7 @@ public final class InventoryAgents {
     }
 
     private void closeChat() {
+        newAgentRequest++;
         if (parent instanceof AgentWorkspaceScreen) {
             parent.onClose();
             return;
@@ -409,6 +424,7 @@ public final class InventoryAgents {
         boolean open = prepare(client.screen);
         // Leaving the agent screens saves open settings, once.
         if (!open && hostOpen) {
+            newAgentRequest++;
             if (chat != null) chat.closeSettings();
             // Mod settings save as they change and stay open across their linked screens.
             if (form instanceof ProjectScreen) closeForm();

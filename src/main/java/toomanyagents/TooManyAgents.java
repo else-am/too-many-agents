@@ -91,12 +91,11 @@ public final class TooManyAgents {
         event.enqueueWork(() -> {
             try {
                 var directory = FMLPaths.GAMEDIR.get().resolve("too-many-agents");
-                ProviderInstallations.get();
                 game = new GameAccess(this::currentServer, this::currentSession, () -> localPlayer, () -> paused);
                 game.setPov(new PovCapture(this::currentSession));
                 agents = new AgentService(directory, game, this::currentSession);
-                var bridge = new LocalBridge(directory, () -> snapshot, this::command, this::agentRoute, this::scopedRoute);
-                agents.bridgeUrl(bridge.url());
+                var bridge = new LocalBridge(directory, () -> snapshot, this::command, this::agentRoute);
+                agents.bridgeConnection(bridge.url(),bridge.token());
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                     bridge.close();
                     agents.close();
@@ -136,8 +135,11 @@ public final class TooManyAgents {
             Object result;
             if (path.equals("/v1/dev") && DevelopmentWorld.ENABLED) {
                 result = method.equals("GET") ? DevelopmentChecks.snapshot() : game.development(request).get(10,TimeUnit.SECONDS);
-            } else if (path.equals("/v1/agents/providers")) result = (method.equals("GET") ? ProviderInstallations.get().snapshot()
-                : ProviderInstallations.get().configure(field(request,"providerId"),field(request,"path"))).get(30,TimeUnit.SECONDS);
+            } else if (path.equals("/v1/bb") && method.equals("POST")) {
+                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(15,TimeUnit.SECONDS)); }
+                catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
+                catch(Exception failure) { return new LocalBridge.Reply(400,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message",failure.getMessage())))); }
+            } else if (path.equals("/v1/agents/providers")) result = agents.backendStatus().get(30,TimeUnit.SECONDS);
             else if (path.equals("/v1/agents/projects")) result = method.equals("GET") ? agents.projects() : agents.projectCommand(request).get(110,TimeUnit.SECONDS);
             else if (method.equals("GET") && path.equals("/v1/agents")) result = agents.list();
             else if (method.equals("GET") && path.equals("/v1/agents/catalog")) result = agents.catalog().get(100, TimeUnit.SECONDS);
@@ -161,17 +163,17 @@ public final class TooManyAgents {
                 if (method.equals("GET") && parts.length == 1) result = agents.snapshot(id);
                 else if (method.equals("POST") && parts.length == 2) {
                     result = switch (parts[1]) {
-                        case "message" -> agents.send(id, field(request, "text"), field(request, "model"), field(request, "effort"),request.getAsJsonObject("pointing"), field(request, "delivery"), field(request, "serviceTier")).get(100, TimeUnit.SECONDS);
+                        case "message" -> agents.send(id, request).get(100, TimeUnit.SECONDS);
                         case "cancel-queued" -> agents.cancelQueued(id, field(request, "messageId")).get(10, TimeUnit.SECONDS);
                         case "transcript" -> agents.transcript(id,request).get(10, TimeUnit.SECONDS);
                         case "inventory" -> agents.inventory(id).get(10, TimeUnit.SECONDS);
                         case "settings" -> agents.updateSettings(id,request).get(10,TimeUnit.SECONDS);
                         case "interrupt" -> agents.interrupt(id).get(100, TimeUnit.SECONDS);
                         case "remove" -> agents.remove(id, false).get(100, TimeUnit.SECONDS);
-                        case "archive" -> agents.retire(id, true).get(100, TimeUnit.SECONDS);
+                        case "archive" -> agents.remove(id, true).get(100, TimeUnit.SECONDS);
                         case "conversation-archive" -> agents.archiveConversation(id, true).get(100, TimeUnit.SECONDS);
                         case "conversation-restore" -> agents.archiveConversation(id, false).get(100, TimeUnit.SECONDS);
-                        case "respond" -> agents.respond(id, field(request, "requestId"), field(request, "answer")).get(100, TimeUnit.SECONDS);
+                        case "respond" -> agents.respond(id, field(request, "requestId"), request.getAsJsonObject("resolution")).get(100, TimeUnit.SECONDS);
                         case "follow" -> agents.setFollowing(id, flag(request, "following")).get(10, TimeUnit.SECONDS);
                         case "tool" -> agents.call(id, field(request, "tool"), request.getAsJsonObject("arguments")).get(10, TimeUnit.SECONDS);
                         default -> throw new IllegalArgumentException("unknown_endpoint");
@@ -189,17 +191,6 @@ public final class TooManyAgents {
             Throwable cause = exception;
             while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) cause = cause.getCause();
             return LocalBridge.error(400, cause.getMessage() == null ? "agent_request_failed" : cause.getMessage());
-        }
-    }
-
-    private LocalBridge.Reply scopedRoute(String token, JsonObject request) {
-        // agent_wait permits a bounded 30-second wait through either tool transport.
-        int timeout = field(request,"tool").equals("agent_wait") ? 35 : 15;
-        try { return new LocalBridge.Reply(200,JSON.toJson(agents.scopedCall(token,request).get(timeout,TimeUnit.SECONDS))); }
-        catch (TimeoutException failure) { return LocalBridge.error(504,"outcome_unknown_do_not_retry"); }
-        catch (Exception failure) {
-            Throwable cause = failure; while((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause()!=null) cause=cause.getCause();
-            return LocalBridge.error(400,cause.getMessage()==null ? "agent_tool_failed" : cause.getMessage());
         }
     }
 
@@ -236,11 +227,10 @@ public final class TooManyAgents {
     }
 
     private void serverTick(ServerTickEvent.Post event) {
-        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retainedBodies, agents == null ? Map::of : agents::agentStates);
+        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retiredBodies, agents == null ? Map::of : agents::agentStates);
         if (DevelopmentWorld.ENABLED) DevelopmentChecks.tick(event.getServer());
         var current = session.get();
         if (current == null || current.server() != event.getServer() || event.getServer().getTickCount() % 5 != 0) return;
-        if (agents != null) { agents.migrateWorldBodies(); agents.ensureWorldProject(); }
         var player = localPlayer == null ? null : event.getServer().getPlayerList().getPlayer(localPlayer);
         if (player == null) return;
         var result = new JsonObject();

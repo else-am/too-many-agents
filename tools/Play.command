@@ -1,2 +1,4 @@
 #!/bin/sh
-exec python3 "$(dirname "$0")/dev"
+set -eu
+cd "$(dirname "$0")/.."
+exec tools/dev

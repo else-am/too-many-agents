@@ -43,9 +43,9 @@ final class ProviderUsagePopup {
         }
         contentHeight = 27;
         if (report == null) contentHeight += 20;
-        else if (AgentModels.array(report, "providers").isEmpty()) contentHeight += 20;
-        else for (var value : AgentModels.array(report, "providers")) {
-            int count = AgentModels.array(value.getAsJsonObject(), "windows").size();
+        else if (providers().isEmpty()) contentHeight += 20;
+        else for (var entry : providers()) {
+            int count = AgentModels.array(entry.getValue().getAsJsonObject(), "windows").size();
             contentHeight += 23 + (count == 0 ? 18 : count * 38);
         }
         x = 10;
@@ -63,13 +63,13 @@ final class ProviderUsagePopup {
         String scale = "% used";
         g.drawString(font, scale, right - font.width(scale), rowY, 0x9FAAA8, false);
         rowY += 23;
-        if (report == null || AgentModels.array(report, "providers").isEmpty()) {
+        if (report == null || providers().isEmpty()) {
             g.drawString(font, fetching ? "Loading…" : "Usage unavailable", left, rowY, 0xAAB4B0, false);
-        } else for (var value : AgentModels.array(report, "providers")) {
-            JsonObject provider = value.getAsJsonObject();
-            String id = AgentModels.text(provider, "providerId");
+        } else for (var entry : providers()) {
+            JsonObject provider = entry.getValue().getAsJsonObject();
+            String id = entry.getKey();
             ProviderIcon.render(g, id, left, rowY);
-            g.drawString(font, id.equals("claude") ? "Claude Code" : "Codex", left + 14, rowY, 0xEEE6D3, false);
+            g.drawString(font, id, left + 14, rowY, 0xEEE6D3, false);
             rowY += 18;
             var windows = AgentModels.array(provider, "windows");
             if (windows.isEmpty()) {
@@ -104,9 +104,17 @@ final class ProviderUsagePopup {
         g.pose().popPose();
     }
 
+    private java.util.Set<java.util.Map.Entry<String, com.google.gson.JsonElement>> providers() {
+        return report==null?java.util.Set.of():report.entrySet();
+    }
+
     private static String reset(JsonObject window, long now) {
-        if (!window.has("resetsAtMs") || window.get("resetsAtMs").isJsonNull()) return "Reset time unavailable";
-        long minutes = Math.max(0, (window.get("resetsAtMs").getAsLong() - now + 59_999) / 60_000);
+        String reset = AgentModels.text(window,"resetsAt");
+        if(reset.isBlank())return "Reset time unavailable";
+        long resetTime;
+        try { resetTime=java.time.Instant.parse(reset).toEpochMilli(); }
+        catch(java.time.format.DateTimeParseException ignored){return reset;}
+        long minutes=Math.max(0,(resetTime-now+59_999)/60_000);
         if (minutes == 0) return "Reset due";
         if (minutes < 60) return "Resets in " + minutes + "m";
         if (minutes < 1440) return "Resets in " + minutes / 60 + "h " + minutes % 60 + "m";

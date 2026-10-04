@@ -45,10 +45,6 @@ def sources():
     paths = []
     for folder in ('src', 'surface'):
         paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
-    bridge = ROOT / 'tools/claude-bridge'
-    paths.extend(bridge.glob('*.mjs'))
-    paths.extend(bridge.glob('*.json'))
-    paths.extend(p for p in (bridge / 'protocol').rglob('*') if p.is_file())
     paths.extend(ROOT / p for p in ('build.gradle', 'settings.gradle', 'gradle.properties', 'tools/HotReload.java', 'tools/dev'))
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
@@ -68,6 +64,9 @@ def main():
         fcntl.flock(instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         raise RuntimeError('This development profile is already running.') from None
+    # Agents run on the current plugin; Minecraft still opens if BB is unavailable.
+    if subprocess.run([str(ROOT / 'tools/bb')], cwd=ROOT).returncode:
+        say('BB plugin was not installed; agents stay disconnected until `tools/bb` succeeds.')
     output = ROOT / 'build/hot-reload'
     output.mkdir(parents=True, exist_ok=True)
     build_lock = (ROOT / '.gradle-user/hot-reload-build.lock')
@@ -166,11 +165,9 @@ def main():
                 if time.monotonic() - changed_at < .7:
                     continue
                 changed = {p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p)}
-                # Live provider callbacks retain compiler-generated lambda targets across reloads.
-                # Recompiling their owners can remove those targets and silently lose turn events.
+                # Live callbacks retain compiler-generated lambda targets across reloads.
                 restart = [p for p in changed if not p.startswith('src/main/java/') or
-                           p.startswith('src/main/java/toomanyagents/agent/') or
-                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/AgentSurface.java', '/ProviderInstallations.java')) or '/mixin/' in p or p not in current]
+                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/AgentSurface.java', '/BbClient.java', '/LocalBridge.java', '/ClientControls.java')) or '/mixin/' in p or p not in current]
                 if restart:
                     status('restart-required', 'Restart required for: ' + ', '.join(sorted(restart)))
                     continue

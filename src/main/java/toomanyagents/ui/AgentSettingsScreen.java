@@ -20,6 +20,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import toomanyagents.AgentColor;
+import toomanyagents.BodySettings;
 
 /** One scrolling draft of an agent's identity, world behavior, access and profiles. Project settings live elsewhere. */
 public final class AgentSettingsScreen extends SettingsFormScreen {
@@ -44,9 +45,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     public AgentSettingsScreen(AgentUiAccess access,Screen parent,JsonObject settings,Function<JsonObject,CompletableFuture<Void>> apply,String agentId) {
         super(Component.literal(agentId==null?"New agent":"Agent settings"));
         this.access=access;this.parent=parent;this.agentId=agentId;this.apply=apply;draft=settings.deepCopy();
-        if(!draft.has("nativeSubagentsEnabled"))draft.addProperty("nativeSubagentsEnabled",false);
-        if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",AgentModels.minecraftProject(access.projects(),AgentModels.text(draft,"projectId")));
-        AgentModels.permissionDefaults(draft);
+        if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",true);
         if(!AgentColor.valid(value("color")))draft.addProperty("color",AgentColor.forId(value("name")));
         var source=agentId==null?draft:access.snapshot(agentId);projectId=AgentModels.text(source,"projectId");
         var hit=Minecraft.getInstance().hitResult;
@@ -56,17 +55,14 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     }
 
     public static JsonObject settings(JsonObject snapshot) {
-        var result = snapshot.has("settings") && snapshot.get("settings").isJsonObject()
-            ? snapshot.getAsJsonObject("settings").deepCopy() : new JsonObject();
+        var result = BodySettings.copy(AgentModels.object(snapshot, "settings"));
         result.add("provider", AgentModels.provider(snapshot).deepCopy());
-        for (String key : new String[]{"name", "directory", "projectId", "checkoutId", "model", "effort", "serviceTier", "following", "mode", "cheats", "nativeSubagentsEnabled", "minecraftAccess", "communication"}) {
+        for (String key : new String[]{"name", "projectId", "following", "mode", "cheats", "minecraftAccess", "communication"}) {
             if (!result.has(key) && snapshot.has(key)) result.add(key, snapshot.get(key).deepCopy());
         }
-        for (var value : AgentModels.array(AgentModels.provider(result), "permissionFields")) {
-            if (!value.isJsonObject()) continue;
-            String key = AgentModels.text(value.getAsJsonObject(), "key");
-            if (!result.has(key) && snapshot.has(key)) result.add(key, snapshot.get(key).deepCopy());
-        }
+        var execution = AgentModels.execution(snapshot);
+        for (String key : new String[]{"model", "reasoningLevel", "serviceTier", "permissionMode"})
+            if (execution.has(key)) result.add(key, execution.get(key).deepCopy());
         if (snapshot.has("providerId")) result.add("providerId",snapshot.get("providerId").deepCopy());
         if (!result.has("title")) result.addProperty("title", AgentModels.text(snapshot, "taskTitle"));
         if (!result.has("body")) {
@@ -74,9 +70,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             if (body.isBlank() && snapshot.has("body") && snapshot.get("body").isJsonObject()) body = AgentModels.text(snapshot.getAsJsonObject("body"), "type");
             result.addProperty("body", body);
         }
-        if (!result.has("nativeSubagentsEnabled")) result.addProperty("nativeSubagentsEnabled", false);
         if (!result.has("minecraftAccess")) result.addProperty("minecraftAccess", true);
-        AgentModels.permissionDefaults(result);
         return result;
     }
 
@@ -99,7 +93,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             bodiesRequested = true;
             String provider = AgentModels.text(agent(), "providerId");
             if (provider.isBlank()) provider = value("providerId");
-            access.catalog(provider.isBlank() ? "codex" : provider).whenComplete((catalog, failure) ->
+            access.catalog(provider,AgentModels.text(AgentModels.object(agent(),"thread"),"environmentId")).whenComplete((catalog, failure) ->
                 net.minecraft.client.Minecraft.getInstance().execute(() -> {
                     if (failure == null) {
                         bodies.clear();
@@ -110,8 +104,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
                 }));
         }
         begin();
-        boolean worldProject = AgentModels.minecraftProject(access.projects(), projectId);
-        if (agentId == null && worldProject) draft.addProperty("minecraftAccess", true);
         boolean enabled=editable(), world=flag("minecraftAccess");
         section("Identity");
         input("Name",value("name"),80,v->draft.addProperty("name",v),enabled);
@@ -124,7 +116,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         colorRow(enabled);
         section("In the world");
         if(agentId==null) {
-            if (!worldProject) toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
+            toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
         } else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");
         if(agentId!=null&&!stations().isEmpty())stationRow(enabled);
         toggle("Follow me",flag("following"),v->{followEdited=true;change("following",v);},enabled);
@@ -136,19 +128,17 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         toggle("World commands",flag("cheats"),v->change("cheats",v),enabled&&world)
             .setTooltip(Tooltip.create(Component.literal("Allow command-based edits in any game mode")));
         section("Access");
-        for(var item:AgentModels.array(AgentModels.provider(draft),"permissionFields")){
-            var field=item.getAsJsonObject();String key=AgentModels.text(field,"key");
-            var choices=new ArrayList<Choice>();for(var option:AgentModels.array(field,"options")){
-                var o=option.getAsJsonObject();choices.add(new Choice(AgentModels.text(o,"id"),AgentModels.text(o,"label")));
-            }
-            choice(AgentModels.text(field,"label"),value(key),choices,v->change(key,v),enabled);
+        if(agentId==null){
+            var permissionChoices = new ArrayList<Choice>();
+            permissionChoices.add(new Choice("", "BB default"));
+            for (String mode : AgentModels.permissionModes(AgentModels.provider(draft)))
+                permissionChoices.add(new Choice(mode, AgentModels.permissionLabel(mode)));
+            choice("Approvals", value("permissionMode"), permissionChoices, v -> change("permissionMode", v), enabled && permissionChoices.size()>1);
         }
         // Left unset for new agents so the service default applies.
         choice("Communication",value("communication").isBlank()?"project":value("communication"),
             options("none","Off","children","Parent & children","project","This project","any","All projects"),v->change("communication",v),enabled);
-        toggle("Native subagents",flag("nativeSubagentsEnabled"),v->change("nativeSubagentsEnabled",v),enabled)
-            .setTooltip(Tooltip.create(Component.literal("Provider subagents without Minecraft bodies; applies from the next turn")));
-        section("Profiles");
+        section("Body profiles");
         var profiles=profiles();var choices=new ArrayList<Choice>();
         for(var profile:profiles)choices.add(new Choice(AgentModels.text(profile,"name"),AgentModels.text(profile,"name")));
         choice("Load profile",selectedProfile,choices,this::loadProfile,enabled&&profiles.size()>0);
@@ -287,27 +277,22 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     }
     private List<JsonObject> profiles(){
         var result=new ArrayList<JsonObject>();
-        for(var value:access.profiles()){
-            var profile=value.getAsJsonObject();String provider=AgentModels.text(profile.getAsJsonObject("settings"),"providerId");
-            if(provider.isBlank())provider="codex";
-            if(provider.equals(value("providerId").isBlank()?"codex":value("providerId")))result.add(profile);
-        }
+        for(var value:access.profiles())result.add(value.getAsJsonObject());
         return result;
     }
     private void loadProfile(String name){
         if(name.isBlank())return;
         var profile=profiles().stream().filter(p->AgentModels.text(p,"name").equals(name)).findFirst().orElseThrow();
-        var settings=profile.getAsJsonObject("settings").deepCopy();for(String key:List.of("project","directory","projectId","checkoutId","useWorktree","baseRef","title"))settings.remove(key);if(settings.has("following"))followEdited=true;
-        draft.addProperty("nativeSubagentsEnabled",false);if(agentId==null)draft.addProperty("minecraftAccess",AgentModels.minecraftProject(access.projects(),projectId));
-        settings.entrySet().stream().filter(e->!e.getKey().equals("provider")&&!e.getKey().equals("providerId")&&(agentId==null||!e.getKey().equals("minecraftAccess")))
-            .forEach(e->draft.add(e.getKey(),e.getValue().deepCopy()));
-        AgentModels.permissionDefaults(draft);targetText.clear();profileName=selectedProfile=name;feedback="Profile loaded into draft.";rebuildForm();
+        var settings=BodySettings.profile(profile.getAsJsonObject("settings"));
+        if(agentId!=null)settings.remove("minecraftAccess");
+        if(settings.has("following"))followEdited=true;
+        for(var entry:settings.entrySet())draft.add(entry.getKey(),entry.getValue());
+        targetText.clear();profileName=selectedProfile=name;feedback="Body profile loaded into draft.";rebuildForm();
     }
     private void saveProfile(){
         if(!valid()||profileName.isBlank()){feedback="Enter a profile name and valid agent settings first.";return;}
         if(!targetsChosen())return;
-        var profile=draft.deepCopy();for(String key:List.of("project","directory","projectId","checkoutId","useWorktree","baseRef","title"))profile.remove(key);
-        run(access.saveProfile(profileName.trim(),profile),"Profile saved.");
+        run(access.saveProfile(profileName.trim(),BodySettings.profile(draft)),"Body profile saved.");
     }
     private void resumeFollow(){
         followEdited=true;draft.addProperty("following",true);
@@ -319,7 +304,11 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private void apply(){
         if(!valid()){feedback="Enter a name and choose a body.";return;}
         if(!targetsChosen())return;
-        var changes=draft.deepCopy();if(agentId!=null){changes.remove("minecraftAccess");if(!followEdited)changes.remove("following");}
+        var changes=agentId==null?draft.deepCopy():BodySettings.copy(draft);
+        if(agentId!=null){
+            if(!value("title").equals(AgentModels.text(saved,"title")))changes.addProperty("title",value("title"));
+            changes.remove("minecraftAccess");if(!followEdited)changes.remove("following");
+        }
         busy=true;rebuildForm();apply.apply(changes).thenCompose(unused->saveStation()).whenComplete((unused,error)->Minecraft.getInstance().execute(()->{
             busy=false;if(error==null)leave(parent);else{feedback=AgentModels.error(error);rebuildForm();}
         }));

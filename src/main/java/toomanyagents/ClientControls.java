@@ -250,6 +250,13 @@ public final class ClientControls {
                     result.complete(widgets());
                     return;
                 }
+                if ("dev_open_world".equals(action)) {
+                    if(!DevelopmentWorld.ENABLED || client.getSingleplayerServer()!=null || !(client.screen instanceof TitleScreen))
+                        throw new IllegalStateException("Opening a test world requires the development title screen");
+                    DevelopmentWorld.open(JsonState.text(request,"name"));
+                    result.complete(new JsonObject());
+                    return;
+                }
                 var agents = service.get();
                 if (agents == null || !client.hasSingleplayerServer() || client.level == null) {
                     throw new IllegalStateException("Open a local singleplayer world first");
