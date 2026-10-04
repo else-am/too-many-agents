@@ -349,7 +349,12 @@ export default async function minecraft(bb: BbPluginApi) {
   const registerCoordination = (name: string, description: string, parameters: Record<string, unknown>, run: (args: ObjectValue, from: Caller, ctx: PluginAgentToolContext) => Promise<unknown>) => {
     bb.agents.registerTool({ name, description, parameters,
       async execute(args: unknown, ctx: PluginAgentToolContext) {
-        try { return JSON.stringify(await run(object(args), await caller(ctx), ctx)); }
+        try {
+          const input = object(args);
+          const from = await caller(ctx);
+          ctx.signal.throwIfAborted();
+          return JSON.stringify(await run(input, from, ctx));
+        }
         catch (error) { return toolError(`${describe(error)}. No automatic retry was attempted.`); }
       },
     });
@@ -459,6 +464,7 @@ export default async function minecraft(bb: BbPluginApi) {
     if (to.parentAgentId !== me.agentId) throw new ApiError("access_denied", "Only your own child may be removed through agent_archive");
     if (to.threadId) {
       const current = await read(to.threadId);
+      ctx.signal.throwIfAborted();
       if (!["idle", "error"].includes(current.thread.status)) throw new ApiError("agent_busy", "Stop the child and inspect it before archiving");
       if (current.interactions.length) throw new ApiError("attention_pending", "A child's pending interactions belong to the human");
       await bb.sdk.threads.archive({ threadId: to.threadId });
