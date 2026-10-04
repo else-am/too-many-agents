@@ -246,6 +246,7 @@ final class AgentMentions {
     private void send(ClientChatEvent event) {
         var client = Minecraft.getInstance();
         if (!active(client.screen) || !event.getMessage().startsWith("@")) return;
+        event.setCanceled(true);
         Address address = address(event.getMessage());
         if (address == null) { error("Use Tab to complete an agent mention."); return; }
         var found = candidates().stream().filter(c -> c.name.equalsIgnoreCase(address.name)
