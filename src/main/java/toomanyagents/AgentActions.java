@@ -275,13 +275,14 @@ final class AgentActions {
                     // Interactions may reach out of the box, but the body works from inside it.
                     if (confined != null && !confined.holdsFeet(candidate)) { outsideOnly = true; continue; }
                     outsideOnly = false;
-                    var path = mob.getNavigation().createPath(candidate, 0);
+                    var path = mob.getNavigation().createPath(candidate, 0, 64);
                     if (path != null && path.canReach() && GameAccess.staysInside(path, confined)) { found = mob.getNavigation().moveTo(path, 1.0); if (found) break; }
                 }
             } else {
                 // The convenience moveTo overload accepts a neighboring tile (accuracy 1).
                 // Coordinate goals need the actual target tile before our arrival check.
-                var path = mob.getNavigation().createPath(pos, 0);
+                // Use the physical tool's range rather than this mob species' follow range.
+                var path = mob.getNavigation().createPath(pos, 0, 64);
                 found = path != null && path.canReach() && GameAccess.staysInside(path, confined) && mob.getNavigation().moveTo(path, 1.0);
             }
             if (!found) throw error(outsideOnly ? "target_out_of_reach_from_box" : confined != null ? "unreachable_inside_box" : "unreachable");
