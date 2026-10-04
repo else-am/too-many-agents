@@ -154,16 +154,16 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var request=arguments.deepCopy(); request.addProperty("op",op); return bb.call(request);
     }
     /** A BB change to an agent's thread; Minecraft rereads the agent once it settles. */
-    private synchronized CompletableFuture<JsonElement> threadRpc(String op,String id,JsonObject arguments) {
+    private synchronized CompletableFuture<JsonElement> threadRpc(String op,String id,JsonObject arguments) { return guarded(() -> {
         var agent=require(id); String session=loadedSession;
         return threadRead(op,id,arguments).whenComplete((done,failure) -> { synchronized(this) { if(currentAgent(agent,session)) refresh(id); } });
-    }
-    private synchronized CompletableFuture<JsonElement> threadRead(String op,String id,JsonObject arguments) {
+    }); }
+    private synchronized CompletableFuture<JsonElement> threadRead(String op,String id,JsonObject arguments) { return guarded(() -> {
         var agent=require(id);
         if(agent.threadId.isBlank()) return failed("This agent has not started a conversation yet.");
         var request=arguments.deepCopy(); request.addProperty("threadId",agent.threadId);
         return rpc(op,request);
-    }
+    }); }
     private synchronized Agent require(String id) {
         if(!currentSession(loadedSession)) throw new IllegalStateException("world_session_changed");
         var agent=agents.get(id); if(agent==null) throw new IllegalArgumentException("Unknown agent: "+id); return agent;
@@ -173,7 +173,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private void requireCurrent(Agent agent,String session) { if(!currentAgent(agent,session)) throw new IllegalStateException("world_session_changed"); }
     synchronized String findByBody(UUID body) { return currentSession(loadedSession) ? agents.values().stream().filter(a -> a.body!=null && a.body.entityUuid().equals(body.toString()) && game.belongsToCurrentWorld(a.body)).map(a -> a.id).findFirst().orElse(null) : null; }
     synchronized Set<String> retiredBodies() {
-        if(!Objects.equals(loadedSession,worldSession.get())) return Set.of();
+        if(!currentSession(loadedSession)) return Set.of();
         return agents.values().stream().filter(a -> a.removed).map(a -> a.id).collect(Collectors.toSet());
     }
     synchronized Map<String,GameAccess.AgentState> agentStates() {
@@ -289,14 +289,14 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }
         }
     }
-    @Override public CompletableFuture<JsonObject> projectCommand(JsonObject request) {
+    @Override public CompletableFuture<JsonObject> projectCommand(JsonObject request) { return guarded(() -> {
         String operation=text(request,"operation");
         if(operation.equals("world-resolve") || operation.startsWith("bounds-") || operation.startsWith("station-")) {
             var copy=request.deepCopy(); if(!text(copy,"agentId").isBlank()) copy.addProperty("agentProjectId",require(text(copy,"agentId")).projectId);
             return game.worldCommand(copy,worldSession.get());
         }
         return rpc("project."+operation,request).thenApply(JsonElement::getAsJsonObject).whenComplete((done,failure) -> polling.execute(this::sync));
-    }
+    }); }
     @Override public synchronized JsonArray profiles() { var rows=new JsonArray(); profiles.forEach((name,settings) -> rows.add(object("name",name,"settings",settings))); return rows; }
     @Override public synchronized CompletableFuture<Void> saveProfile(String name,JsonObject settings) {
         if(name==null || name.isBlank() || name.length()>80) return failed("Profile name must contain 1–80 characters.");
@@ -403,7 +403,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         save(); refresh(id);
     }
 
-    @Override public synchronized CompletableFuture<Void> updateSettings(String id,JsonObject settings) {
+    @Override public synchronized CompletableFuture<Void> updateSettings(String id,JsonObject settings) { return guarded(() -> {
         var agent=require(id); var physical=new JsonObject(); var patch=new JsonObject();
         String session=loadedSession;
         for(var entry:settings.entrySet()) {
@@ -423,18 +423,18 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }
             return save();
         }).thenCompose(done -> { synchronized(this) { requireCurrent(agent,session); return !started || patch.isEmpty()?CompletableFuture.completedFuture(null):threadRpc("agent.update",id,object("patch",patch)).thenApply(v -> null); } });
-    }
-    @Override public synchronized CompletableFuture<Void> openInventory(String id) { var a=require(id); return game.openInventory(a.body,loadedSession,id); }
-    @Override public synchronized CompletableFuture<JsonObject> inventory(String id) { return game.inventory(require(id).body,loadedSession); }
-    @Override public synchronized CompletableFuture<Void> setFollowing(String id,boolean enabled) { var a=require(id); String session=loadedSession; return game.setFollowing(a.body,session,enabled).thenCompose(done -> { synchronized(this) { requireCurrent(a,session); for(var e:game.settings(a.body).entrySet()) a.settings.add(e.getKey(),e.getValue()); } return save(); }); }
+    }); }
+    @Override public synchronized CompletableFuture<Void> openInventory(String id) { return guarded(() -> game.openInventory(require(id).body,loadedSession,id)); }
+    @Override public synchronized CompletableFuture<JsonObject> inventory(String id) { return guarded(() -> game.inventory(require(id).body,loadedSession)); }
+    @Override public synchronized CompletableFuture<Void> setFollowing(String id,boolean enabled) { return guarded(() -> { var a=require(id); String session=loadedSession; return game.setFollowing(a.body,session,enabled).thenCompose(done -> { synchronized(this) { requireCurrent(a,session); for(var e:game.settings(a.body).entrySet()) a.settings.add(e.getKey(),e.getValue()); } return save(); }); }); }
     synchronized void bodyLost(GameAccess.Body body) { if(!currentSession(loadedSession)) return; for(var a:agents.values()) if(Objects.equals(a.body,body)) { a.lost=true; closeScopes(a.id,"body_lost"); } save(); }
-    @Override public synchronized CompletableFuture<Void> checkBody(String id) {
+    @Override public synchronized CompletableFuture<Void> checkBody(String id) { return guarded(() -> {
         var a=require(id); if(!a.lost || a.removed) return CompletableFuture.completedFuture(null);
         String session=loadedSession;
         return game.recoverBody(a.body,a.id,a.projectId,a.settings,session).thenCompose(done -> { synchronized(this) { requireCurrent(a,session); a.lost=false; } return save(); });
-    }
+    }); }
     CompletableFuture<Void> sendMention(String id,String message,JsonObject pointing) { return send(id,object("text",message,"pointing",pointing)); }
-    @Override public synchronized CompletableFuture<Void> send(String id,JsonObject message) {
+    @Override public synchronized CompletableFuture<Void> send(String id,JsonObject message) { return guarded(() -> {
         var pointing=obj(message,"pointing");
         var input=new JsonArray();
         input.add(object("type","text","text",text(message,"text")+(pointing.isEmpty()?"":"\nMinecraft pointing context: "+pointing),"mentions",new JsonArray()));
@@ -445,35 +445,35 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var agent=require(id);
         if(agent.threadId.isBlank()) return start(agent,send);
         return threadRpc("agent.send",id,object("send",send)).thenApply(done -> null);
-    }
+    }); }
     @Override public CompletableFuture<Void> steerQueued(String id,String messageId) { return threadRpc("queue.send",id,object("args",object("queuedMessageId",messageId,"mode","steer"))).thenApply(done -> null); }
     @Override public CompletableFuture<Void> cancelQueued(String id,String messageId) { return threadRpc("queue.delete",id,object("args",object("queuedMessageId",messageId))).thenApply(done -> null); }
     @Override public CompletableFuture<JsonObject> transcript(String id,JsonObject query) { return threadRead("timeline",id,object("query",query)).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> timelineTurnSummaryDetails(String id,JsonObject query) { return threadRead("timeline.summary",id,object("query",query)).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<Void> respond(String id,String requestId,JsonObject resolution) { return threadRpc("interaction.resolve",id,object("interactionId",requestId,"resolution",resolution)).thenApply(done -> null); }
-    @Override public synchronized CompletableFuture<Void> interrupt(String id) {
+    @Override public synchronized CompletableFuture<Void> interrupt(String id) { return guarded(() -> {
         var agent=require(id);
-        synchronized(this) { closeScopes(id,"interrupted"); }
+        closeScopes(id,"interrupted");
         return agent.threadId.isBlank()?CompletableFuture.completedFuture(null):threadRpc("agent.stop",id,new JsonObject()).thenApply(done -> null);
-    }
-    @Override public synchronized CompletableFuture<Void> archiveConversation(String id,boolean archive) {
+    }); }
+    @Override public synchronized CompletableFuture<Void> archiveConversation(String id,boolean archive) { return guarded(() -> {
         var agent=require(id);
         if(!agent.threadId.isBlank()) return threadRpc(archive?"agent.archive":"agent.unarchive",id,new JsonObject()).thenApply(done -> null);
-        synchronized(this) { agent.archived=archive; }
+        agent.archived=archive;
         return save();
-    }
-    @Override public synchronized CompletableFuture<Void> remove(String id,boolean archive) {
+    }); }
+    @Override public synchronized CompletableFuture<Void> remove(String id,boolean archive) { return guarded(() -> {
         var agent=require(id); String session=loadedSession;
-        synchronized(this) { closeScopes(id,"body_removed"); }
+        closeScopes(id,"body_removed");
         return removeBody(agent,session,null,0).thenCompose(done -> { synchronized(this) { requireCurrent(agent,session); return archive?archiveConversation(id,true):CompletableFuture.completedFuture(null); } });
-    }
+    }); }
     private CompletableFuture<Void> removeBody(Agent agent,String session,GameAccess.ToolScope scope,long expiresAt) {
         var removed=scope==null?game.removeAgent(agent.body,session,agent.id,agent.lost):game.removeAgent(agent.body,session,agent.id,agent.lost,scope,expiresAt);
         return removed.thenCompose(done -> { synchronized(this) { requireCurrent(agent,session); agent.removed=true; } return save(); })
             .thenCompose(done -> game.worldCommand(object("operation","station-release","agentId",agent.id),session)).thenApply(done -> null);
     }
     synchronized CompletableFuture<JsonObject> call(String id,String tool,JsonObject arguments) {
-        var agent=require(id); return AgentSurface.call(agent.minecraftAccess,game,agent.body,loadedSession,null,tool,arguments);
+        return guarded(() -> { var agent=require(id); return AgentSurface.call(agent.minecraftAccess,game,agent.body,loadedSession,null,tool,arguments); });
     }
 
     /** Requests from the BB plugin. Physical requests must come from the agent's own thread. */
@@ -560,6 +560,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         }
     }
     private static String message(Throwable error) { while((error instanceof CompletionException || error instanceof ExecutionException) && error.getCause()!=null) error=error.getCause(); return error.getMessage()==null?error.getClass().getSimpleName():error.getMessage(); }
+    /** Reports a synchronous failure (e.g. a stale world session) as a failed future, so UI handlers never see it thrown. */
+    private static <T> CompletableFuture<T> guarded(Supplier<CompletableFuture<T>> body) {
+        try { return body.get(); } catch(RuntimeException failure) { return CompletableFuture.failedFuture(failure); }
+    }
     private static <T> CompletableFuture<T> failed(String message) { return CompletableFuture.failedFuture(new IllegalStateException(message)); }
     @Override public void close() {
         synchronized(this) { closed=true; closeScopes(null,"minecraft_closed"); }
