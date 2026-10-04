@@ -94,7 +94,7 @@ export default async function minecraft(bb: BbPluginApi) {
         signal: signal ?? AbortSignal.timeout(120_000),
       });
     } catch (error) {
-      if (error instanceof Error && error.name === "AbortError") throw error;
+      if (signal?.aborted || error instanceof Error && error.name === "AbortError") throw error;
       // Minecraft is gone without detaching; it attaches again if it is still running.
       if (sessions.get(live.worldId) === live) sessions.delete(live.worldId);
       throw new ApiError("world_disconnected", "Minecraft world is disconnected");
