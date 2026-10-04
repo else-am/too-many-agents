@@ -75,11 +75,30 @@ final class WorldState {
         return result;
     }
     private void register() throws IOException {
+        releaseOrphanStations();
         var paths = data.getAsJsonArray("paths");
         if (!paths.contains(new JsonPrimitive(folder.toString()))) paths.add(folder.toString());
         JsonState.write(file,data);
         registry.addProperty(id(),folder.toString());
         JsonState.write(registryFile,registry);
+    }
+    /** A disconnected spawn may reserve a station before it ever saves a body. */
+    private void releaseOrphanStations() throws IOException {
+        Path bodiesFile = folder.resolve("too-many-agents/bb-bodies-v1.json");
+        var active = new HashSet<String>();
+        if (Files.exists(bodiesFile)) {
+            var bodies = JsonParser.parseString(Files.readString(bodiesFile)).getAsJsonObject();
+            // Preserve assignments if the identity itself still needs recovery.
+            if (!id().equals(JsonState.text(bodies,"worldId"))) return;
+            for (var value : JsonState.array(bodies,"agents")) {
+                var agent = value.getAsJsonObject();
+                if (!JsonState.flag(agent,"bodyRemoved")) active.add(JsonState.text(agent,"id"));
+            }
+        }
+        for (var value : data.getAsJsonArray("stations")) {
+            var station = value.getAsJsonObject();
+            if (!active.contains(JsonState.text(station,"agentId"))) station.addProperty("agentId","");
+        }
     }
     JsonObject resolve(String choice) throws IOException {
         if (!needsDecision) return snapshot();
