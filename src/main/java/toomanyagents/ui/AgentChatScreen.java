@@ -394,7 +394,7 @@ public final class AgentChatScreen extends Screen {
             @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
                 graphics.blitSprite(net.minecraft.resources.ResourceLocation.withDefaultNamespace(!active ? "widget/button_disabled"
                     : isHoveredOrFocused() ? "widget/button_highlighted" : "widget/button"), getX(), getY(), 20, 20);
-                int color = !active ? 0xFF666666 : models.serviceTier.equals("priority") ? 0xFFFFD45A : 0xFFAAAAAA;
+                int color = !active ? 0xFF666666 : !models.serviceTier.isBlank() && !models.serviceTier.equals("default") ? 0xFFFFD45A : 0xFFAAAAAA;
                 int x = getX() + 6, y = getY() + 3;
                 // A small pixel bolt avoids depending on a font's symbol coverage.
                 for (int row = 0; row < 6; row++) {
@@ -952,7 +952,7 @@ public final class AgentChatScreen extends Screen {
 
     private void refreshButtons() {
         if (sendButton == null) return;
-        boolean increasedSpeed = models.serviceTier.equals("priority");
+        boolean increasedSpeed = !models.serviceTier.isBlank() && !models.serviceTier.equals("default");
         String speedHint = increasedSpeed ? "turn off increased speed" : "increase speed (consumes extra usage)";
         speedButton.setMessage(Component.literal(speedHint));
         speedButton.setTooltip(Tooltip.create(Component.literal(speedHint)));

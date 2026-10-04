@@ -75,7 +75,7 @@ final class AgentModels {
     }
 
     static String speedLabel(String tier) {
-        return tier.equals("priority") ? "Fast" : tier.isBlank() || tier.equals("default") ? "Standard" : tier;
+        return tier.equals("priority") || tier.equals("fast") ? "Fast" : tier.isBlank() || tier.equals("default") ? "Standard" : tier;
     }
 
     String speedTooltip() {
@@ -97,6 +97,13 @@ final class AgentModels {
     List<JsonObject> serviceTiers() {
         var result = new ArrayList<JsonObject>();
         for (var item : array(selected(), "supportedServiceTiers")) if (item.isJsonObject()) result.add(item.getAsJsonObject());
+        // BB catalogs list optional tiers; standard execution is always available.
+        if (result.stream().noneMatch(item -> text(item, "id").equals("default"))) {
+            var standard = new JsonObject();
+            standard.addProperty("id", "default");
+            standard.addProperty("label", "Standard");
+            result.addFirst(standard);
+        }
         return result;
     }
 
