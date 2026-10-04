@@ -75,6 +75,8 @@ work in BB.
 Chat renders Markdown natively, including tables, lists, quotes, inline code and
 code blocks. Drag to select text; code and table headers have Copy controls.
 Wide code and tables scroll horizontally with a trackpad or Shift + wheel.
+Code uses Pixel Code at its native 9-pixel size with oversampling disabled,
+keeping glyph edges aligned with Minecraft's pixel grid.
 Web links follow Minecraft's chat-link settings. Workspace and thread-storage
 file links open in BB, including `path:line` and `path#Lline` links.
 
@@ -145,6 +147,6 @@ agent turns. Inspect the fixture screenshots as well as the assertions.
 not bundled into the Minecraft mod JAR.
 
 The JAR bundles CommonMark Java (BSD-2-Clause), the autolink library (MIT),
-TwelveMonkeys ImageIO (BSD-3-Clause), and JetBrains Mono 2.304 (OFL-1.1).
+TwelveMonkeys ImageIO (BSD-3-Clause), and [Pixel Code 2.2](https://github.com/qwerasd205/PixelCode/tree/v2.2) (OFL-1.1).
 The plugin uses beautiful-mermaid (MIT) and resvg (MPL-2.0). Their license files remain
 in the bundled JARs, npm packages, and font asset directories.

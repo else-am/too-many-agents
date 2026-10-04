@@ -28,17 +28,24 @@ try {
   const colors = {'--fg':fg,'--bg':bg,'--_text':fg,'--_text-sec':mix(60),'--_text-muted':mix(40),
     '--_text-faint':mix(25),'--_line':mix(50),'--_arrow':mix(85),'--_node-fill':mix(3),
     '--_node-stroke':mix(20),'--_group-fill':bg,'--_group-hdr':mix(5),'--_inner-stroke':mix(12),'--_key-badge':mix(10)};
-  let svg = renderMermaidSVG(source, { bg, fg, font: 'JetBrains Mono' });
+  let svg = renderMermaidSVG(source, { bg, fg, font: 'Pixel Code' });
   if (!/<text\b/.test(svg)) throw new Error('No diagram content was recognized. Check the source above.');
   // resvg has no browser CSS variables or web fonts. Supply a fixed palette and bundled font.
-  svg = svg.replace(/<style>[\s\S]*?<\/style>/g, '<style>text { font-family: JetBrains Mono; }</style>')
+  svg = svg.replace(/<style>[\s\S]*?<\/style>/g, '<style>text { font-family: Pixel Code; }</style>')
     .replace(/var\((--[\w-]+)\)/g, (all, key) => colors[key] ?? all);
+  // Use Pixel Code's native size; the diagram layout assumes a narrower proportional font.
+  svg = svg.replace(/<text\b[^>]*>/g, tag => {
+    const size = /font-size="([\d.]+)"/.exec(tag);
+    if (!size) return tag;
+    return tag.replace(/font-size="[\d.]+"/, 'font-size="9"')
+      .replace(/dy="([\d.]+)"/, (_, dy) => `dy="${Number(dy) * 9 / Number(size[1])}"`);
+  });
   if (svg.includes('var(') || svg.length > 2000000) throw new Error('Diagram is too complex to display.');
   const require = createRequire(import.meta.url);
   await initWasm(await readFile(join(dirname(require.resolve('@resvg/resvg-wasm')), 'index_bg.wasm')));
-  const font = await readFile(new URL('./assets/JetBrainsMono-Regular.ttf', import.meta.url));
+  const font = await readFile(new URL('./assets/PixelCode.ttf', import.meta.url));
   const options = { background:bg, fitTo:{mode:'width',value:1200},
-    font:{fontBuffers:[font],defaultFontFamily:'JetBrains Mono',sansSerifFamily:'JetBrains Mono',monospaceFamily:'JetBrains Mono'} };
+    font:{fontBuffers:[font],defaultFontFamily:'Pixel Code',sansSerifFamily:'Pixel Code',monospaceFamily:'Pixel Code'} };
   let renderer = new Resvg(svg, options);
   let rendered;
   try {
