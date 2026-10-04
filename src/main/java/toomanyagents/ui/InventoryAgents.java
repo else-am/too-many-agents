@@ -79,7 +79,8 @@ public final class InventoryAgents {
     public boolean standalone() { return parent instanceof AgentWorkspaceScreen; }
 
     public void forget(String id) {
-        chats.remove(id);
+        var forgotten=chats.remove(id);
+        if(forgotten!=null)forgotten.removed();
         if (id.equals(selected)) {
             chat = null; right = settings = null; focus = null; pressed = null; selected = null;
             if (sidebar != null) sidebar.selected(null);
@@ -97,6 +98,7 @@ public final class InventoryAgents {
         var client = Minecraft.getInstance();
         if (screen != client.screen || !supports(screen)) return false;
         if (world != client.level) {
+            chats.values().forEach(AgentChatScreen::removed);drafts.values().forEach(AgentChatScreen::removed);
             world = client.level;
             chats.clear(); drafts.clear(); selected = null; chat = null; parent = null; form = null;
             inventoryTarget = inventoryPending = null;
@@ -320,7 +322,7 @@ public final class InventoryAgents {
     }
 
     private void openDraft(String project, String provider, AgentUiAccess draftAccess) {
-        if (chat != null) chat.closeSettings();
+        if (chat != null) { chat.closeSettings();chat.removed(); }
         chat = drafts.computeIfAbsent(project + ":" + provider, key -> {
             var settings = new JsonObject();
             settings.addProperty("projectId", project);
@@ -371,7 +373,7 @@ public final class InventoryAgents {
         select.accept(id);
         sidebar.selected(id);
         var next = chats.computeIfAbsent(id, key -> new AgentChatScreen(access.get(), key));
-        if (chat != null && chat != next) chat.closeSettings();
+        if (chat != null && chat != next) { chat.closeSettings();chat.removed(); }
         chat = next;
         if (parent instanceof AgentWorkspaceScreen workspace) chat.capturePointing(workspace.pointingContext());
         chat.dock(parent, this::closeChat, this::toggleInventory);
@@ -425,6 +427,7 @@ public final class InventoryAgents {
 
     private void closeClosedChat() {
         newAgentRequest++;
+        if(chat!=null)chat.removed();
         if (parent instanceof AgentWorkspaceScreen) {
             parent.onClose();
             return;
@@ -439,6 +442,7 @@ public final class InventoryAgents {
     private void tick(ClientTickEvent.Post event) {
         var client = Minecraft.getInstance();
         if (client.level == null) {
+            chats.values().forEach(AgentChatScreen::removed);drafts.values().forEach(AgentChatScreen::removed);
             if (sidebar != null) sidebar.closePortraits();
             world = null; parent = null; sidebar = null; chat = null;
             left = right = settings = formPane = focus = pressed = null; selected = null; chats.clear(); drafts.clear(); form = null;
@@ -449,6 +453,7 @@ public final class InventoryAgents {
         // Leaving the agent screens saves open settings, once.
         if (!open && hostOpen) {
             newAgentRequest++;
+            chats.values().forEach(AgentChatScreen::removed);drafts.values().forEach(AgentChatScreen::removed);
             if (chat != null) chat.closeSettings();
             // Mod settings save as they change and stay open across their linked screens.
             if (form instanceof ProjectScreen) closeForm();

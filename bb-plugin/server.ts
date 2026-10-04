@@ -3,6 +3,7 @@ import { open, readFile, realpath, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import type { BbPluginApi, PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
+import { chatAssets } from "./chat-assets.js";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
 type ObjectValue = { [key: string]: Json };
@@ -66,6 +67,7 @@ type Sdk = BbPluginApi["sdk"];
 type Args<F extends (...args: never[]) => unknown> = Parameters<F>[0];
 
 export default async function minecraft(bb: BbPluginApi) {
+  const chat = chatAssets(bb);
   async function withImages<T>(projectId: string, request: ObjectValue, submit: (prepared: ObjectValue) => Promise<T>): Promise<T> {
     if (!Array.isArray(request.input)) return submit(request);
     const input: Json[] = [];
@@ -268,6 +270,9 @@ export default async function minecraft(bb: BbPluginApi) {
       case "agent.archive": return bb.sdk.threads.archive({ threadId: threadId() });
       case "agent.unarchive": return bb.sdk.threads.unarchive({ threadId: threadId() });
       case "timeline": return bb.sdk.threads.timeline({ ...(data.query === undefined ? {} : object(data.query, "query")), threadId: threadId() } as Args<Sdk["threads"]["timeline"]>);
+      case "chat.asset": return data.kind === "mermaid" ? chat.diagram(string(data.source,"source"))
+        : chat.image(threadId(), string(data.source,"source"));
+      case "chat.open": return chat.open(threadId(), string(data.target,"target"));
       case "timeline.summary": return bb.sdk.threads.timelineTurnSummaryDetails({ ...object(data.query, "query"), threadId: threadId() } as Args<Sdk["threads"]["timelineTurnSummaryDetails"]>);
       case "interaction.resolve": return bb.sdk.threads.interactions.resolve({ threadId: threadId(), interactionId: string(data.interactionId, "interactionId"), resolution: data.resolution } as Args<Sdk["threads"]["interactions"]["resolve"]>);
       case "interaction.respond": return bb.sdk.threads.interactions.respond({ threadId: threadId(), interactionId: string(data.interactionId, "interactionId"), value: data.value! });

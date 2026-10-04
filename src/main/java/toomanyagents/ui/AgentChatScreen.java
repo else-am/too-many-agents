@@ -72,8 +72,24 @@ public final class AgentChatScreen extends Screen {
     }
     private record RichPanel(ChatMarkdown.Panel panel, int lineOffset, int inset) {}
     private final List<RichPanel> richPanels = new ArrayList<>();
+    private record RichMedia(ChatMarkdown.Media media,int lineOffset,int inset) {}
+    private final List<RichMedia> richMedia = new ArrayList<>();
+    private final ChatImages chatImages = new ChatImages(this::loadChatAsset);
+    private RichMedia pressedMedia;
     private String pressedLink;
     private boolean developmentTranscript;
+    private java.util.function.BiFunction<String,String,CompletableFuture<JsonObject>> developmentAssets;
+    private java.util.function.Function<String,CompletableFuture<Void>> developmentLinks;
+
+    public void developmentAssets(java.util.function.BiFunction<String,String,CompletableFuture<JsonObject>> assets,
+                                  java.util.function.Function<String,CompletableFuture<Void>> links) {
+        if(!Boolean.getBoolean("too_many_agents.devWorld"))throw new IllegalStateException("Development only");
+        developmentAssets=assets;developmentLinks=links;chatImages.close();
+    }
+
+    private CompletableFuture<JsonObject> loadChatAsset(String kind,String source) {
+        return developmentTranscript && developmentAssets!=null ? developmentAssets.apply(kind,source) : access.chatAsset(agentId,kind,source);
+    }
 
     /** Called only by the guarded development-world UI controls. Uses the real transcript renderer. */
     public JsonObject developmentTranscript(JsonObject request) {
@@ -94,6 +110,7 @@ public final class AgentChatScreen extends Screen {
         result.addProperty("left",left); result.addProperty("width",contentWidth);
         result.addProperty("top",transcriptTop); result.addProperty("bottom",transcriptBottom);
         result.addProperty("selected",selectedText());
+        result.addProperty("feedback",feedback);
         var rendered=new com.google.gson.JsonArray();
         for(int i=0;i<lines.size();i++) {
             var row=new JsonObject(); var line=lines.get(i);
@@ -112,6 +129,21 @@ public final class AgentChatScreen extends Screen {
             panels.add(item);
         }
         result.add("panels",panels);
+        result.addProperty("textureBytes",chatImages.textureBytes());result.addProperty("imageCacheSize",chatImages.size());
+        var media=new com.google.gson.JsonArray();
+        for(var entry:richMedia) {
+            var item=new JsonObject();var m=entry.media();
+            int y=transcriptTop+6+(entry.lineOffset()+m.first())*LINE_HEIGHT-scroll;
+            item.addProperty("kind",m.kind());item.addProperty("source",m.source());item.addProperty("alt",m.alt());
+            item.addProperty("x",left+8+entry.inset()+m.inset());item.addProperty("y",y);item.addProperty("width",m.width());
+            item.addProperty("height",(m.end()-m.first())*LINE_HEIGHT);
+            if(y<transcriptBottom && y+(m.end()-m.first())*LINE_HEIGHT>transcriptTop) {
+                var image=chatImages.get(m.kind(),m.source());
+                item.addProperty("loading",image.loading);item.addProperty("error",image.error);item.addProperty("ready",image.texture!=null);
+            }
+            media.add(item);
+        }
+        result.add("media",media);
         return result;
     }
 
@@ -401,10 +433,14 @@ public final class AgentChatScreen extends Screen {
     boolean pickerOpen() { return pickerAnchor != null; }
 
     @Override public void onClose() {
+        chatImages.close();
         closePicker();
         if (docked()) closePanel.run();
         else super.onClose();
     }
+
+    @Override public void removed() { chatImages.close(); }
+    public static JsonObject imageResources() { return ChatImages.resources(); }
 
     @Override public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         if (!docked()) super.renderBackground(graphics, mouseX, mouseY, partialTick);
@@ -1298,7 +1334,10 @@ public final class AgentChatScreen extends Screen {
     private void detail(JsonObject row) { detail(row,24,contentWidth-48); }
 
     private void markdown(String text, int color, long replyVersion, int inset, int wrapWidth) {
-        var layout = ChatMarkdown.layout(font, text, wrapWidth);
+        appendMarkdown(ChatMarkdown.layout(font,text,wrapWidth),color,replyVersion,inset);
+    }
+
+    private void appendMarkdown(ChatMarkdown.Layout layout,int color,long replyVersion,int inset) {
         int first = lines.size();
         for (int i = 0; i < layout.rows().size(); i++) {
             var row = layout.rows().get(i);
@@ -1306,6 +1345,23 @@ public final class AgentChatScreen extends Screen {
                 inset + row.inset(), row.copyText(), row));
         }
         for (var panel : layout.panels()) richPanels.add(new RichPanel(panel, first, inset));
+        for (var media : layout.media()) richMedia.add(new RichMedia(media, first, inset));
+    }
+
+    private void attachments(JsonObject row,int inset,int width) {
+        var attachments=AgentModels.object(row,"attachments");
+        var sources=new java.util.LinkedHashSet<String>();
+        for(String key:List.of("imageUrls","localImagePaths"))for(var value:AgentModels.array(attachments,key))
+            if(value.isJsonPrimitive() && value.getAsJsonPrimitive().isString())sources.add(value.getAsString());
+        for(String source:sources) appendMarkdown(ChatMarkdown.image(font,source,"Attached image",width),0xEEEEEE,0,inset);
+        for(var value:AgentModels.array(attachments,"localFilePaths")) {
+            String path=value.getAsString();
+            var component=Component.literal("↗ "+path).withStyle(style->style.withColor(0x96C9DB).withUnderlined(true)
+                .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,path)));
+            for(var line:font.split(component,width))lines.add(new Line(line,0x96C9DB,0,inset));
+        }
+        if(sources.isEmpty() && attachmentCount(row)>0 && AgentModels.array(attachments,"localFilePaths").isEmpty())
+            paragraph(attachmentCount(row)+" attachment(s) — open full message for details",0xAAAAAA,0,inset,width);
     }
 
     private void detail(JsonObject row,int inset,int wrapWidth) {
@@ -1351,11 +1407,7 @@ public final class AgentChatScreen extends Screen {
         markdown(text,0xEEEEEE,0,inset+8,textWidth);
         if(!error.isEmpty())paragraph(error,0xFFAAAA,0,inset+8,textWidth);
         if(attachments>0) {
-            var labels=new ArrayList<String>();
-            int imageCount=(int)(number(AgentModels.object(row,"attachments"),"webImages")+number(AgentModels.object(row,"attachments"),"localImages"));
-            for(int i=1;i<=imageCount;i++)labels.add("[Image "+i+"]");
-            if(attachments>imageCount)labels.add((attachments-imageCount)+" other attachment(s)");
-            paragraph(String.join(" ",labels),0xA9C9E0,0,inset+8,textWidth);
+            attachments(row,inset+8,textWidth);
         }
         if(hasDetail)disclosure((id.equals(expandedRow)?"▾ Hide":"▸ Read")+" full message",
             ()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}),inset+8);
@@ -1388,7 +1440,7 @@ public final class AgentChatScreen extends Screen {
             markdown(AgentModels.text(row,"text"),0xEEEEEE,reply,nested?12:0,contentWidth-24-(nested?12:0));
             if(AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected"))paragraph("Not sent: "+AgentModels.text(row,"detail"),0xFFAAAA,0,0);
             int attachments=attachmentCount(row);
-            if(attachments>0)paragraph(attachments+(attachments==1?" attachment":" attachments"),0xAAAAAA,0,0);
+            if(attachments>0)attachments(row,nested?12:0,contentWidth-24-(nested?12:0));
             if(attachments>0 || row.has("truncated")&&row.get("truncated").getAsBoolean())
                 disclosure((id.equals(expandedRow)?"▾ Hide":"▸ Read")+" full message",()->changeTranscript(()->{expandedRow=id.equals(expandedRow)?"":id;textOffset=0;}));
         } else {
@@ -1426,7 +1478,7 @@ public final class AgentChatScreen extends Screen {
         preserveScroll=false;transcriptKey=key;
         for(var entry:disclosures)removeWidget(entry.button());
         var previousPanels = new ArrayList<>(richPanels);
-        disclosures.clear();lines.clear();messageBubbles.clear();richPanels.clear();thinkingLine=-1;
+        disclosures.clear();lines.clear();messageBubbles.clear();richPanels.clear();richMedia.clear();thinkingLine=-1;
         rebuildQueue();
         boolean hasRunningGroup=false;
         var page = AgentModels.object(transcript, "timelinePage");
@@ -1715,6 +1767,8 @@ public final class AgentChatScreen extends Screen {
         int index=(int)Math.floor((mouseY-transcriptTop-6+scroll)/LINE_HEIGHT);
         if(index<0 || index>=lines.size()) return null;
         var line=lines.get(index);
+        if(line.rich()!=null && line.rich().panel()!=null && (mouseX<left+8+line.inset()
+            || mouseX>=left+8+line.inset()+line.rich().panel().width))return null;
         int x=(int)mouseX-lineX(line);
         if(x<0) return null;
         var style=line.rich()==null?font.getSplitter().componentStyleAtWidth(line.text(),x):line.rich().styleAt(font,x);
@@ -1724,11 +1778,22 @@ public final class AgentChatScreen extends Screen {
 
     private void openLink(String target) {
         try {
-            var uri=new java.net.URI(target);
-            if("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme())) {
-                handleComponentClicked(net.minecraft.network.chat.Style.EMPTY.withClickEvent(
-                    new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.OPEN_URL,target)));
-            } else feedback="Cannot open this link yet: "+target;
+            if(target.matches("(?i)^https?://.*")) {
+                var uri=net.minecraft.Util.parseAndValidateUntrustedUri(target);
+                if(uri.getHost()==null)throw new java.net.URISyntaxException(target,"Missing host");
+                if(!minecraft.options.chatLinks().get()){feedback="Web links are disabled in Minecraft chat settings.";return;}
+                Screen parent=returnScreen();
+                if(minecraft.options.chatLinksPrompt().get())minecraft.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(accepted->{
+                    if(accepted)net.minecraft.Util.getPlatform().openUri(uri);
+                    minecraft.setScreen(parent);
+                },target,false));
+                else net.minecraft.Util.getPlatform().openUri(uri);
+            } else if(!target.matches("(?i)^[a-z][\\w+.-]*:.*") || target.startsWith("@thread:") || target.matches(".*:\\d+(?::\\d+)?$")) {
+                feedback="Opening in BB…";
+                (developmentTranscript && developmentLinks!=null ? developmentLinks.apply(target) : access.openChatLink(agentId,target)).whenComplete((ignored,failure)->executeUi(()->{
+                    feedback=failure==null?"Opened in BB":"Could not open link: "+AgentModels.error(failure);
+                }));
+            } else feedback="Unsupported link: "+target;
         } catch(java.net.URISyntaxException failure) { feedback="Invalid link"; }
     }
 
@@ -1754,6 +1819,37 @@ public final class AgentChatScreen extends Screen {
                 graphics.fill(start,bottom-6,start+thumb,bottom-4,0xFF93A8B4);
             }
             graphics.disableScissor();
+        }
+    }
+
+    private RichMedia mediaAt(double mouseX,double mouseY) {
+        if(mouseY<transcriptTop+4 || mouseY>=transcriptBottom-4)return null;
+        for(var entry:richMedia) {
+            var media=entry.media();int x=left+8+entry.inset()+media.inset();
+            int y=transcriptTop+6+(entry.lineOffset()+media.first())*LINE_HEIGHT-scroll;
+            if(mouseX>=x && mouseX<x+media.width() && mouseY>=y && mouseY<y+(media.end()-media.first())*LINE_HEIGHT)return entry;
+        }
+        return null;
+    }
+
+    private void renderRichMedia(GuiGraphics graphics) {
+        for(var entry:richMedia) {
+            var media=entry.media();int x=left+8+entry.inset()+media.inset();
+            int y=transcriptTop+6+(entry.lineOffset()+media.first())*LINE_HEIGHT-scroll;
+            int height=(media.end()-media.first())*LINE_HEIGHT-4;
+            if(y+height<transcriptTop || y>transcriptBottom)continue;
+            var image=chatImages.get(media.kind(),media.source());
+            graphics.fill(x,y,x+media.width(),y+height,0xEF171C21);
+            if(image.texture!=null)ChatImages.draw(graphics,image,x+4,y+4,media.width()-8,height-22);
+            else {
+                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":image.error;
+                var wrapped=font.split(Component.literal(status),Math.max(24,media.width()-16));
+                for(int i=0;i<Math.min(wrapped.size(),(height-24)/LINE_HEIGHT);i++)
+                    graphics.drawString(font,wrapped.get(i),x+8,y+8+i*LINE_HEIGHT,0xBDB5A6);
+            }
+            String caption=image.texture!=null?(media.alt().isBlank()?"Image":media.alt())+" · Click to enlarge"
+                :image.loading?media.alt():"Click to retry · "+media.alt();
+            graphics.drawString(font,font.plainSubstrByWidth(caption,media.width()-12),x+6,y+height-12,0x96C9DB);
         }
     }
 
@@ -1819,6 +1915,7 @@ public final class AgentChatScreen extends Screen {
         }
         long seenReply = 0;
         renderRichPanels(graphics, mouseX, mouseY);
+        renderRichMedia(graphics);
         if (lines.isEmpty()) {
             graphics.drawWordWrap(font, Component.literal(transcriptLoading ? "Loading conversation…" : draft() ? "" : "Your agent is ready. Ask about its project, or give it something to build."), left + 8, transcriptTop + 10, contentWidth - 24, 0xAAAAAA);
         } else {
@@ -1923,6 +2020,8 @@ public final class AgentChatScreen extends Screen {
         // Rebind existing widgets after HotSwap, which can invalidate old lambda methods.
         composer.setValueListener(this::draftChanged);
         if(button==0 && mouseX>=left+4 && mouseX<left+contentWidth-8 && mouseY>=transcriptTop+4 && mouseY<transcriptBottom-4 && !lines.isEmpty()) {
+            pressedMedia=mediaAt(mouseX,mouseY);
+            if(pressedMedia!=null){clearSelection();return true;}
             for (var entry : richPanels) {
                 var panel=entry.panel();
                 int x=left+8+entry.inset()+panel.inset;
@@ -1967,6 +2066,7 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public boolean mouseDragged(double mouseX,double mouseY,int button,double deltaX,double deltaY) {
+        pressedMedia=null;
         if(button==0 && selectingText) {
             pressedLink=null;
             if(mouseY<transcriptTop+4)scroll=Math.max(0,scroll-LINE_HEIGHT);
@@ -1985,6 +2085,15 @@ public final class AgentChatScreen extends Screen {
     }
 
     @Override public boolean mouseReleased(double mouseX,double mouseY,int button) {
+        if(button==0 && pressedMedia!=null) {
+            var entry=pressedMedia;pressedMedia=null;
+            if(entry==mediaAt(mouseX,mouseY)) {
+                var media=entry.media();var image=chatImages.get(media.kind(),media.source());
+                if(!image.error.isBlank())chatImages.retry(media.kind(),media.source());
+                else if(image.texture!=null)minecraft.setScreen(new ChatImageScreen(returnScreen(),media.kind(),media.source(),media.alt(),this::loadChatAsset));
+            }
+            return true;
+        }
         if(button==0 && selectingText) {
             selectingText=false;
             String target=pressedLink;

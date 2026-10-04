@@ -449,6 +449,20 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public CompletableFuture<Void> steerQueued(String id,String messageId) { return threadRpc("queue.send",id,object("args",object("queuedMessageId",messageId,"mode","steer"))).thenApply(done -> null); }
     @Override public CompletableFuture<Void> cancelQueued(String id,String messageId) { return threadRpc("queue.delete",id,object("args",object("queuedMessageId",messageId))).thenApply(done -> null); }
     @Override public CompletableFuture<JsonObject> transcript(String id,JsonObject query) { return threadRead("timeline",id,object("query",query)).thenApply(JsonElement::getAsJsonObject); }
+    @Override public CompletableFuture<JsonObject> chatAsset(String id,String kind,String source) {
+        return threadRead("chat.asset",id,object("kind",kind,"source",source)).thenApply(JsonElement::getAsJsonObject);
+    }
+    @Override public CompletableFuture<Void> openChatLink(String id,String target) {
+        return threadRead("chat.open",id,object("target",target)).thenApply(ignored->null);
+    }
+    CompletableFuture<JsonObject> developmentChatAsset(String threadId,String kind,String source) {
+        if(!DevelopmentWorld.ENABLED)return failed("Development only");
+        return rpc("chat.asset",object("threadId",threadId,"kind",kind,"source",source)).thenApply(JsonElement::getAsJsonObject);
+    }
+    CompletableFuture<Void> developmentChatLink(String threadId,String target) {
+        if(!DevelopmentWorld.ENABLED)return failed("Development only");
+        return rpc("chat.open",object("threadId",threadId,"target",target)).thenApply(ignored->null);
+    }
     @Override public CompletableFuture<JsonObject> timelineTurnSummaryDetails(String id,JsonObject query) { return threadRead("timeline.summary",id,object("query",query)).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<Void> respond(String id,String requestId,JsonObject resolution) { return threadRpc("interaction.resolve",id,object("interactionId",requestId,"resolution",resolution)).thenApply(done -> null); }
     @Override public synchronized CompletableFuture<Void> interrupt(String id) { return guarded(() -> {

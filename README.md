@@ -72,6 +72,23 @@ change the world. Agents with Minecraft access receive the plugin's Minecraft
 prompts and installed physical tools; other threads continue ordinary project
 work in BB.
 
+Chat renders Markdown natively, including tables, lists, quotes, inline code and
+code blocks. Drag to select text; code and table headers have Copy controls.
+Wide code and tables scroll horizontally with a trackpad or Shift + wheel.
+Web links follow Minecraft's chat-link settings. Workspace and thread-storage
+file links open in BB, including `path:line` and `path#Lline` links.
+
+Images load through BB's attachment/file APIs or public HTTP(S) URLs. Click an
+image to zoom and pan; GIF and WebP animations show their first frame. Images
+are limited to 5 MB, 4096 pixels per side and 4 megapixels. Loading and decoding
+run off the render thread; closing chat releases its textures.
+
+Closed `mermaid` fences render flowcharts, sequence, state, class, ER and XY
+diagrams through a browser-free worker in our BB plugin. Mermaid support is a
+subset of the full language; unsupported or malformed diagrams keep their
+copyable source and show an error. Diagrams are limited to 20,000 characters,
+300 lines and five seconds of rendering. Raw HTML is displayed as text.
+
 ## Development
 
 See [AGENTS.md](AGENTS.md) for development rules and packaged-JAR verification,
@@ -109,7 +126,25 @@ stops BB. The fixture is retained for persistence inspection.
 In the guarded test world, `ui dev_drop --json '{"paths":["/absolute/test/image.png"]}'`
 exercises native file drops; files must be inside this checkout's `run/` or `scratch/`.
 
+Rich-chat acceptance uses real native event handlers and the installed BB plugin:
+
+```sh
+uv run --with pillow python tools/rich_chat_fixtures.py
+python3 tools/rich_chat_acceptance.py --game-dir run --assets
+```
+
+Run from a BB thread whose workspace is this checkout, or supply `--thread-id`.
+The harness uses the guarded development world, uploads a small test attachment
+to that thread's project, and exercises parsing, streaming, copying, image
+formats/failures, diagrams, native viewing, and texture cleanup. It starts no
+agent turns. Inspect the fixture screenshots as well as the assertions.
+
 ## License
 
 [MIT](LICENSE). BB remains an external installed runtime; its dependencies are
 not bundled into the Minecraft mod JAR.
+
+The JAR bundles CommonMark Java (BSD-2-Clause), the autolink library (MIT),
+TwelveMonkeys ImageIO (BSD-3-Clause), and JetBrains Mono 2.304 (OFL-1.1).
+The plugin uses beautiful-mermaid (MIT) and resvg (MPL-2.0). Their license files remain
+in the bundled JARs, npm packages, and font asset directories.

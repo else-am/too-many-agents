@@ -70,18 +70,20 @@ final class ChatMarkdown {
         int maxScroll() { return Math.max(0, contentWidth - width + 12); }
     }
 
-    record Layout(List<Row> rows, List<Panel> panels) {}
+    record Media(int first, int end, int inset, int width, String kind, String source, String alt) {}
+    record Layout(List<Row> rows, List<Panel> panels, List<Media> media) {}
     private final Font font;
     private final int width;
     private final List<Row> rows = new ArrayList<>();
     private final List<Panel> panels = new ArrayList<>();
+    private final List<Media> media = new ArrayList<>();
 
     private ChatMarkdown(Font font, int width) { this.font = font; this.width = Math.max(40, width); }
 
     static Layout layout(Font font, String source, int width) {
         var layout = new ChatMarkdown(font, width);
         layout.blocks(PARSER.parse(source), 0, 0);
-        return new Layout(layout.rows, layout.panels);
+        return new Layout(layout.rows, layout.panels, layout.media);
     }
 
     private void blocks(Node parent, int inset, int depth) {
@@ -93,6 +95,7 @@ final class ChatMarkdown {
     private void block(Node node, int inset, int depth) {
         if (node instanceof Paragraph) {
             paragraph(inlines(node, Style.EMPTY, 0), inset);
+            images(node, inset, 0);
             if (!(node.getParent() instanceof ListItem item && item.getParent() instanceof ListBlock list && list.isTight())) gap();
         } else if (node instanceof Heading heading) {
             gap();
@@ -100,6 +103,8 @@ final class ChatMarkdown {
             gap();
         } else if (node instanceof FencedCodeBlock code) {
             code(code.getLiteral(), code.getInfo().strip().split("\\s+", 2)[0], inset);
+            if (code.getInfo().strip().equalsIgnoreCase("mermaid") && code.getClosingFenceLength()!=null)
+                media("mermaid",code.getLiteral(),"Mermaid diagram",inset);
         } else if (node instanceof IndentedCodeBlock code) {
             code(code.getLiteral(), "code", inset);
         } else if (node instanceof BulletList || node instanceof OrderedList) {
@@ -143,6 +148,27 @@ final class ChatMarkdown {
             rows.add(new Row(List.of(new Run(0, FormattedCharSequence.EMPTY)), 0, "\n", null));
     }
 
+    private void images(Node parent, int inset, int depth) {
+        if(depth>32)return;
+        for(Node node=parent.getFirstChild();node!=null;node=node.getNext()) {
+            if(node instanceof Image image) media("image",image.getDestination(),inlines(image,Style.EMPTY,0).getString(),inset);
+            else images(node,inset,depth+1);
+        }
+    }
+
+    private void media(String kind,String source,String alt,int inset) {
+        int first=rows.size(), available=Math.max(40,width-inset);
+        int count=Math.clamp(available/20,7,16);
+        for(int i=0;i<count;i++)rows.add(new Row(List.of(new Run(0,FormattedCharSequence.EMPTY)),inset,i==count-1?"\n":"",null));
+        media.add(new Media(first,rows.size(),inset,available,kind,source,alt));
+    }
+
+    static Layout image(Font font,String source,String alt,int width) {
+        var layout=new ChatMarkdown(font,width);
+        layout.media("image",source,alt,0);
+        return new Layout(layout.rows,layout.panels,layout.media);
+    }
+
     private void paragraph(Component component, int inset) {
         var wrapped = font.split(component, Math.max(24, width - inset));
         String raw = component.getString();
@@ -168,7 +194,7 @@ final class ChatMarkdown {
         int count = lines.length - (source.endsWith("\n") ? 1 : 0);
         for (int i = 0; i < Math.max(1, count); i++) {
             String line = lines[i];
-            var visual = Component.literal(expandTabs(line)).withStyle(CODE).getVisualOrderText();
+            var visual = FormattedCharSequence.forward(expandTabs(line), CODE);
             panel.contentWidth = Math.max(panel.contentWidth, font.width(visual) + 12);
             rows.add(new Row(List.of(new Run(6, visual)), inset, expandTabs(line) + (i < lines.length - 1 ? "\n" : ""), panel));
         }

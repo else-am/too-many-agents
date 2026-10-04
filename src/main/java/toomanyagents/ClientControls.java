@@ -312,11 +312,18 @@ public final class ClientControls {
                                 var settings=new JsonObject();settings.addProperty("name","Rich chat acceptance");
                                 client.setScreen(new AgentChatScreen(agents,settings,ignored->{}));
                             }
-                            result.complete(((AgentChatScreen)client.screen).developmentTranscript(request));
+                            var screen=(AgentChatScreen)client.screen;
+                            if(request.has("threadId")) {
+                                String threadId=request.get("threadId").getAsString();
+                                screen.developmentAssets((kind,source)->agents.developmentChatAsset(threadId,kind,source),
+                                    target->agents.developmentChatLink(threadId,target));
+                            }
+                            result.complete(screen.developmentTranscript(request));
                             return;
                         }
                         else if (action.equals("dev_drag")) {
-                            if (!(client.screen instanceof AgentChatScreen screen)) throw new IllegalStateException("Open a standalone chat first");
+                            var screen=client.screen;
+                            if (!(screen instanceof AgentChatScreen || screen instanceof toomanyagents.ui.ChatImageScreen)) throw new IllegalStateException("Open a standalone chat or image first");
                             double x=request.get("x").getAsDouble(), y=request.get("y").getAsDouble();
                             double endX=request.get("endX").getAsDouble(), endY=request.get("endY").getAsDouble();
                             if(!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(endX) || !Double.isFinite(endY))
@@ -516,7 +523,7 @@ public final class ClientControls {
     }
 
     private static boolean ours(Screen screen) {
-        return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
+        return screen instanceof toomanyagents.ui.ChatImageScreen || screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
             || screen instanceof toomanyagents.ui.SurveyScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQuestionScreen || screen instanceof AgentQueueScreen
@@ -528,6 +535,7 @@ public final class ClientControls {
         var screen = client.screen;
         var reply = new JsonObject();
         reply.addProperty("screen", screen == null ? "game" : screen.getClass().getSimpleName());
+        if(DevelopmentWorld.ENABLED)reply.add("chatImageResources",AgentChatScreen.imageResources());
         reply.addProperty("selectedAgent", selectedAgent);
         reply.addProperty("gamePaused", client.isPaused());
         reply.addProperty("windowActive", client.isWindowActive());
@@ -538,6 +546,7 @@ public final class ClientControls {
         reply.add("survey", survey.diagnostics());
         if (screen instanceof ChatScreen) reply.add("mentions", mentions.diagnostics(screen));
         if (screen instanceof AgentChatScreen chat) reply.add("pointing", chat.pointingContext());
+        if (screen instanceof toomanyagents.ui.ChatImageScreen image) reply.add("imageView",image.diagnostics());
         if (screen instanceof AgentInventoryScreen inventory) reply.add("inventory", inventory.inventoryState());
         if (screen instanceof AgentApprovalScreen approval) reply.add("approval", approval.diagnostics());
         if (screen instanceof AgentQuestionScreen question) reply.add("question", question.diagnostics());

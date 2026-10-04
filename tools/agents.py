@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Use Too Many Agents's local agent bridge. No third-party packages or automatic retries."""
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -32,7 +33,7 @@ def main():
     settings.add_argument('id')
     settings.add_argument('settings', help='JSON object of changed settings')
     dev = commands.add_parser('dev', help='Opt-in isolated development world checks')
-    dev.add_argument('operation', choices=['status', 'native-checks', 'save'])
+    dev.add_argument('operation', choices=['status', 'native-checks', 'pov', 'save'])
     spawn = commands.add_parser('spawn')
     spawn.add_argument('--provider', help='Native BB provider ID; omit to use BB defaults')
     spawn.add_argument('--permission-mode', help='Native BB permission mode; omit to use BB defaults')
@@ -213,6 +214,13 @@ def main():
         if args.action == 'list' and args.archived and isinstance(result, list):
             result = [agent for agent in result if agent.get('conversationArchived', False)]
         if isinstance(result, dict) and 'imageDataUrl' in result:
+            if args.action == 'dev' and args.operation == 'pov':
+                image = result['imageDataUrl']
+                if not image.startswith('data:image/png;base64,'):
+                    raise ValueError('Unexpected POV image format')
+                target = Path(args.game_dir) / 'too-many-agents/development-pov.png'
+                target.write_bytes(base64.b64decode(image.split(',', 1)[1], validate=True))
+                result['path'] = str(target.resolve())
             result.pop('imageDataUrl')  # PNG already saved by the mod; keep its path and metadata readable.
         print(redact(json.dumps(result, indent=2), token))
     except urllib.error.HTTPError as error:
