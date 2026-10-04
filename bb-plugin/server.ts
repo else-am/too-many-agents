@@ -370,7 +370,12 @@ export default async function minecraft(bb: BbPluginApi) {
       environment: args.environment ?? (parent.environmentId ? { type: "reuse", environmentId: parent.environmentId } : { type: "project-default" }),
       providerId: args.providerId ?? parent.providerId,
     };
-    if (execution) for (const key of ["model", "reasoningLevel", "serviceTier", "permissionMode"] as const) spawn[key] = execution[key];
+    if (execution) {
+      spawn.permissionMode = execution.permissionMode;
+      // Models, reasoning levels and speed options belong to the selected provider.
+      if (spawn.providerId === parent.providerId)
+        for (const key of ["model", "reasoningLevel", "serviceTier"] as const) spawn[key] = execution[key];
+    }
     for (const key of ["model", "reasoningLevel"]) if (args[key] !== undefined) spawn[key] = args[key];
     const { name: _name, color: _color, stationId: _station, ...inherited } = me.settings;
     const settings: ObjectValue = { ...inherited, ...(args.settings === undefined ? {} : object(args.settings, "settings")) };
