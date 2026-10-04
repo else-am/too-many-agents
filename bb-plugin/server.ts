@@ -412,17 +412,30 @@ export default async function minecraft(bb: BbPluginApi) {
     const id = thread(target(all, me, args.agentId));
     const deadline = Date.now() + Math.min(60_000, Math.max(0, Number(args.timeoutMs ?? 30_000)));
     while (true) {
-      const result = await read(id);
-      if (!["active", "starting"].includes(result.thread.status) || result.interactions.length || Date.now() >= deadline) return result;
-      // Wake on the thread's next BB event, the deadline, or cancellation.
-      await new Promise<void>(resolve => {
+      ctx.signal.throwIfAborted();
+      let finishWait = () => {};
+      // Subscribe before reading so a change during the read cannot be missed.
+      const changed = new Promise<void>(resolve => {
         const listeners = waiters.get(id) ?? new Set<() => void>();
-        const done = () => { clearTimeout(timer); listeners.delete(done); ctx.signal.removeEventListener("abort", done); resolve(); };
-        const timer = setTimeout(done, deadline - Date.now());
+        let finished = false;
+        const done = () => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(timer); listeners.delete(done);
+          if (!listeners.size) waiters.delete(id);
+          ctx.signal.removeEventListener("abort", done); resolve();
+        };
+        const timer = setTimeout(done, Math.max(0, deadline - Date.now()));
+        finishWait = done;
         listeners.add(done); waiters.set(id, listeners);
         ctx.signal.addEventListener("abort", done, { once: true });
       });
-      ctx.signal.throwIfAborted();
+      try {
+        const result = await read(id);
+        ctx.signal.throwIfAborted();
+        if (!["active", "pending", "starting", "stopping"].includes(result.thread.status) || result.interactions.length || Date.now() >= deadline) return result;
+        await changed;
+      } finally { finishWait(); }
     }
   });
   registerCoordination("agent_stop", "Stop a reachable BB agent; BB cancels its pending physical actions. Children keep their own state.", schema(agentTarget, ["agentId"]), async (args, { me, all }) => {
