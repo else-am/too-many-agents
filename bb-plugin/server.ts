@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { open, readFile, realpath, unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import type { BbPluginApi, PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
@@ -64,6 +66,41 @@ type Sdk = BbPluginApi["sdk"];
 type Args<F extends (...args: never[]) => unknown> = Parameters<F>[0];
 
 export default async function minecraft(bb: BbPluginApi) {
+  async function withImages<T>(projectId: string, request: ObjectValue, submit: (prepared: ObjectValue) => Promise<T>): Promise<T> {
+    if (!Array.isArray(request.input)) return submit(request);
+    const input: Json[] = [];
+    const uploadedPaths = new Set<string>();
+    for (const value of request.input) {
+      const item = object(value, "input item");
+      if (item.type !== "localImage" || typeof item.path !== "string" || !isAbsolute(item.path)) {
+        input.push(item);
+        continue;
+      }
+      const mimeType = ({ ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" } as Record<string, string>)[extname(item.path).toLowerCase()];
+      if (!mimeType) throw new ApiError("invalid_image", "Use a PNG, JPEG, GIF, or WebP image");
+      const file = await open(item.path, "r");
+      try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size < 1 || info.size > 5 * 1024 * 1024)
+          throw new ApiError("invalid_image", "Images must be regular files between 1 byte and 5 MB");
+        const uploaded = await bb.sdk.projects.attachments.upload({ projectId, filename: basename(item.path), mimeType, clientFile: await file.readFile() });
+        input.push({ ...item, path: uploaded.path });
+        uploadedPaths.add(item.path);
+      } finally { await file.close(); }
+    }
+    const result = await submit({ ...request, input });
+    if (uploadedPaths.size === 0) return result;
+    // Only remove our temporary copies after BB accepts the message; never delete the user's source file.
+    const temporaryDirectory = await realpath(join(tmpdir(), "too-many-agents-images")).catch(() => null);
+    if (temporaryDirectory) for (const path of uploadedPaths) {
+      if (!/^image-\d+\.(png|jpe?g|gif|webp)$/i.test(basename(path))) continue;
+      try {
+        if (await realpath(dirname(path)) === temporaryDirectory) await unlink(path);
+      } catch { bb.log.warn("Could not remove a Minecraft temporary image after successful delivery"); }
+    }
+    return result;
+  }
+
   const sessions = new Map<string, Session>();
   // Thread metadata is writable by others, so it only names a candidate. Java checks each thread against its own record.
   const identities = new Map<string, Identity | null>();
@@ -151,11 +188,11 @@ export default async function minecraft(bb: BbPluginApi) {
     const nonce = randomUUID();
     spawning.set(nonce, { worldId: live.worldId, agentId });
     try {
-      const created = await bb.sdk.threads.spawn({
-        ...spawn, projectId, environment, origin: "plugin", originPluginId: bb.pluginId,
+      const created = await withImages(projectId, spawn, prepared => bb.sdk.threads.spawn({
+        ...prepared, projectId, environment, origin: "plugin", originPluginId: bb.pluginId,
         pluginMetadata: { worldId: live.worldId, agentId, minecraftAccess, nonce },
         ...(parentThreadId ? { parentThreadId } : {}),
-      } as unknown as Args<Sdk["threads"]["spawn"]>);
+      } as unknown as Args<Sdk["threads"]["spawn"]>));
       identities.set(created.id, { worldId: live.worldId, agentId });
       await callback(live, "changed", { agentId, threadId: created.id, bind: true }).catch(() => undefined);
       return created;
@@ -217,7 +254,14 @@ export default async function minecraft(bb: BbPluginApi) {
         const parentThreadId = typeof data.parentThreadId === "string" && data.parentThreadId ? data.parentThreadId : undefined;
         return startThread(session(uuid(data.worldId, "worldId")), uuid(data.agentId, "agentId"), data.minecraftAccess === true, object(data.spawn, "spawn"), parentThreadId);
       }
-      case "agent.send": return bb.sdk.threads.send({ ...object(data.send, "send"), threadId: threadId() } as Args<Sdk["threads"]["send"]>);
+      case "agent.send": {
+        const id = threadId();
+        const send = object(data.send, "send");
+        if (!Array.isArray(send.input) || !send.input.some(value => value && typeof value === "object" && !Array.isArray(value) && value.type === "localImage"))
+          return bb.sdk.threads.send({ ...send, threadId: id } as Args<Sdk["threads"]["send"]>);
+        const thread = await bb.sdk.threads.get({ threadId: id });
+        return withImages(thread.projectId, send, prepared => bb.sdk.threads.send({ ...prepared, threadId: id } as Args<Sdk["threads"]["send"]>));
+      }
       case "agent.update": return bb.sdk.threads.update({ ...threadUpdate(data.patch), threadId: threadId() } as Args<Sdk["threads"]["update"]>);
       case "agent.markRead": return bb.sdk.threads.markRead({ threadId: threadId() });
       case "agent.stop": return bb.sdk.threads.stop({ threadId: threadId() });

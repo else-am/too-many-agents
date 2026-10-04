@@ -8,21 +8,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.gui.screens.inventory.InventoryScreen;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import net.minecraft.world.item.SpawnEggItem;
 import toomanyagents.AgentColor;
 import toomanyagents.TooManyAgentsClientSettings;
 
@@ -30,7 +25,6 @@ import toomanyagents.TooManyAgentsClientSettings;
 public final class InventoryAgentSidebar extends Screen {
     private static final int LIST_TOP = 39;
     private static final int ROW_HEIGHT = 40;
-    private static boolean renderingPortrait;
     private final AgentUiAccess access;
     private final Screen parent;
     private final Consumer<String> select;
@@ -39,6 +33,7 @@ public final class InventoryAgentSidebar extends Screen {
     private final Runnable openSettings;
     private final Set<String> collapsed = new HashSet<>();
     private final Map<String, JsonObject> projects = new LinkedHashMap<>();
+    private final AgentPortraits portraits = new AgentPortraits();
     private final List<SidebarButton> rows = new ArrayList<>();
     private List<Entry> entries = List.of();
     private String selected = "", structure = "";
@@ -79,9 +74,10 @@ public final class InventoryAgentSidebar extends Screen {
         }
         selected = next;
     }
-    public static boolean isRenderingPortrait() { return renderingPortrait; }
+    void closePortraits() { portraits.close(); }
 
     @Override protected void init() {
+        portraits.close();
         structure = "";
         projectsReadMs = 0;
         hoveredAgent = "";
@@ -167,8 +163,10 @@ public final class InventoryAgentSidebar extends Screen {
             }
         });
         updateProviderButton();
-        addRenderableWidget(Button.builder(Component.literal("New project"), button ->
-            editProject.accept("")).bounds(62, 7, width - 73, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("+ Project"), button ->
+            editProject.accept("")).bounds(62, 7, (width - 79) / 2, 20).build());
+        addRenderableWidget(Button.builder(Component.literal("+ Thread"), button -> startAgent(""))
+            .bounds(68 + (width - 79) / 2, 7, (width - 79) / 2, 20).build());
         int longest=font.width("BB default");
         for(var item:AgentModels.array(catalog,"providers"))longest=Math.max(longest,font.width(AgentModels.text(item.getAsJsonObject(),"displayName")));
         int choiceWidth = Math.min(width - 43, longest + font.width("✓ ") + ProviderIcon.SIZE + 24);
@@ -263,9 +261,10 @@ public final class InventoryAgentSidebar extends Screen {
     }
     public boolean pickerOpen() { return providerMenu || usagePopup != null && usagePopup.visible(); }
     private void setProviderMenu(boolean open) {
+        boolean restoreFocus = providerMenu && !open && getFocused() != null;
         providerMenu = open;
         for (var choice : providerChoices) choice.visible = open;
-        if (!open) setFocused(providerButton);
+        if (restoreFocus) setFocused(providerButton);
     }
 
     private void startAgent(String projectId) {
@@ -318,7 +317,10 @@ public final class InventoryAgentSidebar extends Screen {
             if (projectId.isBlank()) projectId = "proj_personal";
             groups.computeIfAbsent(projectId, key -> new ArrayList<>()).add(agent);
         }
-        for (var project : projects.values()) groups.computeIfAbsent(text(project,"id"),key->new ArrayList<>());
+        for (var project : projects.values()) {
+            if (text(project, "kind").equals("world"))
+                groups.computeIfAbsent(text(project, "id"), key -> new ArrayList<>());
+        }
         var projectIds = new ArrayList<>(groups.keySet());
         // This world's project first and no project last, around BB's projects.
         projectIds.sort(Comparator.comparing((String id) -> text(projects.getOrDefault(id, new JsonObject()), "kind").equals("world") ? 0 : id.equals("proj_personal") ? 2 : 1)
@@ -368,6 +370,19 @@ public final class InventoryAgentSidebar extends Screen {
         String name = projects.containsKey(id) ? text(projects.get(id), "name")
             : agents.isEmpty() ? "" : text(agents.getFirst(), "projectName");
         return name.isBlank() ? "No project" : name;
+    }
+
+    private String projectTooltip(Entry entry) {
+        var project = projects.get(entry.projectId);
+        if (project == null) return entry.name;
+        JsonObject primary = null;
+        for (var value : AgentModels.array(project, "sources")) {
+            var source = value.getAsJsonObject();
+            if (primary == null) primary = source;
+            if (flag(source, "isDefault")) { primary = source; break; }
+        }
+        String folder = primary == null ? "" : text(primary, "path");
+        return folder.isBlank() ? entry.name : entry.name + "\n\n" + folder;
     }
 
     private void layout() {
@@ -459,9 +474,9 @@ public final class InventoryAgentSidebar extends Screen {
         }
         String hoverKey = "", hoverText = "";
         for (SidebarButton button : rows) {
-            if (button.visible && button.isMouseOver(mouseX, mouseY) && button.entry.agent != null) {
-                hoverKey = text(button.entry.agent, "id");
-                hoverText = age(button.entry.agent);
+            if (button.visible && button.isMouseOver(mouseX, mouseY)) {
+                hoverKey = button.entry.agent == null ? "project:" + button.entry.projectId : text(button.entry.agent, "id");
+                hoverText = button.entry.agent == null ? projectTooltip(button.entry) : age(button.entry.agent);
                 break;
             }
             if (button.add == null) continue;
@@ -550,7 +565,13 @@ public final class InventoryAgentSidebar extends Screen {
                 if (entry.agent == null) {
                     if (isHoveredOrFocused()) g.fill(getX(), rowTop + 2, getX() + getWidth(), rowTop + 22, 0xFF262F30);
                     drawChevron(g, 13, rowTop + 9, !collapsed.contains(entry.projectId), 0x929E9C);
-                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - 31), 25, rowTop + 8, 0xBDC6C2, false);
+                    int labelX = 25;
+                    var project = projects.get(entry.projectId);
+                    if (project != null && text(project, "kind").equals("world")) {
+                        g.renderItem(new ItemStack(Items.GRASS_BLOCK), labelX, rowTop + 4);
+                        labelX += 20;
+                    }
+                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - labelX - 6), labelX, rowTop + 8, 0xBDC6C2, false);
                     return;
                 }
                 var agent = entry.agent;
@@ -664,35 +685,8 @@ public final class InventoryAgentSidebar extends Screen {
     private void renderAvatar(GuiGraphics g, JsonObject agent, int x, int y) {
         int size = 26;
         g.fill(x, y, x + size, y + size, 0xFF111719);
-        var entity = entity(agent);
-        if (entity != null) {
-            float bodyScale = Math.max(0.01F, entity.getScale());
-            int scale = Math.max(8, Math.min(80, (int)((size - 2) / Math.max(0.5F, entity.getBbWidth() / bodyScale))));
-            float eyeOffset = (entity.getEyeHeight() - entity.getBbHeight() / 2) / bodyScale;
-            renderingPortrait = true;
-            try {
-                InventoryScreen.renderEntityInInventoryFollowsAngle(g, x + 1, y + 1, x + size - 1, y + size - 1,
-                    scale, eyeOffset, 0, 0, entity);
-            } finally {
-                renderingPortrait = false;
-            }
-        } else {
-            var type = ResourceLocation.tryParse(text(agent, "bodyType"));
-            var egg = type == null ? null : SpawnEggItem.byId(BuiltInRegistries.ENTITY_TYPE.get(type));
-            g.renderItem(new ItemStack(egg == null ? Items.NAME_TAG : egg), x + 5, y + 4);
-        }
+        portraits.render(g, text(agent, "bodyType"), x + 1, y + 1, size - 2);
         g.fill(x + 3, y + size - 2, x + size - 3, y + size - 1, 0xFF000000 | AgentColor.rgb(text(agent, "color")));
-    }
-
-    private LivingEntity entity(JsonObject agent) {
-        if (minecraft.level == null || !agent.has("body") || !agent.get("body").isJsonObject()) return null;
-        String uuid = text(agent.getAsJsonObject("body"), "entityUuid");
-        try {
-            UUID id = UUID.fromString(uuid);
-            for (var entity : minecraft.level.entitiesForRendering())
-                if (entity instanceof LivingEntity living && entity.getUUID().equals(id)) return living;
-        } catch (IllegalArgumentException ignored) {}
-        return null;
     }
 
     private static String age(JsonObject agent) {

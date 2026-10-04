@@ -68,8 +68,7 @@ public final class InventoryAgents {
     }
 
     private void portraitNameTag(RenderNameTagEvent event) {
-        if (InventoryAgentSidebar.isRenderingPortrait()
-            || Minecraft.getInstance().screen instanceof AgentInventoryScreen inventory && inventory.isRenderingPreview())
+        if (Minecraft.getInstance().screen instanceof AgentInventoryScreen inventory && inventory.isRenderingPreview())
             event.setCanRender(TriState.FALSE);
     }
 
@@ -105,6 +104,7 @@ public final class InventoryAgents {
         if (parent != screen) {
             newAgentRequest++;
             parent = screen;
+            if (sidebar != null) sidebar.closePortraits();
             sidebar = new InventoryAgentSidebar(access.get(), parent, this::open, this::newAgent, this::openProject, this::openModSettings);
             if (form instanceof TooManyAgentsSettingsScreen) form = null;
             if (screen instanceof AgentWorkspaceScreen workspace) {
@@ -295,8 +295,8 @@ public final class InventoryAgents {
 
     private void newClosedAgent(String projectId) {
         var client = Minecraft.getInstance();
-        // New agents belong to this world unless a project is chosen.
-        String project = projectId == null || projectId.isBlank() ? "minecraft" : projectId;
+        // The global New thread action leaves project selection to the draft.
+        String project = projectId == null ? "minecraft" : projectId;
         String draftProject = project;
         var requestWorld = client.level;
         var requestScreen = parent;
@@ -439,6 +439,7 @@ public final class InventoryAgents {
     private void tick(ClientTickEvent.Post event) {
         var client = Minecraft.getInstance();
         if (client.level == null) {
+            if (sidebar != null) sidebar.closePortraits();
             world = null; parent = null; sidebar = null; chat = null;
             left = right = settings = formPane = focus = pressed = null; selected = null; chats.clear(); drafts.clear(); form = null;
             inventoryTarget = inventoryPending = null;

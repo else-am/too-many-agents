@@ -221,7 +221,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public CompletableFuture<JsonObject> backendConfig() { return rpc("system.config",new JsonObject()).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> setDefaultProvider(String providerId) { return rpc("system.defaultProvider.set",object("providerId",providerId)).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> projectExecutionOptions(String projectId) {
-        if(projectId.equals("minecraft")) return CompletableFuture.completedFuture(new JsonObject());
+        if(projectId.isBlank() || projectId.equals("minecraft")) return CompletableFuture.completedFuture(new JsonObject());
         return rpc("project.executionOptions",object("projectId",projectId)).thenApply(value -> value.isJsonObject()?value.getAsJsonObject():new JsonObject());
     }
     @Override public CompletableFuture<JsonObject> usage() { return rpc("usage",new JsonObject()).thenApply(JsonElement::getAsJsonObject); }

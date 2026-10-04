@@ -23,10 +23,11 @@ public final class AgentChatScreen extends Screen {
     private final AgentUiAccess access;
     private String agentId;
     private JsonObject creationSettings;
-    private String creationProjectName="No project";
+    private String creationProjectName="Choose project";
     private boolean creationGit;
     private String environmentProject, creationHost="";
     private Checkbox worktreeBox, minecraftBox;
+    private Button projectButton;
     private Consumer<String> created;
     private final List<String> bodies = new ArrayList<>();
     private int catalogVersion;
@@ -239,7 +240,7 @@ public final class AgentChatScreen extends Screen {
     }
 
     private void readCreationProject(){
-        creationProjectName="No project";
+        creationProjectName="Choose project";
         if (!creationSettings.has("minecraftAccess")) creationSettings.addProperty("minecraftAccess", true);
         String projectId=AgentModels.text(creationSettings,"projectId"), sourceHost="", kind="";
         for(var item:AgentModels.array(access.projects(),"projects")){
@@ -255,7 +256,7 @@ public final class AgentChatScreen extends Screen {
         if(projectId.equals(environmentProject))return;
         environmentProject=projectId;creationGit=false;creationHost="";
         // This world's agents always share its workspace folder; no worktree choice.
-        if(kind.equals("world"))return;
+        if(projectId.isBlank() || kind.equals("world"))return;
         if(!sourceHost.isBlank())readWorktreeProviders(projectId,sourceHost);
         else access.backendConfig().whenComplete((config,failure)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             if(!projectId.equals(environmentProject))return;
@@ -467,7 +468,8 @@ public final class AgentChatScreen extends Screen {
                 }).build();
             addRenderableWidget(minecraftBox);
             minecraftBox.visible = true;
-            // The project comes from where creation started; a worktree is the one choice about it.
+            projectButton = addRenderableWidget(Button.builder(Component.empty(), button -> togglePicker(projectButton))
+                .bounds(left, 0, Math.min(180, contentWidth), 20).build());
             boolean worktree = AgentModels.text(AgentModels.object(creationSettings,"environment"),"environmentProviderId").equals("git-worktree");
             worktreeBox = Checkbox.builder(Component.literal("Worktree"), font).selected(worktree)
                  .onValueChange((box, value) -> {
@@ -485,7 +487,7 @@ public final class AgentChatScreen extends Screen {
             worktreeBox.setTooltip(Tooltip.create(Component.literal("Work in a separate Git worktree instead of the project folder")));
             worktreeBox.visible = creationGit;
             addRenderableWidget(worktreeBox);
-        } else { nameField = null; bodyButton = null; minecraftBox = null; worktreeBox = null; }
+        } else { nameField = null; bodyButton = null; minecraftBox = null; worktreeBox = null; projectButton = null; }
         addRenderableWidget(Button.builder(Component.literal("×"), button -> onClose())
             .bounds(left + contentWidth - 20, 7, 20, 20).build());
         var previousComposer = composer;
@@ -687,6 +689,23 @@ public final class AgentChatScreen extends Screen {
                 if (!info.has("available") || !info.get("available").getAsBoolean()) continue;
                 pickerChoices.add(new PickerChoice((provider.equals(AgentModels.text(state, "providerId")) ? "✓ " : "")
                     + AgentModels.text(info, "displayName"), "", provider, () -> selectProvider(provider)));
+            }
+        } else if (anchor == projectButton) {
+            String selected = AgentModels.text(creationSettings, "projectId");
+            for (var item : AgentModels.array(access.projects(), "projects")) {
+                var project = item.getAsJsonObject();
+                String id = AgentModels.text(project, "id");
+                pickerChoices.add(new PickerChoice((id.equals(selected) ? "✓ " : "") + AgentModels.text(project, "name"), "", () -> {
+                    if (id.equals(AgentModels.text(creationSettings, "projectId"))) return;
+                    creationSettings.addProperty("projectId", id);
+                    creationSettings.remove("environment");
+                    readCreationProject();
+                    // Ignore defaults still arriving for the previous project.
+                    catalogVersion++;
+                    loadingModels = false;
+                    models.load(new JsonObject());
+                    rebuildWidgets();
+                }));
             }
         } else if (anchor == bodyButton) {
             String selected = AgentModels.text(creationSettings, "body");
@@ -1006,6 +1025,10 @@ public final class AgentChatScreen extends Screen {
             bodyButton.setWidth(Math.min(contentWidth, buttonWidth(bodyLabels, " ▾")));
             bodyButton.setMessage(Component.literal(font.plainSubstrByWidth(bodyLabel(AgentModels.text(creationSettings, "body")), bodyButton.getWidth() - font.width(" ▾") - 12) + " ▾"));
             bodyButton.active = !sending && !loadingModels;
+            projectButton.active = !sending;
+            projectButton.visible = !settingsCovering;
+            projectButton.setMessage(Component.literal(font.plainSubstrByWidth(creationProjectName, projectButton.getWidth() - 24) + " ▾"));
+            projectButton.setTooltip(Tooltip.create(Component.literal(creationProjectName)));
             minecraftBox.active = !sending;
             minecraftBox.visible = !settingsCovering;
             boolean worktreeShown = worktreeBox.visible;
@@ -1018,9 +1041,11 @@ public final class AgentChatScreen extends Screen {
         sendButton.active = active && backendAvailable() && !sending && !stopping && !importingImages
             && (showStop || hasDraft() && !models.model.isBlank());
         if (draft()) sendButton.active &= !loadingModels && models.available() && !AgentModels.text(creationSettings, "name").isBlank()
-            && !AgentModels.text(creationSettings, "body").isBlank();
+            && !AgentModels.text(creationSettings, "body").isBlank()
+            && !AgentModels.text(creationSettings, "projectId").isBlank();
         sendButton.setMessage(Component.literal(sending || stopping ? "…" : showStop ? "Stop" : "Send"));
-        sendButton.setTooltip(null);
+        sendButton.setTooltip(draft() && AgentModels.text(creationSettings, "projectId").isBlank()
+            ? Tooltip.create(Component.literal("Choose a project before sending")) : null);
     }
 
     private boolean activeAgent() {
@@ -1470,8 +1495,13 @@ public final class AgentChatScreen extends Screen {
 
     private int creationOptionsHeight() {
         if (!draft() || minecraftBox == null) return 0;
-        if (!worktreeBox.visible && !minecraftBox.visible) return 0;
-        return worktreeBox.visible && minecraftBox.visible && worktreeBox.getWidth() + 12 + minecraftBox.getWidth() > contentWidth ? 48 : 24;
+        int x = 0, rows = 0;
+        for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+            if (!widget.visible) continue;
+            if (rows == 0 || x + widget.getWidth() > contentWidth) { rows++; x = 0; }
+            x += widget.getWidth() + 12;
+        }
+        return rows * 24;
     }
 
     private void rebuildQueue() {
@@ -1493,9 +1523,13 @@ public final class AgentChatScreen extends Screen {
         transcriptBottom = baseBottom - growth;
         if (draft()) {
             int optionsY = composer.getY() - optionsHeight;
-            worktreeBox.setPosition(left, optionsY);
-            minecraftBox.setPosition(left + (worktreeBox.visible && optionsHeight == 24 ? worktreeBox.getWidth() + 12 : 0),
-                optionsY + (optionsHeight == 48 ? 24 : 0));
+            int x = left;
+            for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+                if (!widget.visible) continue;
+                if (x > left && x + widget.getWidth() > left + contentWidth) { x = left; optionsY += 24; }
+                widget.setPosition(x, optionsY);
+                x += widget.getWidth() + 12;
+            }
         }
         int chipX = left;
         int chipWidth = attachmentCount == 0 ? 0 : Math.min(96, contentWidth / attachmentCount);
