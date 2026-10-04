@@ -72,6 +72,21 @@ change the world. Agents with Minecraft access receive the plugin's Minecraft
 prompts and installed physical tools; other threads continue ordinary project
 work in BB.
 
+From an embodied thread, use `bb minecraft spawn --parent-self --prompt 'Task'`
+for a child, or omit `--parent-self` for an independent thread. Use
+`bb minecraft spawn --help` for BB execution/environment options and Minecraft
+body/station options. `bb minecraft bodies` and `bb minecraft stations` describe
+the current world. Other coordination uses ordinary `bb thread` commands.
+Minecraft instructions ask agents to use embodied spawning; they do not disable
+native subagents or change unrelated BB threads' settings.
+
+Agent messages delivered by BB appear in world chat when **Show agent
+communication** is enabled and both bodies are present. BB owns message queues
+and communication permissions. Stopping a thread cancels its physical actions;
+archiving saves and despawns its body and frees its station. Unarchiving restores
+the saved body and inventory when the world is open. Deleting a thread removes
+its body association. These changes also reconcile after reconnecting.
+
 Chat renders Markdown natively, including tables, lists, quotes, inline code and
 code blocks. Drag to select text; code and table headers have Copy controls.
 Wide code and tables scroll horizontally with a trackpad or Shift + wheel.
@@ -115,6 +130,7 @@ python3 tools/agents.py --game-dir run ui widgets
 python3 tools/too_many_agents.py --game-dir run state
 python3 tools/smoke.py run --command
 python3 tools/bb-smoke.py --model gpt-6.1-sol --children
+python3 tools/bb-lifecycle-smoke.py --model gpt-6.1-sol
 ```
 
 These diagnostics exercise the real mod and native UI. Validate releases with

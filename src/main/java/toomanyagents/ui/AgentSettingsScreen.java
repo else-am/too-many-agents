@@ -57,7 +57,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     public static JsonObject settings(JsonObject snapshot) {
         var result = BodySettings.copy(AgentModels.object(snapshot, "settings"));
         result.add("provider", AgentModels.provider(snapshot).deepCopy());
-        for (String key : new String[]{"name", "projectId", "following", "mode", "cheats", "minecraftAccess", "communication"}) {
+        for (String key : new String[]{"name", "projectId", "following", "mode", "cheats", "minecraftAccess"}) {
             if (!result.has(key) && snapshot.has(key)) result.add(key, snapshot.get(key).deepCopy());
         }
         var execution = AgentModels.execution(snapshot);
@@ -136,8 +136,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             choice("Approvals", value("permissionMode"), permissionChoices, v -> change("permissionMode", v), enabled && permissionChoices.size()>1);
         }
         // Left unset for new agents so the service default applies.
-        choice("Communication",value("communication").isBlank()?"project":value("communication"),
-            options("none","Off","children","Parent & children","project","This project","any","All projects"),v->change("communication",v),enabled);
+
         section("Body profiles");
         var profiles=profiles();var choices=new ArrayList<Choice>();
         for(var profile:profiles)choices.add(new Choice(AgentModels.text(profile,"name"),AgentModels.text(profile,"name")));

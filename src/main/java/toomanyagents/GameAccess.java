@@ -426,7 +426,6 @@ final class GameAccess {
             var saved = mob.getPersistentData();
             saved.putString("too_many_agents_mode",mode);
             if (values.has("color")) saved.putString("too_many_agents_color", string(values,"color",7).toUpperCase(java.util.Locale.ROOT));
-            if (values.has("communication")) saved.putString("too_many_agents_communication", string(values,"communication",20));
             if (values.has("cheats")) saved.putBoolean("too_many_agents_cheats",values.get("cheats").getAsBoolean());
             if (values.has("behaviors")) saved.putString("too_many_agents_behaviors",values.get("behaviors").toString());
             if (values.has("following") && values.get("following").getAsBoolean() != saved.getBoolean("too_many_agents_following")) {
@@ -449,7 +448,6 @@ final class GameAccess {
         var result = new JsonObject();
         result.addProperty("name",mob.getName().getString());
         result.addProperty("color", bodyColor(mob));
-        result.addProperty("communication", saved.contains("too_many_agents_communication") ? saved.getString("too_many_agents_communication") : "project");
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
         result.addProperty("mode",saved.getString("too_many_agents_mode").equals("creative") ? "creative" : "survival");
         result.addProperty("cheats",saved.getBoolean("too_many_agents_cheats"));
@@ -633,7 +631,6 @@ final class GameAccess {
             mob.setUUID(UUID.fromString(ref.entityUuid()));
             var data = mob.getPersistentData();
             if (saved.has("color")) data.putString("too_many_agents_color", saved.get("color").getAsString());
-            if (saved.has("communication")) data.putString("too_many_agents_communication", saved.get("communication").getAsString());
             data.putString("too_many_agents_mode", saved.has("mode") ? saved.get("mode").getAsString() : "survival");
             data.putBoolean("too_many_agents_cheats", saved.has("cheats") && saved.get("cheats").getAsBoolean());
             data.putBoolean("too_many_agents_following", saved.has("following") && saved.get("following").getAsBoolean());
@@ -1006,6 +1003,60 @@ final class GameAccess {
         mob.getJumpControl().tick();
         mob.setJumping(false);
         mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
+    }
+
+    /** Save the whole entity before an archive removes it from the world. */
+    CompletableFuture<String> saveBody(Body ref, String session) {
+        return schedule(session, current -> {
+            var mob = body(current, ref);
+            actions(ref, mob).hands.save();
+            var tag = new net.minecraft.nbt.CompoundTag();
+            if (!mob.save(tag)) throw error("body_save_failed");
+            return tag.toString();
+        });
+    }
+
+    CompletableFuture<Void> suspendBody(Body ref, String saved, String session) {
+        return schedule(session, current -> {
+            var level = savedBodyLevel(current, ref, saved);
+            var entity = level.getEntity(UUID.fromString(ref.entityUuid()));
+            if (entity == null) return null;
+            var controller = actions.remove(ref);
+            if (controller != null) controller.close("thread_archived");
+            entity.getPersistentData().putBoolean("too_many_agents_removing", true);
+            entity.discard();
+            bodySnapshots.remove(ref); following.remove(ref);
+            return null;
+        });
+    }
+
+    CompletableFuture<Void> restoreSavedBody(Body ref, String saved, String session) {
+        return schedule(session, current -> {
+            var level = savedBodyLevel(current, ref, saved);
+            var existing = level.getEntity(UUID.fromString(ref.entityUuid()));
+            if (existing instanceof Mob mob) { cacheBody(ref,mob); return null; }
+            try {
+                var entity = net.minecraft.world.entity.EntityType.loadEntityRecursive(net.minecraft.nbt.TagParser.parseTag(saved),level,java.util.function.Function.identity());
+                if (!(entity instanceof Mob mob)) throw error("invalid_saved_body");
+                mob.getPersistentData().remove("too_many_agents_removing");
+                mob.getPersistentData().putString("too_many_agents_world",world(current));
+                if (!level.addFreshEntity(mob)) throw error("body_restore_rejected");
+                restoreBody(mob); cacheBody(ref,mob);
+                return null;
+            } catch (com.mojang.brigadier.exceptions.CommandSyntaxException failure) { throw error("invalid_saved_body"); }
+        });
+    }
+
+    private ServerLevel savedBodyLevel(MinecraftServer current, Body ref, String saved) {
+        if (!worldMatches(ref.world(),world(current))) throw error("body_world_mismatch");
+        var key = ResourceKey.create(Registries.DIMENSION,ResourceLocation.parse(ref.dimension()));
+        var level = current.getLevel(key);
+        if (level == null) throw error("body_dimension_unavailable");
+        try {
+            var position = net.minecraft.nbt.TagParser.parseTag(saved).getList("Pos",net.minecraft.nbt.Tag.TAG_DOUBLE);
+            level.getChunk((int)Math.floor(position.getDouble(0)) >> 4,(int)Math.floor(position.getDouble(2)) >> 4);
+            return level;
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException failure) { throw error("invalid_saved_body"); }
     }
 
     /** Remove a loaded agent body, retaining every remaining inventory stack as a world item. */

@@ -280,8 +280,14 @@ public final class InventoryAgentSidebar extends Screen {
         };
     }
 
-    private static String parent(JsonObject agent) {
-        return text(agent, "parentAgentId");
+    private String parent(JsonObject agent) {
+        String parentThread = text(agent, "parentThreadId");
+        if (parentThread.isBlank()) return "";
+        for (var row : access.list()) {
+            var candidate = row.getAsJsonObject();
+            if (text(candidate, "threadId").equals(parentThread)) return text(candidate, "id");
+        }
+        return "";
     }
 
     @Override public void tick() { refresh(); }

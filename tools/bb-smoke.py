@@ -22,6 +22,7 @@ def main():
     parser.add_argument('--model', required=True)
     parser.add_argument('--reasoning-level', default='high')
     parser.add_argument('--timeout', type=float, default=180)
+    parser.add_argument('--agent-id', help='Use an existing unstarted fixture body after inspecting a definite start failure')
     parser.add_argument('--children', action='store_true', help='Also spawn, wait for and archive a child in a station')
     args = parser.parse_args()
     game = args.game_dir.resolve()
@@ -69,9 +70,11 @@ def main():
 
     marker = 'tma-' + uuid.uuid4().hex
     first, second = marker + '-observed', marker + '-queued'
-    created = request('/v1/agents/spawn', {'name': 'BB live smoke', 'providerId': args.provider,
+    created = request('/v1/agents/' + args.agent_id) if args.agent_id else request('/v1/agents/spawn', {'name': 'BB live smoke', 'providerId': args.provider,
                                           'model': args.model, 'reasoningLevel': args.reasoning_level,
                                           'minecraftAccess': True, 'mode': 'creative'})
+    if created.get('threadId'):
+        raise RuntimeError('Fixture already has a thread; inspect it instead of starting this check again.')
     agent_id = created['id']
     path = '/v1/agents/' + quote(agent_id, safe='')
     print('Fixture agent: ' + agent_id, flush=True)
@@ -187,16 +190,18 @@ def run_children(request, agent_id, project_id, model, reasoning_level, timeout)
                       'min': [x + 5, y, z + 5], 'max': [x + 11, y + 5, z + 11]})
     observed = set()
     try:
-        prompt = ('This is an embodied coordination check. Call agent_stations. Then call agent_spawn exactly once '
-                  f'with name "BB child smoke", body "minecraft:pig", stationId "{station["id"]}", '
-                  'task "Reply BB_CHILD_OK. Do not call any tools or send messages.". Remember the returned agentId. '
-                  'Use agent_wait or agent_read for that child until it is idle with no pending interactions. '
-                  'Then call agent_archive exactly once for that child. Finally reply BB_COORDINATION_OK. '
-                  'Never repeat a spawn or archive after an unknown outcome; inspect state instead.')
+        parent_thread = request(path)['threadId']
+        prompt = ('This is an embodied coordination check. Run bb minecraft stations --json. Then run exactly once '
+                  f'bb minecraft spawn --parent-self --name "BB child smoke" --body minecraft:pig --station {station["id"]} '
+                  f'--model {model} --reasoning-level {reasoning_level} --json '
+                  '--prompt "Reply BB_CHILD_OK. Do not call any tools or send messages.". '
+                  'Use ordinary bb thread wait/show for the returned threadId until idle with no pending interactions. '
+                  'Then run bb thread archive for that thread exactly once. Finally reply BB_COORDINATION_OK. '
+                  'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.')
         request(path + '/message', {'text': prompt, 'delivery': 'auto'})
         deadline = time.monotonic() + timeout + 60
         while time.monotonic() < deadline:
-            children = {row['id'] for row in request('/v1/agents') if row.get('parentAgentId') == agent_id}
+            children = {row['id'] for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread}
             for entity in request('/v1/state').get('server', {}).get('entities', []):
                 if entity.get('agent', {}).get('id') in children:
                     point = entity['position']
@@ -214,16 +219,16 @@ def run_children(request, agent_id, project_id, model, reasoning_level, timeout)
             time.sleep(1)
         else:
             raise RuntimeError('Child coordination did not finish; fixture retained.')
-        children = [row for row in request('/v1/agents') if row.get('parentAgentId') == agent_id]
+        children = [row for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread]
         if len(children) != 1:
             raise RuntimeError('Expected exactly one child: ' + json.dumps(children))
         child = children[0]
         if child['id'] not in observed:
             raise RuntimeError('Child body was never observed in its station.')
         if child['executionOptions'].get('model') != model or child['executionOptions'].get('reasoningLevel') != reasoning_level:
-            raise RuntimeError('Child did not inherit execution options: ' + json.dumps(child['executionOptions']))
-        if not (child['bodyRemoved'] and child['conversationArchived']):
-            raise RuntimeError('Child was not removed and archived: ' + json.dumps(child))
+            raise RuntimeError('Child did not preserve execution options: ' + json.dumps(child['executionOptions']))
+        if child['bodyLoaded'] or child['bodyRemoved'] or not child['conversationArchived']:
+            raise RuntimeError('Child was not suspended and archived: ' + json.dumps(child))
         stations = request('/v1/agents/projects')['world']['stations']
         if next(item for item in stations if item['id'] == station['id']).get('agentId'):
             raise RuntimeError('Child station was not freed.')

@@ -47,7 +47,7 @@ def main():
     spawn.add_argument('--service-tier', help='Native BB speed tier; omit to use BB defaults')
     spawn.add_argument('--mode', choices=['survival', 'creative'], default='survival')
     spawn.add_argument('--cheats', action='store_true')
-    spawn.add_argument('--no-minecraft', action='store_true', help='Project work with collaboration tools and no Minecraft context or controls')
+    spawn.add_argument('--no-minecraft', action='store_true', help='Keep the body and BB coordination, without physical Minecraft tools')
     spawn.add_argument('--follow', action='store_true', help='Start following the local player')
     transcript = commands.add_parser('transcript', help='Read the native BB conversation timeline')
     transcript.add_argument('id')
@@ -66,8 +66,8 @@ def main():
     cancel.add_argument('message_id')
     for action, help_text in (
         ('remove', 'Remove the NPC body; keep the conversation'),
-        ('archive', 'Remove the body and archive the native BB thread'),
-        ('conversation-archive', 'Archive the native BB thread; keep readable history'),
+        ('archive', 'Archive the BB thread and suspend its body with inventory'),
+        ('conversation-archive', 'Archive the BB thread and suspend its body; keep readable history'),
         ('conversation-restore', 'Restore an archived BB thread to the active list'),
         ('inventory', 'Inspect body inventory'),
     ):
