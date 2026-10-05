@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
@@ -588,6 +589,33 @@ final class GameAccess {
         return new Body(mob.getStringUUID(), world(level.getServer()), level.dimension().location().toString());
     }
 
+    /** Close hands before vanilla copies the entity and its saved inventory to another dimension. */
+    void changingDimension(Entity entity, ResourceKey<net.minecraft.world.level.Level> destination) {
+        if (!(entity instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)
+            || level.getServer() != server.get() || destination.equals(level.dimension())
+            || mob.getPersistentData().getString("too_many_agents_agent").isBlank()
+            || !mob.getPersistentData().getString("too_many_agents_world").equals(world(level.getServer()))) return;
+        forgetDimension(new Body(mob.getStringUUID(), world(level.getServer()), level.dimension().location().toString()));
+    }
+
+    /** Server thread only. Revoke old-reference work without running completion callbacks under queueLock. */
+    void forgetDimension(Body previous) {
+        var controller = actions.remove(previous);
+        if (controller != null) controller.close("body_dimension_changed");
+        bodySnapshots.remove(previous);
+        actionStops.remove(previous);
+        var rejected = new ArrayList<PendingCall>();
+        synchronized (queueLock) {
+            toolQueue.removeIf(call -> {
+                if (!previous.equals(call.body)) return false;
+                call.scope.pending--;
+                rejected.add(call);
+                return true;
+            });
+        }
+        for (var call : rejected) call.result.completeExceptionally(error("body_dimension_changed"));
+    }
+
     CompletableFuture<Void> recoverBody(Body ref, String agentId, String projectId, JsonObject settings, String expectedSession) {
         var saved = settings.deepCopy();
         return schedule(expectedSession, current -> {
@@ -681,13 +709,13 @@ final class GameAccess {
     }
 
     /** Called every ServerTick.Post. No references to live entities escape this method. */
-    void tick(MinecraftServer current, Supplier<Set<String>> registry, Supplier<Map<String, AgentState>> states) {
+    void tick(MinecraftServer current, Supplier<Set<String>> registry, Supplier<Map<String, AgentState>> states,
+              BiConsumer<String, Body> observed) {
         if (server.get() != current || worldSession.get() == null) return;
         agentStates = states.get();
         worldInfo = WorldState.get(current).snapshot();
         publishedWorld = new PublishedWorld(world(current), worldSession.get());
         drainActionStops();
-        drainTools(current);
         Set<String> retainedAgents = registry == null ? null : registry.get();
         if (!Objects.equals(cleanupSession,worldSession.get()) || failedBodyCleanup == null) {
             cleanupSession = worldSession.get();
@@ -726,6 +754,7 @@ final class GameAccess {
                 }
                 if (saved.getBoolean("too_many_agents_removing")) continue;
                 var body = new Body(mob.getStringUUID(), world, level.dimension().location().toString());
+                observed.accept(saved.getString("too_many_agents_agent"), body);
                 seen.add(body);
                 try {
                     mob.setNoAi(true);
@@ -751,6 +780,7 @@ final class GameAccess {
         }
         var unloaded = actions.keySet().stream().filter(ref -> !seen.contains(ref)).toList();
         for (var ref : unloaded) { actions.remove(ref).close("body_unloaded"); bodySnapshots.remove(ref); }
+        drainTools(current);
     }
 
     /** Physical actions take precedence; otherwise run the current activity's behavior. */

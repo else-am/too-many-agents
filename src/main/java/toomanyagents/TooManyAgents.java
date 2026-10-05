@@ -28,6 +28,7 @@ import net.neoforged.neoforge.event.entity.living.MobDespawnEvent;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityTravelToDimensionEvent;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -85,6 +86,7 @@ public final class TooManyAgents {
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
         NeoForge.EVENT_BUS.addListener(this::entityJoined);
         NeoForge.EVENT_BUS.addListener(this::entityLeft);
+        NeoForge.EVENT_BUS.addListener(this::entityChangingDimension);
     }
 
     private void setup(FMLClientSetupEvent event) {
@@ -128,6 +130,10 @@ public final class TooManyAgents {
         if (game == null || agents == null) return;
         var body = game.destroyedBody(event.getEntity());
         if (body != null) agents.bodyLost(body);
+    }
+
+    private void entityChangingDimension(EntityTravelToDimensionEvent event) {
+        if (game != null) game.changingDimension(event.getEntity(), event.getDimension());
     }
 
     private LocalBridge.Reply agentRoute(String method, String path, JsonObject request) {
@@ -224,7 +230,9 @@ public final class TooManyAgents {
     }
 
     private void serverTick(ServerTickEvent.Post event) {
-        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retainedBodies, agents == null ? Map::of : agents::agentStates);
+        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retainedBodies,
+            agents == null ? Map::of : agents::agentStates,
+            (id, body) -> { if (agents != null) agents.bodyObserved(id, body, currentSession()); });
         if (DevelopmentWorld.ENABLED) DevelopmentChecks.tick(event.getServer());
         var current = session.get();
         if (current == null || current.server() != event.getServer() || event.getServer().getTickCount() % 5 != 0) return;

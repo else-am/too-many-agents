@@ -163,6 +163,25 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         // Keep drafts and pending starts, too. Only BB can confirm a bound thread's deletion.
         return agents.values().stream().filter(a -> !a.removed).map(a -> a.id).collect(Collectors.toSet());
     }
+
+    /** A loaded, tagged body observed by the owning server thread; never a replacement or recovery. */
+    void bodyObserved(String id, GameAccess.Body observed, String session) {
+        GameAccess.Body previous;
+        synchronized(this) {
+            if (!currentSession(session)) return;
+            var agent = agents.get(id);
+            if (agent == null || agent.removed || agent.archived || agent.body == null
+                || !observed.world().equals(loadedWorldId)
+                || !observed.world().equals(agent.body.world())
+                || !observed.entityUuid().equals(agent.body.entityUuid())
+                || observed.equals(agent.body)) return;
+            previous = agent.body;
+            agent.body = observed;
+            save();
+        }
+        // Revoking queued work can complete callbacks into AgentService.
+        game.forgetDimension(previous);
+    }
     synchronized Map<String,GameAccess.AgentState> agentStates() {
         var result=new HashMap<String,GameAccess.AgentState>();
         if(!currentSession(loadedSession)) return result;
