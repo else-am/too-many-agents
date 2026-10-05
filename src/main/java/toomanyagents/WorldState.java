@@ -176,6 +176,19 @@ final class WorldState {
         if (needsDecision) throw new IllegalStateException("Resolve the relocated world before editing stations.");
         String operation = JsonState.text(request,"operation");
         var stations = data.getAsJsonArray("stations");
+        // Caller restrictions are checked on the owning server thread, together with the mutation.
+        if(request.has("callerProjectId")) {
+            String project=JsonState.text(request,"callerProjectId");
+            if(!operation.equals("station-create")) {
+                var station=station(JsonState.text(request,"stationId"));
+                if(!project.equals(JsonState.text(station,"projectId"))) throw new IllegalArgumentException("Station belongs to another project.");
+                if(operation.equals("station-assign") && JsonState.text(request,"agentId").isBlank()) {
+                    String occupant=JsonState.text(station,"agentId");
+                    if(!occupant.isBlank() && !request.getAsJsonArray("ownedAgents").contains(new com.google.gson.JsonPrimitive(occupant)))
+                        throw new IllegalArgumentException("Unassign only your own or a child's station.");
+                }
+            }
+        }
         JsonObject result;
         switch (operation) {
             case "station-create" -> {

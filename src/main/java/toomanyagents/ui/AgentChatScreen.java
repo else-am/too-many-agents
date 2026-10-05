@@ -491,7 +491,11 @@ public final class AgentChatScreen extends Screen {
                     creationSettings=changes.deepCopy();state=creationSettings;readCreationProject();
                     if(!AgentModels.text(creationSettings,"name").equals(suggestedName))nameSuggested=false;
                     if(nameField!=null)nameField.setValue(AgentModels.text(creationSettings,"name"));
+                    catalogVersion++;loadingModels=false;models.load(new JsonObject());
                     models.model=AgentModels.text(creationSettings,"model");models.effort=AgentModels.text(creationSettings,"reasoningLevel");
+                    models.serviceTier=AgentModels.text(creationSettings,"serviceTier");
+                    if(worktreeBox!=null&&worktreeBox.selected()!=(creationSettings.has("worktree")&&creationSettings.get("worktree").getAsBoolean()))worktreeBox.onPress();
+                    requestModels(this::refreshButtons);
                     return java.util.concurrent.CompletableFuture.completedFuture(null);
                 }
                 return access.updateSettings(agentId,changes);

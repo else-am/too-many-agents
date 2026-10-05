@@ -144,8 +144,6 @@ public final class TooManyAgents {
             else if (method.equals("GET") && path.equals("/v1/agents")) result = agents.list();
             else if (method.equals("GET") && path.equals("/v1/agents/catalog")) result = agents.catalog().get(100, TimeUnit.SECONDS);
             else if (method.equals("GET") && path.startsWith("/v1/agents/catalog/")) result = agents.catalog(path.substring("/v1/agents/catalog/".length())).get(100, TimeUnit.SECONDS);
-            else if (method.equals("GET") && path.equals("/v1/agents/profiles")) result = agents.profiles();
-            else if (method.equals("POST") && path.equals("/v1/agents/profiles")) result = agents.saveProfile(field(request,"name"),request.getAsJsonObject("settings")).get(10,TimeUnit.SECONDS);
             else if (method.equals("POST") && path.equals("/v1/agents/spawn")) {
                 var id = agents.spawn(request).get(110, TimeUnit.SECONDS);
                 var created = new JsonObject();

@@ -24,11 +24,7 @@ def main():
     listing = commands.add_parser('list')
     listing.add_argument('--archived', action='store_true', help='Show only conversations archived in BB')
     commands.add_parser('catalog').add_argument('--provider', help='Native BB provider ID, such as codex or claude-code')
-    commands.add_parser('profiles')
     commands.add_parser('stations', help="List the current world's stations and occupants")
-    profile = commands.add_parser('save-profile')
-    profile.add_argument('name')
-    profile.add_argument('settings', help='JSON object of settings to copy')
     settings = commands.add_parser('settings')
     settings.add_argument('id')
     settings.add_argument('settings', help='JSON object of changed settings')
@@ -114,16 +110,10 @@ def main():
             path += '/projects'
             if getattr(args, 'json', None):
                 data = json.loads(args.json)
-        elif args.action in ('catalog', 'profiles'):
+        elif args.action == 'catalog':
             path += '/' + args.action
             if args.action == 'catalog' and args.provider:
                 path += '/' + args.provider
-        elif args.action == 'save-profile':
-            path += '/profiles'
-            values = json.loads(args.settings)
-            if not isinstance(values, dict):
-                raise ValueError('settings must be a JSON object')
-            data = {'name': args.name, 'settings': values}
         elif args.action == 'dev':
             path = '/v1/dev'
             if args.operation != 'status':

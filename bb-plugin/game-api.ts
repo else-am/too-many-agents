@@ -56,6 +56,15 @@ export function registerGameApi(
             Sdk["providers"]["models"]
           >,
         );
+      case "role.list":
+        return agents.roleList();
+      case "role.save":
+        return agents.roleCapture(live(), agent, data);
+      case "role.import": {
+        for (const [name, body] of Object.entries(object(data.profiles)))
+          await agents.roleSave(live(), { name, instructions: "", bb: {}, body }, "import");
+        return {};
+      }
       case "world.sync":
         return agents.sync(live());
       case "agent.create":

@@ -85,6 +85,40 @@ mod owns physical bodies and saved world records, and renders the plugin’s UI
 data. BB integration changes belong in `bb-plugin/`; the mod asks for actions
 such as creating an agent or choosing a worktree.
 
+Roles live in BB's plugin storage and are shared across game installs. In agent
+settings, **Load role** copies a preset; **Save a role** captures the body and current
+BB choices. Select **Edit** to change a preset's body, behaviors, provider, model,
+reasoning, worktree and multiline instructions. New-agent settings use the same
+role picker. Existing agents can load body/model/reasoning; provider, workspace,
+access and initial instructions are spawn-time choices.
+
+```sh
+bb minecraft role create worker --provider codex --model gpt-6-astra --reasoning high --body minecraft:fox --instructions-file worker.md
+bb minecraft role update worker --worktree
+bb minecraft role show worker --json
+bb minecraft station create --name desk --from 10,64,10 --to 14,67,14
+bb minecraft spawn --parent-self --role worker --station <id> --prompt 'Fix the issue'
+```
+
+Roles have no project or station. Explicit spawn flags override the copied role.
+Role instructions precede the first task. `role list/show/delete` work offline;
+`create/update` require an attached game to validate body settings. Use
+`--instructions-stdin` for one line of stdin; BB currently rejects multiline
+plugin stdin and `--instructions-file -`. Use a file or the in-game editor for
+multiline instructions. File paths are local to BB. `create` rejects an
+existing name; `update` patches only supplied fields. Boolean choices have
+`--no-worktree`, `--no-cheats` and `--no-minecraft-access` counterparts.
+
+Agent station commands (`create/update/assign/delete`) stay inside the caller's
+project and its box. Assign/unassign is limited to self or direct BB children;
+occupied stations cannot be taken or deleted. The dimension defaults to the
+caller's body. User station editing in Minecraft is unchanged.
+
+On attach, old `<game dir>/too-many-agents/body-profiles.json` entries import only
+when their names are absent in BB, then the file becomes `body-profiles.imported.json`.
+The former Survival/Creative built-ins are no longer seeded (saved entries with
+those names still import). Later role edits never change existing agents.
+
 Minecraft instructions ask agents to use embodied spawning; they do not disable
 native subagents or change unrelated BB threads' settings.
 

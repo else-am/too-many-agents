@@ -114,6 +114,12 @@ export function minecraftWorlds(bb: BbPluginApi) {
     return { live, agent };
   }
 
+  async function validationSession(threadId?: string) {
+    if (threadId && await identify(threadId)) return (await caller(threadId)).live;
+    if (sessions.size !== 1) throw new ApiError("world_required", "Open one Minecraft world, or run from an embodied thread, to validate a role.");
+    return sessions.values().next().value!;
+  }
+
   function attach(live: Session) {
     const previous = sessions.get(live.worldId);
     sessions.set(live.worldId, live);
@@ -131,6 +137,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
   });
   return {
     session,
+    validationSession,
     attach,
     detach,
     identify,

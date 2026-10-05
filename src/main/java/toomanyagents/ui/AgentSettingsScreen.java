@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
@@ -22,7 +23,7 @@ import net.minecraft.world.phys.HitResult;
 import toomanyagents.AgentColor;
 import toomanyagents.BodySettings;
 
-/** One scrolling draft of an agent's identity, world behavior, access and profiles. Project settings live elsewhere. */
+/** One scrolling draft of an agent's identity, world behavior, access and roles. Project settings live elsewhere. */
 public final class AgentSettingsScreen extends SettingsFormScreen {
     private final AgentUiAccess access;
     private final Screen parent;
@@ -30,9 +31,11 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private final Function<JsonObject,CompletableFuture<Void>> apply;
     private JsonObject draft, saved;
     private boolean busy;
-    private boolean bodiesRequested;
+    private boolean bodiesRequested, rolesRequested;
+    private final boolean editingRole;
+    private List<JsonObject> roleRows = new ArrayList<>();
     private final List<String> bodies = new ArrayList<>();
-    private String profileName="", selectedProfile="", projectId="", stationId="";
+    private String roleName="", selectedRole="", projectId="", stationId="";
     private static final String[][] STATES={{"working","While working"},{"wants_you","Wants you"},{"idle","When idle"}};
     // The block under the crosshair when settings opened; offered as a look/swing target.
     private final BlockPos aimed;
@@ -43,7 +46,11 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         this(access,parent,settings,apply,null);
     }
     public AgentSettingsScreen(AgentUiAccess access,Screen parent,JsonObject settings,Function<JsonObject,CompletableFuture<Void>> apply,String agentId) {
-        super(Component.literal(agentId==null?"New agent":"Agent settings"));
+        this(access,parent,settings,apply,agentId,false);
+    }
+    private AgentSettingsScreen(AgentUiAccess access,Screen parent,JsonObject settings,Function<JsonObject,CompletableFuture<Void>> apply,String agentId,boolean editingRole) {
+        super(Component.literal(editingRole?"Edit role":agentId==null?"New agent":"Agent settings"));
+        this.editingRole=editingRole;
         this.access=access;this.parent=parent;this.agentId=agentId;this.apply=apply;draft=settings.deepCopy();
         if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",true);
         if(!AgentColor.valid(value("color")))draft.addProperty("color",AgentColor.forId(value("name")));
@@ -53,6 +60,33 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         aimed=hit instanceof BlockHitResult block&&hit.getType()==HitResult.Type.BLOCK?block.getBlockPos().immutable():null;
         if(agentId!=null)stationId=assignedStation();
         saved=draft.deepCopy();
+    }
+
+    private void editRole(String name) {
+        var role=roleRows.stream().filter(row->AgentModels.text(row,"name").equals(name)).findFirst().orElse(null);
+        if(role==null)return;
+        var settings=BodySettings.profile(AgentModels.object(role,"body"));
+        for(var entry:AgentModels.object(role,"bb").entrySet())settings.add(entry.getKey(),entry.getValue().deepCopy());
+        settings.addProperty("roleInstructions",AgentModels.text(role,"instructions"));
+        settings.addProperty("name",name);
+        var editor=new AgentSettingsScreen(access,docked()?minecraft.screen:this,settings,changes->{
+            var record=roleRecord(name,changes);
+            return access.saveRole(record,null).thenCompose(done->access.roles()).thenAccept(rows->Minecraft.getInstance().execute(()->{
+                roleRows.clear();for(var row:rows)roleRows.add(row.getAsJsonObject());rebuildForm();
+            }));
+        },null,true);
+        minecraft.setScreen(editor);
+    }
+
+    private static JsonObject roleRecord(String name,JsonObject settings) {
+        var role=new JsonObject();role.addProperty("name",name);
+        role.add("body",BodySettings.profile(settings));
+        var choices=new JsonObject();
+        for(String key:List.of("providerId","model","reasoningLevel","serviceTier","permissionMode","worktree"))
+            if(settings.has(key)&&!settings.get(key).isJsonNull()&&!settings.get(key).getAsString().isBlank())choices.add(key,settings.get(key).deepCopy());
+        role.add("bb",choices);
+        if(settings.has("roleInstructions"))role.add("instructions",settings.get("roleInstructions").deepCopy());
+        return role;
     }
 
     public static JsonObject settings(JsonObject snapshot) {
@@ -85,11 +119,19 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             && !(state.has("conversationArchived")&&state.get("conversationArchived").getAsBoolean())
             && !(state.has("bodyRemoved")&&state.get("bodyRemoved").getAsBoolean());
     }
-    private boolean valid(){return editable()&&!value("name").isBlank()&&!value("body").isBlank()&&AgentColor.valid(value("color"));}
+    private boolean valid(){return editable()&&!value("name").isBlank()&&(editingRole||!value("body").isBlank()&&AgentColor.valid(value("color")));}
     private void change(String key,String value){draft.addProperty(key,value);rebuildForm();}
     private void change(String key,boolean value){draft.addProperty(key,value);rebuildForm();}
 
     @Override protected void init(){
+        if(!rolesRequested&&!editingRole){
+            rolesRequested=true;
+            access.roles().whenComplete((rows,failure)->Minecraft.getInstance().execute(()->{
+                if(failure!=null){feedback=AgentModels.error(failure);return;}
+                roleRows.clear();for(var row:rows)roleRows.add(row.getAsJsonObject());
+                if(minecraft!=null&&(docked()||minecraft.screen==this))rebuildForm();
+            }));
+        }
         if (!bodiesRequested) {
             bodiesRequested = true;
             String provider = AgentModels.text(agent(), "providerId");
@@ -107,17 +149,24 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if (agentId == null && AgentModels.worldProject(access.projects(), projectId)) draft.addProperty("minecraftAccess", true);
         begin();
         boolean enabled=editable(), world=flag("minecraftAccess");
-        section("Identity");
-        input("Name",value("name"),80,v->draft.addProperty("name",v),enabled);
+        if(!editingRole){
+            section("Role");
+            var choices=new ArrayList<Choice>();
+            for(var role:roleRows)choices.add(new Choice(AgentModels.text(role,"name"),AgentModels.text(role,"name")));
+            choice("Load role",selectedRole,choices,this::loadRole,enabled&&!choices.isEmpty());
+            if(!selectedRole.isBlank())action("Role preset","Edit "+selectedRole,()->editRole(selectedRole),enabled);
+        }
+        section(editingRole?"Role · "+value("name"):"Identity");
+        if(!editingRole)input("Name",value("name"),80,v->draft.addProperty("name",v),enabled);
         // What the agent is working on, like a chat title; it also names a new worktree.
-        input("Title",value("title"),80,v->draft.addProperty("title",v),enabled).setHint(Component.literal("From the first message"));
+        if(!editingRole)input("Title",value("title"),80,v->draft.addProperty("title",v),enabled).setHint(Component.literal("From the first message"));
         var bodyChoices = new ArrayList<Choice>();
         if (!bodies.contains(value("body"))) bodyChoices.add(new Choice(value("body"), bodyLabel(value("body"))));
         for (String body : bodies) bodyChoices.add(new Choice(body, bodyLabel(body)));
         choice("Body", value("body"), bodyChoices, v -> change("body", v), enabled);
-        colorRow(enabled);
+        if(!editingRole)colorRow(enabled);
         section("In the world");
-        if (!AgentModels.worldProject(access.projects(), projectId)) {
+        if (editingRole || !AgentModels.worldProject(access.projects(), projectId)) {
             if(agentId==null) toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
             else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");
         }
@@ -126,8 +175,8 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         choice("Game mode",value("mode").isBlank()?"survival":value("mode"),options("survival","Survival","creative","Creative"),v->change("mode",v),enabled&&world);
         toggle("World commands",flag("cheats"),v->change("cheats",v),enabled&&world)
             .setTooltip(Tooltip.create(Component.literal("Allow command-based edits in any game mode")));
-        section("Access");
-        if(agentId==null){
+        if(agentId==null)section(editingRole?"Execution":"Access");
+        if(agentId==null&&!editingRole){
             var permissionChoices = new ArrayList<Choice>();
             permissionChoices.add(new Choice("", "BB default"));
             for (String mode : AgentModels.permissionModes(AgentModels.provider(draft)))
@@ -136,16 +185,24 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         }
         // Left unset for new agents so the service default applies.
 
-        section("Body profiles");
-        var profiles=profiles();var choices=new ArrayList<Choice>();
-        for(var profile:profiles)choices.add(new Choice(AgentModels.text(profile,"name"),AgentModels.text(profile,"name")));
-        choice("Load profile",selectedProfile,choices,this::loadProfile,enabled&&profiles.size()>0);
-        int y=row("Save as profile");
-        var nameField=new EditBox(font,controlX,0,controlWidth-66,20,Component.literal("Profile name"));
-        nameField.setMaxLength(80);nameField.setValue(profileName);nameField.setResponder(v->profileName=v);nameField.setEditable(enabled);
-        nameField.setHint(Component.literal("Profile name"));place(nameField,y);
-        var save=Button.builder(Component.literal("Save"),b->saveProfile()).bounds(controlX+controlWidth-60,0,60,20).build();
-        save.active=enabled;place(save,y);
+        if(editingRole){
+            input("Provider",value("providerId"),80,v->draft.addProperty("providerId",v),enabled);
+            input("Model",value("model"),120,v->draft.addProperty("model",v),enabled);
+            choice("Reasoning",value("reasoningLevel"),options("","BB default","none","None","low","Low","medium","Medium","high","High","xhigh","Extra high","max","Max","ultra","Ultra","ultracode","Ultracode"),v->change("reasoningLevel",v),enabled);
+            toggle("Worktree",flag("worktree"),v->change("worktree",v),enabled);
+            section("Instructions");
+            var field=new MultiLineEditBox(font,left,0,contentWidth,92,Component.literal("How this agent should work…"),Component.literal("Role instructions"));
+            field.setCharacterLimit(64000);field.setValue(value("roleInstructions"));field.setValueListener(v->draft.addProperty("roleInstructions",v));field.active=enabled;
+            place(field,rowY);rowY+=100;
+        } else {
+            section("Save a role");
+            int y=row("Role name");
+            var nameField=new EditBox(font,controlX,0,controlWidth-66,20,Component.literal("Role name"));
+            nameField.setMaxLength(80);nameField.setValue(roleName);nameField.setResponder(v->roleName=v);nameField.setEditable(enabled);
+            nameField.setHint(Component.literal("Role name"));place(nameField,y);
+            var save=Button.builder(Component.literal("Save"),b->saveRole()).bounds(controlX+controlWidth-60,0,60,20).build();
+            save.active=enabled;place(save,y);
+        }
         done();
     }
     private void colorRow(boolean enabled){
@@ -273,23 +330,24 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         }
         return true;
     }
-    private List<JsonObject> profiles(){
-        var result=new ArrayList<JsonObject>();
-        for(var value:access.profiles())result.add(value.getAsJsonObject());
-        return result;
-    }
-    private void loadProfile(String name){
+    private void loadRole(String name){
         if(name.isBlank())return;
-        var profile=profiles().stream().filter(p->AgentModels.text(p,"name").equals(name)).findFirst().orElseThrow();
-        var settings=BodySettings.profile(profile.getAsJsonObject("settings"));
+        var role=roleRows.stream().filter(p->AgentModels.text(p,"name").equals(name)).findFirst().orElseThrow();
+        var settings=BodySettings.profile(AgentModels.object(role,"body"));
         if(agentId!=null)settings.remove("minecraftAccess");
-        for(var entry:settings.entrySet())draft.add(entry.getKey(),entry.getValue());
-        targetText.clear();profileName=selectedProfile=name;feedback="Body profile loaded into draft.";rebuildForm();
+        for(var entry:settings.entrySet())draft.add(entry.getKey(),entry.getValue().deepCopy());
+        for(var entry:AgentModels.object(role,"bb").entrySet())
+            if(agentId==null||List.of("model","reasoningLevel").contains(entry.getKey()))draft.add(entry.getKey(),entry.getValue().deepCopy());
+        draft.addProperty("roleInstructions",AgentModels.text(role,"instructions"));
+        targetText.clear();roleName=selectedRole=name;
+        feedback=agentId==null?"Role loaded.":"Body, model and reasoning loaded. Other role choices apply at spawn.";
+        rebuildForm();
     }
-    private void saveProfile(){
-        if(!valid()||profileName.isBlank()){feedback="Enter a profile name and valid agent settings first.";return;}
+    private void saveRole(){
+        if(!valid()||roleName.isBlank()){feedback="Enter a role name and valid agent settings first.";return;}
         if(!targetsChosen())return;
-        run(access.saveProfile(profileName.trim(),BodySettings.profile(draft)),"Body profile saved.");
+        var record=roleRecord(roleName.trim(),draft);
+        run(access.saveRole(record,agentId).thenRun(()->Minecraft.getInstance().execute(()->{selectedRole=roleName.trim();rolesRequested=false;})),"Role saved.");
     }
     private void run(CompletableFuture<Void> future,String success){
         busy=true;rebuildForm();future.whenComplete((unused,error)->Minecraft.getInstance().execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));
@@ -299,6 +357,8 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(!targetsChosen()){cancelClose();return;}
         var changes=agentId==null?draft.deepCopy():BodySettings.copy(draft);
         if(agentId!=null){
+            for(String key:List.of("model","reasoningLevel"))
+                if(!value(key).equals(AgentModels.text(saved,key)))changes.addProperty(key,value(key));
             if(!value("title").equals(AgentModels.text(saved,"title")))changes.addProperty("title",value("title"));
             changes.remove("minecraftAccess");
         }

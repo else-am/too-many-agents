@@ -25,6 +25,15 @@ before any retry.
   The plugin separates these, creates a body with an opaque saved draft, and
   starts a conversation only when there is initial input. The UI's optional
   `worktree` boolean is translated here; CLI native environments stay native.
+- `role.list` returns complete roles from plugin KV (`role:<name>`).
+  `role.save`: `{role:{name,instructions?,bb,body},agentId?}` saves the UI draft;
+  with an agent it captures current native BB execution choices and worktree state.
+  Omitted instructions preserve an existing role's instructions.
+  `role.import`: `{profiles:{name:body,...}}` inserts only missing names with empty
+  instructions and BB choices. Java sends the legacy file after attach, then renames
+  it to `body-profiles.imported.json` after acknowledgement. No built-ins are seeded.
+  Java never persists role records. Instructions for an unstarted body are copied
+  into plugin KV (`instructions:<agentId>`), prepended at first start, then removed.
 - `agent.message`: `{agentId,message:{text,images?,pointing?,delivery?,...}}`.
   The plugin prepares native input and image uploads, starts the first thread
   or sends to the existing one. `agent.settings` takes `{agentId,settings}` and
@@ -52,6 +61,17 @@ Java rejects stale sessions and expires physical requests before execution.
 - `body.create`: `{settings,projectId,minecraftAccess,draft}` creates and saves
   a physical body. CLI calls also carry the acting `agentId` and `threadId`;
   Java checks ownership, physical permission inheritance and cancellation.
+- `body.validate`: `{settings}` validates only reusable body fields and spawnable
+  entity types on the game thread, without adding entities. Role saves use this.
+- `body.parent`: `{agentId,threadId,parentThreadId}` refreshes the plugin's trusted
+  BB parent association in memory before a station command.
+- `station.edit`: `{agentId,threadId,request}` uses the same caller/session/expiry/
+  cancellation checks as physical tools. Java derives the caller project and owned
+  bodies, then checks project/occupancy on the server thread with the mutation.
+  `request.operation` is `station-create/update/assign/delete`; corners are `min`
+  and `max` block arrays. Missing dimension uses the caller body's dimension.
+  Assignment defaults to self; blank `request.agentId` releases only self/children.
+  This does not alter the user's unrestricted in-game station editing path.
 - `body.begin`: `{agentId,nonce}` persists a start nonce before BB creation.
   `body.bind`: `{agentId,threadId,nonce}` accepts only that saved nonce. On
   reconnect the plugin finds its own BB threads by metadata, recovers missed
@@ -90,3 +110,11 @@ owner are native BB fields; omitting a parent creates an independent thread.
 BB 0.45 supports `startedOnBehalfOf` only for forks, so the initial prompt
 identifies agent delegation rather than human approval. All other coordination
 uses ordinary BB commands. BB owns queues, child results and attention notices.
+
+Roles expose `bb minecraft role list/show/create/update/delete`. Create/update use
+field flags, matching BB's provider/model/reasoning/service-tier/permission-mode
+names. Updates merge only supplied fields; behaviors replace the entire behavior
+object. CLI creation/deletion and import writes are serialized. `spawn --role`
+copies both halves, then applies explicit flags. Java validates physical settings
+and prohibits delegated cross-project spawns. The legacy `/v1/agents/profiles`
+routes and Java profile storage have been removed.

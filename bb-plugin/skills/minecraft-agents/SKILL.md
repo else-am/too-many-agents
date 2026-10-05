@@ -1,6 +1,6 @@
 ---
 name: minecraft-agents
-description: Create embodied agents and inspect bodies or stations in an attached Minecraft world. Use BB itself for conversation and coordination.
+description: Create embodied agents, roles and stations in an attached Minecraft world. Use BB itself for conversation and coordination.
 ---
 
 # Embodied agents
@@ -36,3 +36,53 @@ Stopping cancels physical actions. Archiving suspends the body and releases its
 station; unarchiving restores its saved body when the world is available.
 Deleting removes its association. Conversation edits and forks do not undo or
 copy Minecraft world mutations.
+
+## Stations
+
+Use `minecraft_observe` for your block coordinates. Corners are inclusive:
+
+```sh
+bb minecraft station create --name desk --from 10,64,10 --to 14,67,14
+bb minecraft station update <id> --name desk-two --from 12,64,10 --to 16,67,14
+bb minecraft station assign <id>                     # yourself
+bb minecraft station assign <id> --agent <body-id>   # your BB child
+bb minecraft station assign <id> --unassign
+bb minecraft station delete <id>
+```
+
+The dimension defaults to your body's dimension (`--dimension` overrides it).
+All edits and spawns stay in your body's BB project. Stations must fit its box.
+A station holds one body; a body has one station. Occupied stations cannot be
+taken or deleted. You can assign/unassign only yourself or a direct BB child.
+The user can still edit stations in Minecraft.
+
+## Roles
+
+Roles are shared presets in BB, independent of worlds and projects. They contain
+`name`, `instructions`, `bb` execution choices and `body` settings. They never
+contain a project, station, body name or color. A spawn copies the role; changing
+it later does not change existing agents.
+
+```sh
+bb minecraft role create worker --provider codex --model gpt-6-astra --reasoning high --body minecraft:fox --mode survival --no-cheats --minecraft-access --behaviors '{"wants_you":{"type":"follow"},"working":{"type":"stand"},"idle":{"type":"wander"}}' --instructions-file worker.md
+bb minecraft role list
+bb minecraft role show worker --json
+bb minecraft role update worker --worktree --instructions-file worker.md
+bb minecraft spawn --parent-self --role worker --station <id> --prompt 'Fix the small issue' --json
+bb minecraft role delete worker
+```
+
+`create` fails for an existing name; `update` changes only supplied fields and
+fails for a missing name. `--no-worktree`, `--no-cheats` and
+`--no-minecraft-access` explicitly turn those choices off. Use
+`--instructions-stdin` for a single line of stdin. The installed BB plugin CLI
+rejects multiline stdin and cannot read `--instructions-file -`; use a file for
+multiline instructions.
+File paths refer to the local BB machine, relative to the invoking directory.
+Creating/updating requires a connected game for Java body validation; listing,
+showing and deleting work without one. With multiple games, run from an embodied
+thread to select the validating world.
+
+Explicit spawn flags override the role. An explicit environment overrides its
+worktree choice. Role instructions precede the task and the delegation notice is
+retained. Roles cannot grant stronger physical or BB permissions than the caller.

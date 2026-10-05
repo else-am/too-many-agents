@@ -5,6 +5,7 @@ import type { MinecraftProjects } from "./projects.js";
 import {
   ApiError,
   object,
+  string,
   type Agent,
   type Args,
   type ObjectValue,
@@ -44,6 +45,90 @@ export function minecraftAgents(
 ) {
   const starting = new Set<string>();
 
+  // One record per role; serialize writes so imports cannot race an explicit save.
+  let roleWrites: Promise<unknown> = Promise.resolve();
+  const roleKey = (name: string) => `role:${name}`;
+  function roleName(value: unknown) {
+    const name = string(value, "role name");
+    if (name !== name.trim() || name.length > 80 || /[\u0000-\u001f]/.test(name))
+      throw new ApiError("invalid_role", "Role name must contain 1–80 printable characters.");
+    return name;
+  }
+  async function roleGet(name: string) {
+    const role = await bb.storage.kv.get<ObjectValue>(roleKey(roleName(name)));
+    if (!role) throw new ApiError("role_missing", `Unknown role: ${name}`);
+    return role;
+  }
+  async function roleList() {
+    const keys = await bb.storage.kv.list("role:");
+    const rows = await Promise.all(keys.sort().map(key => bb.storage.kv.get<ObjectValue>(key)));
+    return rows.filter((row): row is ObjectValue => row != null);
+  }
+  async function roleSave(live: Session, value: unknown, mode: "replace" | "create" | "update" | "import" = "replace") {
+    let role = object(value, "role");
+    const name = roleName(role.name);
+    const write = roleWrites.catch(() => undefined).then(async () => {
+      const previous = await bb.storage.kv.get<ObjectValue>(roleKey(name));
+      if (mode === "import" && previous) return;
+      if (mode === "create" && previous) throw new ApiError("role_exists", `Role already exists: ${name}`);
+      if (mode === "update" && !previous) throw new ApiError("role_missing", `Unknown role: ${name}`);
+      if (mode === "update") role = {
+        ...previous!, ...role,
+        bb: { ...object(previous!.bb), ...object(role.bb ?? {}) },
+        body: { ...object(previous!.body), ...object(role.body ?? {}) },
+      };
+      if (mode === "create") role = { instructions: "", bb: {}, body: {}, ...role };
+      if (Object.keys(role).some(key => !["name", "instructions", "bb", "body"].includes(key)) ||
+          typeof role.instructions !== "string" || role.instructions.length > 64_000)
+        throw new ApiError("invalid_role", "Use name, instructions (up to 64000 characters), bb and body only.");
+      const choices = object(role.bb, "role.bb");
+      object(role.body, "role.body");
+      for (const [key, value] of Object.entries(choices)) {
+        if (!["providerId", "model", "reasoningLevel", "serviceTier", "permissionMode", "worktree"].includes(key) ||
+            (key === "worktree" ? typeof value !== "boolean" : typeof value !== "string" || !value.trim()))
+          throw new ApiError("invalid_role", `Invalid role.bb field: ${key}`);
+      }
+      if (choices.reasoningLevel && !["none", "low", "medium", "high", "xhigh", "max", "ultra", "ultracode"].includes(String(choices.reasoningLevel)))
+        throw new ApiError("invalid_role", "Invalid reasoningLevel");
+      if (choices.permissionMode && !["accept-edits", "auto", "full"].includes(String(choices.permissionMode)))
+        throw new ApiError("invalid_role", "Invalid permissionMode");
+      await worlds.callback(live, "body.validate", { settings: role.body });
+      await bb.storage.kv.set(roleKey(name), role);
+    });
+    roleWrites = write;
+    await write;
+    return roleGet(name);
+  }
+  async function roleDelete(name: string) {
+    const write = roleWrites.catch(() => undefined).then(() => bb.storage.kv.delete(roleKey(roleName(name))));
+    roleWrites = write;
+    await write;
+  }
+  async function roleCapture(live: Session, agent: Agent | undefined, request: ObjectValue) {
+    const role = { ...object(request.role) };
+    if (agent?.threadId) {
+      const thread = await bb.sdk.threads.get({ threadId: agent.threadId });
+      const execution = await bb.sdk.threads.defaultExecutionOptions({ threadId: agent.threadId });
+      const environment = thread.environmentId
+        ? await bb.sdk.environments.get({ environmentId: thread.environmentId }) : undefined;
+      role.bb = {
+        providerId: thread.providerId,
+        model: execution?.model,
+        reasoningLevel: execution?.reasoningLevel,
+        permissionMode: execution?.permissionMode,
+        serviceTier: execution?.serviceTier,
+        worktree: environment?.isWorktree === true,
+      } as ObjectValue;
+      // Omit absent optional execution fields.
+      role.bb = Object.fromEntries(Object.entries(role.bb as ObjectValue).filter(([, value]) => value != null && value !== ""));
+    }
+    if (role.instructions === undefined) {
+      const existing = await bb.storage.kv.get<ObjectValue>(roleKey(roleName(role.name)));
+      role.instructions = existing?.instructions ?? "";
+    }
+    return roleSave(live, role);
+  }
+
   async function get(live: Session, agentId: string) {
     const agent = (await worlds.agents(live)).find((row) => row.agentId === agentId);
     if (!agent) throw new ApiError("agent_missing", "This Minecraft body is unavailable");
@@ -56,16 +141,21 @@ export function minecraftAgents(
     starting.add(agent.agentId);
     try {
       const { mode: _mode, ...request } = message;
+      const instructions = await bb.storage.kv.get<string>(`instructions:${agent.agentId}`);
+      if (instructions && Array.isArray(request.input))
+        request.input = [inputText(instructions + "\n\n"), ...request.input];
       const selection = await projects.selection(live, {
         ...agent.draft,
         ...request,
       } as Partial<SpawnOptions>);
-      return await threads.start(
+      const thread = await threads.start(
         live,
         agent.agentId,
         agent.minecraftAccess,
         selection as SpawnOptions,
       );
+      await bb.storage.kv.delete(`instructions:${agent.agentId}`);
+      return thread;
     } finally {
       starting.delete(agent.agentId);
     }
@@ -76,7 +166,10 @@ export function minecraftAgents(
     request: ObjectValue,
     caller?: { threadId: string; signal: AbortSignal },
   ) {
-    const { worktree, ...choicesRequest } = request;
+    const role = request.role ? await roleGet(string(request.role, "role")) : undefined;
+    const explicit = Object.fromEntries(Object.entries(request).filter(([, value]) => value !== undefined));
+    request = { ...(role ? object(role.body) : {}), ...(role ? object(role.bb) : {}), ...explicit };
+    const { worktree, role: _role, roleInstructions, ...choicesRequest } = request;
     const { settings, draft } = split(choicesRequest);
     const selected = await projects.selection(
       live,
@@ -98,6 +191,9 @@ export function minecraftAgents(
           })
         : await worlds.callback(live, "body.create", args)
     ) as Agent;
+    const instructions = roleInstructions ?? role?.instructions;
+    if (typeof instructions === "string" && instructions)
+      await bb.storage.kv.set(`instructions:${agent.agentId}`, instructions);
     caller?.signal.throwIfAborted();
     const task = typeof request.initialTask === "string" ? request.initialTask : prompt;
     const first = input ?? (task ? [inputText(task)] : []);
@@ -182,6 +278,6 @@ export function minecraftAgents(
     );
     return { projects: rows };
   }
-  return { get, create, send, settings, archive, sync };
+  return { get, create, send, settings, archive, sync, roleGet, roleList, roleSave, roleDelete, roleCapture };
 }
 export type MinecraftAgents = ReturnType<typeof minecraftAgents>;
