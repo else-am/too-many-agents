@@ -6,6 +6,32 @@ import { ApiError, object, string, type Session, type SpawnOptions } from "./pro
 export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const creating = new Map<string, Promise<string>>();
 
+  function color(value: unknown): string | undefined {
+    if (value === undefined) return undefined;
+    if (typeof value !== "string" || !/^#[0-9a-fA-F]{6}$/.test(value))
+      throw new ApiError("invalid_project_color", "Enter a color as #RRGGBB");
+    return value.toUpperCase();
+  }
+
+  async function configure(live: Session, projectId: string, name: unknown, value: unknown) {
+    const selectedColor = color(value);
+    const id = projectId === "minecraft" ? await ensureWorldProject(live) : projectId;
+    const project = name === undefined
+      ? await bb.sdk.projects.get({ projectId: id })
+      : await bb.sdk.projects.update({ projectId: id, name: string(name, "name") });
+    if (selectedColor !== undefined) await bb.storage.kv.set(`project-color:${id}`, selectedColor);
+    return project;
+  }
+
+  async function create(name: string, folder: string, value: unknown) {
+    const selectedColor = color(value);
+    const { primaryHostId } = await bb.sdk.system.config();
+    if (!primaryHostId) throw new ApiError("host_unavailable", "BB local host daemon is unavailable");
+    const project = await bb.sdk.projects.create({ name, source: { type: "local_path", hostId: primaryHostId, path: folder } });
+    if (selectedColor !== undefined) await bb.storage.kv.set(`project-color:${project.id}`, selectedColor);
+    return project;
+  }
+
   async function metadata(live: Session) {
     return object(await worlds.callback(live, "world_metadata", {}));
   }
@@ -114,7 +140,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
           path,
         });
     }
-    return [
+    return Promise.all([
       { ...(own ?? { id: "minecraft", sources: [] }), name: "This world", kind: "world" },
       ...projects.filter(
         (project) =>
@@ -128,19 +154,20 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
       ...projects
         .filter((project) => project.kind === "personal")
         .map((project) => ({ ...project, name: "No project" })),
-    ].map((project) => ({
+    ].map(async (project) => ({
       id: project.id,
       name: project.name,
       kind: project.kind,
+      color: await bb.storage.kv.get<string>(`project-color:${project.id}`) ?? "",
       folders: project.sources.map((source) => ({
         label: `Folder on ${source.hostId}`,
         path: source.path,
       })),
       folder: (project.sources.find((row) => row.isDefault) ?? project.sources[0])?.path ?? "",
-    }));
+    })));
   }
 
   bb.onDispose(() => creating.clear());
-  return { selection, list, metadata, creationOptions };
+  return { selection, list, metadata, creationOptions, create, configure };
 }
 export type MinecraftProjects = ReturnType<typeof minecraftProjects>;

@@ -191,7 +191,7 @@ final class AgentMentions {
             int index = firstRow() + row;
             if (index == selected) graphics.fill(3, y + row * 12, 3 + width, y + (row + 1) * 12, 0xFF505050);
             graphics.drawString(font, font.plainSubstrByWidth(matches.get(index).token, width - 8), 7, y + row * 12 + 2,
-                0xFF000000 | AgentColor.rgb(matches.get(index).agent.get("color").getAsString()), false);
+                0xFFE1E7DF, false);
         }
         graphics.pose().popPose();
     }

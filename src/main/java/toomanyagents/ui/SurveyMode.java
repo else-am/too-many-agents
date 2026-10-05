@@ -38,7 +38,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
-import toomanyagents.AgentColor;
+import toomanyagents.ProjectColor;
 
 /**
  * Shows project boxes and stations as outlines and draws new ones from two clicked corners.
@@ -148,7 +148,13 @@ public final class SurveyMode {
         return "Project";
     }
 
-    static int color(String projectId) { return AgentColor.rgb(AgentColor.forId(projectId)); }
+    int color(String projectId) {
+        for (var item : AgentModels.array(data, "projects")) {
+            var project = item.getAsJsonObject();
+            if (AgentModels.text(project, "id").equals(projectId)) return ProjectColor.rgb(ProjectColor.of(project));
+        }
+        return ProjectColor.rgb(ProjectColor.forId(projectId));
+    }
 
     private List<Box> visible() {
         var level = Minecraft.getInstance().level;
@@ -357,7 +363,7 @@ public final class SurveyMode {
         MutableComponent text = Component.literal(AgentModels.text(box.row(), "label")).withColor(color);
         if (box.row().has("outsideProject") && box.row().get("outsideProject").getAsBoolean()) text.append(Component.literal(" - outside").withColor(0xE07A6A));
         var agent = agents.get(AgentModels.text(box.row(), "agentId"));
-        if (agent != null) text.append(Component.literal(" - ").withColor(0x9A9A9A)).append(AgentColor.name(AgentModels.text(agent, "name"), AgentModels.text(agent, "color")));
+        if (agent != null) text.append(Component.literal(" - ").withColor(0x9A9A9A)).append(Component.literal(AgentModels.text(agent, "name")).withColor(0xDDDDDD));
         return text;
     }
 

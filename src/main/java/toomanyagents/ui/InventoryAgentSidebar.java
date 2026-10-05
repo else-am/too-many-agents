@@ -18,7 +18,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
-import toomanyagents.AgentColor;
+import toomanyagents.ProjectColor;
 import toomanyagents.TooManyAgentsClientSettings;
 
 /** An inventory companion; the host owns its position, scale, and input routing. */
@@ -565,8 +565,10 @@ public final class InventoryAgentSidebar extends Screen {
                 if (entry.agent == null) {
                     if (isHoveredOrFocused()) g.fill(getX(), rowTop + 2, getX() + getWidth(), rowTop + 22, 0xFF262F30);
                     drawChevron(g, 13, rowTop + 9, !collapsed.contains(entry.projectId), 0x929E9C);
-                    int labelX = 25;
+                    int labelX = 35;
                     var project = projects.get(entry.projectId);
+                    int projectColor = ProjectColor.rgb(project == null ? ProjectColor.forId(entry.projectId) : ProjectColor.of(project));
+                    g.fill(25, rowTop + 9, 30, rowTop + 14, 0xFF000000 | projectColor);
                     if (project != null && text(project, "kind").equals("world")) {
                         g.renderItem(new ItemStack(Items.GRASS_BLOCK), labelX, rowTop + 4);
                         labelX += 20;
@@ -650,7 +652,7 @@ public final class InventoryAgentSidebar extends Screen {
         boolean working = List.of("active", "pending", "starting", "stopping").contains(text(agent, "status"));
         boolean attention = flag(agent, "hasPendingInteraction") || flag(agent, "waitingForGame");
         if (attention || !working && unread(agent)) {
-            int color = 0xFF000000 | AgentColor.rgb(text(agent, "color"));
+            int color = 0xFFE6AC62;
             g.fill(x + 1, y + 14, x + 5, y + 20, color);
             g.fill(x, y + 15, x + 6, y + 19, color);
         } else if (working) {
@@ -685,7 +687,6 @@ public final class InventoryAgentSidebar extends Screen {
         int size = 26;
         g.fill(x, y, x + size, y + size, 0xFF111719);
         portraits.render(g, text(agent, "bodyType"), x + 1, y + 1, size - 2);
-        g.fill(x + 3, y + size - 2, x + size - 3, y + size - 1, 0xFF000000 | AgentColor.rgb(text(agent, "color")));
     }
 
     private static String age(JsonObject agent) {

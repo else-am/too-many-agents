@@ -108,20 +108,10 @@ export function registerGameApi(
           runtimeVersion: (await bb.sdk.system.version()).currentVersion,
           providers: await bb.sdk.providers.catalog(),
         };
-      case "project.create": {
-        const { primaryHostId } = await bb.sdk.system.config();
-        if (!primaryHostId)
-          throw new ApiError("host_unavailable", "BB local host daemon is unavailable");
-        return bb.sdk.projects.create({
-          name: string(data.name, "name"),
-          source: { type: "local_path", hostId: primaryHostId, path: string(data.folder, "folder") },
-        });
-      }
+      case "project.create":
+        return projects.create(string(data.name, "name"), string(data.folder, "folder"), data.color);
       case "project.configure":
-        return bb.sdk.projects.update({
-          projectId: string(data.projectId, "projectId"),
-          name: string(data.name, "name"),
-        });
+        return projects.configure(live(), string(data.projectId, "projectId"), data.name, data.color);
       case "project.remove":
         return bb.sdk.projects.delete({
           projectId: string(data.projectId, "projectId"),
@@ -147,8 +137,13 @@ export function registerGameApi(
         worlds.detach(uuid(data.worldId, "worldId"), string(data.worldSessionId, "worldSessionId"));
         return {};
       }
-      case "agent.markRead":
-        return bb.sdk.threads.markRead({ threadId: threadId() });
+      case "agent.markRead": {
+        const current = requireAgent();
+        const result = await bb.sdk.threads.markRead({ threadId: threadId() });
+        // Push BB's confirmed read state instead of waiting for the fallback sync.
+        await threads.sync(live(), current.agentId, threadId());
+        return result;
+      }
       case "agent.stop":
         return agent && !agent.threadId ? {} : bb.sdk.threads.stop({ threadId: threadId() });
       case "agent.archive":

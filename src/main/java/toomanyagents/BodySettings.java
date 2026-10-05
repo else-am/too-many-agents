@@ -8,7 +8,7 @@ public final class BodySettings {
     public static JsonObject copy(JsonObject settings) {
         var result = new JsonObject();
         if (settings == null) return result;
-        for (String key : List.of("name", "body", "mode", "color", "behaviors", "stationId", "minecraftAccess"))
+        for (String key : List.of("name", "body", "mode", "behaviors", "stationId", "minecraftAccess"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
         return result;
     }
@@ -34,7 +34,7 @@ public final class BodySettings {
     /** Roles reuse body settings without replacing identity or a world's station assignment. */
     public static JsonObject profile(JsonObject settings) {
         var result = copy(settings);
-        for (String key : List.of("name", "color", "stationId")) result.remove(key);
+        for (String key : List.of("name", "stationId")) result.remove(key);
         return result;
     }
 

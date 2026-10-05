@@ -1417,7 +1417,7 @@ public final class AgentChatScreen extends Screen {
             transcriptKey="";
         }
         if(queueControls==null) { queueControls=new ArrayList<>(); transcriptKey=""; }
-        String key=loadedSequence+":"+queryVersion+":"+contentWidth+":"+maxImageHeight()+":"+chatImages.layoutVersion()+":"+AgentModels.text(state,"color")+":"+working()+":"+AgentModels.queuedMessages(state)+":"+AgentModels.text(state,"canSteer")+":"+images()+":"+pointing+":"+composerFeedback()+":"+requestKey+":"+respondingRequests+":"+requestErrors;
+        String key=loadedSequence+":"+queryVersion+":"+contentWidth+":"+maxImageHeight()+":"+chatImages.layoutVersion()+":"+working()+":"+AgentModels.queuedMessages(state)+":"+AgentModels.text(state,"canSteer")+":"+images()+":"+pointing+":"+composerFeedback()+":"+requestKey+":"+respondingRequests+":"+requestErrors;
         if(key.equals(transcriptKey))return;
         if(selectingText)return;
         var previousLines=new ArrayList<>(lines);

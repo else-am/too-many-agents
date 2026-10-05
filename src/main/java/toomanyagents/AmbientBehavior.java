@@ -30,6 +30,7 @@ final class AmbientBehavior {
             GameAccess.stopFollowingMotion(mob);
             running = settings.toString();
             wait = 20 + mob.getRandom().nextInt(40);
+            if (type.equals("jump")) wait = Math.round(wait / 1.5f);
             walking = swing = 0;
             home = mob.position();
         }
@@ -47,10 +48,16 @@ final class AmbientBehavior {
             mob.getLookControl().tick();
             if (type.equals("jump") && mob.onGround() && --wait <= 0) {
                 mob.jumpFromGround();
-                wait = 40 + mob.getRandom().nextInt(60);
+                wait = Math.round((40 + mob.getRandom().nextInt(60)) / 1.5f);
             }
             if (type.equals("spin")) {
-                float yaw = net.minecraft.util.Mth.wrapDegrees(mob.getYRot() + 6);
+                float next = mob.getYRot() + 9;
+                float yaw = net.minecraft.util.Mth.wrapDegrees(next);
+                // Keep the previous angles in the same revolution for render interpolation.
+                float wrap = yaw - next;
+                mob.yRotO += wrap;
+                mob.yHeadRotO += wrap;
+                mob.yBodyRotO += wrap;
                 mob.setYRot(yaw);
                 mob.setYHeadRot(yaw);
                 mob.setYBodyRot(yaw);

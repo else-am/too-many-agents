@@ -20,7 +20,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
-import toomanyagents.AgentColor;
 import toomanyagents.BodySettings;
 
 /** One scrolling draft of an agent's identity, world behavior, access and roles. Project settings live elsewhere. */
@@ -57,7 +56,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         this.editingRole=editingRole;
         this.access=access;this.parent=parent;this.agentId=agentId;this.apply=apply;draft=settings.deepCopy();
         if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",true);
-        if(!AgentColor.valid(value("color")))draft.addProperty("color",AgentColor.forId(value("name")));
+        draft.remove("color");
         var source=agentId==null?draft:access.snapshot(agentId);projectId=AgentModels.text(source,"projectId");
         if (agentId == null && AgentModels.worldProject(access.projects(), projectId)) draft.addProperty("minecraftAccess", true);
         var hit=Minecraft.getInstance().hitResult;
@@ -129,7 +128,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             && !(state.has("conversationArchived")&&state.get("conversationArchived").getAsBoolean())
             && !(state.has("bodyRemoved")&&state.get("bodyRemoved").getAsBoolean());
     }
-    private boolean valid(){return editable()&&!value("name").isBlank()&&(editingRole||!value("body").isBlank()&&AgentColor.valid(value("color")));}
+    private boolean valid(){return editable()&&!value("name").isBlank()&&(editingRole||!value("body").isBlank());}
     private void change(String key,String value){draft.addProperty(key,value);rebuildForm();}
     private void change(String key,boolean value){draft.addProperty(key,value);rebuildForm();}
 
@@ -175,7 +174,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if (!bodies.contains(value("body"))) bodyChoices.add(new Choice(value("body"), bodyLabel(value("body"))));
         for (String body : bodies) bodyChoices.add(new Choice(body, bodyLabel(body)));
         choice("Body", value("body"), bodyChoices, v -> change("body", v), enabled);
-        if(!editingRole)colorRow(enabled);
         section("In the world");
         if (editingRole || !AgentModels.worldProject(access.projects(), projectId)) {
             if(agentId==null) toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
@@ -217,26 +215,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             save.active=enabled;place(save,y);
         }
         done();
-    }
-    private void colorRow(boolean enabled){
-        var palette=List.of("#F2627D","#E6AC62","#E1D48B","#91C99B","#77BFC7","#80A5E0","#B99ADC","#D1D1D1");
-        int y=row("Color"), step=Math.min(24,(controlWidth-60)/palette.size()), size=step-4;
-        for(int i=0;i<palette.size();i++){
-            String hex=palette.get(i);
-            var swatch=new Button(controlX+i*step,0,size,20,Component.literal(hex),b->change("color",hex),n->n.get()){
-                @Override protected void renderWidget(GuiGraphics g,int mx,int my,float delta){
-                    boolean chosen=value("color").equalsIgnoreCase(hex);
-                    if(chosen||isHoveredOrFocused())g.fill(getX(),getY(),getX()+getWidth(),getY()+20,chosen?0xFFFFFFFF:0xFF777777);
-                    g.fill(getX()+2,getY()+2,getX()+getWidth()-2,getY()+18,0xFF000000|AgentColor.rgb(hex));
-                }
-            };
-            swatch.active=enabled;place(swatch,y);
-        }
-        int x=controlX+palette.size()*step+2;
-        var field=new EditBox(font,x,0,Math.min(64,controlX+controlWidth-x),20,Component.literal("Color"));
-        field.setMaxLength(7);field.setValue(value("color"));field.setEditable(enabled);field.setTextColor(AgentColor.rgb(value("color")));
-        field.setResponder(v->{draft.addProperty("color",v);field.setTextColor(AgentColor.valid(v)?AgentColor.rgb(v):0xE0E0E0);});
-        place(field,y);
     }
     private List<JsonObject> stations(){
         var result=new ArrayList<JsonObject>();

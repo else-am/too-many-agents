@@ -12,11 +12,10 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import org.lwjgl.glfw.GLFW;
-import toomanyagents.AgentColor;
 
 /** A small side panel for saving a drawn box or editing one; the world stays visible beside it. */
 public final class SurveyScreen extends Screen {
-    private record Choice(String id, String name, String color) {}
+    private record Choice(String id, String name) {}
     private final SurveyMode survey;
     private final AgentUiAccess access;
     private final SurveyMode.Box existing;
@@ -45,15 +44,15 @@ public final class SurveyScreen extends Screen {
         agentId = existing != null && station() ? AgentModels.text(existing.row(), "agentId") : "";
         for (var item : AgentModels.array(access.projects(), "projects")) {
             var row = item.getAsJsonObject();
-            projects.add(new Choice(AgentModels.text(row, "id"), AgentModels.text(row, "name"), ""));
+            projects.add(new Choice(AgentModels.text(row, "id"), AgentModels.text(row, "name")));
         }
         if (existing != null && station()) {
-            agents.add(new Choice("", "Nobody", ""));
+            agents.add(new Choice("", "Nobody"));
             for (var item : access.list()) {
                 var row = item.getAsJsonObject();
                 boolean active = AgentModels.text(row, "lifecycle").equals("active") && !row.get("conversationArchived").getAsBoolean();
                 if ((active && AgentModels.text(row, "projectId").equals(this.projectId)) || AgentModels.text(row, "id").equals(agentId))
-                    agents.add(new Choice(AgentModels.text(row, "id"), AgentModels.text(row, "name"), AgentModels.text(row, "color")));
+                    agents.add(new Choice(AgentModels.text(row, "id"), AgentModels.text(row, "name")));
             }
         }
     }
@@ -62,7 +61,7 @@ public final class SurveyScreen extends Screen {
     private boolean redrawn() { return min != null; }
     private BlockPos low() { return redrawn() ? min : existing.min(); }
     private BlockPos high() { return redrawn() ? max : existing.max(); }
-    private int color() { return SurveyMode.color(projectId); }
+    private int color() { return survey.color(projectId); }
 
     @Override protected void init() {
         // Docked right of the crosshair, so the box itself stays in view.
@@ -262,7 +261,6 @@ public final class SurveyScreen extends Screen {
             g.drawString(font, getMessage(), getX() + 2, getY() + 6, 0x8C8C8C, false);
             String shown = value.get();
             int color = 0xFFFFFF;
-            for (var choice : agents) if (choice.name().equals(shown) && !choice.color().isBlank()) color = AgentColor.rgb(choice.color());
             String text = font.plainSubstrByWidth(shown, getWidth() - 70) + "  ›";
             g.drawString(font, text, getX() + getWidth() - 2 - font.width(text), getY() + 6, color, false);
         }

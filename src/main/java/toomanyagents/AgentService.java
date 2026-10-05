@@ -180,7 +180,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var state=agent.remote.deepCopy();
         var physical=object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,"projectId",agent.projectId,
             "threadId",agent.threadId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
-            "minecraftAccess",agent.minecraftAccess,"currentWorld",game.belongsToCurrentWorld(agent.body),"color",text(agent.settings,"color"),
+            "minecraftAccess",agent.minecraftAccess,"currentWorld",game.belongsToCurrentWorld(agent.body),
             "bodyType",text(agent.settings,"body"),"gamePaused",game.isPaused(),"conversationArchived",agent.archived);
         for(var entry:physical.entrySet()) state.add(entry.getKey(),entry.getValue());
         if(agent.threadId.isBlank()) { state.add("executionOptions",agent.spawn); state.addProperty("providerId",text(agent.spawn,"providerId")); }
@@ -241,7 +241,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var requested=obj(request,"settings");
         var settings=caller==null?BodySettings.copy(requested):BodySettings.copy(caller.settings);
         if(caller!=null) {
-            settings.remove("name"); settings.remove("color"); settings.remove("stationId");
+            settings.remove("name"); settings.remove("stationId");
             for(var entry:BodySettings.copy(requested).entrySet()) settings.add(entry.getKey(),entry.getValue());
             var mode=BodySettings.mode(text(settings,"mode"));
             var callerMode=BodySettings.mode(text(caller.settings,"mode"));
@@ -254,7 +254,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(!currentSession(session)) return failed("world_session_changed");
             if(text(settings,"name").isBlank()) settings.addProperty("name",StarterAgents.name(agents.values().stream().map(a -> a.name).collect(Collectors.toSet())));
             if(text(settings,"body").isBlank()) settings.addProperty("body",StarterAgents.body());
-            if(text(settings,"color").isBlank()) settings.addProperty("color",AgentColor.random(agents.values().stream().map(a -> text(a.settings,"color")).collect(Collectors.toSet())));
         }
         if(!settings.has("mode")) settings.addProperty("mode","survival");
         validateRoleBody(BodySettings.profile(settings));

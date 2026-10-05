@@ -420,7 +420,6 @@ final class GameAccess {
             mob.setCustomName(Component.literal(name)); mob.setCustomNameVisible(true);
             var saved = mob.getPersistentData();
             saved.putString("too_many_agents_mode",mode);
-            if (values.has("color")) saved.putString("too_many_agents_color", string(values,"color",7).toUpperCase(java.util.Locale.ROOT));
             if (values.has("behaviors")) saved.putString("too_many_agents_behaviors",values.get("behaviors").toString());
             actions(ref,mob).hands.syncBody();
             cacheBody(ref,mob);
@@ -432,7 +431,6 @@ final class GameAccess {
         var saved = mob.getPersistentData();
         var result = new JsonObject();
         result.addProperty("name",mob.getName().getString());
-        result.addProperty("color", bodyColor(mob));
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
         result.addProperty("mode",BodySettings.mode(saved.getString("too_many_agents_mode")).id);
         result.add("behaviors",behaviors(mob));
@@ -610,7 +608,6 @@ final class GameAccess {
             var mob = createBody(player, null, string(saved,"name",80), string(saved,"body",200), agentId, projectId);
             mob.setUUID(UUID.fromString(ref.entityUuid()));
             var data = mob.getPersistentData();
-            if (saved.has("color")) data.putString("too_many_agents_color", saved.get("color").getAsString());
             data.putString("too_many_agents_mode", BodySettings.mode(saved.get("mode").getAsString()).id);
             if (saved.has("behaviors")) data.putString("too_many_agents_behaviors", saved.get("behaviors").toString());
             if (!player.serverLevel().addFreshEntity(mob)) throw error("body_recovery_spawn_rejected");
@@ -758,12 +755,15 @@ final class GameAccess {
 
     /** Physical actions take precedence; otherwise run the current activity's behavior. */
     private void idle(MinecraftServer current, Mob mob, AgentActions controller) {
-        var box = box(mob);
         if (controller.ambient.failed) { stopFollowingMotion(mob); return; }
         try {
             var behavior = behaviors(mob).get(agentState(mob).activity());
             boolean follows = behavior instanceof JsonObject b && "follow".equals(b.has("type") ? b.get("type").getAsString() : "");
-            if (!follows && controller.ambient.returnInside(box)) return;
+            // Following leaves the station, but remains inside the project's bounds.
+            var box = follows
+                ? WorldState.get(current).box("", agentState(mob).projectId(), mob.level().dimension().location().toString())
+                : box(mob);
+            if (controller.ambient.returnInside(box)) return;
             var id = localPlayer.get();
             controller.ambient.tick(box, behavior, id == null ? null : current.getPlayerList().getPlayer(id));
         } catch (RuntimeException | LinkageError failure) {
@@ -1245,19 +1245,14 @@ final class GameAccess {
         return result;
     }
 
-    private static String bodyColor(Mob mob) {
-        String color = mob.getPersistentData().getString("too_many_agents_color");
-        return AgentColor.valid(color) ? color : AgentColor.forId(mob.getPersistentData().getString("too_many_agents_agent"));
-    }
-
     CompletableFuture<Void> announceCommunication(Body sender, Body recipient, String session, String summary) {
         return schedule(session, current -> {
             if (!TooManyAgentsClientSettings.get().showAgentCommunication()) return null;
             var from = body(current, sender);
             var to = body(current, recipient);
-            player(current).sendSystemMessage(AgentColor.name(from.getName().getString(), bodyColor(from))
+            player(current).sendSystemMessage(Component.literal(from.getName().getString())
                 .append(Component.literal(" → ").withStyle(style -> style.withColor(0xAAAAAA)))
-                .append(AgentColor.name(to.getName().getString(), bodyColor(to)))
+                .append(Component.literal(to.getName().getString()))
                 .append(Component.literal(": " + summary).withStyle(style -> style.withColor(0xDDDDDD))));
             return null;
         });
@@ -1267,7 +1262,7 @@ final class GameAccess {
         var message = string(args, "message", limit);
         if (limit == 120 && message.codePoints().anyMatch(c -> Character.isISOControl(c) || c == '§' || c == 0x2028 || c == 0x2029)) throw error("message_must_be_one_plain_text_line");
         if (message.isBlank()) throw error("empty_message");
-        var notification = Component.literal("[").append(AgentColor.name(mob.getName().getString(), bodyColor(mob)))
+        var notification = Component.literal("[").append(Component.literal(mob.getName().getString()))
             .append(Component.literal("] " + message));
         if (limit == 120) notification.withStyle(style -> style
             .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,

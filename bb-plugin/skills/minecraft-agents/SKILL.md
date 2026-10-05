@@ -66,7 +66,7 @@ The user can still edit stations in Minecraft.
 
 Roles are shared presets in BB, independent of worlds and projects. They contain
 `name`, `instructions`, `bb` execution choices and `body` settings. They never
-contain a project, station, body name or color. A spawn copies the role; changing
+contain a project, station or body name. A spawn copies the role; changing
 it later does not change existing agents.
 
 ```sh
@@ -96,3 +96,6 @@ retained. Roles cannot grant stronger physical or BB permissions than the caller
 `--mode` accepts `survival`, `creative`, or `creative_commands` (Creative + commands).
 Only `creative_commands` allows Minecraft commands; both Creative modes allow
 Creative physical actions. A child cannot gain abilities its caller lacks.
+
+Project colors are configured in Minecraft’s project settings and persisted in BB,
+shared across worlds. Agents have no individual color setting.

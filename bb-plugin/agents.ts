@@ -19,7 +19,6 @@ const bodyFields = new Set([
   "name",
   "body",
   "mode",
-  "color",
   "behaviors",
   "stationId",
   "minecraftAccess",
@@ -28,7 +27,7 @@ function split(request: ObjectValue) {
   const settings: ObjectValue = {},
     draft: ObjectValue = {};
   for (const [key, value] of Object.entries(request)) {
-    if (value == null || value === "" || key === "initialTask") continue;
+    if (value == null || value === "" || key === "initialTask" || key === "color") continue;
     (bodyFields.has(key) ? settings : draft)[key] = value;
   }
   return { settings, draft };

@@ -45,7 +45,7 @@ before any retry.
   Native `threadId` requests remain available for development diagnostics.
   Java renders these payloads; it does not orchestrate BB calls.
 - `project.creationOptions`: `{projectId}` → `{worktreeAvailable}`.
-  `project.create`: `{name,folder}`; `project.configure`: `{projectId,name}`;
+  `project.create`: `{name,folder,color?}`; `project.configure`: `{projectId,name?,color?}`;
   `project.remove`: `{projectId}`. Host/source/provider details stay in the plugin.
 
 ## Plugin → Minecraft
