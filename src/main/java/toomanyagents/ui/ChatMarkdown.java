@@ -70,19 +70,29 @@ final class ChatMarkdown {
         int maxScroll() { return Math.max(0, contentWidth - width + 12); }
     }
 
-    record Media(int first, int end, int inset, int width, String kind, String source, String alt) {}
+    record Media(int first, int end, int inset, int width, int height, String kind, String source, String alt) {}
     record Layout(List<Row> rows, List<Panel> panels, List<Media> media) {}
     private final Font font;
     private final int width;
+    private final ChatImages images;
+    private final int maxImageHeight;
     private final List<Row> rows = new ArrayList<>();
     private final List<Panel> panels = new ArrayList<>();
     private final List<Media> media = new ArrayList<>();
 
-    private ChatMarkdown(Font font, int width) { this.font = font; this.width = Math.max(40, width); }
+    private ChatMarkdown(Font font, int width, ChatImages images, int maxImageHeight) {
+        this.font = font; this.width = Math.max(40, width);
+        this.images = images; this.maxImageHeight = maxImageHeight;
+    }
 
-    static Layout layout(Font font, String source, int width) {
-        var layout = new ChatMarkdown(font, width);
+    static Layout layout(Font font, String source, int width, ChatImages images, int maxImageHeight) {
+        var layout = new ChatMarkdown(font, width, images, maxImageHeight);
         layout.blocks(PARSER.parse(source), 0, 0);
+        // Messages provide their own bottom padding; keep gaps only between blocks.
+        if (!layout.rows.isEmpty() && layout.rows.getLast().panel() == null
+            && plain(layout.rows.getLast().text()).isEmpty()
+            && (layout.media.isEmpty() || layout.media.getLast().end() < layout.rows.size()))
+            layout.rows.removeLast();
         return new Layout(layout.rows, layout.panels, layout.media);
     }
 
@@ -158,18 +168,20 @@ final class ChatMarkdown {
 
     private void media(String kind,String source,String alt,int inset) {
         int first=rows.size(), available=Math.max(40,width-inset);
-        int count=Math.clamp(available/20,7,16);
+        var size=images.size(kind,source,available,maxImageHeight);
+        int count=(size.height()+LINE_HEIGHT-1)/LINE_HEIGHT;
         for(int i=0;i<count;i++)rows.add(new Row(List.of(new Run(0,FormattedCharSequence.EMPTY)),inset,i==count-1?"\n":"",null));
-        media.add(new Media(first,rows.size(),inset,available,kind,source,alt));
+        media.add(new Media(first,rows.size(),inset,size.width(),size.height(),kind,source,alt));
     }
 
-    static Layout image(Font font,String source,String alt,int width) {
-        var layout=new ChatMarkdown(font,width);
+    static Layout image(Font font,String source,String alt,int width,ChatImages images,int maxImageHeight) {
+        var layout=new ChatMarkdown(font,width,images,maxImageHeight);
         layout.media("image",source,alt,0);
         return new Layout(layout.rows,layout.panels,layout.media);
     }
 
     private void paragraph(Component component, int inset) {
+        if (component.getString().isEmpty()) return;
         var wrapped = font.split(component, Math.max(24, width - inset));
         String raw = component.getString();
         int cursor = 0;
@@ -270,8 +282,7 @@ final class ChatMarkdown {
             else if (node instanceof HardLineBreak) result.append(Component.literal("\n").withStyle(style));
             else if (node instanceof HtmlInline html) result.append(Component.literal(html.getLiteral()).withStyle(style));
             else if (node instanceof TaskListItemMarker task) result.append(Component.literal(task.isChecked() ? "☑ " : "☐ ").withStyle(style));
-            else if (node instanceof Image image) result.append(Component.literal("[Image: ").withStyle(style))
-                .append(inlines(image, linkStyle(style, image.getDestination()), depth + 1)).append("]");
+            else if (node instanceof Image) continue;
             else {
                 Style next = node instanceof StrongEmphasis ? style.withBold(true)
                     : node instanceof Emphasis ? style.withItalic(true)

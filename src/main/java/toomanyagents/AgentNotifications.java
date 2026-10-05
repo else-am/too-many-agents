@@ -18,7 +18,7 @@ import toomanyagents.ui.AgentUiAccess;
 public final class AgentNotifications {
     private final Supplier<? extends AgentUiAccess> access;
     private final Predicate<String> viewingAgent;
-    private final Map<String, String> previousAttention = new HashMap<>();
+    private final Map<String, Boolean> previousAttention = new HashMap<>();
     private final Map<String, Boolean> previousUnread = new HashMap<>();
     private Object previousLevel;
     private long lastCueMs;
@@ -45,12 +45,13 @@ public final class AgentNotifications {
             var agent = item.getAsJsonObject();
             String id = text(agent, "id");
             present.add(id);
-            String attention = text(agent, "attention");
-            boolean unread = flag(agent, "unread");
-            String before = previousAttention.put(id, attention);
+            boolean attention = flag(agent, "hasPendingInteraction");
+            boolean unread = agent.has("latestAttentionAt") && agent.get("latestAttentionAt").getAsLong()
+                > (agent.has("lastReadAt") && !agent.get("lastReadAt").isJsonNull() ? agent.get("lastReadAt").getAsLong() : 0);
+            Boolean before = previousAttention.put(id, attention);
             Boolean readBefore = previousUnread.put(id, unread);
             // First sightings and reconnects establish a quiet baseline.
-            if (before != null && !attention.isBlank() && !attention.equals(before)) cue = true;
+            if (Boolean.FALSE.equals(before) && attention) cue = true;
             if (Boolean.FALSE.equals(readBefore) && unread && !viewingAgent.test(id)) cue = true;
         }
         previousAttention.keySet().retainAll(present);

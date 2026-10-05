@@ -298,7 +298,7 @@ public final class InventoryAgents {
     private void newClosedAgent(String projectId) {
         var client = Minecraft.getInstance();
         // The global New thread action leaves project selection to the draft.
-        String project = projectId == null ? "minecraft" : projectId;
+        String project = projectId == null ? "" : projectId;
         String draftProject = project;
         var requestWorld = client.level;
         var requestScreen = parent;

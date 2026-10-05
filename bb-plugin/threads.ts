@@ -4,6 +4,13 @@ import { imageUploads } from "./images.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import { describe, type ObjectValue, type Session, type SpawnOptions, type Thread } from "./protocol.js";
 
+function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" | "working" | "idle" {
+  if (hasPendingInteraction || thread.status === "error" ||
+      thread.latestAttentionAt > (thread.lastReadAt ?? 0)) return "wants_you";
+  if (["active", "pending", "starting", "stopping"].includes(thread.status)) return "working";
+  return "idle";
+}
+
 /** Translate native BB state once, into the view and physical state Minecraft needs. */
 export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const withImages = imageUploads(bb);
@@ -17,6 +24,15 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       bb.sdk.threads.interactions.list({ threadId }),
       bb.sdk.threads.queuedMessages.list({ threadId }),
     ]);
+    // These sidebar fields are absent from threads.get in the current SDK.
+    let row;
+    if (thread.deletedAt == null) for (let offset = 0; ; offset += 100) {
+      const rows = await bb.sdk.threads.list({ projectId: thread.projectId,
+        archived: thread.archivedAt != null, includeHidden: true, limit: 100, offset });
+      row = rows.find((item) => item.id === threadId);
+      if (row || rows.length < 100) break;
+    }
+    const hasPendingInteraction = row?.hasPendingInteraction ?? interactions.length > 0;
     const active = ["active", "pending", "starting", "stopping"].includes(thread.status);
     return {
       thread,
@@ -25,14 +41,13 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       queuedMessages,
       parentThreadId: thread.parentThreadId ?? "",
       status: thread.status,
-      turnActive: active,
+      hasPendingInteraction,
+      latestAttentionAt: thread.latestAttentionAt,
+      lastReadAt: thread.lastReadAt,
+      queuedWork: row?.queuedWork ?? "none",
+      activity: activity(thread, hasPendingInteraction),
       canSteer: active,
       conversationArchived: thread.archivedAt != null,
-      unread:
-        thread.latestAttentionAt != null &&
-        (thread.lastReadAt == null || thread.latestAttentionAt > thread.lastReadAt),
-      replyVersion: thread.latestAttentionAt ?? 0,
-      attention: interactions.length ? "input" : "",
       taskTitle: thread.title ?? "",
       providerId: thread.providerId,
     };

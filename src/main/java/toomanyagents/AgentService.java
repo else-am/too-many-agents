@@ -100,7 +100,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 var captured=agent.suspendedBody.isBlank()?game.saveBody(agent.body,session):CompletableFuture.completedFuture(agent.suspendedBody);
                 return captured.thenCompose(saved -> {
                     synchronized(this) { requireCurrent(agent,session); agent.suspendedBody=saved; agent.settings.remove("stationId"); }
-                    // Persist the complete entity, including inventory, before despawning it.
+                    // Inventory has been dropped; persist the empty body before despawning it.
                     return save();
                 }).thenCompose(done -> game.suspendBody(agent.body,agent.suspendedBody,session))
                     .thenCompose(done -> game.worldCommand(object("operation","station-release","agentId",agent.id),session))
@@ -167,15 +167,17 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private boolean currentAgent(Agent agent,String session) { return currentSession(session) && agents.get(agent.id)==agent; }
     private void requireCurrent(Agent agent,String session) { if(!currentAgent(agent,session)) throw new IllegalStateException("world_session_changed"); }
     synchronized String findByBody(UUID body) { return currentSession(loadedSession) ? agents.values().stream().filter(a -> a.body!=null && a.body.entityUuid().equals(body.toString()) && game.belongsToCurrentWorld(a.body)).map(a -> a.id).findFirst().orElse(null) : null; }
-    synchronized Set<String> retiredBodies() {
-        if(!currentSession(loadedSession)) return Set.of();
-        return agents.values().stream().filter(a -> a.removed).map(a -> a.id).collect(Collectors.toSet());
+    /** Null until this world's records load; an empty registry then really means no bodies belong here. */
+    synchronized Set<String> retainedBodies() {
+        if(!currentSession(loadedSession)) return null;
+        // Keep drafts and pending starts, too. Only BB can confirm a bound thread's deletion.
+        return agents.values().stream().filter(a -> !a.removed).map(a -> a.id).collect(Collectors.toSet());
     }
     synchronized Map<String,GameAccess.AgentState> agentStates() {
         var result=new HashMap<String,GameAccess.AgentState>();
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed && !agent.archived) {
-            var state=snapshot(agent.id); String activity=!text(state,"attention").isBlank()?"needs_input":flag(state,"turnActive")?"working":flag(state,"unread")?"done":"idle";
+            String activity=text(snapshot(agent.id),"activity");
             result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity));
         }
         return result;
@@ -193,7 +195,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         for(var entry:physical.entrySet()) state.add(entry.getKey(),entry.getValue());
         if(agent.threadId.isBlank()) { state.add("executionOptions",agent.spawn); state.addProperty("providerId",text(agent.spawn,"providerId")); }
         if(!state.has("status")) state.addProperty("status","idle");
-        if(!connected || !agentError.isBlank()) { state.addProperty("status","disconnected"); state.addProperty("turnActive",false); state.addProperty("canSteer",false); }
+        if(!state.has("activity")) state.addProperty("activity","idle");
+        if(!connected || !agentError.isBlank()) { state.addProperty("status","disconnected"); state.addProperty("canSteer",false); }
         var live=agent.body==null?new JsonObject():game.cached(agent.body);
         state.addProperty("bodyLoaded",!live.isEmpty()); state.addProperty("following",agent.body!=null && game.following(agent.body));
         state.addProperty("followingSuspended",flag(live,"followingSuspended")); state.addProperty("followPauseReason",text(live,"followPauseReason"));
@@ -263,7 +266,11 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(settings.has("behaviors")) validateBehaviors(settings.get("behaviors"));
         String name=text(settings,"name");
         var agent=new Agent(); agent.id=id; agent.name=name; agent.projectId=projectId;
-        agent.minecraftAccess=caller==null?flag(request,"minecraftAccess"):caller.minecraftAccess;
+        // World drafts always have access; delegated bodies still inherit their caller's access.
+        agent.minecraftAccess=caller==null
+            ? projectId.equals(text(game.worldInfo(),"worldProjectId")) || flag(request,"minecraftAccess")
+            : caller.minecraftAccess;
+        settings.addProperty("minecraftAccess", agent.minecraftAccess);
         agent.settings=settings; agent.spawn=obj(request,"draft").deepCopy();
         var anchor=caller==null?null:caller.body;
         String stationId=text(settings,"stationId");
@@ -487,7 +494,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     static void validateBehaviors(JsonElement value) {
         if (!value.isJsonObject()) throw new IllegalArgumentException("Behaviors must be an object keyed by state.");
         for (var entry : value.getAsJsonObject().entrySet()) {
-            if (!Set.of("working","needs_input","done","idle").contains(entry.getKey())) throw new IllegalArgumentException("Unknown behavior state: " + entry.getKey());
+            if (!Set.of("working","wants_you","idle").contains(entry.getKey())) throw new IllegalArgumentException("Unknown behavior state: " + entry.getKey());
             if (!entry.getValue().isJsonObject()) throw new IllegalArgumentException("Each behavior must be an object.");
             var behavior = entry.getValue().getAsJsonObject();
             String type = text(behavior,"type");

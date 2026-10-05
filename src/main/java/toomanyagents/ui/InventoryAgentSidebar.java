@@ -647,10 +647,9 @@ public final class InventoryAgentSidebar extends Screen {
     }
 
     private void renderSignals(GuiGraphics g, JsonObject agent, int x, int y) {
-        boolean working = flag(agent, "turnActive")
-            || List.of("starting", "running", "background", "stopping").contains(text(agent, "status"));
-        boolean attention = !text(agent, "attention").isBlank() || flag(agent, "waitingForGame");
-        if (attention || !working && flag(agent, "unread")) {
+        boolean working = List.of("active", "pending", "starting", "stopping").contains(text(agent, "status"));
+        boolean attention = flag(agent, "hasPendingInteraction") || flag(agent, "waitingForGame");
+        if (attention || !working && unread(agent)) {
             int color = 0xFF000000 | AgentColor.rgb(text(agent, "color"));
             g.fill(x + 1, y + 14, x + 5, y + 20, color);
             g.fill(x, y + 15, x + 6, y + 19, color);
@@ -708,15 +707,20 @@ public final class InventoryAgentSidebar extends Screen {
         String result = text(agent, "name");
         String task = text(agent, "taskTitle");
         if (!task.isBlank()) result += "\n" + task;
-        String attention = text(agent, "attention");
         String state = text(agent, "status").equals("disconnected") ? "BB disconnected"
             : flag(agent, "waitingForGame") ? "Waiting for game to resume"
-            : attention.equals("approval") ? "Approval needed" : attention.equals("input") ? "Input needed"
-            : attention.equals("error") ? "Needs attention" : flag(agent, "turnActive") ? "Working" : "Ready";
+            : flag(agent, "hasPendingInteraction") ? "Input needed"
+            : text(agent, "status").equals("error") ? "Needs attention"
+            : List.of("active", "pending", "starting", "stopping").contains(text(agent, "status")) ? "Working" : "Ready";
         result += "\n" + state;
-        if (flag(agent, "unread")) result += " - Unread reply";
+        if (unread(agent)) result += " - Unread reply";
         if (!flag(agent, "currentWorld")) result += "\nOther world";
         return result;
+    }
+
+    private static boolean unread(JsonObject agent) {
+        return agent.has("latestAttentionAt") && agent.get("latestAttentionAt").getAsLong()
+            > (agent.has("lastReadAt") && !agent.get("lastReadAt").isJsonNull() ? agent.get("lastReadAt").getAsLong() : 0);
     }
 
     private static String text(JsonObject object, String key) { return AgentModels.text(object, key); }

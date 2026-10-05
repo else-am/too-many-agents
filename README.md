@@ -89,9 +89,10 @@ native subagents or change unrelated BB threads' settings.
 Agent messages delivered by BB appear in world chat when **Show agent
 communication** is enabled and both bodies are present. BB owns message queues
 and communication permissions. Stopping a thread cancels its physical actions;
-archiving saves and despawns its body and frees its station. Unarchiving restores
-the saved body and inventory when the world is open. Deleting a thread removes
-its body association. These changes also reconcile after reconnecting.
+archiving drops its inventory, saves and despawns its body, and frees its station.
+Unarchiving restores the saved body with an empty inventory when the world is
+open. Deleting a thread removes its body association. These changes also
+reconcile after reconnecting.
 
 Chat renders Markdown natively, including tables, lists, quotes, inline code and
 code blocks. Drag to select text; code and table headers have Copy controls.
@@ -101,8 +102,8 @@ keeping glyph edges aligned with Minecraft's pixel grid.
 Web links follow Minecraft's chat-link settings. Workspace and thread-storage
 file links open in BB, including `path:line` and `path#Lline` links.
 
-Images load through BB's attachment/file APIs or public HTTP(S) URLs. Click an
-image to zoom and pan; GIF and WebP animations show their first frame. Images
+Images load inline through BB's attachment/file APIs or public HTTP(S) URLs,
+fitted to their proportions. GIF and WebP animations show their first frame. Images
 are limited to 5 MB, 4096 pixels per side and 4 megapixels. Loading and decoding
 run off the render thread; closing chat releases its textures.
 

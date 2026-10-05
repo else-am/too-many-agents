@@ -33,7 +33,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private boolean bodiesRequested;
     private final List<String> bodies = new ArrayList<>();
     private String profileName="", selectedProfile="", projectId="", stationId="";
-    private static final String[][] STATES={{"working","While working"},{"needs_input","Needing input"},{"done","When done"},{"idle","When idle"}};
+    private static final String[][] STATES={{"working","While working"},{"wants_you","Wants you"},{"idle","When idle"}};
     // The block under the crosshair when settings opened; offered as a look/swing target.
     private final BlockPos aimed;
     private final Map<String,String> targetText=new HashMap<>();
@@ -48,6 +48,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",true);
         if(!AgentColor.valid(value("color")))draft.addProperty("color",AgentColor.forId(value("name")));
         var source=agentId==null?draft:access.snapshot(agentId);projectId=AgentModels.text(source,"projectId");
+        if (agentId == null && AgentModels.worldProject(access.projects(), projectId)) draft.addProperty("minecraftAccess", true);
         var hit=Minecraft.getInstance().hitResult;
         aimed=hit instanceof BlockHitResult block&&hit.getType()==HitResult.Type.BLOCK?block.getBlockPos().immutable():null;
         if(agentId!=null)stationId=assignedStation();
@@ -103,6 +104,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
                     }
                 }));
         }
+        if (agentId == null && AgentModels.worldProject(access.projects(), projectId)) draft.addProperty("minecraftAccess", true);
         begin();
         boolean enabled=editable(), world=flag("minecraftAccess");
         section("Identity");
@@ -115,9 +117,10 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         choice("Body", value("body"), bodyChoices, v -> change("body", v), enabled);
         colorRow(enabled);
         section("In the world");
-        if(agentId==null) {
-            toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
-        } else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");
+        if (!AgentModels.worldProject(access.projects(), projectId)) {
+            if(agentId==null) toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
+            else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");
+        }
         if(agentId!=null&&!stations().isEmpty())stationRow(enabled);
         toggle("Follow me",flag("following"),v->{followEdited=true;change("following",v);},enabled);
         if(AgentModels.text(agent(),"followPauseReason").equals("work"))action("Paused while working","Resume following",this::resumeFollow,enabled);

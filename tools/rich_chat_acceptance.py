@@ -10,7 +10,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--game-dir', default='run')
-parser.add_argument('--assets', action='store_true', help='Also test BB-backed images, Mermaid, viewer and cleanup; generate fixtures first')
+parser.add_argument('--assets', action='store_true', help='Also test BB-backed images, Mermaid and cleanup; generate fixtures first')
 parser.add_argument('--thread-id', help='Existing BB thread whose workspace is this checkout (defaults to current bb thread)')
 args = parser.parse_args()
 
@@ -198,12 +198,9 @@ if args.assets:
 
     view = asset('scratch/rich-chat/colors.png')
     media = view['media'][0]
-    assert ui('click', x=media['x'] + 50, y=media['y'] + 50)['screen'] == 'ChatImageScreen'
-    assert ui('scroll', x=300, y=200, delta=3)['imageView']['zoom'] > 1
-    ui('dev_drag',x=300,y=200,endX=360,endY=230)
-    assert ui('widgets')['imageView']['panX'] > 0
-    assert ui('key', key=256)['screen'] == 'AgentChatScreen'
-    print('PASS: Native image viewer opens, zooms and returns to chat')
+    assert abs(media['width'] / media['height'] - 2) < .02
+    assert ui('click', x=media['x'] + media['width'] / 2, y=media['y'] + media['height'] / 2)['screen'] == 'AgentChatScreen'
+    print('PASS: Images retain their proportions inline; clicking stays in chat')
 
     for index in range(28):
         view = asset(f'scratch/rich-chat/cache-{index}.png')

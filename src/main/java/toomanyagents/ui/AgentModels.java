@@ -29,6 +29,11 @@ final class AgentModels {
 
     static JsonObject execution(JsonObject snapshot) { return object(snapshot, "executionOptions"); }
 
+    static boolean worldProject(JsonObject projects, String projectId) {
+        return projectId.equals("minecraft") || !projectId.isBlank()
+            && projectId.equals(text(object(projects, "world"), "worldProjectId"));
+    }
+
     void load(JsonObject catalog) {
         models.clear();
         for (var item : array(catalog, "models")) models.add(item.getAsJsonObject());

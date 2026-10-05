@@ -116,7 +116,15 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
     }
     return [
       { ...(own ?? { id: "minecraft", sources: [] }), name: "This world", kind: "world" },
-      ...projects.filter((project) => project !== own && project.kind !== "personal"),
+      ...projects.filter(
+        (project) =>
+          project !== own &&
+          project.kind !== "personal" &&
+          // World projects own this save-relative folder, even after a rename or move.
+          !project.sources.some((source) =>
+            /[\\/]too-many-agents[\\/]workspace[\\/]?$/.test(source.path),
+          ),
+      ),
       ...projects
         .filter((project) => project.kind === "personal")
         .map((project) => ({ ...project, name: "No project" })),

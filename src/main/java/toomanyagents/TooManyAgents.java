@@ -227,7 +227,7 @@ public final class TooManyAgents {
     }
 
     private void serverTick(ServerTickEvent.Post event) {
-        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retiredBodies, agents == null ? Map::of : agents::agentStates);
+        if (game != null && !event.getServer().isDedicatedServer()) game.tick(event.getServer(), agents == null ? null : agents::retainedBodies, agents == null ? Map::of : agents::agentStates);
         if (DevelopmentWorld.ENABLED) DevelopmentChecks.tick(event.getServer());
         var current = session.get();
         if (current == null || current.server() != event.getServer() || event.getServer().getTickCount() % 5 != 0) return;

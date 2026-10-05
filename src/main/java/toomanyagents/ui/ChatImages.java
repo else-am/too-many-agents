@@ -30,11 +30,24 @@ final class ChatImages implements AutoCloseable {
     }
     private record Pixels(int width, int height, int[] rgba) {}
     private final LinkedHashMap<String, Image> images = new LinkedHashMap<>(16, 0.75f, true);
+    private final java.util.Map<String, Size> dimensions = new java.util.HashMap<>();
+    private int layoutVersion;
     private final BiFunction<String, String, CompletableFuture<JsonObject>> load;
     private int generation;
     private long textureBytes;
 
     ChatImages(BiFunction<String, String, CompletableFuture<JsonObject>> load) { this.load = load; }
+
+    record Size(int width, int height) {}
+
+    Size size(String kind, String source, int width, int maxHeight) {
+        var size = dimensions.get(kind + "\n" + source);
+        if (size == null) return new Size(width, 2 * ChatMarkdown.LINE_HEIGHT);
+        double scale = Math.min((double)width / size.width(), (double)maxHeight / size.height());
+        return new Size(Math.max(1, (int)(size.width() * scale)), Math.max(1, (int)(size.height() * scale)));
+    }
+
+    int layoutVersion() { return layoutVersion; }
 
     Image get(String kind, String source) {
         String key = kind + "\n" + source;
@@ -63,6 +76,8 @@ final class ChatImages implements AutoCloseable {
                     var texture = new DynamicTexture(nativeImage);
                     target.texture = Minecraft.getInstance().getTextureManager().register("bb_chat", texture);
                     target.width = pixels.width(); target.height = pixels.height();
+                    dimensions.put(key, new Size(target.width, target.height));
+                    layoutVersion++;
                     textureBytes += (long)target.width * target.height * 4;
                     liveTextures++;liveBytes+=(long)target.width*target.height*4;
                 } catch (Throwable error) { nativeImage.close(); throw error; }
@@ -103,7 +118,8 @@ final class ChatImages implements AutoCloseable {
 
     @Override public void close() {
         generation++;
-        images.values().forEach(this::release); images.clear(); textureBytes = 0;
+        images.values().forEach(this::release); images.clear(); dimensions.clear(); textureBytes = 0;
+        layoutVersion++;
     }
 
     static void draw(GuiGraphics graphics, Image image, int x, int y, int width, int height) {

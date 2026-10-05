@@ -10,7 +10,18 @@ public final class BodySettings {
         if (settings == null) return result;
         for (String key : List.of("name", "body", "mode", "cheats", "following", "followReturn", "color", "behaviors", "stationId", "minecraftAccess"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
+        if (result.get("behaviors") instanceof JsonObject behaviors) migrateBehaviors(behaviors);
         return result;
+    }
+
+    /** Keep existing choices when loading the old four-state behavior settings. */
+    static void migrateBehaviors(JsonObject behaviors) {
+        if (!behaviors.has("wants_you")) {
+            var previous = behaviors.has("needs_input") ? behaviors.get("needs_input") : behaviors.get("done");
+            if (previous != null) behaviors.add("wants_you", previous);
+        }
+        behaviors.remove("needs_input");
+        behaviors.remove("done");
     }
 
     /** Profiles reuse body behavior without replacing identity or a world's station assignment. */

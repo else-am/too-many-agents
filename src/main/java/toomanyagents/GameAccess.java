@@ -55,7 +55,7 @@ final class GameAccess {
     private static final int ENTITY_LIMIT = 64;
     private static final PovCapture.Settings POV = new PovCapture.Settings(960, 540, 70);
     record Body(String entityUuid, String world, String dimension) {}
-    /** An agent's project and activity (working, needs_input, done, idle), published by AgentService. */
+    /** An agent's project and plugin activity (working, wants_you, idle), published by AgentService. */
     record AgentState(String projectId, String activity) {}
     private record PublishedWorld(String path, String session) {}
 
@@ -726,7 +726,14 @@ final class GameAccess {
     static JsonObject behaviors(Mob mob) {
         String saved = mob.getPersistentData().getString("too_many_agents_behaviors");
         if (saved.isBlank()) return new JsonObject();
-        try { return com.google.gson.JsonParser.parseString(saved).getAsJsonObject(); }
+        try {
+            var behaviors = com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
+            if (behaviors.has("needs_input") || behaviors.has("done")) {
+                BodySettings.migrateBehaviors(behaviors);
+                mob.getPersistentData().putString("too_many_agents_behaviors", behaviors.toString());
+            }
+            return behaviors;
+        }
         catch (RuntimeException invalid) { return new JsonObject(); }
     }
 
@@ -772,7 +779,7 @@ final class GameAccess {
         publishedWorld = new PublishedWorld(world(current), worldSession.get());
         drainActionStops();
         drainTools(current);
-        Set<String> retiredAgents = registry == null ? null : registry.get();
+        Set<String> retainedAgents = registry == null ? null : registry.get();
         if (!Objects.equals(cleanupSession,worldSession.get()) || failedBodyCleanup == null) {
             cleanupSession = worldSession.get();
             failedBodyCleanup = new HashSet<>();
@@ -798,13 +805,13 @@ final class GameAccess {
                     continue;
                     }
                 }
-                // Remove only known retired bodies. Unknown or disconnected NPCs remain intact.
-                if (retiredAgents != null && retiredAgents.contains(saved.getString("too_many_agents_agent"))) {
+                // Once records are loaded, clean up retired bodies and ghosts left by older versions.
+                if (retainedAgents != null && !retainedAgents.contains(saved.getString("too_many_agents_agent"))) {
                     if (!failedBodyCleanup.contains(mob.getUUID())) {
                         try { removeBody(mob,current); }
                         catch (RuntimeException | LinkageError failure) {
                             failedBodyCleanup.add(mob.getUUID());
-                            LOG.warn("Could not clean up retired agent body {}; not automatically retrying",mob.getStringUUID(),failure);
+                            LOG.warn("Could not clean up orphaned agent body {}; not automatically retrying",mob.getStringUUID(),failure);
                         }
                     }
                     continue;
@@ -1005,11 +1012,17 @@ final class GameAccess {
         mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
     }
 
-    /** Save the whole entity before an archive removes it from the world. */
+    /** Drop belongings, then save the empty body for restoration after an archive. */
     CompletableFuture<String> saveBody(Body ref, String session) {
         return schedule(session, current -> {
             var mob = body(current, ref);
-            actions(ref, mob).hands.save();
+            var controller = actions(ref, mob);
+            // Freeze the body while its snapshot is written, including across a failed disk save.
+            mob.getPersistentData().putBoolean("too_many_agents_removing", true);
+            stopFollowingMotion(mob);
+            actions.remove(ref);
+            controller.close("thread_archived");
+            dropInventory(mob, controller.hands);
             var tag = new net.minecraft.nbt.CompoundTag();
             if (!mob.save(tag)) throw error("body_save_failed");
             return tag.toString();
@@ -1034,7 +1047,11 @@ final class GameAccess {
         return schedule(session, current -> {
             var level = savedBodyLevel(current, ref, saved);
             var existing = level.getEntity(UUID.fromString(ref.entityUuid()));
-            if (existing instanceof Mob mob) { cacheBody(ref,mob); return null; }
+            if (existing instanceof Mob mob) {
+                mob.getPersistentData().remove("too_many_agents_removing");
+                cacheBody(ref,mob);
+                return null;
+            }
             try {
                 var entity = net.minecraft.world.entity.EntityType.loadEntityRecursive(net.minecraft.nbt.TagParser.parseTag(saved),level,java.util.function.Function.identity());
                 if (!(entity instanceof Mob mob)) throw error("invalid_saved_body");
@@ -1095,7 +1112,13 @@ final class GameAccess {
         following.remove(ref);
         bodySnapshots.remove(ref);
         controller.close("agent_removed");
-        var inventory = controller.hands.getInventory();
+        dropInventory(mob, controller.hands);
+        mob.discard();
+        if (!mob.isRemoved()) throw error("body_removal_not_confirmed");
+    }
+
+    private void dropInventory(Mob mob, AgentHands hands) {
+        var inventory = hands.getInventory();
         for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
             var stack = inventory.getItem(slot);
             if (stack.isEmpty()) continue;
@@ -1103,10 +1126,8 @@ final class GameAccess {
             drop.setDefaultPickUpDelay();
             if (!((ServerLevel) mob.level()).addFreshEntity(drop)) throw error("inventory_drop_rejected_retry_removal");
             inventory.setItem(slot, net.minecraft.world.item.ItemStack.EMPTY);
-            controller.hands.save();
+            hands.save();
         }
-        mob.discard();
-        if (!mob.isRemoved()) throw error("body_removal_not_confirmed");
     }
 
     /** Roll back a newly created body when agent creation fails. */

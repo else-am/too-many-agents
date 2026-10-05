@@ -323,7 +323,7 @@ public final class ClientControls {
                         }
                         else if (action.equals("dev_drag")) {
                             var screen=client.screen;
-                            if (!(screen instanceof AgentChatScreen || screen instanceof toomanyagents.ui.ChatImageScreen)) throw new IllegalStateException("Open a standalone chat or image first");
+                            if (!(screen instanceof AgentChatScreen)) throw new IllegalStateException("Open a standalone chat first");
                             double x=request.get("x").getAsDouble(), y=request.get("y").getAsDouble();
                             double endX=request.get("endX").getAsDouble(), endY=request.get("endY").getAsDouble();
                             if(!Double.isFinite(x) || !Double.isFinite(y) || !Double.isFinite(endX) || !Double.isFinite(endY))
@@ -523,7 +523,7 @@ public final class ClientControls {
     }
 
     private static boolean ours(Screen screen) {
-        return screen instanceof toomanyagents.ui.ChatImageScreen || screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
+        return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
             || screen instanceof toomanyagents.ui.SurveyScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQuestionScreen || screen instanceof AgentQueueScreen
@@ -546,7 +546,6 @@ public final class ClientControls {
         reply.add("survey", survey.diagnostics());
         if (screen instanceof ChatScreen) reply.add("mentions", mentions.diagnostics(screen));
         if (screen instanceof AgentChatScreen chat) reply.add("pointing", chat.pointingContext());
-        if (screen instanceof toomanyagents.ui.ChatImageScreen image) reply.add("imageView",image.diagnostics());
         if (screen instanceof AgentInventoryScreen inventory) reply.add("inventory", inventory.inventoryState());
         if (screen instanceof AgentApprovalScreen approval) reply.add("approval", approval.diagnostics());
         if (screen instanceof AgentQuestionScreen question) reply.add("question", question.diagnostics());

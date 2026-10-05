@@ -60,9 +60,16 @@ Java rejects stale sessions and expires physical requests before execution.
   `body.settings`: `{agentId,settings}` applies physical settings.
 - `body.sync`: `{agentId,threadId,view?,state?,running?,projectId?}`. `view` is the
   plugin's ready-to-display agent state. `state` is `present`, `suspended` or
-  `deleted`. Java cancels physical actions when `running` is false, saves full
-  entity data before suspension, restores it on return, and releases stations
-  on suspension/deletion. BB lifecycle fields are interpreted only in the plugin.
+  `deleted`. Java cancels physical actions when `running` is false, drops inventory
+  and saves the empty body before suspension, restores it on return, and releases
+  stations on suspension/deletion. BB lifecycle fields are interpreted only in the plugin.
+  The view passes through BB's `status`, `hasPendingInteraction`, `latestAttentionAt`,
+  `lastReadAt` and `queuedWork` for native UI indicators (list-only fields come from
+  the thread list, with pending interactions as a fallback). Its one computed
+  `activity` drives body behavior: `wants_you` for pending input, error or unread
+  attention first; otherwise `working` for active/pending/starting/stopping;
+  otherwise `idle`. Java uses that value directly. Saved `needs_input` and `done`
+  behaviors migrate to `wants_you`, preferring `needs_input` when both exist.
 - `world_metadata`, `world.workspace`, `world.project` expose the saved world
   record, create its owned workspace directory, and persist the BB project ID.
 - `tool`: `{agentId,threadId,tool,arguments}` executes only for the body's own

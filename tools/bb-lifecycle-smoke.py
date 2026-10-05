@@ -93,18 +93,30 @@ def main():
         assert sum(token in row for row in request('/v1/state')['recentChat']) == 1
     print('PASS: BB direct and queued agent messages shown once in world chat', flush=True)
 
-    # Add an actual inventory stack, then preserve it across BB archive/unarchive.
+    # Archiving drops inventory; restoring the body must not duplicate those items.
     path = '/v1/agents/' + receiver_id
     bb('thread', 'tell', receiver_thread, 'Use minecraft_action creative_item to create exactly 7 minecraft:diamond once. Poll minecraft_action_status until complete, then reply INVENTORY_READY. Do not repeat an action after an unknown outcome.', '--mode', 'auto')
-    inventory = wait(lambda: (inv if 'minecraft:diamond' in json.dumps(inv := inventory_contents()) else None), 'Inventory stack')
+    wait(lambda: (inv if 'minecraft:diamond' in json.dumps(inv := inventory_contents()) else None), 'Inventory stack')
     wait(lambda: get(receiver_id).get('thread', {}).get('status') == 'idle', 'Inventory turn completion')
+    items_before = {e['uuid'] for e in request('/v1/state')['server']['entities'] if e['type'] == 'minecraft:item'}
     bb('thread', 'archive', receiver_thread)
     wait(lambda: get(receiver_id).get('conversationArchived', False) and not get(receiver_id).get('bodyLoaded', False), 'Archive suspension')
+    dropped = wait(lambda: next((e for e in request('/v1/state')['server']['entities']
+        if e['type'] == 'minecraft:item' and e['name'] == 'Diamond' and e['uuid'] not in items_before), None), 'Dropped diamonds')
+    # Move the drop out of automatic pickup range before restoring the NPC.
+    position = dropped['position']
+    request('/v1/command', {'session': request('/v1/state')['session'],
+        'command': f"tp {dropped['uuid']} {position['x'] + 12} {position['y']} {position['z'] + 12}"})
+    wait(lambda: any(e['uuid'] == dropped['uuid'] and e['position']['x'] > position['x'] + 10
+        for e in request('/v1/state')['server']['entities']), 'Drop moved out of pickup range')
     bb('thread', 'unarchive', receiver_thread)
     wait(lambda: get(receiver_id).get('bodyLoaded', False) and not get(receiver_id).get('conversationArchived', False), 'Unarchive restoration')
-    assert inventory_contents() == inventory
+    empty_inventory = inventory_contents()
+    assert all(slot['count'] == 0 for slot in empty_inventory['slots'])
+    assert all(slot['count'] == 0 for slot in empty_inventory['equipment'])
+    assert empty_inventory['carried']['count'] == 0
     assert get(receiver_id)['body']['entityUuid'] == receiver['body']['entityUuid']
-    print('PASS: archive/unarchive preserves body UUID and inventory', flush=True)
+    print('PASS: archive drops inventory; unarchive preserves body UUID without duplicating items', flush=True)
 
     # A plugin reload must reconnect the same bodies without replaying chat.
     bb('plugin', 'reload', 'minecraft')
@@ -121,8 +133,8 @@ def main():
     wait(lambda: get(receiver_id).get('conversationArchived', False) and not get(receiver_id).get('bodyLoaded', False), 'Offline archive reconciliation')
     bb('thread', 'unarchive', receiver_thread)
     wait(lambda: get(receiver_id).get('bodyLoaded', False), 'Restore after reconnect')
-    assert inventory_contents() == inventory
-    print('PASS: offline archive reconciles and restores inventory after reopening world', flush=True)
+    assert inventory_contents() == empty_inventory
+    print('PASS: offline archive reconciles and does not restore dropped inventory', flush=True)
 
     bb('thread', 'delete', receiver_thread, '--yes')
     wait(lambda: all(a['id'] != receiver_id for a in request('/v1/agents')), 'Deleted association cleanup')

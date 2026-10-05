@@ -130,7 +130,7 @@ def main():
                         and observation.get('body', {}).get('uuid') == body_uuid):
                     physical_calls.add(row['callId'])
                 seen_tool = len(physical_calls) >= 5
-        if seen_first and seen_second and seen_tool and not current.get('turnActive'):
+        if seen_first and seen_second and seen_tool and current.get('status') not in ('active', 'pending', 'starting', 'stopping'):
             break
         if current.get('status') in ('error', 'disconnected') or current.get('error'):
             raise RuntimeError('Provider or Minecraft connection failed; fixture retained for inspection.')
