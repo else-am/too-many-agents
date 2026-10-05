@@ -63,9 +63,10 @@ Java rejects stale sessions and expires physical requests before execution.
   `deleted`. Java cancels physical actions when `running` is false, drops inventory
   and saves the empty body before suspension, restores it on return, and releases
   stations on suspension/deletion. BB lifecycle fields are interpreted only in the plugin.
-  The view passes through BB's `status`, `hasPendingInteraction`, `latestAttentionAt`,
-  `lastReadAt` and `queuedWork` for native UI indicators (list-only fields come from
-  the thread list, with pending interactions as a fallback). Its one computed
+  The view passes through BB's `status`, `latestAttentionAt` and `lastReadAt` for
+  native UI indicators. `hasPendingInteraction` comes from the pending-interaction
+  list; `queuedWork` is `failed` if any queued message has a non-null `failureReason`,
+  otherwise `waiting` if any are queued, or `none`. Its one computed
   `activity` drives body behavior: `wants_you` for pending input, error or unread
   attention first; otherwise `working` for active/pending/starting/stopping;
   otherwise `idle`. Java uses that value directly. Saved `needs_input` and `done`

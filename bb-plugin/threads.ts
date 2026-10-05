@@ -24,15 +24,9 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       bb.sdk.threads.interactions.list({ threadId }),
       bb.sdk.threads.queuedMessages.list({ threadId }),
     ]);
-    // These sidebar fields are absent from threads.get in the current SDK.
-    let row;
-    if (thread.deletedAt == null) for (let offset = 0; ; offset += 100) {
-      const rows = await bb.sdk.threads.list({ projectId: thread.projectId,
-        archived: thread.archivedAt != null, includeHidden: true, limit: 100, offset });
-      row = rows.find((item) => item.id === threadId);
-      if (row || rows.length < 100) break;
-    }
-    const hasPendingInteraction = row?.hasPendingInteraction ?? interactions.length > 0;
+    const hasPendingInteraction = interactions.some((interaction) => interaction.status === "pending");
+    const queuedWork = queuedMessages.some((message) => message.failureReason != null)
+      ? "failed" : queuedMessages.length ? "waiting" : "none";
     const active = ["active", "pending", "starting", "stopping"].includes(thread.status);
     return {
       thread,
@@ -44,7 +38,7 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       hasPendingInteraction,
       latestAttentionAt: thread.latestAttentionAt,
       lastReadAt: thread.lastReadAt,
-      queuedWork: row?.queuedWork ?? "none",
+      queuedWork,
       activity: activity(thread, hasPendingInteraction),
       canSteer: active,
       conversationArchived: thread.archivedAt != null,
