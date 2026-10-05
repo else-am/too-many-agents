@@ -557,6 +557,18 @@ final class AgentHands extends FakePlayer {
         body.getPersistentData().put("too_many_agents_hands", saved);
     }
 
+    /** Vanilla already copied these private stacks into the destination body. Do not return or drop them twice. */
+    void closeAfterTransfer() {
+        requireThread();
+        if (closed) return;
+        containerMenu.setCarried(ItemStack.EMPTY);
+        inventoryMenu.setCarried(ItemStack.EMPTY);
+        for (int slot = 1; slot <= 4; slot++) inventoryMenu.getSlot(slot).set(ItemStack.EMPTY);
+        if (containerMenu instanceof CraftingMenu)
+            for (int slot = 1; slot <= 9; slot++) containerMenu.getSlot(slot).set(ItemStack.EMPTY);
+        closeHands();
+    }
+
     void closeHands() {
         requireThread();
         if (closed) return;

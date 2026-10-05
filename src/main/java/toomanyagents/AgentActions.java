@@ -93,7 +93,8 @@ final class AgentActions {
 
     void close(String reason) {
         if (busy()) finish("interrupted", reason, null);
-        hands.closeHands();
+        if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
+        else hands.closeHands();
     }
 
     void tick() {
