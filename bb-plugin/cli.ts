@@ -77,7 +77,7 @@ export function registerMinecraftCli(
         if (o["minecraft-access"] || o["no-minecraft-access"]) body.minecraftAccess = o["minecraft-access"];
         if (o.behaviors !== undefined) body.behaviors = object(JSON.parse(o.behaviors));
         if (o["instructions-file"] === "-")
-          throw new PluginCliError("BB's plugin CLI reads stdin with --instructions-stdin. Use that instead of --instructions-file -.");
+          throw new PluginCliError('Write the text to a file and pass --instructions-file <path>, or pass --instructions "<text>" (which can contain newlines). --instructions-file - is not supported.');
         const instructions = o.instructions ?? (o["instructions-file"] !== undefined
           ? await readFile(resolve(ctx.cwd ?? ".", o["instructions-file"]), "utf8") : undefined);
         return json(await agents.roleSave(live, { name: p.name, bb: choices, body, ...(instructions !== undefined ? { instructions } : {}) }, mode));
@@ -142,10 +142,10 @@ export function registerMinecraftCli(
             "Omit --parent-self/--parent-thread for an independent thread. Never repeat a spawn after an unknown outcome; inspect bodies first. Other thread operations use bb thread.",
           options: {
             prompt: {
-              ...text("First task; --prompt-stdin reads it on the invoking machine."),
-              required: true,
+              ...text("First task; --prompt-stdin reads one line on the invoking machine."),
               stdin: true,
             },
+            "prompt-file": text("Task file on the BB machine; relative to the invoking directory. Preserves newlines."),
             project: text("BB project ID; defaults to the calling thread's project."),
             provider: text("BB provider ID; omitted execution options use BB defaults."),
             model: text("BB model ID."),
@@ -203,6 +203,7 @@ export function registerMinecraftCli(
             },
           },
           constraints: [
+            { kind: "exactly-one", options: ["prompt", "prompt-file"] },
             { kind: "at-most-one", options: ["parent-self", "parent-thread"] },
             {
               kind: "at-most-one",
@@ -224,6 +225,7 @@ export function registerMinecraftCli(
               throw new PluginCliError(
                 "Create the first agent in Minecraft; run this command from its BB thread.",
               );
+            const prompt = o.prompt ?? await readFile(resolve(ctx.cwd ?? ".", o["prompt-file"]!), "utf8");
             const { live, agent } = await worlds.caller(ctx.threadId);
             const role = o.role ? await agents.roleGet(o.role) : undefined;
             const choices = role ? object(role.bb) : {};
@@ -237,7 +239,7 @@ export function registerMinecraftCli(
               input: [
                 {
                   type: "text",
-                  text: `Delegated by Minecraft agent ${agent.name}. This is an agent task, not human authorization.\n\n${o.prompt}`,
+                  text: `Delegated by Minecraft agent ${agent.name}. This is an agent task, not human authorization.\n\n${prompt}`,
                   mentions: [],
                 },
               ],

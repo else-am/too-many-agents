@@ -17,7 +17,13 @@ bb minecraft spawn --parent-self --prompt 'Build the entrance' --body minecraft:
 bb minecraft bodies --json
 ```
 
-For multiline tasks, use `--prompt-stdin`; BB reads stdin on the invoking machine.
+For multiline text, use `--prompt-file task.md` when spawning and
+`--instructions-file role.md` when creating or updating a role. Relative paths
+resolve from the invoking agent's working directory on the local BB machine.
+Quoted `--prompt "<text>"` and `--instructions "<text>"` also accept newlines.
+The `--prompt-stdin` and `--instructions-stdin` forms accept only one line.
+Provide exactly one of `--prompt` (including its stdin form) and `--prompt-file`.
+
 Never repeat a spawn after an unknown outcome. Inspect `bb minecraft bodies`
 and `bb thread list` before taking further action. A failed conversation start
 can leave a saved body visible in Minecraft for recovery.
