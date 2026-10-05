@@ -19,8 +19,6 @@ const bodyFields = new Set([
   "body",
   "mode",
   "cheats",
-  "following",
-  "followReturn",
   "color",
   "behaviors",
   "stationId",

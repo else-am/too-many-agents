@@ -22,6 +22,7 @@ final class AgentActions {
     final AmbientBehavior ambient;
     private final String session;
     private final Supplier<BodyBox> box;
+    private final Supplier<ServerPlayer> player;
     private final LinkedHashMap<String, JsonObject> history = new LinkedHashMap<>();
     private JsonObject action;
     private JsonObject args;
@@ -31,10 +32,11 @@ final class AgentActions {
     private BlockState original;
     private boolean mining;
 
-    AgentActions(Mob mob, String session, Supplier<BodyBox> box) {
+    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
         this.mob = mob;
         this.session = session;
         this.box = box;
+        this.player = player;
         hands = new AgentHands(mob);
         ambient = new AmbientBehavior(mob);
     }
@@ -219,8 +221,7 @@ final class AgentActions {
     private Entity entity() {
         String id = text(args, "entity");
         if (id.equals("player")) {
-            var saved = mob.getPersistentData();
-            var owner = saved.hasUUID("too_many_agents_follow_owner") ? mob.level().getServer().getPlayerList().getPlayer(saved.getUUID("too_many_agents_follow_owner")) : null;
+            var owner = player.get();
             if (owner != null && owner.level() == mob.level()) return owner;
             throw error("player_unavailable_in_dimension");
         }

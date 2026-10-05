@@ -67,8 +67,10 @@ A separate world copy keeps its bodies and workspace files; its agents start new
 conversations in the copy's own project.
 
 Project bounds and stations keep bodies within their assigned space. Press B
-for survey mode to see and draw boxes. Idle behaviors are cosmetic and never
-change the world. Agents with Minecraft access receive the plugin's Minecraft
+for survey mode to see and draw boxes. Each activity (wants you, working, idle)
+can stand, wander, follow you, jump, spin, look, or swing. Behaviors yield to
+physical actions and resume afterward; following in all three activities keeps
+an agent with you even while it works in BB. Behaviors never change blocks. Agents with Minecraft access receive the plugin's Minecraft
 prompts and installed physical tools; other threads continue ordinary project
 work in BB.
 

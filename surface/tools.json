@@ -241,29 +241,5 @@
       "additionalProperties": false
     },
     "operation": "NOTIFY"
-  },
-  {
-    "name": "minecraft_follow",
-    "minecraft": true,
-    "description": "Control following: pause for world work (remember whether you were following); resume when ready to return (apply saved return preference); on/off explicitly enable/disable. Coding-only tasks can keep following. Stay paused when help is needed at the worksite. Do not pause/resume between individual actions.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "mode": {
-          "type": "string",
-          "enum": [
-            "pause",
-            "resume",
-            "on",
-            "off"
-          ]
-        }
-      },
-      "required": [
-        "mode"
-      ],
-      "additionalProperties": false
-    },
-    "operation": "FOLLOW"
   }
 ]

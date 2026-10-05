@@ -48,7 +48,6 @@ def main():
     spawn.add_argument('--mode', choices=['survival', 'creative'], default='survival')
     spawn.add_argument('--cheats', action='store_true')
     spawn.add_argument('--no-minecraft', action='store_true', help='Keep the body and BB coordination, without physical Minecraft tools')
-    spawn.add_argument('--follow', action='store_true', help='Start following the local player')
     transcript = commands.add_parser('transcript', help='Read the native BB conversation timeline')
     transcript.add_argument('id')
     transcript.add_argument('--json', default='{}', help='Native BB timeline query fields')
@@ -74,9 +73,6 @@ def main():
         commands.add_parser(action, help=help_text).add_argument('id')
     stop = commands.add_parser('stop')
     stop.add_argument('id')
-    follow = commands.add_parser('follow')
-    follow.add_argument('id')
-    follow.add_argument('setting', choices=['on', 'off'])
     respond = commands.add_parser('respond')
     respond.add_argument('id')
     respond.add_argument('request')
@@ -147,7 +143,6 @@ def main():
             if args.permission_mode:
                 data['permissionMode'] = args.permission_mode
             data['minecraftAccess'] = not args.no_minecraft
-            data['following'] = args.follow
             if args.service_tier: data['serviceTier'] = args.service_tier
             values = json.loads(args.json)
             if not isinstance(values, dict):
@@ -189,9 +184,6 @@ def main():
             elif args.action == 'stop':
                 path += '/interrupt'
                 data = {}
-            elif args.action == 'follow':
-                path += '/follow'
-                data = {'following': args.setting == 'on'}
             elif args.action == 'respond':
                 path += '/respond'
                 resolution = json.loads(args.resolution)

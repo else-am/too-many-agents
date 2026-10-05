@@ -36,7 +36,6 @@ public interface AgentUiAccess {
     CompletableFuture<Void> openChatLink(String agentId, String target);
     CompletableFuture<JsonObject> timelineTurnSummaryDetails(String agentId, JsonObject query);
     CompletableFuture<Void> checkBody(String agentId);
-    CompletableFuture<Void> setFollowing(String agentId, boolean following);
     CompletableFuture<Void> interrupt(String agentId);
     CompletableFuture<Void> remove(String agentId, boolean archiveThread);
     CompletableFuture<Void> archiveConversation(String agentId, boolean archived);

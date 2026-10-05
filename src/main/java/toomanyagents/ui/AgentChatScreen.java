@@ -54,13 +54,12 @@ public final class AgentChatScreen extends Screen {
     private final List<Line> lines = new ArrayList<>();
     private ChatInput composer;
     private Button permissionsButton;
-    private boolean savingFollow;
     private List<PickerChoice> pickerChoices;
     private int pickerOffset, pickerPageSize, pickerRowHeight;
     private record PickerChoice(String label, String description, String icon, Runnable select) {
         PickerChoice(String label, String description, Runnable select) { this(label, description, "", select); }
     }
-    private Button modelButton, effortButton, speedButton, settingsButton, archiveButton, inventoryButton, followButton, sendButton;
+    private Button modelButton, effortButton, speedButton, settingsButton, archiveButton, inventoryButton, sendButton;
     private List<AbstractWidget> pickerWidgets;
     private Button pickerAnchor;
     private int pickerX, pickerY, pickerWidth, pickerHeight;
@@ -315,7 +314,7 @@ public final class AgentChatScreen extends Screen {
         for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"mode", "survival"}, {"projectId", ""}}) {
             if (AgentModels.text(this.creationSettings, defaultValue[0]).isBlank()) this.creationSettings.addProperty(defaultValue[0], defaultValue[1]);
         }
-        for (String key : new String[]{"cheats", "following", "worktree"}) {
+        for (String key : new String[]{"cheats", "worktree"}) {
             if (!this.creationSettings.has(key)) this.creationSettings.addProperty(key, false);
         }
         state = this.creationSettings;
@@ -480,26 +479,11 @@ public final class AgentChatScreen extends Screen {
                 }
             }
         });
-        followButton = addRenderableWidget(Button.builder(Component.literal("Follow"), button -> {
-            if (draft()) {
-                creationSettings.addProperty("following", !following());
-                refreshButtons();
-                return;
-            }
-            if (savingFollow) return;
-            boolean resume = AgentModels.text(state,"followPauseReason").equals("work");
-            savingFollow = true; refreshButtons();
-            access.setFollowing(agentId, resume || !following()).whenComplete((done, failure) -> executeUi(() -> {
-                savingFollow = false;
-                if (failure != null) feedback = AgentModels.error(failure);
-                refreshButtons();
-            }));
-        }).bounds(compact ? left : left + contentWidth - 320, controlsY, 68, 20).build());
         inventoryButton = addRenderableWidget(Button.builder(Component.literal("Inventory"), button -> toggleInventory.run())
-            .bounds(compact ? left + 74 : left + contentWidth - 246, controlsY, 70, 20).build());
+            .bounds(compact ? left : left + contentWidth - 246, controlsY, 70, 20).build());
         // One archive, no confirmation: restore lives in Mod settings → Archive.
         archiveButton = addRenderableWidget(Button.builder(Component.literal("Archive"), button -> archive())
-            .bounds(compact ? left + 148 : left + contentWidth - 170, controlsY, 58, 20).build());
+            .bounds(compact ? left + 74 : left + contentWidth - 170, controlsY, 58, 20).build());
         settingsButton = addRenderableWidget(Button.builder(Component.empty(), button -> {
             if(settingsPanel!=null){settingsPanel.onClose();return;}
             var screen=new AgentSettingsScreen(access,returnScreen(),settings(),changes -> {
@@ -1070,13 +1054,9 @@ public final class AgentChatScreen extends Screen {
         boolean inventoryOpen = dockParent instanceof AgentInventoryScreen inventory && agentId.equals(inventory.agentId());
         inventoryButton.active = !draft() && (inventoryOpen || active && inventoryButton.visible);
         inventoryButton.setMessage(Component.literal(inventoryOpen ? "Inventory ✓" : "Inventory"));
-        followButton.setX(compact ? left : left + contentWidth - (inventoryButton.visible ? 320 : 244));
         archiveButton.visible = true;
         archiveButton.active = !draft() && active && backendAvailable() && !working() && !sending;
         archiveButton.setTooltip(Tooltip.create(Component.literal(draft() ? "Available after creating the agent" : working() ? "Stop the agent's work to archive it" : "Archive conversation. Restore it from Mod settings → Archive.")));
-        followButton.visible = true;
-        followButton.active = active && !savingFollow && !sending;
-        followButton.setMessage(Component.literal(savingFollow ? "…" : AgentModels.text(state,"followPauseReason").equals("work") ? "Resume" : following() ? "Following" : "Follow"));
         settingsButton.setMessage(Component.literal(settingsPanel == null ? "Settings…" : settingsCovering ? "Back" : "Settings ✓"));
         if (worktreeBox != null) worktreeBox.active = !sending;
         if (draft()) {
@@ -1116,10 +1096,6 @@ public final class AgentChatScreen extends Screen {
         return (lifecycle.isBlank() || lifecycle.equals("active"))
             && !(state.has("conversationArchived") && state.get("conversationArchived").getAsBoolean())
             && !(state.has("bodyRemoved") && state.get("bodyRemoved").getAsBoolean());
-    }
-
-    private boolean following() {
-        return state.has("following") && !state.get("following").isJsonNull() && state.get("following").getAsBoolean();
     }
 
     private void send() {

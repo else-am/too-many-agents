@@ -29,7 +29,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private final String agentId;
     private final Function<JsonObject,CompletableFuture<Void>> apply;
     private JsonObject draft, saved;
-    private boolean busy, followEdited;
+    private boolean busy;
     private boolean bodiesRequested;
     private final List<String> bodies = new ArrayList<>();
     private String profileName="", selectedProfile="", projectId="", stationId="";
@@ -58,7 +58,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     public static JsonObject settings(JsonObject snapshot) {
         var result = BodySettings.copy(AgentModels.object(snapshot, "settings"));
         result.add("provider", AgentModels.provider(snapshot).deepCopy());
-        for (String key : new String[]{"name", "projectId", "following", "mode", "cheats", "minecraftAccess"}) {
+        for (String key : new String[]{"name", "projectId", "mode", "cheats", "minecraftAccess"}) {
             if (!result.has(key) && snapshot.has(key)) result.add(key, snapshot.get(key).deepCopy());
         }
         var execution = AgentModels.execution(snapshot);
@@ -122,10 +122,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");
         }
         if(agentId!=null&&!stations().isEmpty())stationRow(enabled);
-        toggle("Follow me",flag("following"),v->{followEdited=true;change("following",v);},enabled);
-        if(AgentModels.text(agent(),"followPauseReason").equals("work"))action("Paused while working","Resume following",this::resumeFollow,enabled);
-        if(flag("following"))choice("After world work",value("followReturn").isBlank()?"previous":value("followReturn"),
-            options("previous","Restore follow state","always","Always follow"),v->change("followReturn",v),enabled&&world);
         behaviorRows(enabled);
         choice("Game mode",value("mode").isBlank()?"survival":value("mode"),options("survival","Survival","creative","Creative"),v->change("mode",v),enabled&&world);
         toggle("World commands",flag("cheats"),v->change("cheats",v),enabled&&world)
@@ -213,7 +209,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             var behavior=behavior(state[0]);String type=AgentModels.text(behavior,"type");
             String kind=type.isBlank()?"stand":type.equals("look")&&behavior.get("target") instanceof com.google.gson.JsonPrimitive p&&p.getAsString().equals("player")?"look-player":type;
             behaviorRow.put(state[0],rowY);
-            choice(state[1],kind,options("stand","Stand","wander","Wander","look-player","Look at me","look","Look at block","swing","Swing at block"),v->setBehavior(state[0],v),enabled);
+            choice(state[1],kind,options("stand","Stand","wander","Wander","follow","Follow me","jump","Jump","spin","Spin","look-player","Look at me","look","Look at block","swing","Swing at block"),v->setBehavior(state[0],v),enabled);
             if(kind.equals("look")||kind.equals("swing"))targetRow(state[0],behavior,enabled);
         }
     }
@@ -227,7 +223,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(kind.equals("stand")){all.remove(state);rebuildForm();return;}
         var behavior=new JsonObject();behavior.addProperty("type",kind.equals("look-player")?"look":kind);
         if(kind.equals("look-player"))behavior.addProperty("target","player");
-        else if(!kind.equals("wander")){
+        else if(kind.equals("look")||kind.equals("swing")){
             if(previous!=null&&previous.isJsonObject())behavior.add("target",previous.deepCopy());
             else if(aimed!=null)behavior.add("target",target(aimed));
         }
@@ -287,7 +283,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         var profile=profiles().stream().filter(p->AgentModels.text(p,"name").equals(name)).findFirst().orElseThrow();
         var settings=BodySettings.profile(profile.getAsJsonObject("settings"));
         if(agentId!=null)settings.remove("minecraftAccess");
-        if(settings.has("following"))followEdited=true;
         for(var entry:settings.entrySet())draft.add(entry.getKey(),entry.getValue());
         targetText.clear();profileName=selectedProfile=name;feedback="Body profile loaded into draft.";rebuildForm();
     }
@@ -295,10 +290,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(!valid()||profileName.isBlank()){feedback="Enter a profile name and valid agent settings first.";return;}
         if(!targetsChosen())return;
         run(access.saveProfile(profileName.trim(),BodySettings.profile(draft)),"Body profile saved.");
-    }
-    private void resumeFollow(){
-        followEdited=true;draft.addProperty("following",true);
-        run(access.setFollowing(agentId,true),"Following resumed.");
     }
     private void run(CompletableFuture<Void> future,String success){
         busy=true;rebuildForm();future.whenComplete((unused,error)->Minecraft.getInstance().execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));
@@ -309,7 +300,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         var changes=agentId==null?draft.deepCopy():BodySettings.copy(draft);
         if(agentId!=null){
             if(!value("title").equals(AgentModels.text(saved,"title")))changes.addProperty("title",value("title"));
-            changes.remove("minecraftAccess");if(!followEdited)changes.remove("following");
+            changes.remove("minecraftAccess");
         }
         busy=true;rebuildForm();apply.apply(changes).thenCompose(unused->saveStation()).whenComplete((unused,error)->Minecraft.getInstance().execute(()->{
             busy=false;if(error==null)leave(parent);else{cancelClose();feedback=AgentModels.error(error);rebuildForm();}

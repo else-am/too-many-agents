@@ -8,9 +8,21 @@ public final class BodySettings {
     public static JsonObject copy(JsonObject settings) {
         var result = new JsonObject();
         if (settings == null) return result;
-        for (String key : List.of("name", "body", "mode", "cheats", "following", "followReturn", "color", "behaviors", "stationId", "minecraftAccess"))
+        for (String key : List.of("name", "body", "mode", "cheats", "color", "behaviors", "stationId", "minecraftAccess"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
-        if (result.get("behaviors") instanceof JsonObject behaviors) migrateBehaviors(behaviors);
+        if (result.has("behaviors") && !result.get("behaviors").isJsonObject()) return result;
+        var behaviors = result.get("behaviors") instanceof JsonObject b ? b : new JsonObject();
+        migrateBehaviors(behaviors);
+        if (settings.has("following") && settings.get("following").getAsBoolean()) {
+            for (String state : List.of("wants_you", "working", "idle")) {
+                if (!behaviors.has(state)) {
+                    var follow = new JsonObject();
+                    follow.addProperty("type", "follow");
+                    behaviors.add(state, follow);
+                }
+            }
+        }
+        if (!behaviors.isEmpty() || result.has("behaviors")) result.add("behaviors", behaviors);
         return result;
     }
 

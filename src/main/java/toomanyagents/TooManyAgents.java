@@ -174,7 +174,6 @@ public final class TooManyAgents {
                         case "conversation-archive" -> agents.archiveConversation(id, true).get(100, TimeUnit.SECONDS);
                         case "conversation-restore" -> agents.archiveConversation(id, false).get(100, TimeUnit.SECONDS);
                         case "respond" -> agents.respond(id, field(request, "requestId"), request.getAsJsonObject("resolution")).get(100, TimeUnit.SECONDS);
-                        case "follow" -> agents.setFollowing(id, flag(request, "following")).get(10, TimeUnit.SECONDS);
                         case "tool" -> agents.call(id, field(request, "tool"), request.getAsJsonObject("arguments")).get(10, TimeUnit.SECONDS);
                         default -> throw new IllegalArgumentException("unknown_endpoint");
                     };

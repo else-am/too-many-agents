@@ -11,7 +11,7 @@ import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
 import net.minecraft.world.phys.Vec3;
 
-/** A body's cosmetic behavior while it has no action and is not following. Server thread only. */
+/** A body's ambient behavior while it has no physical action. Server thread only. */
 final class AmbientBehavior {
     private final Mob mob;
     private String running = "";
@@ -34,6 +34,10 @@ final class AmbientBehavior {
             home = mob.position();
         }
         lastTick = now;
+        if (type.equals("follow")) {
+            GameAccess.follow(mob, box, player);
+            return;
+        }
         // A one-block box has nowhere to wander, so the body stands.
         if (type.equals("wander") && (box == null || box.min().getX() != box.max().getX() || box.min().getZ() != box.max().getZ())) wander(box);
         else {
@@ -41,6 +45,16 @@ final class AmbientBehavior {
             var target = type.equals("look") || type.equals("swing") ? target(settings, player) : null;
             if (target != null) mob.getLookControl().setLookAt(target.x, target.y, target.z, 10, 40);
             mob.getLookControl().tick();
+            if (type.equals("jump") && mob.onGround() && --wait <= 0) {
+                mob.jumpFromGround();
+                wait = 40 + mob.getRandom().nextInt(60);
+            }
+            if (type.equals("spin")) {
+                float yaw = net.minecraft.util.Mth.wrapDegrees(mob.getYRot() + 6);
+                mob.setYRot(yaw);
+                mob.setYHeadRot(yaw);
+                mob.setYBodyRot(yaw);
+            }
             // Animation only: the block is never hit, damaged or used.
             if (type.equals("swing") && target != null && --swing <= 0) {
                 mob.swing(InteractionHand.MAIN_HAND);

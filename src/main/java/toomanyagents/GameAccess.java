@@ -49,7 +49,7 @@ import java.util.function.Supplier;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, CHAT, NOTIFY, FOLLOW }
+    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, CHAT, NOTIFY }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -63,8 +63,6 @@ final class GameAccess {
     private final Supplier<String> worldSession;
     private final Supplier<UUID> localPlayer;
     private final BooleanSupplier paused;
-    private final ConcurrentHashMap<Body, Boolean> following = new ConcurrentHashMap<>();
-    private volatile String followingSession;
     private volatile PublishedWorld publishedWorld;
     private volatile JsonObject worldInfo = new JsonObject();
     private final Map<Body, AgentActions> actions = new HashMap<>();
@@ -252,7 +250,7 @@ final class GameAccess {
 
     JsonObject settings(Body body) {
         var state = cached(body);
-        state.remove("action"); state.remove("followingSuspended"); state.remove("followPauseReason");
+        state.remove("action");
         return state;
     }
 
@@ -383,7 +381,7 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob)));
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer())));
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
@@ -391,15 +389,13 @@ final class GameAccess {
         return schedule(expectedSession, current -> {
             Body ref = initialRef;
             var mob = body(current, ref);
-            String followReturn = values.has("followReturn") ? string(values,"followReturn",20) : null;
-            if (followReturn != null && !List.of("previous","always").contains(followReturn)) throw error("invalid_follow_return");
             String mode = values.has("mode") ? values.get("mode").getAsString() : mob.getPersistentData().getString("too_many_agents_mode");
             if (mode.isBlank()) mode = "survival";
             if (!mode.equals("survival") && !mode.equals("creative")) throw error("invalid_agent_mode");
             String name = values.has("name") ? string(values,"name",80).strip() : mob.getName().getString();
             if (name.isBlank()) throw error("invalid_agent_name");
             AgentActions controller = actions(ref,mob);
-            boolean physicalChange = List.of("name", "body", "mode", "cheats", "following", "followReturn").stream()
+            boolean physicalChange = List.of("name", "body", "mode", "cheats").stream()
                 .anyMatch(key -> values.has(key) && !Objects.equals(values.get(key), settings(initialRef).get(key)));
             if (controller.busy() && physicalChange) throw error("interrupt_action_before_changing_settings");
             String typeName = values.has("body") ? string(values,"body",200) : BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
@@ -418,7 +414,7 @@ final class GameAccess {
                 restoreBody(replacement);
                 if (!((ServerLevel)mob.level()).addFreshEntity(replacement)) { actions.remove(ref); throw error("replacement_spawn_rejected"); }
                 mob.getPersistentData().putBoolean("too_many_agents_removing", true);
-                mob.discard(); actions.remove(ref); following.remove(ref); bodySnapshots.remove(ref);
+                mob.discard(); actions.remove(ref); bodySnapshots.remove(ref);
                 mob = replacement;
                 ref = new Body(mob.getStringUUID(),world(current),mob.level().dimension().location().toString());
             }
@@ -428,15 +424,6 @@ final class GameAccess {
             if (values.has("color")) saved.putString("too_many_agents_color", string(values,"color",7).toUpperCase(java.util.Locale.ROOT));
             if (values.has("cheats")) saved.putBoolean("too_many_agents_cheats",values.get("cheats").getAsBoolean());
             if (values.has("behaviors")) saved.putString("too_many_agents_behaviors",values.get("behaviors").toString());
-            if (values.has("following") && values.get("following").getAsBoolean() != saved.getBoolean("too_many_agents_following")) {
-                saved.putBoolean("too_many_agents_following",values.get("following").getAsBoolean());
-                saved.putBoolean("too_many_agents_follow_work",false);
-                saved.remove("too_many_agents_follow_before_work");
-                stopFollowingMotion(mob);
-            }
-            if (followReturn != null) saved.putString("too_many_agents_follow_return",followReturn);
-            saved.putUUID("too_many_agents_follow_owner",player(current).getUUID());
-            cacheFollowing(ref,saved.getBoolean("too_many_agents_following"));
             actions(ref,mob).hands.syncBody();
             cacheBody(ref,mob);
             return ref;
@@ -451,13 +438,8 @@ final class GameAccess {
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
         result.addProperty("mode",saved.getString("too_many_agents_mode").equals("creative") ? "creative" : "survival");
         result.addProperty("cheats",saved.getBoolean("too_many_agents_cheats"));
-        result.addProperty("following",saved.getBoolean("too_many_agents_following"));
-        result.addProperty("followReturn",saved.getString("too_many_agents_follow_return").equals("always") ? "always" : "previous");
         result.add("behaviors",behaviors(mob));
         var controller = actions(ref,mob);
-        String pauseReason = saved.getBoolean("too_many_agents_follow_work") ? "work" : controller.busy() ? "action" : "";
-        result.addProperty("followPauseReason", pauseReason);
-        result.addProperty("followingSuspended",saved.getBoolean("too_many_agents_following") && !pauseReason.isEmpty());
         result.add("action",controller.status(""));
         bodySnapshots.put(ref,result);
     }
@@ -478,7 +460,7 @@ final class GameAccess {
         scopes.forEach(scope -> scope.close("world_closed"));
         actionStops.clear();
         actions.values().forEach(a -> a.close("world_closed"));
-        actions.clear(); bodySnapshots.clear(); following.clear(); actionSession = null;
+        actions.clear(); bodySnapshots.clear(); actionSession = null;
     }
 
     CompletableFuture<JsonObject> development(JsonObject request) {
@@ -633,10 +615,7 @@ final class GameAccess {
             if (saved.has("color")) data.putString("too_many_agents_color", saved.get("color").getAsString());
             data.putString("too_many_agents_mode", saved.has("mode") ? saved.get("mode").getAsString() : "survival");
             data.putBoolean("too_many_agents_cheats", saved.has("cheats") && saved.get("cheats").getAsBoolean());
-            data.putBoolean("too_many_agents_following", saved.has("following") && saved.get("following").getAsBoolean());
-            data.putString("too_many_agents_follow_return", saved.has("followReturn") ? saved.get("followReturn").getAsString() : "previous");
             if (saved.has("behaviors")) data.putString("too_many_agents_behaviors", saved.get("behaviors").toString());
-            data.putUUID("too_many_agents_follow_owner", player.getUUID());
             if (!player.serverLevel().addFreshEntity(mob)) throw error("body_recovery_spawn_rejected");
             cacheBody(ref, mob);
             return null;
@@ -662,9 +641,6 @@ final class GameAccess {
                 observation.add("hands",controller.hands.snapshot());
                 cacheBody(body,mob);
                 observation.add("settings",settings(body));
-                var state = cached(body);
-                observation.add("followingSuspended",state.get("followingSuspended"));
-                observation.add("followPauseReason",state.get("followPauseReason"));
                 observation.add("action",controller.status(""));
                 yield observation;
             }
@@ -675,66 +651,25 @@ final class GameAccess {
             case COMMAND -> command(current, mob, arguments);
             case CHAT -> chat(current, mob, arguments, 2000);
             case NOTIFY -> chat(current, mob, arguments, 120);
-            case FOLLOW -> {
-                String mode = string(arguments,"mode",20);
-                var saved = mob.getPersistentData();
-                switch (mode) {
-                    case "pause" -> {
-                        if (!saved.getBoolean("too_many_agents_follow_work")) {
-                            saved.putBoolean("too_many_agents_follow_before_work",saved.getBoolean("too_many_agents_following"));
-                            saved.putBoolean("too_many_agents_follow_work",true);
-                        }
-                        if (!controller.busy()) stopFollowingMotion(mob);
-                    }
-                    case "resume" -> {
-                        if (saved.getBoolean("too_many_agents_follow_work")) {
-                            boolean enabled = saved.getString("too_many_agents_follow_return").equals("always")
-                                || saved.getBoolean("too_many_agents_follow_before_work");
-                            changeFollowing(current,body,mob,enabled);
-                        }
-                    }
-                    case "on", "off" -> changeFollowing(current,body,mob,mode.equals("on"));
-                    default -> throw error("follow_mode_must_be_pause_resume_on_or_off");
-                }
-                cacheBody(body,mob);
-                yield cached(body);
-            }
             case POV -> throw error("pov_requires_client_renderer");
         };
     }
 
-    CompletableFuture<Void> setFollowing(Body body, String expectedSession, boolean enabled) {
-        return schedule(expectedSession, current -> {
-            var mob = body(current, body);
-            changeFollowing(current, body, mob, enabled);
-            return null;
-        });
-    }
-
-    private void changeFollowing(MinecraftServer current, Body body, Mob mob, boolean enabled) {
-        var saved = mob.getPersistentData();
-        saved.putUUID("too_many_agents_follow_owner", player(current).getUUID());
-        saved.putBoolean("too_many_agents_following", enabled);
-        saved.putBoolean("too_many_agents_follow_work", false);
-        saved.remove("too_many_agents_follow_before_work");
-        if (!actions(body,mob).busy()) stopFollowingMotion(mob);
-        cacheFollowing(body, enabled);
-        cacheBody(body,mob);
-    }
-
-    /** The body's saved behavior for each activity state; validated by AgentService before saving. */
+    /** Load old NBT settings once, preserving explicit behavior choices. Server thread only. */
     static JsonObject behaviors(Mob mob) {
-        String saved = mob.getPersistentData().getString("too_many_agents_behaviors");
-        if (saved.isBlank()) return new JsonObject();
+        var data = mob.getPersistentData();
+        var settings = new JsonObject();
+        String saved = data.getString("too_many_agents_behaviors");
         try {
-            var behaviors = com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
-            if (behaviors.has("needs_input") || behaviors.has("done")) {
-                BodySettings.migrateBehaviors(behaviors);
-                mob.getPersistentData().putString("too_many_agents_behaviors", behaviors.toString());
-            }
-            return behaviors;
-        }
-        catch (RuntimeException invalid) { return new JsonObject(); }
+            if (!saved.isBlank()) settings.add("behaviors", com.google.gson.JsonParser.parseString(saved).getAsJsonObject());
+        } catch (RuntimeException invalid) { /* Ignore unreadable legacy behaviors. */ }
+        settings.addProperty("following", data.getBoolean("too_many_agents_following"));
+        var migrated = BodySettings.copy(settings);
+        var behaviors = migrated.has("behaviors") ? migrated.getAsJsonObject("behaviors") : new JsonObject();
+        if (!behaviors.toString().equals(saved)) data.putString("too_many_agents_behaviors", behaviors.toString());
+        for (String key : List.of("following", "follow_return", "follow_work", "follow_before_work", "follow_owner"))
+            data.remove("too_many_agents_" + key);
+        return behaviors;
     }
 
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
@@ -749,12 +684,6 @@ final class GameAccess {
         return WorldState.get(mob.getServer()).box(agentId, agentState(mob).projectId(), mob.level().dimension().location().toString());
     }
 
-    /** UI snapshot only; an unloaded body or a different world session reports false. */
-    boolean following(Body body) {
-        return body != null && server.get() != null && followingSession != null
-            && followingSession.equals(worldSession.get()) && following.getOrDefault(body, false);
-    }
-
     /** Called on the server's EntityJoinLevelEvent, before a restored body can run ordinary AI. */
     void restoreBody(Entity entity) {
         if (!(entity instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)
@@ -767,8 +696,7 @@ final class GameAccess {
         mob.setTarget(null);
         mob.setPersistenceRequired();
         mob.setInvulnerable(true);
-        cacheFollowing(new Body(mob.getStringUUID(), world(level.getServer()), level.dimension().location().toString()),
-            mob.getPersistentData().getBoolean("too_many_agents_following"));
+        behaviors(mob);
     }
 
     /** Called every ServerTick.Post. No references to live entities escape this method. */
@@ -797,9 +725,9 @@ final class GameAccess {
                     if (saved.getString("too_many_agents_world").equals(WorldState.get(current).copiedFrom())) {
                         saved.putString("too_many_agents_world",world);
                     } else {
-                    // A copied body must not run its original world's following or agent controls.
+                    // A copied body must not run its original world's agent controls.
                     saved.putString("too_many_agents_unassigned_agent",saved.getString("too_many_agents_agent"));
-                    saved.remove("too_many_agents_agent"); saved.putBoolean("too_many_agents_following",false);
+                    saved.remove("too_many_agents_agent");
                     mob.setNoAi(true); mob.setInvulnerable(false); mob.setDeltaMovement(Vec3.ZERO);
                     mob.setCustomName(mob.getName().copy().append(" (unassigned)"));
                     continue;
@@ -821,7 +749,6 @@ final class GameAccess {
                 seen.add(body);
                 try {
                     mob.setNoAi(true);
-                    cacheFollowing(body, mob.getPersistentData().getBoolean("too_many_agents_following"));
                     if (!paused.getAsBoolean() && level.isPositionEntityTicking(mob.blockPosition())) {
                         var controller = actions(body,mob);
                         drainActionStops();
@@ -832,44 +759,30 @@ final class GameAccess {
                     }
                 } catch (RuntimeException | LinkageError failure) {
                     mob.setNoAi(true);
-                    mob.getPersistentData().putBoolean("too_many_agents_following", false);
-                    cacheFollowing(body, false);
+                    actions(body,mob).ambient.failed = true;
                     mob.setDeltaMovement(Vec3.ZERO);
-                    LOG.warn("Following stopped for agent body {}", mob.getStringUUID(), failure);
+                    LOG.warn("Movement stopped for agent body {}", mob.getStringUUID(), failure);
                     var id = localPlayer.get();
                     var player = id == null ? null : current.getPlayerList().getPlayer(id);
-                    if (player != null) player.sendSystemMessage(Component.literal("Following stopped for "
+                    if (player != null) player.sendSystemMessage(Component.literal("Movement stopped for "
                         + mob.getName().getString() + ": its movement controller failed. See the game log."));
                 }
             }
         }
-        following.keySet().retainAll(seen);
         var unloaded = actions.keySet().stream().filter(ref -> !seen.contains(ref)).toList();
         for (var ref : unloaded) { actions.remove(ref).close("body_unloaded"); bodySnapshots.remove(ref); }
     }
 
-    private void cacheFollowing(Body body, boolean enabled) {
-        var session = worldSession.get();
-        if (!Objects.equals(followingSession, session)) {
-            following.clear();
-            followingSession = session;
-        }
-        following.put(body, enabled);
-    }
-
-    /** A body without a running action follows; otherwise it returns inside its box, then acts out its activity. */
+    /** Physical actions take precedence; otherwise run the current activity's behavior. */
     private void idle(MinecraftServer current, Mob mob, AgentActions controller) {
         var box = box(mob);
-        var saved = mob.getPersistentData();
-        if (saved.getBoolean("too_many_agents_following") && !saved.getBoolean("too_many_agents_follow_work")) {
-            follow(current, mob, box);
-            return;
-        }
         if (controller.ambient.failed) { stopFollowingMotion(mob); return; }
         try {
-            if (controller.ambient.returnInside(box)) return;
+            var behavior = behaviors(mob).get(agentState(mob).activity());
+            boolean follows = behavior instanceof JsonObject b && "follow".equals(b.has("type") ? b.get("type").getAsString() : "");
+            if (!follows && controller.ambient.returnInside(box)) return;
             var id = localPlayer.get();
-            controller.ambient.tick(box, behaviors(mob).get(agentState(mob).activity()), id == null ? null : current.getPlayerList().getPlayer(id));
+            controller.ambient.tick(box, behavior, id == null ? null : current.getPlayerList().getPlayer(id));
         } catch (RuntimeException | LinkageError failure) {
             // Behaviors are cosmetic: stop them for this body rather than failing every tick.
             controller.ambient.failed = true;
@@ -878,10 +791,8 @@ final class GameAccess {
         }
     }
 
-    private static void follow(MinecraftServer current, Mob mob, BodyBox box) {
-        var saved = mob.getPersistentData();
-        var owner = saved.hasUUID("too_many_agents_follow_owner")
-            ? current.getPlayerList().getPlayer(saved.getUUID("too_many_agents_follow_owner")) : null;
+    static void follow(Mob mob, BodyBox box, ServerPlayer owner) {
+        var current = mob.getServer();
         if (owner == null || !owner.isAlive() || owner.isSpectator() || owner.level() != mob.level()
             || mob.isPassenger() || mob.isVehicle() || mob.isLeashed()) {
             stopFollowingMotion(mob);
@@ -1038,7 +949,7 @@ final class GameAccess {
             if (controller != null) controller.close("thread_archived");
             entity.getPersistentData().putBoolean("too_many_agents_removing", true);
             entity.discard();
-            bodySnapshots.remove(ref); following.remove(ref);
+            bodySnapshots.remove(ref);
             return null;
         });
     }
@@ -1106,10 +1017,8 @@ final class GameAccess {
         var ref = new Body(mob.getStringUUID(), world(current), mob.level().dimension().location().toString());
         var controller = actions(ref, mob);
         mob.getPersistentData().putBoolean("too_many_agents_removing", true);
-        mob.getPersistentData().putBoolean("too_many_agents_following", false);
         stopFollowingMotion(mob);
         actions.remove(ref);
-        following.remove(ref);
         bodySnapshots.remove(ref);
         controller.close("agent_removed");
         dropInventory(mob, controller.hands);
@@ -1137,7 +1046,6 @@ final class GameAccess {
             if (controller != null) controller.close("body_removed");
             bodySnapshots.remove(body);
             body(current, body).discard();
-            following.remove(body);
             return null;
         });
     }
@@ -1247,10 +1155,6 @@ final class GameAccess {
         result.addProperty("dimension", mob.level().dimension().location().toString());
         result.addProperty("tick", current.getTickCount());
         result.addProperty("timeOfDay", mob.level().getDayTime());
-        result.addProperty("following", mob.getPersistentData().getBoolean("too_many_agents_following"));
-        if (mob.getPersistentData().hasUUID("too_many_agents_follow_owner")) {
-            result.addProperty("followOwner", mob.getPersistentData().getUUID("too_many_agents_follow_owner").toString());
-        }
         result.add("body", Observations.entity(mob));
         var box = box(mob);
         result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());

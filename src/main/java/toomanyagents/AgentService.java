@@ -43,8 +43,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     AgentService(Path directory, GameAccess game, Supplier<String> worldSession) {
         this.directory=directory; this.game=game; this.worldSession=worldSession; bb=new BbClient();
-        profiles.put("Survival",object("mode","survival","cheats",false,"following",false));
-        profiles.put("Creative",object("mode","creative","cheats",false,"following",false));
+        profiles.put("Survival",object("mode","survival","cheats",false));
+        profiles.put("Creative",object("mode","creative","cheats",false));
         try {
             var file=directory.resolve("body-profiles.json");
             if(Files.exists(file)) {
@@ -198,8 +198,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(!state.has("activity")) state.addProperty("activity","idle");
         if(!connected || !agentError.isBlank()) { state.addProperty("status","disconnected"); state.addProperty("canSteer",false); }
         var live=agent.body==null?new JsonObject():game.cached(agent.body);
-        state.addProperty("bodyLoaded",!live.isEmpty()); state.addProperty("following",agent.body!=null && game.following(agent.body));
-        state.addProperty("followingSuspended",flag(live,"followingSuspended")); state.addProperty("followPauseReason",text(live,"followPauseReason"));
+        state.addProperty("bodyLoaded",!live.isEmpty());
         if(live.has("action")) state.add("action",live.get("action"));
         int pending=scopes.entrySet().stream().filter(e -> agent.id.equals(scopeAgents.get(e.getKey()))).mapToInt(e -> e.getValue().pendingCount()).sum();
         state.addProperty("pendingWorldTools",pending); state.addProperty("waitingForGame",game.isPaused() && pending>0);
@@ -326,7 +325,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
     @Override public synchronized CompletableFuture<Void> openInventory(String id) { return guarded(() -> game.openInventory(require(id).body,loadedSession,id)); }
     @Override public synchronized CompletableFuture<JsonObject> inventory(String id) { return guarded(() -> game.inventory(require(id).body,loadedSession)); }
-    @Override public synchronized CompletableFuture<Void> setFollowing(String id,boolean enabled) { return guarded(() -> { var a=require(id); String session=loadedSession; return game.setFollowing(a.body,session,enabled).thenCompose(done -> { synchronized(this) { requireCurrent(a,session); for(var e:game.settings(a.body).entrySet()) a.settings.add(e.getKey(),e.getValue()); } return save(); }); }); }
     synchronized void bodyLost(GameAccess.Body body) { if(!currentSession(loadedSession)) return; for(var a:agents.values()) if(Objects.equals(a.body,body)) { a.lost=true; closeScopes(a.id,"body_lost"); } save(); }
     @Override public synchronized CompletableFuture<Void> checkBody(String id) { return guarded(() -> {
         var a=require(id); if(!a.lost || a.removed) return CompletableFuture.completedFuture(null);
@@ -505,12 +503,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             });
             boolean player = target != null && target.isJsonPrimitive() && target.getAsString().equals("player");
             boolean valid = switch (type) {
-                case "stand", "wander" -> target == null;
+                case "stand", "wander", "follow", "jump", "spin" -> target == null;
                 case "look" -> block || player;
                 case "swing" -> block;
                 default -> false;
             };
-            if (!valid) throw new IllegalArgumentException("Invalid " + entry.getKey() + " behavior: use stand, wander, look at the player or a block, or swing at a block.");
+            if (!valid) throw new IllegalArgumentException("Invalid " + entry.getKey() + " behavior: use stand, wander, follow, jump, spin, look at the player or a block, or swing at a block.");
         }
     }
 }

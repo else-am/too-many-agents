@@ -35,8 +35,6 @@ final class Observations {
         if (saved.contains("too_many_agents_agent")) {
             var agent = new JsonObject();
             agent.addProperty("id", saved.getString("too_many_agents_agent"));
-            if (saved.hasUUID("too_many_agents_follow_owner")) agent.addProperty("owner", saved.getUUID("too_many_agents_follow_owner").toString());
-            agent.addProperty("following", saved.getBoolean("too_many_agents_following"));
             if (entity instanceof Mob mob) {
                 agent.addProperty("navigationDone", mob.getNavigation().isDone());
             }
