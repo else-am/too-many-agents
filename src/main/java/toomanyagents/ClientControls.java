@@ -394,7 +394,7 @@ public final class ClientControls {
                         }
                         else if (action.equals("dev_gui_scale")) {
                             int scale = request.get("scale").getAsInt();
-                            if (scale < 1 || scale > 4) throw new IllegalArgumentException("GUI scale must be 1–4");
+                            if (scale < 0 || scale > 4) throw new IllegalArgumentException("GUI scale must be 0 (Auto) or 1–4");
                             client.options.guiScale().set(scale);
                             client.resizeDisplay();
                         }
