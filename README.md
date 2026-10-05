@@ -89,7 +89,9 @@ Roles live in BB's plugin storage and are shared across game installs. In agent
 settings, **Load role** copies a preset; **Save a role** captures the body and current
 BB choices. Select **Edit** to change a preset's body, behaviors, provider, model,
 reasoning, worktree and multiline instructions. New-agent settings use the same
-role picker. Existing agents can load body/model/reasoning; provider, workspace,
+role picker. Choose **None** to restore the choices from before loading a role;
+switching roles also clears choices left by the previous role. Existing agents
+can load body/model/reasoning; provider, workspace,
 access and initial instructions are spawn-time choices.
 
 ```sh

@@ -30,6 +30,10 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private final String agentId;
     private final Function<JsonObject,CompletableFuture<Void>> apply;
     private JsonObject draft, saved;
+    // UI-only undo state; never sent to BB or saved with a body.
+    private JsonObject roleSelection = new JsonObject();
+    private static final List<String> ROLE_FIELDS = List.of("body", "mode", "behaviors", "minecraftAccess",
+        "providerId", "model", "reasoningLevel", "serviceTier", "permissionMode", "worktree", "roleInstructions");
     private boolean busy;
     private boolean bodiesRequested, rolesRequested;
     private final boolean editingRole;
@@ -60,6 +64,12 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         aimed=hit instanceof BlockHitResult block&&hit.getType()==HitResult.Type.BLOCK?block.getBlockPos().immutable():null;
         if(agentId!=null)stationId=assignedStation();
         saved=draft.deepCopy();
+    }
+
+    void rememberRole(JsonObject selection) {
+        roleSelection = selection;
+        selectedRole = AgentModels.text(selection,"name");
+        roleName = selectedRole;
     }
 
     private void editRole(String name) {
@@ -152,8 +162,9 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(!editingRole){
             section("Role");
             var choices=new ArrayList<Choice>();
+            choices.add(new Choice("", "None"));
             for(var role:roleRows)choices.add(new Choice(AgentModels.text(role,"name"),AgentModels.text(role,"name")));
-            choice("Load role",selectedRole,choices,this::loadRole,enabled&&!choices.isEmpty());
+            choice("Load role",selectedRole,choices,this::loadRole,enabled&&(choices.size()>1||!selectedRole.isBlank()));
             if(!selectedRole.isBlank())action("Role preset","Edit "+selectedRole,()->editRole(selectedRole),enabled);
         }
         section(editingRole?"Role · "+value("name"):"Identity");
@@ -333,7 +344,19 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         return true;
     }
     private void loadRole(String name){
-        if(name.isBlank())return;
+        if (!roleSelection.has("before") && !name.isBlank()) roleSelection.add("before",draft.deepCopy());
+        if (roleSelection.get("before") instanceof JsonObject before) {
+            for (String key : ROLE_FIELDS) {
+                draft.remove(key);
+                if (before.has(key)) draft.add(key,before.get(key).deepCopy());
+            }
+        }
+        targetText.clear();roleName=selectedRole=name;
+        roleSelection.addProperty("name",name);
+        if(name.isBlank()) {
+            roleSelection.remove("before");
+            feedback="";rebuildForm();return;
+        }
         var role=roleRows.stream().filter(p->AgentModels.text(p,"name").equals(name)).findFirst().orElseThrow();
         var settings=BodySettings.profile(AgentModels.object(role,"body"));
         if(agentId!=null)settings.remove("minecraftAccess");
@@ -341,7 +364,6 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         for(var entry:AgentModels.object(role,"bb").entrySet())
             if(agentId==null||List.of("model","reasoningLevel").contains(entry.getKey()))draft.add(entry.getKey(),entry.getValue().deepCopy());
         draft.addProperty("roleInstructions",AgentModels.text(role,"instructions"));
-        targetText.clear();roleName=selectedRole=name;
         feedback=agentId==null?"Role loaded.":"Body, model and reasoning loaded. Other role choices apply at spawn.";
         rebuildForm();
     }
@@ -349,7 +371,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         if(!valid()||roleName.isBlank()){feedback="Enter a role name and valid agent settings first.";return;}
         if(!targetsChosen())return;
         var record=roleRecord(roleName.trim(),draft);
-        run(access.saveRole(record,agentId).thenRun(()->Minecraft.getInstance().execute(()->{selectedRole=roleName.trim();rolesRequested=false;})),"Role saved.");
+        run(access.saveRole(record,agentId).thenRun(()->Minecraft.getInstance().execute(()->{selectedRole=roleName.trim();roleSelection.addProperty("name",selectedRole);rolesRequested=false;})),"Role saved.");
     }
     private void run(CompletableFuture<Void> future,String success){
         busy=true;rebuildForm();future.whenComplete((unused,error)->Minecraft.getInstance().execute(()->{busy=false;feedback=error==null?success:AgentModels.error(error);rebuildForm();}));

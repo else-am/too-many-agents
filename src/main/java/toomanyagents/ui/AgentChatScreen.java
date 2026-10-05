@@ -23,6 +23,7 @@ public final class AgentChatScreen extends Screen {
     private final AgentUiAccess access;
     private String agentId;
     private JsonObject creationSettings;
+    private final JsonObject roleSelection = new JsonObject();
     private String creationProjectName="Choose project";
     private boolean creationGit;
     private String environmentProject;
@@ -498,6 +499,7 @@ public final class AgentChatScreen extends Screen {
                 }
                 return access.updateSettings(agentId,changes);
             },draft()?null:agentId);
+            screen.rememberRole(roleSelection);
             if(!docked()){minecraft.setScreen(screen);return;}
             settingsPanel=screen;
             screen.dock(()->{if(settingsPanel==screen){settingsPanel=null;cover(false);refreshButtons();}});
