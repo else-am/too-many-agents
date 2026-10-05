@@ -20,11 +20,6 @@ final class WorldState {
     JsonObject project(String projectId) throws IOException {
         if (needsDecision) throw new IllegalStateException("Resolve the relocated world before creating its project.");
         data.addProperty("worldProjectId",projectId);
-        // Boxes and stations made before the project existed used its placeholder ID.
-        for (String list : List.of("bounds","stations")) for (var item : data.getAsJsonArray(list)) {
-            var row = item.getAsJsonObject();
-            if (JsonState.text(row,"projectId").equals("minecraft")) row.addProperty("projectId",projectId);
-        }
         JsonState.write(file,data);
         return snapshot();
     }
@@ -38,9 +33,8 @@ final class WorldState {
         registryFile = FMLPaths.GAMEDIR.get().resolve("too-many-agents/worlds.json");
         registry = Files.exists(registryFile) ? JsonParser.parseString(Files.readString(registryFile)).getAsJsonObject() : new JsonObject();
         data = Files.exists(file) ? JsonParser.parseString(Files.readString(file)).getAsJsonObject()
-            : JsonState.object("id",UUID.randomUUID().toString(),"bounds",new JsonArray(),"paths",new JsonArray());
+            : JsonState.object("id",UUID.randomUUID().toString(),"bounds",new JsonArray(),"paths",new JsonArray(),"stations",new JsonArray());
         UUID.fromString(id());
-        if (!data.has("stations")) data.add("stations",new JsonArray());
         previousPath = registry.has(id()) ? registry.get(id()).getAsString() : "";
         if(previousPath.isBlank()) {
             var paths = JsonState.array(data,"paths");

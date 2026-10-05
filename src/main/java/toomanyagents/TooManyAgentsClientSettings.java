@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import net.neoforged.fml.loading.FMLPaths;
 
-/** Display preferences belong to this installation, separately from worlds and agent profiles. */
+/** Display preferences belong to this installation, separately from worlds and BB roles. */
 public final class TooManyAgentsClientSettings {
     private static TooManyAgentsClientSettings instance;
     private final Path path = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-client.json");
@@ -27,18 +27,15 @@ public final class TooManyAgentsClientSettings {
 
     private TooManyAgentsClientSettings() {
         if (!Files.exists(path)) return;
-        boolean obsoleteProvider = false;
         try (var reader = Files.newBufferedReader(path)) {
             var json = JsonParser.parseReader(reader).getAsJsonObject();
             if (json.has("notificationSound")) notificationSound = json.get("notificationSound").getAsBoolean();
             if (json.has("showAgentCommunication")) showAgentCommunication = json.get("showAgentCommunication").getAsBoolean();
             if (json.has("screenScale")) screenScale = Math.max(0, json.get("screenScale").getAsInt());
             if (json.has("sidebarCollapsed")) sidebarCollapsed = json.get("sidebarCollapsed").getAsBoolean();
-            obsoleteProvider = json.has("defaultProvider");
         } catch (Exception failure) {
             error = "Could not read display settings. Changes will replace the unreadable file.";
         }
-        if (obsoleteProvider) save();
     }
 
     public boolean notificationSound() { return notificationSound; }

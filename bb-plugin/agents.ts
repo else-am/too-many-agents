@@ -19,7 +19,6 @@ const bodyFields = new Set([
   "name",
   "body",
   "mode",
-  "cheats",
   "color",
   "behaviors",
   "stationId",
@@ -45,7 +44,7 @@ export function minecraftAgents(
 ) {
   const starting = new Set<string>();
 
-  // One record per role; serialize writes so imports cannot race an explicit save.
+  // One record per role; serialize writes so creates and updates cannot race.
   let roleWrites: Promise<unknown> = Promise.resolve();
   const roleKey = (name: string) => `role:${name}`;
   function roleName(value: unknown) {
@@ -64,12 +63,11 @@ export function minecraftAgents(
     const rows = await Promise.all(keys.sort().map(key => bb.storage.kv.get<ObjectValue>(key)));
     return rows.filter((row): row is ObjectValue => row != null);
   }
-  async function roleSave(live: Session, value: unknown, mode: "replace" | "create" | "update" | "import" = "replace") {
+  async function roleSave(live: Session, value: unknown, mode: "replace" | "create" | "update" = "replace") {
     let role = object(value, "role");
     const name = roleName(role.name);
     const write = roleWrites.catch(() => undefined).then(async () => {
       const previous = await bb.storage.kv.get<ObjectValue>(roleKey(name));
-      if (mode === "import" && previous) return;
       if (mode === "create" && previous) throw new ApiError("role_exists", `Role already exists: ${name}`);
       if (mode === "update" && !previous) throw new ApiError("role_missing", `Unknown role: ${name}`);
       if (mode === "update") role = {

@@ -257,6 +257,7 @@ abstract class SettingsFormScreen extends Screen {
         if (!docked()) g.drawCenteredString(font,title,width/2,12,0xFFFFFF);
         if (header) g.drawString(font,heading(),left,12,0xFFFFFF);
         g.fill(left-8,formTop-5,left+contentWidth+8,side?height:Math.min(formBottom,formTop+rowY)+3,0xA0101010);
+        g.flush();
         g.enableScissor(left-2,formTop,left+contentWidth+2,formBottom);
         for(var label:labels) {
             int yy=formTop+label.offset()-scroll;
@@ -266,6 +267,7 @@ abstract class SettingsFormScreen extends Screen {
             if(label.rule())g.fill(left+font.width(label.value())+8,yy+4,left+contentWidth,yy+5,0x40E2D4A7);
         }
         for(var placed:controls)if(placed.widget().visible)placed.widget().render(g,x,y,delta);
+        g.flush();
         g.disableScissor();
         if(maxScroll()>0){int h=formBottom-formTop,thumb=Math.max(16,h*h/(h+maxScroll()));int yy=formTop+(h-thumb)*scroll/maxScroll();
             g.fill(left+contentWidth+7,formTop,left+contentWidth+9,formBottom,0xFF333333);g.fill(left+contentWidth+6,yy,left+contentWidth+10,yy+thumb,0xFFAAAAAA);}

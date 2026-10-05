@@ -70,7 +70,7 @@ contain a project, station, body name or color. A spawn copies the role; changin
 it later does not change existing agents.
 
 ```sh
-bb minecraft role create worker --provider codex --model gpt-6-astra --reasoning high --body minecraft:fox --mode survival --no-cheats --minecraft-access --behaviors '{"wants_you":{"type":"follow"},"working":{"type":"stand"},"idle":{"type":"wander"}}' --instructions-file worker.md
+bb minecraft role create worker --provider codex --model gpt-6-astra --reasoning high --body minecraft:fox --mode survival --minecraft-access --behaviors '{"wants_you":{"type":"follow"},"working":{"type":"stand"},"idle":{"type":"wander"}}' --instructions-file worker.md
 bb minecraft role list
 bb minecraft role show worker --json
 bb minecraft role update worker --worktree --instructions-file worker.md
@@ -79,7 +79,7 @@ bb minecraft role delete worker
 ```
 
 `create` fails for an existing name; `update` changes only supplied fields and
-fails for a missing name. `--no-worktree`, `--no-cheats` and
+fails for a missing name. `--no-worktree` and
 `--no-minecraft-access` explicitly turn those choices off. Use
 `--instructions-stdin` for a single line of stdin. The installed BB plugin CLI
 rejects multiline stdin and cannot read `--instructions-file -`; use a file for
@@ -92,3 +92,7 @@ thread to select the validating world.
 Explicit spawn flags override the role. An explicit environment overrides its
 worktree choice. Role instructions precede the task and the delegation notice is
 retained. Roles cannot grant stronger physical or BB permissions than the caller.
+
+`--mode` accepts `survival`, `creative`, or `creative_commands` (Creative + commands).
+Only `creative_commands` allows Minecraft commands; both Creative modes allow
+Creative physical actions. A child cannot gain abilities its caller lacks.

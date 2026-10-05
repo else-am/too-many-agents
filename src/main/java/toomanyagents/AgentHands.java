@@ -88,7 +88,7 @@ final class AgentHands extends FakePlayer {
         setYRot(body.getViewYRot(1));
         setXRot(body.getXRot());
         setOnGround(body.onGround());
-        var mode = body.getPersistentData().getString("too_many_agents_mode").equals("creative")
+        var mode = BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).creative
             ? GameType.CREATIVE : GameType.SURVIVAL;
         if (gameMode.getGameModeForPlayer() != mode) gameMode.changeGameModeForPlayer(mode);
         getAbilities().flying = false;
@@ -500,7 +500,7 @@ final class AgentHands extends FakePlayer {
     JsonObject snapshot() {
         syncBody();
         var result = new JsonObject();
-        result.addProperty("mode", isCreative() ? "creative" : "survival");
+        result.addProperty("mode", BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).id);
         result.addProperty("selected", getInventory().selected);
         result.addProperty("usingItem", isUsingItem());
         var inventory = new JsonArray();

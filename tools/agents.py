@@ -41,8 +41,7 @@ def main():
     spawn.add_argument('--reasoning-level', '--effort', dest='reasoning_level', help='Native BB reasoning level')
     spawn.add_argument('--json', default='{}', help='Additional native BB spawn fields as a JSON object')
     spawn.add_argument('--service-tier', help='Native BB speed tier; omit to use BB defaults')
-    spawn.add_argument('--mode', choices=['survival', 'creative'], default='survival')
-    spawn.add_argument('--cheats', action='store_true')
+    spawn.add_argument('--mode', choices=['survival', 'creative', 'creative_commands'], default='survival')
     spawn.add_argument('--no-minecraft', action='store_true', help='Keep the body and BB coordination, without physical Minecraft tools')
     transcript = commands.add_parser('transcript', help='Read the native BB conversation timeline')
     transcript.add_argument('id')
@@ -120,7 +119,7 @@ def main():
                 data = {'action': args.operation.replace('-', '_')}
         elif args.action == 'spawn':
             path += '/spawn'
-            data = {key: getattr(args, key) for key in ('name', 'body', 'mode', 'cheats')}
+            data = {key: getattr(args, key) for key in ('name', 'body', 'mode')}
             if args.model: data['model'] = args.model
             if args.reasoning_level: data['reasoningLevel'] = args.reasoning_level
             if args.project_id: data['projectId'] = args.project_id

@@ -92,7 +92,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     public static JsonObject settings(JsonObject snapshot) {
         var result = BodySettings.copy(AgentModels.object(snapshot, "settings"));
         result.add("provider", AgentModels.provider(snapshot).deepCopy());
-        for (String key : new String[]{"name", "projectId", "mode", "cheats", "minecraftAccess"}) {
+        for (String key : new String[]{"name", "projectId", "mode", "minecraftAccess"}) {
             if (!result.has(key) && snapshot.has(key)) result.add(key, snapshot.get(key).deepCopy());
         }
         var execution = AgentModels.execution(snapshot);
@@ -172,9 +172,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         }
         if(agentId!=null&&!stations().isEmpty())stationRow(enabled);
         behaviorRows(enabled);
-        choice("Game mode",value("mode").isBlank()?"survival":value("mode"),options("survival","Survival","creative","Creative"),v->change("mode",v),enabled&&world);
-        toggle("World commands",flag("cheats"),v->change("cheats",v),enabled&&world)
-            .setTooltip(Tooltip.create(Component.literal("Allow command-based edits in any game mode")));
+        choice("Game mode",value("mode").isBlank()?"survival":value("mode"),java.util.Arrays.stream(toomanyagents.BodySettings.Mode.values()).map(m -> new Choice(m.id,m.label)).toList(),v->change("mode",v),enabled&&world);
         if(agentId==null)section(editingRole?"Execution":"Access");
         if(agentId==null&&!editingRole){
             var permissionChoices = new ArrayList<Choice>();
@@ -191,7 +189,11 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
             choice("Reasoning",value("reasoningLevel"),options("","BB default","none","None","low","Low","medium","Medium","high","High","xhigh","Extra high","max","Max","ultra","Ultra","ultracode","Ultracode"),v->change("reasoningLevel",v),enabled);
             toggle("Worktree",flag("worktree"),v->change("worktree",v),enabled);
             section("Instructions");
-            var field=new MultiLineEditBox(font,left,0,contentWidth,92,Component.literal("How this agent should work…"),Component.literal("Role instructions"));
+            var field=new MultiLineEditBox(font,left,0,contentWidth,92,Component.literal("How this agent should work…"),Component.literal("Role instructions")) {
+                @Override public boolean mouseClicked(double x,double y,int button) {
+                    return visible && y>=formTop && y<formBottom && super.mouseClicked(x,y,button);
+                }
+            };
             field.setCharacterLimit(64000);field.setValue(value("roleInstructions"));field.setValueListener(v->draft.addProperty("roleInstructions",v));field.active=enabled;
             place(field,rowY);rowY+=100;
         } else {

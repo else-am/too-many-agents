@@ -93,7 +93,7 @@ public final class TooManyAgents {
                 var directory = FMLPaths.GAMEDIR.get().resolve("too-many-agents");
                 game = new GameAccess(this::currentServer, this::currentSession, () -> localPlayer, () -> paused);
                 game.setPov(new PovCapture(this::currentSession));
-                agents = new AgentService(directory, game, this::currentSession);
+                agents = new AgentService(game, this::currentSession);
                 var bridge = new LocalBridge(directory, () -> snapshot, this::command, this::agentRoute);
                 agents.bridgeConnection(bridge.url(),bridge.token());
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {

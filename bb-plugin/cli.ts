@@ -49,9 +49,7 @@ export function registerMinecraftCli(
         "permission-mode": { type: "enum", values: ["accept-edits", "auto", "full"], description: "Permission mode; delegated spawns cannot exceed their caller." },
         worktree: { type: "boolean", description: "Use a new worktree." },
         "no-worktree": { type: "boolean", description: "Use the project checkout." },
-        body: text("Minecraft body type."), mode: { type: "enum", values: ["survival", "creative"], description: "Game mode." },
-        cheats: { type: "boolean", description: "Enable world commands." },
-        "no-cheats": { type: "boolean", description: "Disable world commands." },
+        body: text("Minecraft body type."), mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Game mode." },
         "minecraft-access": { type: "boolean", description: "Enable physical tools." },
         "no-minecraft-access": { type: "boolean", description: "Disable physical tools." },
         behaviors: text("Behavior object as JSON; replaces all behavior choices."),
@@ -61,7 +59,6 @@ export function registerMinecraftCli(
       },
       constraints: [
         { kind: "at-most-one", options: ["worktree", "no-worktree"] },
-        { kind: "at-most-one", options: ["cheats", "no-cheats"] },
         { kind: "at-most-one", options: ["minecraft-access", "no-minecraft-access"] },
         { kind: "at-most-one", options: ["instructions", "instructions-file"] },
       ],
@@ -73,7 +70,6 @@ export function registerMinecraftCli(
         if (o.worktree || o["no-worktree"]) choices.worktree = o.worktree;
         if (o.body !== undefined) body.body = o.body;
         if (o.mode !== undefined) body.mode = o.mode;
-        if (o.cheats || o["no-cheats"]) body.cheats = o.cheats;
         if (o["minecraft-access"] || o["no-minecraft-access"]) body.minecraftAccess = o["minecraft-access"];
         if (o.behaviors !== undefined) body.behaviors = object(JSON.parse(o.behaviors));
         if (o["instructions-file"] === "-")
@@ -191,8 +187,7 @@ export function registerMinecraftCli(
             "environment-inputs": text("JSON inputs for the environment provider."),
             name: text("Minecraft display name; generated when omitted."),
             role: text("Role to copy from BB storage."),
-            mode: { type: "enum", values: ["survival", "creative"], description: "Minecraft game mode." },
-            cheats: { type: "enum", values: ["true", "false"], description: "World command access." },
+            mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Minecraft game mode." },
             "minecraft-access": { type: "enum", values: ["true", "false"], description: "Physical tool access; cannot exceed your own." },
             behaviors: text("JSON behavior settings, replacing the role's behaviors."),
             body: text("Minecraft entity type, e.g. minecraft:fox."),
@@ -323,7 +318,6 @@ export function registerMinecraftCli(
                 ...(role ? { roleInstructions: role.instructions } : {}),
                 ...(!o.environment && !o["new-environment"] && !o["environment-provider"] && !o.machine && typeof choices.worktree === "boolean" ? { worktree: choices.worktree } : {}),
                 ...(o.mode ? { mode: o.mode } : {}),
-                ...(o.cheats ? { cheats: o.cheats === "true" } : {}),
                 ...(o["minecraft-access"] ? { minecraftAccess: o["minecraft-access"] === "true" } : {}),
                 ...(o.behaviors ? { behaviors: object(JSON.parse(o.behaviors)) } : {}),
                 name: o.name,

@@ -122,7 +122,6 @@ final class DevelopmentChecks {
         body.setPersistenceRequired();
         body.getPersistentData().putBoolean(FIXTURE, true);
         body.getPersistentData().putString("too_many_agents_mode", "survival");
-        body.getPersistentData().putBoolean("too_many_agents_cheats", false);
         positionBody(BASE);
         require(level.addFreshEntity(body), "fixture_spawn_rejected");
         hands = new AgentHands(body);
@@ -131,7 +130,7 @@ final class DevelopmentChecks {
         hands.getInventory().setItem(2, new ItemStack(Items.COBBLESTONE, 8));
         hands.getInventory().setItem(3, new ItemStack(Items.OAK_STAIRS, 2));
         hands.save();
-        passed("Fixture in isolated development world; human Creative, hands Survival, cheats off.");
+        passed("Fixture in isolated development world; human Creative, hands Survival, commands off.");
         next("survival_timed_mining");
     }
 
@@ -255,9 +254,9 @@ final class DevelopmentChecks {
                 require(level.addFreshEntity(body), "restored_fixture_spawn_rejected");
                 hands = new AgentHands(body);
                 require(inventoryBeforeReload.equals(hands.getInventory().save(new ListTag())), "inventory_changed_after_body_nbt_reload");
-                require(!hands.isCreative() && !body.getPersistentData().getBoolean("too_many_agents_cheats"), "settings_changed_after_reload");
+                require(!hands.isCreative() && !BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).commands, "settings_changed_after_reload");
                 require(ItemStack.matches(body.getMainHandItem(), hands.getMainHandItem()), "held_item_changed_after_reload");
-                passed("Saved and recreated the body through Minecraft entity NBT, then recreated FakePlayer hands; inventory, durability, held equipment, Survival and cheats-off survived.");
+                passed("Saved and recreated the body through Minecraft entity NBT, then recreated FakePlayer hands; inventory, durability, held equipment, Survival and commands-off survived.");
                 next("creative_independent_mode");
             }
             case 10 -> {

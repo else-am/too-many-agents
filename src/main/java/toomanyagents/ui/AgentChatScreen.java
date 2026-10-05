@@ -314,9 +314,7 @@ public final class AgentChatScreen extends Screen {
         for (String[] defaultValue : new String[][]{{"body", toomanyagents.StarterAgents.body()}, {"mode", "survival"}, {"projectId", ""}}) {
             if (AgentModels.text(this.creationSettings, defaultValue[0]).isBlank()) this.creationSettings.addProperty(defaultValue[0], defaultValue[1]);
         }
-        for (String key : new String[]{"cheats", "worktree"}) {
-            if (!this.creationSettings.has(key)) this.creationSettings.addProperty(key, false);
-        }
+        if (!this.creationSettings.has("worktree")) this.creationSettings.addProperty("worktree", false);
         state = this.creationSettings;
         models.model = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "model");
         models.effort = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "reasoningLevel");

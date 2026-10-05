@@ -8,35 +8,30 @@ public final class BodySettings {
     public static JsonObject copy(JsonObject settings) {
         var result = new JsonObject();
         if (settings == null) return result;
-        for (String key : List.of("name", "body", "mode", "cheats", "color", "behaviors", "stationId", "minecraftAccess"))
+        for (String key : List.of("name", "body", "mode", "color", "behaviors", "stationId", "minecraftAccess"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
-        if (result.has("behaviors") && !result.get("behaviors").isJsonObject()) return result;
-        var behaviors = result.get("behaviors") instanceof JsonObject b ? b : new JsonObject();
-        migrateBehaviors(behaviors);
-        if (settings.has("following") && settings.get("following").getAsBoolean()) {
-            for (String state : List.of("wants_you", "working", "idle")) {
-                if (!behaviors.has(state)) {
-                    var follow = new JsonObject();
-                    follow.addProperty("type", "follow");
-                    behaviors.add(state, follow);
-                }
-            }
-        }
-        if (!behaviors.isEmpty() || result.has("behaviors")) result.add("behaviors", behaviors);
         return result;
     }
 
-    /** Keep existing choices when loading the old four-state behavior settings. */
-    static void migrateBehaviors(JsonObject behaviors) {
-        if (!behaviors.has("wants_you")) {
-            var previous = behaviors.has("needs_input") ? behaviors.get("needs_input") : behaviors.get("done");
-            if (previous != null) behaviors.add("wants_you", previous);
+    public enum Mode {
+        SURVIVAL("survival", "Survival", false, false),
+        CREATIVE("creative", "Creative", true, false),
+        CREATIVE_COMMANDS("creative_commands", "Creative + commands", true, true);
+
+        public final String id, label;
+        public final boolean creative, commands;
+
+        Mode(String id, String label, boolean creative, boolean commands) {
+            this.id = id; this.label = label; this.creative = creative; this.commands = commands;
         }
-        behaviors.remove("needs_input");
-        behaviors.remove("done");
     }
 
-    /** Profiles reuse body behavior without replacing identity or a world's station assignment. */
+    public static Mode mode(String id) {
+        for (var mode : Mode.values()) if (mode.id.equals(id)) return mode;
+        throw new IllegalArgumentException("invalid_agent_mode: " + id);
+    }
+
+    /** Roles reuse body settings without replacing identity or a world's station assignment. */
     public static JsonObject profile(JsonObject settings) {
         var result = copy(settings);
         for (String key : List.of("name", "color", "stationId")) result.remove(key);

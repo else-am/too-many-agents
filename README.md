@@ -107,17 +107,21 @@ Role instructions precede the first task. `role list/show/delete` work offline;
 plugin stdin and `--instructions-file -`. Use a file or the in-game editor for
 multiline instructions. File paths are local to BB. `create` rejects an
 existing name; `update` patches only supplied fields. Boolean choices have
-`--no-worktree`, `--no-cheats` and `--no-minecraft-access` counterparts.
+`--no-worktree` and `--no-minecraft-access` counterparts.
 
 Agent station commands (`create/update/assign/delete`) stay inside the caller's
 project and its box. Assign/unassign is limited to self or direct BB children;
 occupied stations cannot be taken or deleted. The dimension defaults to the
 caller's body. User station editing in Minecraft is unchanged.
 
-On attach, old `<game dir>/too-many-agents/body-profiles.json` entries import only
-when their names are absent in BB, then the file becomes `body-profiles.imported.json`.
-The former Survival/Creative built-ins are no longer seeded (saved entries with
-those names still import). Later role edits never change existing agents.
+Modes combine physical abilities and command access: `survival` uses inventory
+and tools; `creative` grants Creative physical actions; `creative_commands`
+also permits world commands using the human's existing permissions. The UI labels
+that last choice **Creative + commands**. Children cannot gain abilities their
+caller lacks. There is no separate command-access setting.
+
+Roles are created explicitly; none are seeded automatically. Later role edits
+never change existing agents. Saved data uses only the current format.
 
 Minecraft instructions ask agents to use embodied spawning; they do not disable
 native subagents or change unrelated BB threads' settings.

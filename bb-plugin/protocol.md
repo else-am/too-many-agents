@@ -29,9 +29,6 @@ before any retry.
   `role.save`: `{role:{name,instructions?,bb,body},agentId?}` saves the UI draft;
   with an agent it captures current native BB execution choices and worktree state.
   Omitted instructions preserve an existing role's instructions.
-  `role.import`: `{profiles:{name:body,...}}` inserts only missing names with empty
-  instructions and BB choices. Java sends the legacy file after attach, then renames
-  it to `body-profiles.imported.json` after acknowledgement. No built-ins are seeded.
   Java never persists role records. Instructions for an unstarted body are copied
   into plugin KV (`instructions:<agentId>`), prepended at first start, then removed.
 - `agent.message`: `{agentId,message:{text,images?,pointing?,delivery?,...}}`.
@@ -89,8 +86,7 @@ Java rejects stale sessions and expires physical requests before execution.
   otherwise `waiting` if any are queued, or `none`. Its one computed
   `activity` drives body behavior: `wants_you` for pending input, error or unread
   attention first; otherwise `working` for active/pending/starting/stopping;
-  otherwise `idle`. Java uses that value directly. Saved `needs_input` and `done`
-  behaviors migrate to `wants_you`, preferring `needs_input` when both exist.
+  otherwise `idle`. Java uses that value directly.
 - `world_metadata`, `world.workspace`, `world.project` expose the saved world
   record, create its owned workspace directory, and persist the BB project ID.
 - `tool`: `{agentId,threadId,tool,arguments}` executes only for the body's own
@@ -114,7 +110,9 @@ uses ordinary BB commands. BB owns queues, child results and attention notices.
 Roles expose `bb minecraft role list/show/create/update/delete`. Create/update use
 field flags, matching BB's provider/model/reasoning/service-tier/permission-mode
 names. Updates merge only supplied fields; behaviors replace the entire behavior
-object. CLI creation/deletion and import writes are serialized. `spawn --role`
+object. CLI creation/deletion and update writes are serialized. `spawn --role`
 copies both halves, then applies explicit flags. Java validates physical settings
-and prohibits delegated cross-project spawns. The legacy `/v1/agents/profiles`
-routes and Java profile storage have been removed.
+and prohibits delegated cross-project spawns. Body `mode` is `survival`,
+`creative`, or `creative_commands`; only the last permits world commands.
+Both Creative modes permit Creative physical actions. Delegated bodies cannot
+gain either capability beyond their caller. Saved data has no old-format conversions.

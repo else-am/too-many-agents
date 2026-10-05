@@ -207,7 +207,7 @@
   {
     "name": "minecraft_command",
     "minecraft": true,
-    "description": "Run a Minecraft command only when this agent has cheats enabled, using the human's existing permissions. @s is your body.",
+    "description": "Run a Minecraft command only in creative_commands mode, using the human's existing permissions. @s is your body.",
     "inputSchema": {
       "type": "object",
       "properties": {

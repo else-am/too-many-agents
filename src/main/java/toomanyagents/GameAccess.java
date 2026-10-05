@@ -390,12 +390,11 @@ final class GameAccess {
             Body ref = initialRef;
             var mob = body(current, ref);
             String mode = values.has("mode") ? values.get("mode").getAsString() : mob.getPersistentData().getString("too_many_agents_mode");
-            if (mode.isBlank()) mode = "survival";
-            if (!mode.equals("survival") && !mode.equals("creative")) throw error("invalid_agent_mode");
+            BodySettings.mode(mode);
             String name = values.has("name") ? string(values,"name",80).strip() : mob.getName().getString();
             if (name.isBlank()) throw error("invalid_agent_name");
             AgentActions controller = actions(ref,mob);
-            boolean physicalChange = List.of("name", "body", "mode", "cheats").stream()
+            boolean physicalChange = List.of("name", "body", "mode").stream()
                 .anyMatch(key -> values.has(key) && !Objects.equals(values.get(key), settings(initialRef).get(key)));
             if (controller.busy() && physicalChange) throw error("interrupt_action_before_changing_settings");
             String typeName = values.has("body") ? string(values,"body",200) : BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString();
@@ -422,7 +421,6 @@ final class GameAccess {
             var saved = mob.getPersistentData();
             saved.putString("too_many_agents_mode",mode);
             if (values.has("color")) saved.putString("too_many_agents_color", string(values,"color",7).toUpperCase(java.util.Locale.ROOT));
-            if (values.has("cheats")) saved.putBoolean("too_many_agents_cheats",values.get("cheats").getAsBoolean());
             if (values.has("behaviors")) saved.putString("too_many_agents_behaviors",values.get("behaviors").toString());
             actions(ref,mob).hands.syncBody();
             cacheBody(ref,mob);
@@ -436,8 +434,7 @@ final class GameAccess {
         result.addProperty("name",mob.getName().getString());
         result.addProperty("color", bodyColor(mob));
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
-        result.addProperty("mode",saved.getString("too_many_agents_mode").equals("creative") ? "creative" : "survival");
-        result.addProperty("cheats",saved.getBoolean("too_many_agents_cheats"));
+        result.addProperty("mode",BodySettings.mode(saved.getString("too_many_agents_mode")).id);
         result.add("behaviors",behaviors(mob));
         var controller = actions(ref,mob);
         result.add("action",controller.status(""));
@@ -576,6 +573,7 @@ final class GameAccess {
         mob.setPersistenceRequired();
         mob.setInvulnerable(true);
         mob.setNoAi(true);
+        mob.getPersistentData().putString("too_many_agents_mode", "survival");
         mob.getPersistentData().putString("too_many_agents_agent", agentId);
         mob.getPersistentData().putString("too_many_agents_world",WorldState.get(anchor.level().getServer()).id());
         // A body starts inside its box: its station if assigned, otherwise its project's box.
@@ -613,8 +611,7 @@ final class GameAccess {
             mob.setUUID(UUID.fromString(ref.entityUuid()));
             var data = mob.getPersistentData();
             if (saved.has("color")) data.putString("too_many_agents_color", saved.get("color").getAsString());
-            data.putString("too_many_agents_mode", saved.has("mode") ? saved.get("mode").getAsString() : "survival");
-            data.putBoolean("too_many_agents_cheats", saved.has("cheats") && saved.get("cheats").getAsBoolean());
+            data.putString("too_many_agents_mode", BodySettings.mode(saved.get("mode").getAsString()).id);
             if (saved.has("behaviors")) data.putString("too_many_agents_behaviors", saved.get("behaviors").toString());
             if (!player.serverLevel().addFreshEntity(mob)) throw error("body_recovery_spawn_rejected");
             cacheBody(ref, mob);
@@ -655,21 +652,10 @@ final class GameAccess {
         };
     }
 
-    /** Load old NBT settings once, preserving explicit behavior choices. Server thread only. */
+    /** Server thread only. */
     static JsonObject behaviors(Mob mob) {
-        var data = mob.getPersistentData();
-        var settings = new JsonObject();
-        String saved = data.getString("too_many_agents_behaviors");
-        try {
-            if (!saved.isBlank()) settings.add("behaviors", com.google.gson.JsonParser.parseString(saved).getAsJsonObject());
-        } catch (RuntimeException invalid) { /* Ignore unreadable legacy behaviors. */ }
-        settings.addProperty("following", data.getBoolean("too_many_agents_following"));
-        var migrated = BodySettings.copy(settings);
-        var behaviors = migrated.has("behaviors") ? migrated.getAsJsonObject("behaviors") : new JsonObject();
-        if (!behaviors.toString().equals(saved)) data.putString("too_many_agents_behaviors", behaviors.toString());
-        for (String key : List.of("following", "follow_return", "follow_work", "follow_before_work", "follow_owner"))
-            data.remove("too_many_agents_" + key);
-        return behaviors;
+        String saved = mob.getPersistentData().getString("too_many_agents_behaviors");
+        return saved.isBlank() ? new JsonObject() : com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
     }
 
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
@@ -689,8 +675,6 @@ final class GameAccess {
         if (!(entity instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)
             || mob.getPersistentData().getString("too_many_agents_agent").isBlank()) return;
         publishedWorld = new PublishedWorld(world(level.getServer()), worldSession.get());
-        if (mob.getPersistentData().getString("too_many_agents_world").isBlank())
-            mob.getPersistentData().putString("too_many_agents_world",WorldState.get(level.getServer()).id());
         mob.setNoAi(true);
         mob.setCanPickUpLoot(false);
         mob.setTarget(null);
@@ -720,9 +704,8 @@ final class GameAccess {
                     || mob.getPersistentData().getString("too_many_agents_agent").isBlank()) continue;
                 if (world.startsWith("unresolved:")) { mob.setNoAi(true); mob.setDeltaMovement(Vec3.ZERO); continue; }
                 var saved = mob.getPersistentData();
-                if (saved.getString("too_many_agents_world").isBlank()) saved.putString("too_many_agents_world",world);
                 if (!saved.getString("too_many_agents_world").equals(world)) {
-                    if (saved.getString("too_many_agents_world").equals(WorldState.get(current).copiedFrom())) {
+                    if (!WorldState.get(current).copiedFrom().isBlank() && saved.getString("too_many_agents_world").equals(WorldState.get(current).copiedFrom())) {
                         saved.putString("too_many_agents_world",world);
                     } else {
                     // A copied body must not run its original world's agent controls.
@@ -733,7 +716,7 @@ final class GameAccess {
                     continue;
                     }
                 }
-                // Once records are loaded, clean up retired bodies and ghosts left by older versions.
+                // Once records are loaded, remove bodies no longer retained by this world.
                 if (retainedAgents != null && !retainedAgents.contains(saved.getString("too_many_agents_agent"))) {
                     if (!failedBodyCleanup.contains(mob.getUUID())) {
                         try { removeBody(mob,current); }
@@ -1163,10 +1146,10 @@ final class GameAccess {
         result.addProperty("radius", radius);
         var capabilities = new JsonObject();
         var availableActions = new JsonArray();
-        boolean creative = mob.getPersistentData().getString("too_many_agents_mode").equals("creative");
-        AgentActions.TYPES.stream().filter(type -> creative || !type.equals("creative_item")).forEach(availableActions::add);
+        var mode = BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode"));
+        AgentActions.TYPES.stream().filter(type -> mode.creative || !type.equals("creative_item")).forEach(availableActions::add);
         capabilities.add("physicalActions",availableActions);
-        capabilities.addProperty("commandEditing",mob.getPersistentData().getBoolean("too_many_agents_cheats"));
+        capabilities.addProperty("commandEditing",mode.commands);
         capabilities.addProperty("povImages",true);
         capabilities.addProperty("navigationRadius",64);
         capabilities.addProperty("damageAndHunger",false);
@@ -1232,7 +1215,7 @@ final class GameAccess {
     }
 
     private JsonObject command(MinecraftServer current, Mob mob, JsonObject args) {
-        if (!mob.getPersistentData().getBoolean("too_many_agents_cheats")) throw error("cheats_disabled");
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).commands) throw error("world_commands_disabled");
         var text = string(args, "command", 4096).strip();
         if (text.startsWith("/")) text = text.substring(1);
         if (text.isBlank() || text.contains("\n") || text.contains("\r")) throw error("invalid_command");

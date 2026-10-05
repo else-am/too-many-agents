@@ -12,7 +12,6 @@ import static toomanyagents.JsonState.*;
 /** Minecraft owns agents and bodies; BB owns conversations, providers, projects and queues. */
 final class AgentService implements AgentUiAccess, AutoCloseable {
     private static final Gson JSON = new GsonBuilder().serializeNulls().create();
-    private final Path directory;
     private final GameAccess game;
     private final Supplier<String> worldSession;
     private final BbClient bb;
@@ -41,8 +40,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         boolean minecraftAccess=true, removed, lost, archived, deleted, suspended;
     }
 
-    AgentService(Path directory, GameAccess game, Supplier<String> worldSession) {
-        this.directory=directory; this.game=game; this.worldSession=worldSession; bb=new BbClient();
+    AgentService(GameAccess game, Supplier<String> worldSession) {
+        this.game=game; this.worldSession=worldSession; bb=new BbClient();
         // BB pushes changes; this slower sync re-attaches after a plugin restart and catches anything missed.
         polling.scheduleWithFixedDelay(this::sync,0,5,TimeUnit.SECONDS);
     }
@@ -62,7 +61,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }
             bb.call(object("op","session.attach","protocol",3,"worldId",worldId,"worldSessionId",session,"callbackUrl",callbackUrl,"callbackToken",callbackToken)).join();
             synchronized(this) { if(!currentSession(session)) return; }
-            importProfiles();
             var state=rpc("world.sync",new JsonObject()).join().getAsJsonObject();
             synchronized(this) { if(!currentSession(session)) return; projectRows=array(state,"projects"); connected=true; error=""; }
 
@@ -126,8 +124,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         UUID.fromString(agent.id);
         agent.body=JSON.fromJson(row.get("body"),GameAccess.Body.class);
         if(agent.body!=null) agent.body=new GameAccess.Body(agent.body.entityUuid(),worldId,agent.body.dimension());
-        agent.settings=BodySettings.copy(obj(row,"settings")); agent.minecraftAccess=!row.has("minecraftAccess") || flag(row,"minecraftAccess");
-        agent.projectId=text(row,row.has("projectId")?"projectId":"bbProjectId"); agent.threadId=text(row,"threadId"); agent.suspendedBody=text(row,"suspendedBody"); agent.deleted=flag(row,"deleted");
+        agent.settings=BodySettings.copy(obj(row,"settings")); agent.minecraftAccess=flag(row,"minecraftAccess");
+        agent.projectId=text(row,"projectId"); agent.threadId=text(row,"threadId"); agent.suspendedBody=text(row,"suspendedBody"); agent.deleted=flag(row,"deleted");
         agent.startNonce=text(row,"startNonce");
         agent.spawn=obj(row,"spawn").deepCopy(); agent.archived=flag(row,"archived");
         agent.removed=flag(row,"bodyRemoved"); agent.lost=flag(row,"bodyLost");
@@ -225,16 +223,6 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         }
         return rpc("project."+operation,request).thenApply(JsonElement::getAsJsonObject).whenComplete((done,failure) -> polling.execute(this::sync));
     }); }
-    // The legacy file is only a migration source. BB owns all role records.
-    private void importProfiles() throws java.io.IOException {
-        var file=directory.resolve("body-profiles.json");
-        if(!Files.exists(file)) return;
-        var profiles=new JsonObject();
-        for(var entry:JsonParser.parseString(Files.readString(file)).getAsJsonObject().entrySet())
-            profiles.add(entry.getKey(),BodySettings.profile(entry.getValue().getAsJsonObject()));
-        rpc("role.import",object("profiles",profiles)).join();
-        Files.move(file,directory.resolve("body-profiles.imported.json"),StandardCopyOption.REPLACE_EXISTING);
-    }
     @Override public CompletableFuture<JsonArray> roles() {
         return rpc("role.list",new JsonObject()).thenApply(JsonElement::getAsJsonArray);
     }
@@ -255,8 +243,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(caller!=null) {
             settings.remove("name"); settings.remove("color"); settings.remove("stationId");
             for(var entry:BodySettings.copy(requested).entrySet()) settings.add(entry.getKey(),entry.getValue());
-            if(flag(settings,"cheats") && !flag(caller.settings,"cheats")) return failed("A body cannot gain cheats that its caller lacks.");
-            if(text(settings,"mode").equals("creative") && !text(caller.settings,"mode").equals("creative")) return failed("A Survival caller cannot give another body Creative access.");
+            var mode=BodySettings.mode(text(settings,"mode"));
+            var callerMode=BodySettings.mode(text(caller.settings,"mode"));
+            if(mode.commands && !callerMode.commands) return failed("A body cannot gain world commands that its caller lacks.");
+            if(mode.creative && !callerMode.creative) return failed("A Survival caller cannot give another body Creative access.");
         }
         String id=UUID.randomUUID().toString(), projectId=text(request,"projectId");
         if(caller!=null && !caller.projectId.equals(projectId)) return failed("An agent can spawn only in its own body's project.");
@@ -508,8 +498,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             String key=entry.getKey(); var value=entry.getValue();
             boolean valid=switch(key) {
                 case "body" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() && !value.getAsString().isBlank();
-                case "mode" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() && Set.of("survival","creative").contains(value.getAsString());
-                case "cheats","minecraftAccess" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
+                case "mode" -> {
+                    if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isString()) yield false;
+                    BodySettings.mode(value.getAsString());
+                    yield true;
+                }
+                case "minecraftAccess" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
                 case "behaviors" -> value.isJsonObject();
                 default -> false;
             };
