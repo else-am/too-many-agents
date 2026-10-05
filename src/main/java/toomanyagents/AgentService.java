@@ -221,7 +221,34 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             var copy=request.deepCopy(); if(!text(copy,"agentId").isBlank()) copy.addProperty("agentProjectId",require(text(copy,"agentId")).projectId);
             return game.worldCommand(copy,worldSession.get());
         }
-        return rpc("project."+operation,request).thenApply(JsonElement::getAsJsonObject).whenComplete((done,failure) -> polling.execute(this::sync));
+        CompletableFuture<JsonElement> response;
+        if(operation.equals("remove")) {
+            JsonObject removal;
+            synchronized(this) {
+                var world=game.worldInfo(); // Serialized snapshot published by the server thread.
+                if(!currentSession(loadedSession) || !Objects.equals(loadedWorldId,text(world,"id"))
+                    || !Objects.equals(loadedWorldId,game.currentWorldId())) throw new IllegalStateException("world_session_changed");
+                String project=text(request,"projectId");
+                var remaining=new ArrayList<String>();
+                var bodies=agents.values().stream().filter(a -> !a.removed && a.projectId.equals(project)).map(a -> a.name).toList();
+                if(!bodies.isEmpty()) remaining.add("remove bodies ("+String.join(", ",bodies)+")");
+                var stations=new ArrayList<String>();
+                for(var value:array(world,"stations")) {
+                    var station=value.getAsJsonObject();
+                    if(text(station,"projectId").equals(project)) stations.add(text(station,"label"));
+                }
+                if(!stations.isEmpty()) remaining.add("unassign and delete stations ("+String.join(", ",stations)+")");
+                for(var value:array(world,"bounds")) if(text(value.getAsJsonObject(),"projectId").equals(project)) {
+                    remaining.add("clear the project box"); break;
+                }
+                if(!remaining.isEmpty()) throw new IllegalStateException("Cannot remove project. First "+String.join("; ",remaining)+".");
+                removal=request.deepCopy(); removal.addProperty("op","project.remove");
+                removal.addProperty("worldId",loadedWorldId); removal.addProperty("worldSessionId",loadedSession);
+            }
+            // BB owns deletion. Do not hold the body lock while contacting it.
+            response=bb.call(removal);
+        } else response=rpc("project."+operation,request);
+        return response.thenApply(JsonElement::getAsJsonObject).whenComplete((done,failure) -> polling.execute(this::sync));
     }); }
     @Override public CompletableFuture<JsonArray> roles() {
         return rpc("role.list",new JsonObject()).thenApply(JsonElement::getAsJsonArray);
