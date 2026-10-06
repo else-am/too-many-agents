@@ -76,6 +76,8 @@ public final class ClientControls {
         toomanyagents.ui.ScreenScale.register();
         inventoryAgents = new toomanyagents.ui.InventoryAgents(() -> service.get(), id -> selectedAgent = id);
         survey = new toomanyagents.ui.SurveyMode(() -> service.get());
+        var speech = new toomanyagents.ui.SpeechBubbles(() -> service.get());
+        new toomanyagents.ui.OverheadAgentCards(() -> service.get(), speech);
         new AgentNotifications(service, id -> Minecraft.getInstance().isWindowActive()
             && (Minecraft.getInstance().screen instanceof AgentChatScreen chat && chat.agentId().equals(id)
                 || inventoryAgents.viewing(id)));

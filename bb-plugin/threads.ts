@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { imageUploads } from "./images.js";
 import type { MinecraftWorlds } from "./minecraft.js";
+import { agentSpeech } from "./speech.js";
 import { describe, type ObjectValue, type Session, type SpawnOptions, type Thread } from "./protocol.js";
 
 function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" | "working" | "idle" {
@@ -14,15 +15,43 @@ function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" |
 /** Translate native BB state once, into the view and physical state Minecraft needs. */
 export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const withImages = imageUploads(bb);
+  const speech = agentSpeech(bb);
   const pending = new Map<string, Promise<void>>();
   let disposed = false;
+  const environments = new Map<string, { until: number; value: ReturnType<typeof readEnvironment> }>();
+
+  async function readEnvironment(environmentId: string) {
+    const [environment, status] = await Promise.all([
+      bb.sdk.environments.get({ environmentId }),
+      bb.sdk.environments.status({ environmentId }),
+    ]);
+    const isGitRepo = status.outcome === "available";
+    return {
+      id: environment.id, path: environment.path,
+      isWorktree: environment.isWorktree && isGitRepo,
+      isGitRepo,
+      branchName: isGitRepo ? status.workspace.branch.currentBranch : null,
+    };
+  }
+
+  function environmentFor(thread: Thread) {
+    const id = thread.environmentId;
+    if (!id) return null;
+    const cached = environments.get(id);
+    if (cached && cached.until > Date.now()) return cached.value;
+    // Share one live workspace read across threads and streaming events for five seconds.
+    const value = readEnvironment(id);
+    environments.set(id, { until: Date.now() + 5_000, value });
+    return value;
+  }
 
   async function read(thread: Thread) {
     const threadId = thread.id;
-    const [executionOptions, interactions, queuedMessages] = await Promise.all([
+    const [executionOptions, interactions, queuedMessages, environment] = await Promise.all([
       bb.sdk.threads.defaultExecutionOptions({ threadId }),
       bb.sdk.threads.interactions.list({ threadId }),
       bb.sdk.threads.queuedMessages.list({ threadId }),
+      environmentFor(thread)?.catch(() => null) ?? null,
     ]);
     const hasPendingInteraction = interactions.some((interaction) => interaction.status === "pending");
     const queuedWork = queuedMessages.some((message) => message.failureReason != null)
@@ -30,6 +59,7 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
     const active = ["active", "pending", "starting", "stopping"].includes(thread.status);
     return {
       thread,
+      environment,
       executionOptions,
       interactions,
       queuedMessages,
@@ -42,8 +72,11 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       activity: activity(thread, hasPendingInteraction),
       canSteer: active,
       conversationArchived: thread.archivedAt != null,
-      taskTitle: thread.title ?? "",
+      taskTitle: thread.title ?? thread.titleFallback ?? "",
       providerId: thread.providerId,
+      // A bubble is decoration; failing to read it must not look like a lost connection.
+      speech: thread.deletedAt != null || thread.archivedAt != null
+        ? null : await speech.speech(thread, interactions).catch(() => null),
     };
   }
 
@@ -162,6 +195,9 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   }
 
   bb.events.on("thread.created", ({ thread }) => bind(thread.id));
+  bb.events.on("thread.deleted", ({ thread }) => {
+    speech.forget(thread.id);
+  });
   for (const event of [
     "thread.active",
     "thread.idle",
@@ -177,6 +213,7 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
     bb.events.on(event, ({ entry }) => changed(entry.threadId));
   bb.onDispose(() => {
     disposed = true;
+    environments.clear();
   });
   return { sync, start, withImages, reconnect };
 }

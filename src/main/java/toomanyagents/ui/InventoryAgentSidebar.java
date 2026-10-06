@@ -23,8 +23,9 @@ import toomanyagents.TooManyAgentsClientSettings;
 
 /** An inventory companion; the host owns its position, scale, and input routing. */
 public final class InventoryAgentSidebar extends Screen {
+    static final int DEFAULT_WIDTH = 260, CARD_MARGINS = 31;
     private static final int LIST_TOP = 39;
-    private static final int ROW_HEIGHT = 40;
+    private static final int ROW_HEIGHT = AgentCard.HEIGHT + 11;
     private final AgentUiAccess access;
     private final Screen parent;
     private final Consumer<String> select;
@@ -135,15 +136,15 @@ public final class InventoryAgentSidebar extends Screen {
             Component.literal(sidebarCollapsed() ? "Expand sidebar" : "Collapse sidebar"), button ->
                 TooManyAgentsClientSettings.get().setSidebarCollapsed(!sidebarCollapsed()), message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
-                if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF303638);
-                int color = isHoveredOrFocused() ? 0xFFF0E6CD : 0xFFADB5B1;
+                if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF363636);
+                int color = isHoveredOrFocused() ? 0xFFEEEEEE : 0xFFB3B3B3;
                 int x = getX() + 4, y = getY() + 5;
                 g.fill(x, y, x + 10, y + 1, color);
                 g.fill(x, y + 8, x + 10, y + 9, color);
                 g.fill(x, y + 1, x + 1, y + 8, color);
                 g.fill(x + 9, y + 1, x + 10, y + 8, color);
                 g.fill(x + 3, y + 1, x + 4, y + 8, color);
-                if (!sidebarCollapsed()) g.fill(x + 1, y + 1, x + 3, y + 8, 0x886D7975);
+                if (!sidebarCollapsed()) g.fill(x + 1, y + 1, x + 3, y + 8, 0x88777777);
             }
         });
         toggle.setTooltip(net.minecraft.client.gui.components.Tooltip.create(toggle.getMessage()));
@@ -274,8 +275,8 @@ public final class InventoryAgentSidebar extends Screen {
     private Button footer(int x, int y, int w, String label, Runnable action) {
         return new Button(x, y, w, 22, Component.literal(label), button -> action.run(), message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
-                if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF303638);
-                g.drawString(font, getMessage(), getX() + 5, getY() + 7, label.startsWith("+") ? 0xE2D7B7 : 0xAEB6B5, false);
+                if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF363636);
+                g.drawString(font, getMessage(), getX() + 5, getY() + 7, label.startsWith("+") ? 0xDDDDDD : 0xB5B5B5, false);
             }
         };
     }
@@ -462,21 +463,31 @@ public final class InventoryAgentSidebar extends Screen {
             super.render(g, mouseX, mouseY, partialTick);
             return;
         }
-        g.fill(11, height - 42, width - 11, height - 41, 0xFF303735);
+        g.fill(11, height - 42, width - 11, height - 41, 0xFF353535);
         Tooltip tooltip = renderWidgets(g, mouseX, mouseY, partialTick);
-        if (entries.isEmpty()) g.drawString(font, "No projects here", 14, LIST_TOP + 12, 0x8C9695, false);
+        if (entries.isEmpty()) g.drawString(font, "No projects here", 14, LIST_TOP + 12, 0x949494, false);
         int viewport = listBottom() - LIST_TOP;
         if (contentHeight > viewport) {
             int thumb = Math.max(14, viewport * viewport / contentHeight);
             int thumbY = LIST_TOP + scroll * (viewport - thumb) / (contentHeight - viewport);
-            g.fill(width - 5, LIST_TOP, width - 3, listBottom(), 0xFF252D2E);
-            g.fill(width - 5, thumbY, width - 3, thumbY + thumb, 0xFF75817F);
+            g.fill(width - 5, LIST_TOP, width - 3, listBottom(), 0xFF2B2B2B);
+            g.fill(width - 5, thumbY, width - 3, thumbY + thumb, 0xFF808080);
         }
         String hoverKey = "", hoverText = "";
         for (SidebarButton button : rows) {
             if (button.visible && button.isMouseOver(mouseX, mouseY)) {
                 hoverKey = button.entry.agent == null ? "project:" + button.entry.projectId : text(button.entry.agent, "id");
-                hoverText = button.entry.agent == null ? projectTooltip(button.entry) : age(button.entry.agent);
+                hoverText = button.entry.agent == null ? projectTooltip(button.entry) : "";
+                if (button.entry.agent != null) {
+                    int inset = indent(button.entry, width);
+                    float iconX = 13 + inset + AgentCard.worktreeOffset(button.entry.agent, width - CARD_MARGINS - inset);
+                    int iconY = button.rowTop + 5 + AgentCard.CONTEXT_Y;
+                    String path = AgentCard.worktreePath(button.entry.agent);
+                    if (!path.isBlank() && mouseX >= iconX && mouseX < iconX + 9 * AgentCard.DETAIL && mouseY >= iconY && mouseY < iconY + 9 * AgentCard.DETAIL) {
+                        hoverKey += ":worktree";
+                        hoverText = "worktree: " + path;
+                    }
+                }
                 break;
             }
             if (button.add == null) continue;
@@ -563,8 +574,8 @@ public final class InventoryAgentSidebar extends Screen {
             g.enableScissor(5, LIST_TOP, panelWidth - 6, listBottom());
             try {
                 if (entry.agent == null) {
-                    if (isHoveredOrFocused()) g.fill(getX(), rowTop + 2, getX() + getWidth(), rowTop + 22, 0xFF262F30);
-                    drawChevron(g, 13, rowTop + 9, !collapsed.contains(entry.projectId), 0x929E9C);
+                    if (isHoveredOrFocused()) g.fill(getX(), rowTop + 2, getX() + getWidth(), rowTop + 22, 0xFF2D2D2D);
+                    drawChevron(g, 13, rowTop + 9, !collapsed.contains(entry.projectId), 0x9B9B9B);
                     int labelX = 35;
                     var project = projects.get(entry.projectId);
                     int projectColor = ProjectColor.rgb(project == null ? ProjectColor.forId(entry.projectId) : ProjectColor.of(project));
@@ -573,26 +584,19 @@ public final class InventoryAgentSidebar extends Screen {
                         g.renderItem(new ItemStack(Items.GRASS_BLOCK), labelX, rowTop + 4);
                         labelX += 20;
                     }
-                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - labelX - 6), labelX, rowTop + 8, 0xBDC6C2, false);
+                    g.drawString(font, ellipsis(entry.name, getX() + getWidth() - labelX - 6), labelX, rowTop + 8, 0xC3C3C3, false);
                     return;
                 }
                 var agent = entry.agent;
                 boolean chosen = text(agent, "id").equals(selected);
-                if (chosen || isHoveredOrFocused()) g.fill(getX(), rowTop + 1, getX() + getWidth(), rowTop + ROW_HEIGHT - 1,
-                    chosen ? 0xFF333D3D : 0xFF272F31);
-                if (chosen) g.fill(getX(), rowTop + 6, getX() + 2, rowTop + ROW_HEIGHT - 6, 0xFFD7CBA7);
+                if (chosen || isHoveredOrFocused()) g.fill(getX(), rowTop + 1, getX() + getWidth(), rowTop + ROW_HEIGHT - 1, AgentCard.background());
                 int inset = indent(entry, panelWidth);
                 if (entry.depth > 0) {
-                    g.fill(getX() - 7, rowTop, getX() - 6, rowTop + 21, 0xFF65716D);
-                    g.fill(getX() - 6, rowTop + 20, getX() - 2, rowTop + 21, 0xFF65716D);
+                    g.fill(getX() - 7, rowTop, getX() - 6, rowTop + 21, 0xFF6E6E6E);
+                    g.fill(getX() - 6, rowTop + 20, getX() - 2, rowTop + 21, 0xFF6E6E6E);
                 }
-                renderAvatar(g, agent, 13 + inset, rowTop + 7);
-                String name = ellipsis(text(agent, "name"), panelWidth - 78 - inset - ProviderIcon.SIZE - 4);
-                g.drawString(font, name, 47 + inset, rowTop + 9, 0xE1E7DF, false);
-                ProviderIcon.render(g, text(agent, "providerId"), 47 + inset + font.width(name) + 4, rowTop + 9);
-                String task = text(agent, "taskTitle");
-                if (!task.isBlank()) g.drawString(font, ellipsis(task, panelWidth - 78 - inset), 47 + inset, rowTop + 23, 0x98A3A0, false);
-                renderSignals(g, agent, panelWidth - 22, rowTop + 11);
+                portraits.render(g, text(agent, "bodyType"), 13 + inset, rowTop + 4, 10);
+                AgentCard.render(g, agent, 13 + inset, rowTop + 5, panelWidth - CARD_MARGINS - inset, 14);
             } finally {
                 g.disableScissor();
             }
@@ -633,10 +637,10 @@ public final class InventoryAgentSidebar extends Screen {
             g.enableScissor(5, LIST_TOP, InventoryAgentSidebar.this.width - 6, listBottom());
             try {
                 int y = row.rowTop + 3;
-                if (active && isHoveredOrFocused()) g.fill(getX(), y, getX() + getWidth(), y + 18, 0xFF303A39);
+                if (active && isHoveredOrFocused()) g.fill(getX(), y, getX() + getWidth(), y + 18, 0xFF383838);
                 String icon = edit ? "…" : "+";
                 g.drawString(font, icon, getX() + (getWidth() - font.width(icon)) / 2, y + 5,
-                    !active ? 0x55615E : edit ? 0xA4B0AA : 0xD4C8A8, false);
+                    !active ? 0x5E5E5E : edit ? 0xACACAC : 0xCCCCCC, false);
             } finally {
                 g.disableScissor();
             }
@@ -646,24 +650,6 @@ public final class InventoryAgentSidebar extends Screen {
     private String ellipsis(String value, int available) {
         if (font.width(value) <= available) return value;
         return font.plainSubstrByWidth(value, Math.max(0, available - font.width("…"))) + "…";
-    }
-
-    private void renderSignals(GuiGraphics g, JsonObject agent, int x, int y) {
-        boolean working = List.of("active", "pending", "starting", "stopping").contains(text(agent, "status"));
-        boolean attention = flag(agent, "hasPendingInteraction") || flag(agent, "waitingForGame");
-        if (attention || !working && unread(agent)) {
-            int color = 0xFFE6AC62;
-            g.fill(x + 1, y + 14, x + 5, y + 20, color);
-            g.fill(x, y + 15, x + 6, y + 19, color);
-        } else if (working) {
-            int phase = (int)((System.nanoTime() / 130_000_000L) % 8);
-            int[][] points = {{0, 0}, {3, 0}, {6, 0}, {6, 3}, {6, 6}, {3, 6}, {0, 6}, {0, 3}};
-            for (int i = 0; i < points.length; i++) {
-                int opacity = 255 - Math.floorMod(phase - i, 8) * 25;
-                g.fill(x - 1 + points[i][0], y + 13 + points[i][1], x + 1 + points[i][0], y + 15 + points[i][1],
-                    opacity << 24 | 0xA0A0A0);
-            }
-        }
     }
 
     private static void drawChevron(GuiGraphics g, int x, int y, boolean expanded, int color) {
@@ -683,27 +669,6 @@ public final class InventoryAgentSidebar extends Screen {
         }
     }
 
-    private void renderAvatar(GuiGraphics g, JsonObject agent, int x, int y) {
-        int size = 26;
-        g.fill(x, y, x + size, y + size, 0xFF111719);
-        portraits.render(g, text(agent, "bodyType"), x + 1, y + 1, size - 2);
-    }
-
-    private static String age(JsonObject agent) {
-        var conversation = AgentModels.object(agent,"thread");
-        if (!conversation.has("createdAt")) return "";
-        long createdAt = conversation.get("createdAt").getAsLong();
-        if (createdAt <= 0) return "";
-        long seconds = Math.max(0, (System.currentTimeMillis() - createdAt) / 1000);
-        if (seconds < 60) return seconds + "s";
-        if (seconds < 3_600) return seconds / 60 + "m";
-        if (seconds < 86_400) return seconds / 3_600 + "h";
-        long days = seconds / 86_400;
-        if (days < 7) return days + "d";
-        if (days < 365) return days / 7 + "w";
-        return days / 365 + "y";
-    }
-
     private static String details(JsonObject agent) {
         String result = text(agent, "name");
         String task = text(agent, "taskTitle");
@@ -719,10 +684,7 @@ public final class InventoryAgentSidebar extends Screen {
         return result;
     }
 
-    private static boolean unread(JsonObject agent) {
-        return agent.has("latestAttentionAt") && agent.get("latestAttentionAt").getAsLong()
-            > (agent.has("lastReadAt") && !agent.get("lastReadAt").isJsonNull() ? agent.get("lastReadAt").getAsLong() : 0);
-    }
+    private static boolean unread(JsonObject agent) { return AgentCard.unread(agent); }
 
     private static String text(JsonObject object, String key) { return AgentModels.text(object, key); }
     private static boolean flag(JsonObject object, String key) {

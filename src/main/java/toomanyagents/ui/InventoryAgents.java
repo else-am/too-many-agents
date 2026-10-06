@@ -167,7 +167,7 @@ public final class InventoryAgents {
         boolean collapsed = TooManyAgentsClientSettings.get().sidebarCollapsed();
         float sidebarScale = Math.min(scale, Math.max(.1F, leftSpace / 180F));
         left = layout(left, sidebar, margin, margin,
-            collapsed ? Math.max(12, Math.round(28 * sidebarScale)) : Math.min(leftSpace, Math.round(260 * scale)),
+            collapsed ? Math.max(12, Math.round(28 * sidebarScale)) : Math.min(leftSpace, Math.round(InventoryAgentSidebar.DEFAULT_WIDTH * scale)),
             collapsed ? Math.max(12, Math.round(32 * sidebarScale)) : availableHeight, sidebarScale);
         int chatWidth = Math.min(rightSpace, Math.round(540 * scale));
         int settingsWidth = settingsWidth(rightSpace, scale);
@@ -222,7 +222,7 @@ public final class InventoryAgents {
         int availableWidth = screen.width - 16;
         float scale = Math.max(.1F, Math.min(preferred, Math.min(availableWidth / (collapsed ? 580F : 812F), height / 400F)));
         int gap = Math.round(12 * scale);
-        int sidebarWidth = collapsed ? Math.max(12, Math.round(28 * scale)) : Math.round(260 * scale);
+        int sidebarWidth = collapsed ? Math.max(12, Math.round(28 * scale)) : Math.round(InventoryAgentSidebar.DEFAULT_WIDTH * scale);
         int totalWidth = Math.min(availableWidth, Math.round((collapsed ? 824 : 1056) * scale));
         int x = (screen.width - totalWidth) / 2;
         int settingsWidth = settingsWidth(availableWidth - sidebarWidth - gap, scale);

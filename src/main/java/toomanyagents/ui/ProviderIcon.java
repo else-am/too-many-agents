@@ -13,14 +13,18 @@ final class ProviderIcon {
 
     /** Draws the mark for a provider id; y is the top of the text it sits beside. Returns the width drawn. */
     static int render(GuiGraphics g, String providerId, int x, int textY) {
-        ResourceLocation icon = switch (providerId) {
+        ResourceLocation icon = textureFor(providerId);
+        if (icon == null) return 0;
+        g.blit(icon, x, textY - 1, 0, 0, SIZE, SIZE, SIZE, SIZE);
+        return SIZE;
+    }
+
+    static ResourceLocation textureFor(String providerId) {
+        return switch (providerId) {
             case "claude-code" -> CLAUDE;
             case "codex" -> OPENAI;
             default -> null;
         };
-        if (icon == null) return 0;
-        g.blit(icon, x, textY - 1, 0, 0, SIZE, SIZE, SIZE, SIZE);
-        return SIZE;
     }
 
     private static ResourceLocation texture(String name) {

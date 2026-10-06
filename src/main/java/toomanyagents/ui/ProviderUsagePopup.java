@@ -55,26 +55,26 @@ final class ProviderUsagePopup {
         scroll = Math.clamp(scroll, 0, Math.max(0, contentHeight - height + 12));
         g.pose().pushPose();
         g.pose().translate(0, 0, 500);
-        g.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF59625D);
-        g.fill(x, y, x + width, y + height, 0xFF18201E);
+        g.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF606060);
+        g.fill(x, y, x + width, y + height, 0xFF1C1C1C);
         g.enableScissor(x + 1, y + 1, x + width - 1, y + height - 1);
         int left = x + 9, right = x + width - 10, rowY = y + 10 - scroll;
-        g.drawString(font, "Usage", left, rowY, 0xEEE6D3, false);
+        g.drawString(font, "Usage", left, rowY, 0xEEEEEE, false);
         String scale = "% used";
-        g.drawString(font, scale, right - font.width(scale), rowY, 0x9FAAA8, false);
+        g.drawString(font, scale, right - font.width(scale), rowY, 0xAAAAAA, false);
         rowY += 23;
         if (report == null || providers().isEmpty()) {
-            g.drawString(font, fetching ? "Loading…" : "Usage unavailable", left, rowY, 0xAAB4B0, false);
+            g.drawString(font, fetching ? "Loading…" : "Usage unavailable", left, rowY, 0xB0B0B0, false);
         } else for (var entry : providers()) {
             JsonObject provider = entry.getValue().getAsJsonObject();
             String id = entry.getKey();
             ProviderIcon.render(g, id, left, rowY);
-            g.drawString(font, id, left + 14, rowY, 0xEEE6D3, false);
+            g.drawString(font, id, left + 14, rowY, 0xEEEEEE, false);
             rowY += 18;
             var windows = AgentModels.array(provider, "windows");
             if (windows.isEmpty()) {
                 String message = AgentModels.text(provider, "message");
-                g.drawString(font, font.plainSubstrByWidth(message.isBlank() ? "Usage unavailable" : message, right - left), left, rowY, 0x9FAAA8, false);
+                g.drawString(font, font.plainSubstrByWidth(message.isBlank() ? "Usage unavailable" : message, right - left), left, rowY, 0xAAAAAA, false);
                 rowY += 18;
             }
             for (var limit : windows) {
@@ -84,13 +84,13 @@ final class ProviderUsagePopup {
                 known &= Double.isFinite(used);
                 String percent = known ? Math.round(used) + "%" : "—";
                 int labelWidth = right - left - font.width(percent) - 6;
-                g.drawString(font, font.plainSubstrByWidth(AgentModels.text(window, "label"), labelWidth), left, rowY, 0xC7D0C9, false);
-                g.drawString(font, percent, right - font.width(percent), rowY, 0xC7D0C9, false);
-                g.fill(left, rowY + 12, right, rowY + 16, 0xFF35433D);
+                g.drawString(font, font.plainSubstrByWidth(AgentModels.text(window, "label"), labelWidth), left, rowY, 0xCCCCCC, false);
+                g.drawString(font, percent, right - font.width(percent), rowY, 0xCCCCCC, false);
+                g.fill(left, rowY + 12, right, rowY + 16, 0xFF3E3E3E);
                 if (known) g.fill(left, rowY + 12, left + (int)Math.round((right - left) * Math.clamp(used, 0, 100) / 100), rowY + 16,
-                    used >= 90 ? 0xFFD59B75 : 0xFF9BAD96);
+                    used >= 90 ? 0xFFDDDDDD : 0xFFAAAAAA);
                 String reset = reset(window, now);
-                g.drawString(font, font.plainSubstrByWidth(reset, right - left), left, rowY + 20, 0x8F9F98, false);
+                g.drawString(font, font.plainSubstrByWidth(reset, right - left), left, rowY + 20, 0x999999, false);
                 rowY += 38;
             }
             rowY += 5;
@@ -99,7 +99,7 @@ final class ProviderUsagePopup {
         if (contentHeight + 12 > height) {
             int track = height - 8, thumb = Math.max(12, track * height / (contentHeight + 12));
             int top = y + 4 + scroll * (track - thumb) / (contentHeight + 12 - height);
-            g.fill(x + width - 4, top, x + width - 2, top + thumb, 0xFF75817F);
+            g.fill(x + width - 4, top, x + width - 2, top + thumb, 0xFF808080);
         }
         g.pose().popPose();
     }

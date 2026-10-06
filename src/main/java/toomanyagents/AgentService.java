@@ -197,6 +197,14 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var agent=agents.get(id); if(agent==null || !currentSession(loadedSession)) return object("id",id,"status","unavailable");
         String agentError=text(agent.remote,"error");
         var state=agent.remote.deepCopy();
+        for(var row:projectRows) {
+            var project=row.getAsJsonObject();
+            if(agent.projectId.equals(text(project,"id"))) {
+                state.addProperty("projectColor",ProjectColor.of(project));
+                state.addProperty("projectName",text(project,"name"));
+                break;
+            }
+        }
         var physical=object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,"projectId",agent.projectId,
             "threadId",agent.threadId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
             "minecraftAccess",agent.minecraftAccess,"currentWorld",game.belongsToCurrentWorld(agent.body),
