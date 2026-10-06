@@ -8,6 +8,7 @@ import { minecraftThreads } from "./threads.js";
 import { minecraftAgents } from "./agents.js";
 import { minecraftProjects } from "./projects.js";
 import { describe } from "./protocol.js";
+import { savePovSnapshot } from "./images.js";
 
 export default async function minecraft(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
@@ -44,11 +45,12 @@ export default async function minecraft(bb: BbPluginApi) {
       async execute(args, ctx): Promise<PluginAgentToolResult> {
         try {
           const { live, agent } = await worlds.caller(ctx.threadId);
-          return (await worlds.toolCallback(live, ctx, "tool", {
+          const result = (await worlds.toolCallback(live, ctx, "tool", {
             agentId: agent.agentId,
             tool: tool.name,
             arguments: args,
           })) as PluginAgentToolResult;
+          return tool.name === "minecraft_pov" ? await savePovSnapshot(bb, ctx, result) : result;
         } catch (error) {
           return {
             content: [

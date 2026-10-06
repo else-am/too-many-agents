@@ -20,7 +20,7 @@
   {
     "name": "minecraft_pov",
     "minecraft": true,
-    "description": "See a rendered image from your NPC body's actual eyes, without moving the human camera.",
+    "description": "Capture a rendered PNG from your NPC body's eyes without moving the human camera. Returns the saved file's absolute path. Open it with your image-viewing tool to see the snapshot.",
     "inputSchema": {
       "type": "object",
       "properties": {},
