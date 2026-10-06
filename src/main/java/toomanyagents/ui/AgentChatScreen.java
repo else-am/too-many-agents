@@ -1770,19 +1770,25 @@ public final class AgentChatScreen extends Screen {
             int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
             int bottom=y+(panel.end-panel.first)*LINE_HEIGHT;
             if(bottom<transcriptTop || y>transcriptBottom) continue;
-            graphics.fill(x,y-2,x+panel.width,bottom-2,0xEF171C21);
-            graphics.fill(x,y-2,x+panel.width,y+LINE_HEIGHT-2,0xFF2A333A);
-            graphics.drawString(font,font.plainSubstrByWidth(panel.label,Math.max(8,panel.width-50)),x+6,y,0xAEBEC7);
-            graphics.drawString(font,"Copy",x+panel.width-30,y,0xC9D8DF);
+            if (!panel.table()) {
+                graphics.fill(x,y-2,x+panel.width,bottom-2,AgentCard.background());
+                graphics.drawString(font,"Copy",x+panel.width-30,y,0xCCCCCC);
+            }
             graphics.enableScissor(x,transcriptTop+4,x+panel.width,transcriptBottom-4);
-            for(int column:panel.columns) graphics.fill(x+column-panel.scroll,y+LINE_HEIGHT-2,
-                x+column-panel.scroll+1,bottom-LINE_HEIGHT,0xFF36424A);
+            if (panel.table()) {
+                int tableRight = x + panel.contentWidth - panel.scroll;
+                graphics.fill(x-panel.scroll,y-2,tableRight,y+panel.headerEnd*LINE_HEIGHT-2,0x18FFFFFF);
+                for(int column:panel.columns) graphics.fill(x+column-panel.scroll,y-2,
+                    x+column-panel.scroll+1,bottom-LINE_HEIGHT-1,0x88EEEEEE);
+                for(int row:panel.borders) graphics.fill(x-panel.scroll,y+row*LINE_HEIGHT-2,
+                    tableRight+1,y+row*LINE_HEIGHT-1,0x88EEEEEE);
+            }
             if(panel.maxScroll()>0) {
                 int track=panel.width-12;
                 int thumb=Math.max(12,track*panel.width/Math.max(panel.width,panel.contentWidth));
                 int start=x+6+(track-thumb)*panel.scroll/panel.maxScroll();
-                graphics.fill(x+6,bottom-6,x+panel.width-6,bottom-4,0xFF35414A);
-                graphics.fill(start,bottom-6,start+thumb,bottom-4,0xFF93A8B4);
+                graphics.fill(x+6,bottom-6,x+panel.width-6,bottom-4,0x55777777);
+                graphics.fill(start,bottom-6,start+thumb,bottom-4,0xFFAAAAAA);
             }
             graphics.disableScissor();
         }
@@ -1990,7 +1996,7 @@ public final class AgentChatScreen extends Screen {
                 var panel=entry.panel();
                 int x=left+8+entry.inset()+panel.inset;
                 int y=transcriptTop+6+(entry.lineOffset()+panel.first)*LINE_HEIGHT-scroll;
-                if(mouseY>=y && mouseY<y+LINE_HEIGHT && mouseX>=x+panel.width-36 && mouseX<x+panel.width) {
+                if(!panel.table() && mouseY>=y && mouseY<y+LINE_HEIGHT && mouseX>=x+panel.width-36 && mouseX<x+panel.width) {
                     minecraft.keyboardHandler.setClipboard(panel.source);
                     feedback="Copied "+panel.label;
                     clearSelection();

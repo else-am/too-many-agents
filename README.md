@@ -139,7 +139,7 @@ open. Deleting a thread removes its body association. These changes also
 reconcile after reconnecting.
 
 Chat renders Markdown natively, including tables, lists, quotes, inline code and
-code blocks. Drag to select text; code and table headers have Copy controls.
+code blocks. Drag to select text; code blocks and diagrams have Copy controls.
 Wide code and tables scroll horizontally with a trackpad or Shift + wheel.
 Code uses Pixel Code at its native 9-pixel size with oversampling disabled,
 keeping glyph edges aligned with Minecraft's pixel grid.

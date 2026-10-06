@@ -43,9 +43,13 @@ final class ChatImages implements AutoCloseable {
     Size size(String kind, String source, int width, int maxHeight) {
         var size = dimensions.get(kind + "\n" + source);
         if (size == null) return new Size(width, 2 * ChatMarkdown.LINE_HEIGHT);
-        double scale = Math.min((double)width / size.width(), (double)maxHeight / size.height());
+        // Diagrams arrive at 2x resolution. Cap their labels at 1.5x chat text.
+        double scale = kind.equals("mermaid") ? Math.min(0.75, (double)width / size.width())
+            : Math.min((double)width / size.width(), (double)maxHeight / size.height());
         return new Size(Math.max(1, (int)(size.width() * scale)), Math.max(1, (int)(size.height() * scale)));
     }
+
+    boolean rendered(String kind, String source) { return dimensions.containsKey(kind + "\n" + source); }
 
     int layoutVersion() { return layoutVersion; }
 

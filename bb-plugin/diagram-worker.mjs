@@ -22,13 +22,13 @@ try {
     }
     if (stack.length) throw new Error('Diagram contains unclosed brackets. Source is shown above.');
   }
-  const bg = '#1a1c1e', fg = '#e7e1d5';
+  const bg = '#000000', fg = '#eeeeee';
   const mix = percent => '#' + [0, 2, 4].map(i => Math.round(parseInt(fg.slice(1+i,3+i),16)*percent/100
     + parseInt(bg.slice(1+i,3+i),16)*(1-percent/100)).toString(16).padStart(2,'0')).join('');
   const colors = {'--fg':fg,'--bg':bg,'--_text':fg,'--_text-sec':mix(60),'--_text-muted':mix(40),
     '--_text-faint':mix(25),'--_line':mix(50),'--_arrow':mix(85),'--_node-fill':mix(3),
     '--_node-stroke':mix(20),'--_group-fill':bg,'--_group-hdr':mix(5),'--_inner-stroke':mix(12),'--_key-badge':mix(10)};
-  let svg = renderMermaidSVG(source, { bg, fg, font: 'Pixel Code' });
+  let svg = renderMermaidSVG(source, { bg, fg, font: 'Pixel Code', transparent: true });
   if (!/<text\b/.test(svg)) throw new Error('No diagram content was recognized. Check the source above.');
   // resvg has no browser CSS variables or web fonts. Supply a fixed palette and bundled font.
   svg = svg.replace(/<style>[\s\S]*?<\/style>/g, '<style>text { font-family: Pixel Code; }</style>')
@@ -44,13 +44,13 @@ try {
   const require = createRequire(import.meta.url);
   await initWasm(await readFile(join(dirname(require.resolve('@resvg/resvg-wasm')), 'index_bg.wasm')));
   const font = await readFile(new URL('./assets/PixelCode.ttf', import.meta.url));
-  const options = { background:bg, fitTo:{mode:'width',value:1200},
+  const options = { fitTo:{mode:'zoom',value:2},
     font:{fontBuffers:[font],defaultFontFamily:'Pixel Code',sansSerifFamily:'Pixel Code',monospaceFamily:'Pixel Code'} };
   let renderer = new Resvg(svg, options);
   let rendered;
   try {
-    if (renderer.width * renderer.height > 4000000 || renderer.height > 4096) {
-      const scale = Math.min(4096 / renderer.height, Math.sqrt(4000000 / (renderer.width * renderer.height)));
+    if (renderer.width * renderer.height > 4000000 || renderer.width > 4096 || renderer.height > 4096) {
+      const scale = Math.min(4096 / renderer.width, 4096 / renderer.height, Math.sqrt(4000000 / (renderer.width * renderer.height)));
       const width = Math.max(1, Math.floor(renderer.width * scale));
       renderer.free();
       renderer = new Resvg(svg, {...options, fitTo:{mode:'width',value:width}});

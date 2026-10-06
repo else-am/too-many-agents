@@ -22,7 +22,7 @@ import org.commonmark.parser.Parser;
 /** CommonMark supplies syntax; Minecraft supplies glyphs, measurements and interaction. */
 final class ChatMarkdown {
     static final int LINE_HEIGHT = 12;
-    static final Style CODE = Style.EMPTY.withFont(ResourceLocation.fromNamespaceAndPath("too_many_agents", "code")).withColor(0xDDD5C5);
+    static final Style CODE = Style.EMPTY.withFont(ResourceLocation.fromNamespaceAndPath("too_many_agents", "code")).withColor(0xEEEEEE);
     private static final Parser PARSER = Parser.builder().extensions(List.of(
         TablesExtension.create(), StrikethroughExtension.create(), TaskListItemsExtension.create(), AutolinkExtension.create())).build();
 
@@ -63,6 +63,9 @@ final class ChatMarkdown {
         final int first, inset, width;
         final String label, source;
         final List<Integer> columns = new ArrayList<>();
+        final List<Integer> borders = new ArrayList<>();
+        int headerEnd;
+        boolean table() { return !columns.isEmpty(); }
         int end, contentWidth, scroll;
         Panel(int first, int inset, int width, String label, String source) {
             this.first = first; this.inset = inset; this.width = width; this.label = label; this.source = source;
@@ -112,9 +115,17 @@ final class ChatMarkdown {
             paragraph(inlines(node, Style.EMPTY.withBold(true).withColor(heading.getLevel() <= 2 ? 0xF1DCB4 : 0xE5D8BF), 0), inset);
             gap();
         } else if (node instanceof FencedCodeBlock code) {
-            code(code.getLiteral(), code.getInfo().strip().split("\\s+", 2)[0], inset);
-            if (code.getInfo().strip().equalsIgnoreCase("mermaid") && code.getClosingFenceLength()!=null)
-                media("mermaid",code.getLiteral(),"Mermaid diagram",inset);
+            boolean diagram = code.getInfo().strip().equalsIgnoreCase("mermaid") && code.getClosingFenceLength() != null;
+            if (diagram && images.rendered("mermaid", code.getLiteral())) {
+                var panel = new Panel(rows.size(), inset, Math.max(40, width - inset), "diagram", code.getLiteral());
+                panels.add(panel);
+                rows.add(new Row(List.of(new Run(0, FormattedCharSequence.EMPTY)), inset, "", panel));
+                media("mermaid", code.getLiteral(), "Mermaid diagram", inset + 6);
+                panel.end = rows.size();
+            } else {
+                code(code.getLiteral(), "code", inset);
+                if (diagram) media("mermaid", code.getLiteral(), "Mermaid diagram", inset);
+            }
         } else if (node instanceof IndentedCodeBlock code) {
             code(code.getLiteral(), "code", inset);
         } else if (node instanceof BulletList || node instanceof OrderedList) {
@@ -167,11 +178,12 @@ final class ChatMarkdown {
     }
 
     private void media(String kind,String source,String alt,int inset) {
-        int first=rows.size(), available=Math.max(40,width-inset);
+        int first=rows.size(), available=Math.max(40,width-inset-(kind.equals("mermaid") && images.rendered(kind,source) ? 6 : 0));
         var size=images.size(kind,source,available,maxImageHeight);
         int count=(size.height()+LINE_HEIGHT-1)/LINE_HEIGHT;
         for(int i=0;i<count;i++)rows.add(new Row(List.of(new Run(0,FormattedCharSequence.EMPTY)),inset,i==count-1?"\n":"",null));
-        media.add(new Media(first,rows.size(),inset,size.width(),size.height(),kind,source,alt));
+        int centeredInset = kind.equals("mermaid") ? inset + (available-size.width())/2 : inset;
+        media.add(new Media(first,rows.size(),centeredInset,size.width(),size.height(),kind,source,alt));
     }
 
     static Layout image(Font font,String source,String alt,int width,ChatImages images,int maxImageHeight) {
@@ -238,17 +250,17 @@ final class ChatMarkdown {
         }
         var panel = new Panel(rows.size(), inset, Math.max(40, width - inset), "table", source.toString());
         panels.add(panel);
-        rows.add(new Row(List.of(new Run(0, FormattedCharSequence.EMPTY)), inset, "", panel));
         int x = 0;
         for (int columnWidth : widths) { panel.columns.add(x); x += columnWidth; }
         panel.columns.add(x);
         panel.contentWidth = x;
         for (var row : cells) {
+            panel.borders.add(rows.size() - panel.first);
             var wrapped = new ArrayList<List<FormattedCharSequence>>();
             int height = 1;
             for (int i = 0; i < row.size(); i++) {
                 var cell = row.get(i);
-                var text = inlines(cell, cell.isHeader() ? Style.EMPTY.withBold(true).withColor(0xF1DCB4) : Style.EMPTY, 0);
+                var text = inlines(cell, cell.isHeader() ? Style.EMPTY.withBold(true) : Style.EMPTY, 0);
                 var lines = font.split(text, widths[i] - 16);
                 wrapped.add(lines); height = Math.max(height, lines.size());
             }
@@ -266,7 +278,9 @@ final class ChatMarkdown {
                 }
                 rows.add(new Row(runs, inset, copy + "\n", panel));
             }
+            if (row.getFirst().isHeader()) panel.headerEnd = rows.size() - panel.first;
         }
+        panel.borders.add(rows.size() - panel.first);
         rows.add(new Row(List.of(new Run(0, FormattedCharSequence.EMPTY)), inset, "\n", panel));
         panel.end = rows.size();
         gap();
