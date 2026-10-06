@@ -1319,6 +1319,10 @@ public final class AgentChatScreen extends Screen {
 
     private void detail(JsonObject row,int inset,int wrapWidth) {
         if(!AgentModels.text(row,"id").equals(expandedRow))return;
+        if(AgentModels.text(row,"workKind").equals("image-view") && !AgentModels.text(row,"path").isBlank()) {
+            appendMarkdown(ChatMarkdown.image(font,AgentModels.text(row,"path"),"Viewed image",wrapWidth,chatImages,maxImageHeight()),0xEEEEEE,0,inset);
+            return;
+        }
         String text = workDetail(row);
         int offset = Math.clamp(textOffset, 0, Math.max(0, text.length() - 1));
         if(offset>0)disclosure("↑ Previous output",()->changeTranscript(()->textOffset=Math.max(0,offset-8000)),inset);

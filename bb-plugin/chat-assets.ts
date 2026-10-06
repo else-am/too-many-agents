@@ -63,6 +63,13 @@ export function chatAssets(bb: BbPluginApi) {
       const file = await bb.sdk.files.read({hostId:storage.hostId, rootPath:storage.storageRootPath, path:absolute, signal:AbortSignal.timeout(8000)});
       return pack(Buffer.from(file.content, file.contentEncoding === 'base64' ? 'base64' : 'utf8'), file.mimeType ?? mimeFor(source));
     }
+    if (absolute) {
+      if (!thread.environmentId) throw new Error('Image is outside this thread\'s workspace and storage.');
+      const environment = await bb.sdk.environments.get({environmentId:thread.environmentId});
+      if (!environment.path || !inside(environment.path, absolute)) throw new Error('Image is outside this thread\'s workspace and storage.');
+      // Project file APIs take relative paths; BB still validates the resolved file and symlinks.
+      source = relative(environment.path, absolute);
+    }
     const args = {projectId:thread.projectId,path:source,signal:AbortSignal.timeout(8000)};
     const file = await bb.sdk.projects.fileContent(thread.environmentId ? {...args,environmentId:thread.environmentId} : args);
     return pack(Buffer.from(file.content, file.contentEncoding === 'base64' ? 'base64' : 'utf8'), file.mimeType);
