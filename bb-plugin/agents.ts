@@ -210,7 +210,7 @@ export function minecraftAgents(
       inputText(
         String(message.text ?? "") +
           (Object.keys(pointing).length
-            ? `\nMinecraft pointing context: ${JSON.stringify(pointing)}`
+            ? `\n\n[minecraft user context]\n${Object.entries(pointing).map(([key, value]) => `${key}: ${typeof value === "string" ? value : JSON.stringify(value)}`).join("\n")}\n[/minecraft user context]`
             : ""),
       ),
     ];

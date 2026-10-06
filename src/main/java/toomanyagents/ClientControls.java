@@ -193,7 +193,6 @@ public final class ClientControls {
         var client = Minecraft.getInstance();
         if (client.player == null || client.level == null) return null;
         var result = new JsonObject();
-        result.addProperty("capturedAtMs", System.currentTimeMillis());
         result.addProperty("dimension", client.level.dimension().location().toString());
         var player = new JsonObject();
         player.addProperty("uuid", client.player.getStringUUID());
@@ -203,7 +202,11 @@ public final class ClientControls {
         var view = new JsonObject();
         view.add("position", vector(camera.getPosition()));
         var direction = camera.getLookVector();
-        view.add("direction", vector(new Vec3(direction.x(), direction.y(), direction.z())));
+        String[] compass = {"south", "southwest", "west", "northwest", "north", "northeast", "east", "southeast"};
+        int heading = Math.floorMod((int) Math.round(Math.atan2(-direction.x(), direction.z()) / (Math.PI / 4)), 8);
+        String facing = Math.abs(direction.y()) > 0.9 ? (direction.y() > 0 ? "up" : "down")
+            : compass[heading] + (direction.y() > 0.25 ? ", looking up" : direction.y() < -0.25 ? ", looking down" : ", level");
+        view.addProperty("facing", "approximately " + facing);
         result.add("camera", view);
         var target = new JsonObject();
         var hit = client.hitResult;
@@ -226,9 +229,9 @@ public final class ClientControls {
 
     private static JsonObject vector(Vec3 value) {
         var result = new JsonObject();
-        result.addProperty("x", value.x);
-        result.addProperty("y", value.y);
-        result.addProperty("z", value.z);
+        result.addProperty("x", Math.round(value.x));
+        result.addProperty("y", Math.round(value.y));
+        result.addProperty("z", Math.round(value.z));
         return result;
     }
 

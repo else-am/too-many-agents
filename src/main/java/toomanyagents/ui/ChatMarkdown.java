@@ -278,8 +278,7 @@ final class ChatMarkdown {
         for (Node node = parent.getFirstChild(); node != null; node = node.getNext()) {
             if (node instanceof Text text) result.append(Component.literal(text.getLiteral()).withStyle(style));
             else if (node instanceof Code code) result.append(Component.literal(code.getLiteral()).withStyle(CODE.applyTo(style)));
-            else if (node instanceof SoftLineBreak) result.append(Component.literal(" ").withStyle(style));
-            else if (node instanceof HardLineBreak) result.append(Component.literal("\n").withStyle(style));
+            else if (node instanceof SoftLineBreak || node instanceof HardLineBreak) result.append(Component.literal("\n").withStyle(style));
             else if (node instanceof HtmlInline html) result.append(Component.literal(html.getLiteral()).withStyle(style));
             else if (node instanceof TaskListItemMarker task) result.append(Component.literal(task.isChecked() ? "☑ " : "☐ ").withStyle(style));
             else if (node instanceof Image) continue;
