@@ -1748,12 +1748,7 @@ public final class AgentChatScreen extends Screen {
                 var uri=net.minecraft.Util.parseAndValidateUntrustedUri(target);
                 if(uri.getHost()==null)throw new java.net.URISyntaxException(target,"Missing host");
                 if(!minecraft.options.chatLinks().get()){feedback="Web links are disabled in Minecraft chat settings.";return;}
-                Screen parent=returnScreen();
-                if(minecraft.options.chatLinksPrompt().get())minecraft.setScreen(new net.minecraft.client.gui.screens.ConfirmLinkScreen(accepted->{
-                    if(accepted)net.minecraft.Util.getPlatform().openUri(uri);
-                    minecraft.setScreen(parent);
-                },target,false));
-                else net.minecraft.Util.getPlatform().openUri(uri);
+                net.minecraft.Util.getPlatform().openUri(uri);
             } else if(!target.matches("(?i)^[a-z][\\w+.-]*:.*") || target.startsWith("@thread:") || target.matches(".*:\\d+(?::\\d+)?$")) {
                 feedback="Opening in BB…";
                 (developmentTranscript && developmentLinks!=null ? developmentLinks.apply(target) : access.openChatLink(agentId,target)).whenComplete((ignored,failure)->executeUi(()->{

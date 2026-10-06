@@ -105,8 +105,7 @@ if args.assets:
         return ui('click', x=line['x'] + 5, y=line['y'] + 3)
 
     for link in ('[Website](https://example.com)', 'https://example.com'):
-        assert click_link(link)['screen'] == 'ConfirmLinkScreen'
-        assert ui('dev_key', key=256)['screen'] == 'AgentChatScreen'
+        assert click_link(link)['screen'] == 'AgentChatScreen'
     for link in ('[Unsafe](javascript:alert%281%29)', '[Command](run_command:/op)'):
         assert click_link(link)['screen'] == 'AgentChatScreen'
         assert 'Unsupported' in ui('dev_chat')['feedback']
@@ -119,7 +118,7 @@ if args.assets:
         else: raise AssertionError(ui('dev_chat')['feedback'])
         tabs = json.loads(subprocess.check_output(['bb','thread','tabs','show',thread_id,'--json'],cwd=ROOT))['tabs']
         assert any(tab.get('path') == 'README.md' and tab.get('lineRange',{}).get('startLineNumber') == number for tab in tabs)
-    print('PASS: Web/autolink confirmation, safe cancellation, rejected schemes and real BB file:line navigation')
+    print('PASS: Web/autolinks skip confirmation, rejected schemes and real BB file:line navigation')
 
     def settled():
         deadline = time.monotonic() + 20

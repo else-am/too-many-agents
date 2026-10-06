@@ -143,8 +143,9 @@ code blocks. Drag to select text; code blocks and diagrams have Copy controls.
 Wide code and tables scroll horizontally with a trackpad or Shift + wheel.
 Code uses Pixel Code at its native 9-pixel size with oversampling disabled,
 keeping glyph edges aligned with Minecraft's pixel grid.
-Web links follow Minecraft's chat-link settings. Workspace and thread-storage
-file links open in BB, including `path:line` and `path#Lline` links.
+Web links open directly without a confirmation when Minecraft chat links are
+enabled. Workspace and thread-storage file links open in BB, including `path:line`
+and `path#Lline` links.
 
 Images load inline through BB's attachment/file APIs or public HTTP(S) URLs,
 fitted to their proportions. GIF and WebP animations show their first frame. Images
