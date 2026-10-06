@@ -168,11 +168,10 @@ public final class InventoryAgentSidebar extends Screen {
             editProject.accept("")).bounds(62, 7, (width - 79) / 2, 20).build());
         addRenderableWidget(Button.builder(Component.literal("+ Thread"), button -> startAgent(""))
             .bounds(68 + (width - 79) / 2, 7, (width - 79) / 2, 20).build());
-        int longest=font.width("BB default");
+        int longest=0;
         for(var item:AgentModels.array(catalog,"providers"))longest=Math.max(longest,font.width(AgentModels.text(item.getAsJsonObject(),"displayName")));
         int choiceWidth = Math.min(width - 43, longest + font.width("✓ ") + ProviderIcon.SIZE + 24);
         var providerIds = new ArrayList<String>();
-        providerIds.add("");
         for (var item : AgentModels.array(catalog,"providers")) {
             var info=item.getAsJsonObject();
             if(!info.has("available")||!info.get("available").getAsBoolean())continue;
@@ -240,7 +239,7 @@ public final class InventoryAgentSidebar extends Screen {
         var requestWorld = minecraft.level;
         setProviderMenu(false);
         updateProviderButton();
-        access.setDefaultProvider(provider.isBlank() ? null : provider).whenComplete((config, failure) -> minecraft.execute(() -> {
+        access.setDefaultProvider(provider).whenComplete((config, failure) -> minecraft.execute(() -> {
             if (request != providerRequest) return;
             providerSaving = false;
             if (minecraft.level != requestWorld || minecraft.screen != parent) { catalogRequested = false; return; }
@@ -253,7 +252,7 @@ public final class InventoryAgentSidebar extends Screen {
         }));
     }
     private String providerName(String provider) {
-        if (provider.isBlank()) return "BB default";
+        if (provider.isBlank()) return "Choose default provider";
         for(var item:AgentModels.array(catalog,"providers")) {
             var info=item.getAsJsonObject();
             if(AgentModels.text(info,"id").equals(provider))return AgentModels.text(info,"displayName");
