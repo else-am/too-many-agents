@@ -51,6 +51,19 @@ final class ChatAttachments {
         } catch (IOException failure) { Files.deleteIfExists(copy); throw failure; }
     }
 
+    static void removeCopies(List<String> copies) {
+        for (String copy : copies) {
+            try {
+                Path path = Path.of(copy);
+                if (!path.getFileName().toString().matches("image-\\d+\\.(png|jpe?g|gif|webp)")) continue;
+                Path directory = Path.of(System.getProperty("java.io.tmpdir"), "too-many-agents-images").toRealPath();
+                if (path.getParent().toRealPath().equals(directory)) Files.deleteIfExists(path);
+            } catch (IOException failure) {
+                com.mojang.logging.LogUtils.getLogger().warn("Could not remove a Minecraft temporary image", failure);
+            }
+        }
+    }
+
     private static void validate(Path path) throws IOException {
         long size = Files.size(path);
         if (size == 0 || size > MAX_BYTES) throw new IOException("Images must be between 1 byte and 5 MB.");

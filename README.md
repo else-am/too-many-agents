@@ -109,7 +109,8 @@ Role instructions precede the first task. `role list/show/delete` work offline;
 `create/update` require an attached game to validate body settings. Use
 `--instructions-stdin` for one line of stdin; BB currently rejects multiline
 plugin stdin and `--instructions-file -`. Use a file or the in-game editor for
-multiline instructions. File paths are local to BB. `create` rejects an
+multiline instructions. File paths use the calling thread's BB host and the invoking
+directory; outside a thread, role files use BB's local host. `create` rejects an
 existing name; `update` patches only supplied fields. Boolean choices have
 `--no-worktree` and `--no-minecraft-access` counterparts.
 

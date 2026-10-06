@@ -1,6 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { cliCommand, defineCli, PluginCliError, type BbPluginApi } from "@get-bb/plugin-sdk";
+import { cliCommand, defineCli, PluginCliError, type BbPluginApi, type PluginCliContext } from "@get-bb/plugin-sdk";
+import { isAbsolutePath, pathStyle } from "./paths.js";
 import type { MinecraftAgents } from "./agents.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import { object, type SpawnOptions, type ObjectValue } from "./protocol.js";
@@ -17,6 +16,28 @@ export function registerMinecraftCli(
   agents: MinecraftAgents,
 ) {
   const json = (value: unknown) => ({ exitCode: 0, stdout: JSON.stringify(value) });
+  async function callerLocation(ctx: PluginCliContext) {
+    if (ctx.threadId) {
+      const thread = await bb.sdk.threads.get({ threadId: ctx.threadId });
+      if (!thread.environmentId) throw new PluginCliError("The calling thread has no environment to resolve its machine.");
+      const environment = await bb.sdk.environments.get({ environmentId: thread.environmentId });
+      return { hostId: environment.hostId, cwd: ctx.cwd ?? environment.path };
+    }
+    const { primaryHostId } = await bb.sdk.system.config();
+    if (!primaryHostId) throw new PluginCliError("BB's local host is unavailable. Pass the text directly instead.");
+    return { hostId: primaryHostId, cwd: ctx.cwd };
+  }
+  async function readTextFile(file: string, flag: string, ctx: PluginCliContext) {
+    if (file === "-") throw new PluginCliError(`${flag} - is not supported by BB's plugin CLI. Use a file path or pass the text directly.`);
+    const { hostId, cwd } = await callerLocation(ctx);
+    if (!isAbsolutePath(file) && (!cwd || !isAbsolutePath(cwd)))
+      throw new PluginCliError(`${flag} needs an absolute path when the invoking directory is unavailable.`);
+    const path = isAbsolutePath(file) ? file : pathStyle(cwd!).resolve(cwd!, file);
+    const result = await bb.sdk.files.read({ hostId, path, signal: ctx.signal });
+    return result.contentEncoding === "base64"
+      ? new TextDecoder("utf-8", { fatal: true }).decode(Buffer.from(result.content, "base64"))
+      : result.content;
+  }
   const coordinates = (value: string) => {
     const parts = value.split(",");
     if (parts.length !== 3 || parts.some(part => !/^-?\d+$/.test(part.trim()) || Math.abs(Number(part)) > 30_000_000))
@@ -53,7 +74,7 @@ export function registerMinecraftCli(
         "minecraft-access": { type: "boolean", description: "Enable physical tools." },
         "no-minecraft-access": { type: "boolean", description: "Disable physical tools." },
         behaviors: text("Behavior object as JSON; replaces all behavior choices."),
-        "instructions-file": text("Instructions file on the BB machine; relative to the invoking directory."),
+        "instructions-file": text("UTF-8 file on the calling thread's host (BB's local host outside a thread); relative to the invoking directory."),
         instructions: { ...text("Instructions text; --instructions-stdin reads one line on the invoking machine."), stdin: true },
         json: { type: "boolean", description: "Print JSON." },
       },
@@ -67,15 +88,13 @@ export function registerMinecraftCli(
         const choices: ObjectValue = {}, body: ObjectValue = {};
         for (const [flag, key] of [["provider", "providerId"], ["model", "model"], ["reasoning", "reasoningLevel"], ["service-tier", "serviceTier"], ["permission-mode", "permissionMode"]] as const)
           if (o[flag] !== undefined) choices[key] = o[flag]!;
-        if (o.worktree || o["no-worktree"]) choices.worktree = o.worktree;
+        if (o.worktree || o["no-worktree"]) choices.worktree = !o["no-worktree"];
         if (o.body !== undefined) body.body = o.body;
         if (o.mode !== undefined) body.mode = o.mode;
-        if (o["minecraft-access"] || o["no-minecraft-access"]) body.minecraftAccess = o["minecraft-access"];
+        if (o["minecraft-access"] || o["no-minecraft-access"]) body.minecraftAccess = !o["no-minecraft-access"];
         if (o.behaviors !== undefined) body.behaviors = object(JSON.parse(o.behaviors));
-        if (o["instructions-file"] === "-")
-          throw new PluginCliError('Write the text to a file and pass --instructions-file <path>, or pass --instructions "<text>" (which can contain newlines). --instructions-file - is not supported.');
         const instructions = o.instructions ?? (o["instructions-file"] !== undefined
-          ? await readFile(resolve(ctx.cwd ?? ".", o["instructions-file"]), "utf8") : undefined);
+          ? await readTextFile(o["instructions-file"], "--instructions-file", ctx) : undefined);
         return json(await agents.roleSave(live, { name: p.name, bb: choices, body, ...(instructions !== undefined ? { instructions } : {}) }, mode));
       },
     });
@@ -141,7 +160,7 @@ export function registerMinecraftCli(
               ...text("First task; --prompt-stdin reads one line on the invoking machine."),
               stdin: true,
             },
-            "prompt-file": text("Task file on the BB machine; relative to the invoking directory. Preserves newlines."),
+            "prompt-file": text("UTF-8 task file on the calling thread's host; relative to the invoking directory. Preserves newlines."),
             project: text("BB project ID; defaults to the calling thread's project."),
             provider: text("BB provider ID; omitted execution options use BB defaults."),
             model: text("BB model ID."),
@@ -220,7 +239,8 @@ export function registerMinecraftCli(
               throw new PluginCliError(
                 "Create the first agent in Minecraft; run this command from its BB thread.",
               );
-            const prompt = o.prompt ?? await readFile(resolve(ctx.cwd ?? ".", o["prompt-file"]!), "utf8");
+            const prompt = o.prompt ?? await readTextFile(o["prompt-file"]!, "--prompt-file", ctx);
+            if (!prompt.trim()) throw new PluginCliError("The initial task must not be empty.");
             const { live, agent } = await worlds.caller(ctx.threadId);
             const role = o.role ? await agents.roleGet(o.role) : undefined;
             const choices = role ? object(role.bb) : {};
@@ -269,25 +289,37 @@ export function registerMinecraftCli(
                   environmentId: o.environment,
                 };
               } else {
-                if (!o.environment.startsWith("/"))
+                if (!isAbsolutePath(o.environment))
                   throw new PluginCliError("Use an environment ID or an absolute workspace path.");
                 spawn.environment = {
                   type: "host",
-                  hostId: o.machine,
+                  hostId: o.machine ?? (await callerLocation(ctx)).hostId,
                   workspace: { type: "unmanaged", path: o.environment },
                 };
               }
             } else if (o["environment-provider"]) {
+              const provider = (await bb.sdk.environments.listProviders({ projectId: spawn.projectId }))
+                .find(row => row.id === o["environment-provider"]);
+              if (!provider) throw new PluginCliError(`Unknown environment provider: ${o["environment-provider"]}`);
+              let inputs = o["environment-inputs"] === undefined ? null : JSON.parse(o["environment-inputs"]);
+              if (provider.inputs !== null && inputs === null) {
+                if (!provider.acceptsEmptyInputs) throw new PluginCliError(`The '${provider.id}' environment provider needs --environment-inputs <json>.`);
+                inputs = {};
+              }
+              if (provider.inputs === null && inputs !== null)
+                throw new PluginCliError(`The '${provider.id}' environment provider takes no --environment-inputs.`);
+              if (provider.machineProviderId && o.machine)
+                throw new PluginCliError("This environment provider chooses its own machine; omit --machine.");
               spawn.environment = {
                 type: "provider",
-                environmentProviderId: o["environment-provider"],
-                inputs: o["environment-inputs"] ? JSON.parse(o["environment-inputs"]) : {},
-                ...(o.machine ? { machine: { type: "existing", hostId: o.machine } } : {}),
+                environmentProviderId: provider.id,
+                inputs,
+                ...(!provider.machineProviderId ? { machine: { type: "existing", hostId: o.machine ?? (await callerLocation(ctx)).hostId } } : {}),
               };
             } else if (o["new-environment"] === "worktree") {
               spawn.environment = {
                 type: "host",
-                hostId: o.machine,
+                hostId: o.machine ?? (await callerLocation(ctx)).hostId,
                 workspace: {
                   type: "managed-worktree",
                   baseBranch: o["base-branch"]
@@ -300,14 +332,15 @@ export function registerMinecraftCli(
                 throw new PluginCliError("--base-branch requires --new-environment worktree.");
               spawn.environment = {
                 type: "host",
-                hostId: o.machine,
+                hostId: o.machine ?? (await callerLocation(ctx)).hostId,
                 workspace: { type: "personal" },
               };
             } else if (o.machine) {
+              const project = await bb.sdk.projects.get({ projectId: spawn.projectId });
               spawn.environment = {
                 type: "host",
                 hostId: o.machine,
-                workspace: { type: "unmanaged", path: null },
+                workspace: project.kind === "personal" ? { type: "personal" } : { type: "unmanaged", path: null },
               };
             }
             const result = await agents.create(

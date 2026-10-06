@@ -1,6 +1,7 @@
 import type { BbPluginApi } from '@get-bb/plugin-sdk';
 import { Worker } from 'node:worker_threads';
-import { join, isAbsolute, relative, resolve } from 'node:path';
+import { join } from 'node:path';
+import { isAbsolutePath, relativeInside } from './paths.js';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { request as httpRequest } from 'node:http';
@@ -49,8 +50,8 @@ export function chatAssets(bb: BbPluginApi) {
       const response = await remote(source);
       return pack(response.bytes, response.mimeType);
     }
-    if (/^[a-z][\w+.-]*:/i.test(source)) throw new Error('Only HTTP(S), workspace files and BB attachments can be displayed.');
     source = decodeURIComponent(source);
+    if (!isAbsolutePath(source) && /^[a-z][\w+.-]*:/i.test(source)) throw new Error('Only HTTP(S), workspace files and BB attachments can be displayed.');
     const thread = await bb.sdk.threads.get({threadId});
     // BB attachment paths are opaque. Let BB validate ownership before trying workspace paths.
     try {
@@ -58,17 +59,18 @@ export function chatAssets(bb: BbPluginApi) {
       return pack(attachment.bytes, attachment.mimeType);
     } catch { /* Not a BB attachment; resolve in this thread's workspace or storage below. */ }
     const storage = await bb.sdk.threads.storageLocation({threadId});
-    const absolute = isAbsolute(source) ? resolve(source) : '';
-    if (absolute && inside(storage.storageRootPath, absolute)) {
+    const absolute = isAbsolutePath(source) ? source : '';
+    if (absolute && relativeInside(storage.storageRootPath, absolute) !== null) {
       const file = await bb.sdk.files.read({hostId:storage.hostId, rootPath:storage.storageRootPath, path:absolute, signal:AbortSignal.timeout(8000)});
       return pack(Buffer.from(file.content, file.contentEncoding === 'base64' ? 'base64' : 'utf8'), file.mimeType ?? mimeFor(source));
     }
     if (absolute) {
       if (!thread.environmentId) throw new Error('Image is outside this thread\'s workspace and storage.');
       const environment = await bb.sdk.environments.get({environmentId:thread.environmentId});
-      if (!environment.path || !inside(environment.path, absolute)) throw new Error('Image is outside this thread\'s workspace and storage.');
+      const relative = environment.path ? relativeInside(environment.path, absolute) : null;
+      if (relative === null) throw new Error('Image is outside this thread\'s workspace and storage.');
       // Project file APIs take relative paths; BB still validates the resolved file and symlinks.
-      source = relative(environment.path, absolute);
+      source = relative;
     }
     const args = {projectId:thread.projectId,path:source,signal:AbortSignal.timeout(8000)};
     const file = await bb.sdk.projects.fileContent(thread.environmentId ? {...args,environmentId:thread.environmentId} : args);
@@ -79,21 +81,25 @@ export function chatAssets(bb: BbPluginApi) {
     if (target.startsWith('@thread:')) return bb.sdk.threads.open({threadId:target.slice(8),file:null});
     const match = /^(.*?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L?\d+)?)?$/.exec(target)!;
     const path = decodeURIComponent(match[1]!);
-    if (!path || /^[a-z][\w+.-]*:/i.test(path)) throw new Error('Unsupported link target.');
+    if (!path || (!isAbsolutePath(path) && /^[a-z][\w+.-]*:/i.test(path))) throw new Error('Unsupported link target.');
     const storage = await bb.sdk.threads.storageLocation({threadId});
-    const inStorage = isAbsolute(path) && inside(storage.storageRootPath, path);
-    const opened = await bb.sdk.threads.open({threadId,file:{path:inStorage?relative(storage.storageRootPath,path):path,
+    const relative = relativeInside(storage.storageRootPath, path);
+    const inStorage = relative !== null;
+    let filePath = relative ?? path;
+    if (!inStorage && isAbsolutePath(path)) {
+      const thread = await bb.sdk.threads.get({threadId});
+      const environment = thread.environmentId ? await bb.sdk.environments.get({environmentId:thread.environmentId}) : null;
+      const workspaceRelative = environment?.path ? relativeInside(environment.path, path) : null;
+      if (workspaceRelative === null) throw new Error('File is outside this thread\'s workspace and storage.');
+      filePath = workspaceRelative;
+    }
+    const opened = await bb.sdk.threads.open({threadId,file:{path:filePath,
       source:inStorage?'thread-storage':'workspace',lineNumber:match[2] || match[3] ? Math.max(1,Number(match[2] || match[3])) : null}});
     if (!opened.delivered) throw new Error('Open a BB window to view this file.');
     return opened;
   }
 
   return {diagram, image, open};
-}
-
-function inside(root: string, path: string) {
-  const rel = relative(resolve(root),resolve(path));
-  return rel !== '..' && !rel.startsWith('../') && !isAbsolute(rel);
 }
 
 function pack(bytes: Uint8Array, mimeType: string): Asset {

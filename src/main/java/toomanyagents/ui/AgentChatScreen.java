@@ -1169,6 +1169,7 @@ public final class AgentChatScreen extends Screen {
                     if (composer != null) composer.setValue("");
                 }
                 images().removeAll(attachments);
+                CompletableFuture.runAsync(() -> ChatAttachments.removeCopies(attachments));
                 permissionOverride = null;
                 executionEdited = false;
                 transcriptKey = "";
@@ -1644,7 +1645,8 @@ public final class AgentChatScreen extends Screen {
             String path=images().get(i);
             attachmentControl("Image " + (i+1), "",
                 chipX, composer.getY() - 26 - optionsHeight, chipWidth - 4, 0x556D98D4, () -> {
-                    images().remove(path); transcriptKey=""; rebuildTranscript(); refreshButtons();
+                    images().remove(path); CompletableFuture.runAsync(() -> ChatAttachments.removeCopies(List.of(path)));
+                    transcriptKey=""; rebuildTranscript(); refreshButtons();
                 });
             chipX += chipWidth;
         }
@@ -1761,7 +1763,7 @@ public final class AgentChatScreen extends Screen {
                 if(uri.getHost()==null)throw new java.net.URISyntaxException(target,"Missing host");
                 if(!minecraft.options.chatLinks().get()){feedback="Web links are disabled in Minecraft chat settings.";return;}
                 net.minecraft.Util.getPlatform().openUri(uri);
-            } else if(!target.matches("(?i)^[a-z][\\w+.-]*:.*") || target.startsWith("@thread:") || target.matches(".*:\\d+(?::\\d+)?$")) {
+            } else if(!target.matches("(?i)^[a-z][\\w+.-]*:.*") || target.matches("(?i)^[a-z]:[\\\\/].*") || target.startsWith("@thread:") || target.matches(".*:\\d+(?::\\d+)?$")) {
                 feedback="Opening in BB…";
                 (developmentTranscript && developmentLinks!=null ? developmentLinks.apply(target) : access.openChatLink(agentId,target)).whenComplete((ignored,failure)->executeUi(()->{
                     feedback=failure==null?"Opened in BB":"Could not open link: "+AgentModels.error(failure);

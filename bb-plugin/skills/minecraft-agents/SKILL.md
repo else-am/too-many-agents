@@ -19,7 +19,7 @@ bb minecraft bodies --json
 
 For multiline text, use `--prompt-file task.md` when spawning and
 `--instructions-file role.md` when creating or updating a role. Relative paths
-resolve from the invoking agent's working directory on the local BB machine.
+resolve from the invoking agent's working directory on its BB host, including remote hosts.
 Quoted `--prompt "<text>"` and `--instructions "<text>"` also accept newlines.
 The `--prompt-stdin` and `--instructions-stdin` forms accept only one line.
 Provide exactly one of `--prompt` (including its stdin form) and `--prompt-file`.
@@ -84,7 +84,9 @@ fails for a missing name. `--no-worktree` and
 `--instructions-stdin` for a single line of stdin. The installed BB plugin CLI
 rejects multiline stdin and cannot read `--instructions-file -`; use a file for
 multiline instructions.
-File paths refer to the local BB machine, relative to the invoking directory.
+File paths refer to the calling thread's BB host, relative to the invoking directory.
+Outside a thread, role files use BB's local host. Explicit workspace paths and new
+environments use the calling thread's host unless `--machine` selects another one.
 Creating/updating requires a connected game for Java body validation; listing,
 showing and deleting work without one. With multiple games, run from an embodied
 thread to select the validating world.
