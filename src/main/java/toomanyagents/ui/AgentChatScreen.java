@@ -459,25 +459,30 @@ public final class AgentChatScreen extends Screen {
             .bounds(left, controlY, 92, 20).build());
         effortButton = addRenderableWidget(Button.builder(Component.empty(), button -> requestModels(() -> togglePicker(effortButton)))
             .bounds(left, controlY, 60, 20).build());
-        speedButton = addRenderableWidget(new Button(left, controlY, 20, 20,
+        speedButton = new Button(0, 0, 18, 18,
                 Component.literal("Increase speed"), button -> {
-                    closePicker();
                     executionEdited = true;
                     models.nextServiceTier();
                     refreshButtons();
                 }, message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-                graphics.blitSprite(net.minecraft.resources.ResourceLocation.withDefaultNamespace(!active ? "widget/button_disabled"
-                    : isHoveredOrFocused() ? "widget/button_highlighted" : "widget/button"), getX(), getY(), 20, 20);
-                int color = !active ? 0xFF666666 : !models.serviceTier.isBlank() && !models.serviceTier.equals("default") ? 0xFFFFD45A : 0xFFAAAAAA;
-                int x = getX() + 6, y = getY() + 3;
-                // A small pixel bolt avoids depending on a font's symbol coverage.
-                for (int row = 0; row < 6; row++) {
-                    graphics.fill(x + 4 - row / 2, y + row + 1, x + 7 - row / 2, y + row + 2, color);
-                    graphics.fill(x + 3 - row / 2, y + row + 7, x + 6 - row / 2, y + row + 8, color);
+                if (isHoveredOrFocused()) graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF454545);
+                boolean enabled = !models.serviceTier.isBlank() && !models.serviceTier.equals("default");
+                int color = !active ? 0xFF666666 : enabled ? 0xFFFFD45A : 0xFFAAAAAA;
+                int x = getX() + 5, y = getY() + 4;
+                // A nine-pixel tapered bolt; only its edge is drawn when speed is off.
+                int[] rows = {0b0011100, 0b0011100, 0b0111000, 0b0110000, 0b1111111,
+                    0b0011110, 0b0011100, 0b0011000, 0b0010000};
+                for (int row = 0; row < rows.length; row++) for (int col = 0; col < 7; col++) {
+                    int pixel = 1 << (6 - col);
+                    if ((rows[row] & pixel) == 0) continue;
+                    boolean interior = row > 0 && row < rows.length - 1
+                        && (rows[row - 1] & pixel) != 0 && (rows[row + 1] & pixel) != 0
+                        && (rows[row] & (pixel << 1)) != 0 && (rows[row] & (pixel >> 1)) != 0;
+                    if (enabled || !interior) graphics.fill(x + col, y + row, x + col + 1, y + row + 1, color);
                 }
             }
-        });
+        };
         inventoryButton = addRenderableWidget(Button.builder(Component.literal("Inventory"), button -> toggleInventory.run())
             .bounds(compact ? left : left + contentWidth - 246, controlsY, 70, 20).build());
         // One archive, no confirmation: restore lives in Mod settings → Archive.
@@ -722,7 +727,7 @@ public final class AgentChatScreen extends Screen {
         closePicker();
         if (wasOpen) return;
         boolean effort = anchor == effortButton;
-        if (effort && models.efforts().size() < 2) return;
+        if (effort && models.efforts().size() < 2 && !models.hasSpeedChoices()) return;
         pickerChoices = new ArrayList<>();
         pickerOffset = 0;
         if (anchor == modelButton) {
@@ -804,11 +809,12 @@ public final class AgentChatScreen extends Screen {
             var choices = models.efforts();
             var slider = new AbstractSliderButton(pickerX + 8, pickerY + 24, pickerWidth - 16, 20,
                     Component.literal("Effort: " + models.effort),
-                    (double) choices.indexOf(models.effort) / (choices.size() - 1)) {
+                    choices.size() < 2 ? 0 : (double) choices.indexOf(models.effort) / (choices.size() - 1)) {
                 @Override protected void updateMessage() {
                     setMessage(Component.literal("Effort: " + models.effort));
                 }
                 @Override protected void applyValue() {
+                    if (choices.size() < 2) return;
                     int index = (int) Math.round(value * (choices.size() - 1));
                     value = (double) index / (choices.size() - 1);
                     executionEdited = true;
@@ -816,6 +822,7 @@ public final class AgentChatScreen extends Screen {
                     refreshButtons();
                 }
                 @Override public boolean keyPressed(int key, int scanCode, int modifiers) {
+                    if (choices.size() < 2) return false;
                     if (key == GLFW.GLFW_KEY_LEFT || key == GLFW.GLFW_KEY_RIGHT) {
                         int index = Math.clamp(choices.indexOf(models.effort) + (key == GLFW.GLFW_KEY_LEFT ? -1 : 1), 0, choices.size() - 1);
                         value = (double) index / (choices.size() - 1);
@@ -826,7 +833,13 @@ public final class AgentChatScreen extends Screen {
                     return super.keyPressed(key, scanCode, modifiers);
                 }
             };
+            slider.active = choices.size() > 1;
             pickerWidgets.add(addWidget(slider));
+            if (models.hasSpeedChoices()) {
+                speedButton.setX(pickerX + pickerWidth - 26);
+                speedButton.setY(pickerY + 3);
+                pickerWidgets.add(addWidget(speedButton));
+            }
         } else {
             if (anchor == bodyButton) {
                 bodySearch = new EditBox(font, pickerX + 6, pickerY + 6, pickerWidth - 12, 20, Component.literal("Search bodies"));
@@ -991,7 +1004,7 @@ public final class AgentChatScreen extends Screen {
         return name.isBlank() ? id : name;
     }
 
-    /** Approval sits left; speed, context, provider, model and effort sit right, each as wide as its widest choice. */
+    /** Approval sits left; context, provider, model and effort sit right, each as wide as its widest choice. */
     private void layoutControls() {
         int gap = 4;
         var permissionLabels = new ArrayList<String>(List.of("Permissions"));
@@ -1004,7 +1017,7 @@ public final class AgentChatScreen extends Screen {
         var effortLabels = new ArrayList<String>(List.of("Default"));
         effortLabels.addAll(models.efforts());
         int effortWidth = buttonWidth(effortLabels, " ▾");
-        int fixed = 20 + gap + 20 + gap + effortWidth + (speedButton.visible ? 20 + gap : 0);
+        int fixed = 20 + gap + 20 + gap + effortWidth;
         boolean pending = state.has("permissionsPending") && state.get("permissionsPending").getAsBoolean();
         int permissionWidth = Math.min(buttonWidth(permissionLabels, pending ? " * ▾" : " ▾"), (contentWidth - fixed) / 2);
         int modelWidth = Math.clamp(buttonWidth(modelLabels, " ▾"), 40, Math.max(40, contentWidth - fixed - permissionWidth - 2 * gap));
@@ -1013,7 +1026,6 @@ public final class AgentChatScreen extends Screen {
         effortButton.setX(x); effortButton.setWidth(effortWidth);
         modelButton.setX(x -= modelWidth + gap); modelButton.setWidth(modelWidth);
         providerButton.setX(x - 20 - gap);
-        if (speedButton.visible) speedButton.setX(providerButton.getX() - 2 * (20 + gap));
     }
 
     private int buttonWidth(List<String> labels, String suffix) {
@@ -1036,7 +1048,7 @@ public final class AgentChatScreen extends Screen {
         boolean active = availableHere();
         modelButton.active = effortButton.active = active && backendAvailable() && !loadingModels && !sending;
         speedButton.active = active && backendAvailable() && speedButton.visible && !loadingModels && !sending;
-        effortButton.active &= !models.available() || models.efforts().size() > 1;
+        effortButton.active &= !models.available() || models.efforts().size() > 1 || models.hasSpeedChoices();
         String permission = AgentModels.text(settings(), "permissionMode");
         permission = AgentModels.permissionLabel(permission);
         boolean permissionsPending = permissionOverride != null;
