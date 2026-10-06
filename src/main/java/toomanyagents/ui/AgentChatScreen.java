@@ -1347,6 +1347,21 @@ public final class AgentChatScreen extends Screen {
 
     private void userMessage(JsonObject row) {
         String text=AgentModels.text(row,"text");
+        String systemText=text.stripLeading();
+        String systemPrefix="[bb system]";
+        if(systemText.startsWith(systemPrefix) && (systemText.length()==systemPrefix.length()
+            || Character.isWhitespace(systemText.charAt(systemPrefix.length())))) {
+            String id=AgentModels.text(row,"id");
+            disclosure((id.equals(expandedRow)?"▾ ":"▸ ")+"BB system",()->changeTranscript(()->{
+                expandedRow=id.equals(expandedRow)?"":id;
+            }));
+            if(id.equals(expandedRow)) {
+                markdown(systemText.substring(systemPrefix.length()).stripLeading(),0xAAAAAA,0,12,contentWidth-36);
+                if(attachmentCount(row)>0)attachments(row,12,contentWidth-36);
+            }
+            lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
+            return;
+        }
         String error=AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected")?"Not sent: "+AgentModels.text(row,"detail"):"";
         int attachments=attachmentCount(row);
         int maxWidth=Math.max(40,(contentWidth-40)*3/4);
