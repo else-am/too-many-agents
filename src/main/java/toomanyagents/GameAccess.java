@@ -56,8 +56,8 @@ final class GameAccess {
     private static final int ENTITY_LIMIT = 64;
     private static final PovCapture.Settings POV = new PovCapture.Settings(960, 540, 70);
     record Body(String entityUuid, String world, String dimension) {}
-    /** An agent's project and plugin activity (working, wants_you, idle), published by AgentService. */
-    record AgentState(String projectId, String activity) {}
+    /** An agent's project, activity and Minecraft access, published by AgentService. */
+    record AgentState(String projectId, String activity, boolean minecraftAccess) {}
     private record PublishedWorld(String path, String session) {}
 
     private final Supplier<MinecraftServer> server;
@@ -686,7 +686,7 @@ final class GameAccess {
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
     AgentState agentState(Mob mob) {
         var state = agentStates.get(mob.getPersistentData().getString("too_many_agents_agent"));
-        return state == null ? new AgentState("", "idle") : state;
+        return state == null ? new AgentState("", "idle", false) : state;
     }
 
     /** Server thread: the box confining this body (its station, else its project box), or null. */
@@ -762,7 +762,7 @@ final class GameAccess {
                         var controller = actions(body,mob);
                         drainActionStops();
                         boolean wasBusy = controller.busy();
-                        controller.tick();
+                        controller.tick(agentState(mob).minecraftAccess());
                         if (!wasBusy) idle(current,mob,controller);
                         cacheBody(body,mob);
                     }

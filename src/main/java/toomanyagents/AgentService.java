@@ -187,7 +187,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed && !agent.archived) {
             String activity=text(snapshot(agent.id),"activity");
-            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity));
+            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity,agent.minecraftAccess));
         }
         return result;
     }

@@ -97,11 +97,11 @@ final class AgentActions {
         else hands.closeHands();
     }
 
-    void tick() {
+    void tick(boolean minecraftAccess) {
         try {
             hands.tickHands();
             // Explicit pickup must collect and report its own target before it disappears.
-            if (!busy() || !kind.equals("pickup")) hands.pickupNearby();
+            if (minecraftAccess && (!busy() || !kind.equals("pickup"))) hands.pickupNearby();
             if (!busy()) return;
             if (++ticks > 1200) { finish("timeout", "Action exceeded 60 seconds of game time.", null); return; }
             switch (kind) {
