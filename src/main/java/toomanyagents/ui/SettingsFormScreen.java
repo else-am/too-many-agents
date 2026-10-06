@@ -20,7 +20,9 @@ abstract class SettingsFormScreen extends Screen {
         Choice(String id, String label) { this(id, label, true); }
     }
     private record Placed(AbstractWidget widget, int offset) {}
-    private record Text(String value, int offset, int color, boolean fullWidth, boolean rule) {}
+    private record Text(String value, int offset, int color, boolean fullWidth, boolean rule, String tooltip) {
+        Text(String value,int offset,int color,boolean fullWidth,boolean rule) { this(value,offset,color,fullWidth,rule,""); }
+    }
     protected int left, contentWidth, controlX, controlWidth, formTop, formBottom, rowY;
     protected int scroll;
     protected String feedback = "";
@@ -97,7 +99,10 @@ abstract class SettingsFormScreen extends Screen {
         rowY+=6;
     }
     protected int row(String label) {
-        int y=rowY; labels.add(new Text(label,y+6,0xD4D4D4,false,false)); rowY+=24; return y;
+        return row(label,"");
+    }
+    protected int row(String label,String tooltip) {
+        int y=rowY; labels.add(new Text(label,y+6,0xD4D4D4,false,false,tooltip)); rowY+=24; return y;
     }
     protected <T extends AbstractWidget> T place(T widget,int offset) {
         controls.add(new Placed(addWidget(widget),offset)); widget.setY(formTop+offset-scroll); return widget;
@@ -108,13 +113,14 @@ abstract class SettingsFormScreen extends Screen {
         field.setMaxLength(limit);field.setValue(value);field.setResponder(change);field.setEditable(enabled);
         return place(field,y);
     }
-    protected void value(String label,String value) {
-        int y=row(label);
+    protected EditBox value(String label,String value) { return value(label,value,""); }
+    protected EditBox value(String label,String value,String tooltip) {
+        int y=row(label,tooltip);
         var field=new EditBox(font,controlX,0,controlWidth,12,Component.literal(label));
         field.setMaxLength(8192);field.setValue(value);field.setEditable(false);
         field.setBordered(false);field.setTextColorUneditable(0xAAAAAA);
         if(font.width(value)>controlWidth)field.setTooltip(Tooltip.create(Component.literal(value)));
-        place(field,y+6);
+        return place(field,y+6);
     }
     protected Checkbox toggle(String label,boolean checked,Consumer<Boolean> change,boolean enabled) {
         int y=row(label);
@@ -263,6 +269,8 @@ abstract class SettingsFormScreen extends Screen {
             int yy=formTop+label.offset()-scroll;
             if(yy+9<=formTop||yy>=formBottom)continue;
             g.drawString(font,font.plainSubstrByWidth(label.value(),label.fullWidth()?contentWidth:controlX-left-16),left,yy,label.color());
+            if(!label.tooltip().isBlank() && anchor==null && x>=left && x<controlX-12 && y>=yy && y<yy+10 && y>=formTop && y<formBottom)
+                setTooltipForNextRenderPass(font.split(Component.literal(label.tooltip()),Math.min(240,contentWidth)));
             // A faint rule after each section heading.
             if(label.rule())g.fill(left+font.width(label.value())+8,yy+4,left+contentWidth,yy+5,0x40E2D4A7);
         }

@@ -200,8 +200,21 @@ public final class SurveyScreen extends Screen {
     }
 
     @Override public boolean keyPressed(int key, int scan, int modifiers) {
+        if(survey.key.matches(key,scan) && survey.key.getKeyModifier().isActive(null)
+            && !(getFocused() instanceof net.minecraft.client.gui.components.EditBox)) {
+            if(!busy){survey.setOn(false);onClose();}
+            return true;
+        }
         if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) && !busy) { if (changed()) save(); else onClose(); return true; }
         return super.keyPressed(key, scan, modifiers);
+    }
+
+    @Override public boolean mouseClicked(double x,double y,int button) {
+        if(survey.key.matchesMouse(button) && survey.key.getKeyModifier().isActive(null)) {
+            if(!busy){survey.setOn(false);onClose();}
+            return true;
+        }
+        return super.mouseClicked(x,y,button);
     }
 
     @Override public void onClose() { if (!busy) minecraft.setScreen(null); }
@@ -232,6 +245,7 @@ public final class SurveyScreen extends Screen {
             g.fill(left, bottom, left + panelWidth, bottom + 10 + lines.size() * 10, 0xF4121212);
             for (var line : lines) { g.drawString(font, line, x, y, 0xFFE59A8C, false); y += 10; }
         }
+        SurveyMode.renderExitHint(g,Math.min(height-16,bottom+30+font.split(Component.literal(feedback),panelWidth-20).size()*10));
     }
 
     /** A quiet text toggle with a colored underline, like the settings tabs. */

@@ -20,6 +20,8 @@ public final class ProjectScreen extends SettingsFormScreen {
     private JsonObject data;
     private String projectId,name="",directory="",color="",saved="";
     private boolean busy,choosing,confirmRemove;
+    private final Map<EditBox,JsonObject> distances=new LinkedHashMap<>();
+    private Button surveyButton;
 
     public static ProjectScreen create(AgentUiAccess access,Screen parent){return new ProjectScreen(access,parent,"");}
     public static ProjectScreen edit(AgentUiAccess access,Screen parent,String projectId){return new ProjectScreen(access,parent,projectId);}
@@ -46,6 +48,7 @@ public final class ProjectScreen extends SettingsFormScreen {
     private boolean automatic(){return Set.of("personal","world").contains(text(project(),"kind"));}
 
     @Override protected void init(){
+        distances.clear();surveyButton=null;
         begin();
         var world=world();
         if(world.has("needsDecision")&&world.get("needsDecision").getAsBoolean()){
@@ -117,27 +120,40 @@ public final class ProjectScreen extends SettingsFormScreen {
         try{var leaf=Path.of(directory.strip()).getFileName();if(leaf!=null)name=leaf.toString();}catch(Exception ignored){}
     }
     private void placeRows(JsonObject world){
-        section("Place");
+        section("In-world");
         JsonObject box=null;
         for(var item:array(world,"bounds"))if(text(item.getAsJsonObject(),"projectId").equals(projectId))box=item.getAsJsonObject();
-        value("Box",box==null?"None":size(box)+" at "+corner(box));
-        var names=new HashMap<String,String>();
-        for(var item:access.worldAgents())names.put(text(item.getAsJsonObject(),"id"),text(item.getAsJsonObject(),"name"));
+        var boundary=value("Project boundary",box==null?"Not set":distance(box),"Agents in this project will stay inside this box");
+        if(box!=null)distances.put(boundary,box);
+        rowY+=4;row("Stations");
+        boolean any=false;
         for(var item:array(world,"stations")){
             var station=item.getAsJsonObject();if(!text(station,"projectId").equals(projectId))continue;
-            String occupant=text(station,"agentId");
-            value(text(station,"label"),(occupant.isBlank()?"Free":names.getOrDefault(occupant,"Occupied"))+" - "+corner(station));
+            distances.put(value("  "+text(station,"label"),distance(station)),station);any=true;
         }
-        action("In the world","Edit in world",()->SurveyMode.start(projectId),!busy&&minecraft.level!=null);
+        if(!any)note("No stations yet");
+        rowY+=8;
+        surveyButton=place(Button.builder(Component.literal(surveyCaption()),b->SurveyMode.start(projectId))
+            .bounds(left,0,contentWidth,20).build(),rowY);
+        surveyButton.active=!busy&&minecraft.level!=null;rowY+=24;
     }
-    private static String size(JsonObject box){
-        var min=array(box,"min");var max=array(box,"max");
-        return (max.get(0).getAsInt()-min.get(0).getAsInt()+1)+"×"+(max.get(1).getAsInt()-min.get(1).getAsInt()+1)+"×"+(max.get(2).getAsInt()-min.get(2).getAsInt()+1);
+    private static String surveyCaption(){return "Show/edit project boxes (press "+SurveyMode.keyLabel()+")";}
+    private String distance(JsonObject box){
+        if(minecraft.player==null||minecraft.level==null)return "Not in world";
+        String dimension=text(box,"dimension");
+        if(!dimension.equals(minecraft.level.dimension().location().toString()))
+            return "In "+dimension.substring(dimension.indexOf(':')+1).replace('_',' ');
+        var min=array(box,"min");var max=array(box,"max");var at=minecraft.player.position();
+        double dx=Math.max(0,Math.max(min.get(0).getAsDouble()-at.x,at.x-max.get(0).getAsDouble()-1));
+        double dy=Math.max(0,Math.max(min.get(1).getAsDouble()-at.y,at.y-max.get(1).getAsDouble()-1));
+        double dz=Math.max(0,Math.max(min.get(2).getAsDouble()-at.z,at.z-max.get(2).getAsDouble()-1));
+        long blocks=Math.round(Math.sqrt(dx*dx+dy*dy+dz*dz));
+        return blocks+" block"+(blocks==1?"":"s")+" away";
     }
-    private static String corner(JsonObject box){
-        var min=array(box,"min");String dimension=text(box,"dimension");
-        String at=min.get(0).getAsInt()+" "+min.get(1).getAsInt()+" "+min.get(2).getAsInt();
-        return dimension.isBlank()||dimension.equals("minecraft:overworld")?at:at+" - "+dimension.substring(dimension.indexOf(':')+1);
+    @Override public void render(GuiGraphics g,int x,int y,float delta){
+        distances.forEach((field,box)->{String next=distance(box);if(!field.getValue().equals(next))field.setValue(next);});
+        if(surveyButton!=null)surveyButton.setMessage(Component.literal(surveyCaption()));
+        super.render(g,x,y,delta);
     }
     private void save(){
         if(projectId.isBlank())defaultName();

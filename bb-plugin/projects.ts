@@ -160,7 +160,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
       kind: project.kind,
       color: await bb.storage.kv.get<string>(`project-color:${project.id}`) ?? "",
       folders: project.sources.map((source) => ({
-        label: `Folder on ${source.hostId}`,
+        label: "Folder",
         path: source.path,
       })),
       folder: (project.sources.find((row) => row.isDefault) ?? project.sources[0])?.path ?? "",

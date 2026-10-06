@@ -16,6 +16,7 @@ import java.util.function.Supplier;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.PauseScreen;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.LightTexture;
@@ -110,6 +111,16 @@ public final class SurveyMode {
     }
 
     public boolean on() { return on; }
+
+    public static String keyLabel() { return instance==null ? "Unbound" : instance.key.getTranslatedKeyMessage().getString(); }
+
+    static void renderExitHint(GuiGraphics g,int y) {
+        var font=Minecraft.getInstance().font;
+        String text="Press "+keyLabel()+" to exit";
+        int x=(g.guiWidth()-font.width(text))/2;
+        g.fill(x-6,y-4,x+font.width(text)+6,y+12,0xD0101010);
+        g.drawString(font,text,x,y,0xD8D8D8,false);
+    }
 
 
     public void setOn(boolean value) {
@@ -418,6 +429,7 @@ public final class SurveyMode {
         g.fill(x - 6, y + 12, x + width + 6, y + 13, 0xFF000000 | ACCENT);
         g.drawString(font, mark, x, y, ACCENT, false);
         g.drawString(font, hint, x + font.width(mark) + gap, y, 0xD8D8D8, false);
+        if(on)renderExitHint(g,y+22);
     }
 
     /** Survey state for local UI diagnostics. */
