@@ -258,10 +258,11 @@ final class AgentMentions {
         String body = event.getMessage().substring(address.end).trim();
         if (body.isBlank()) { error("Add a message after the agent mention."); return; }
         var agent = found.getFirst().agent;
+        client.gui.getChat().addMessage(Component.translatable("chat.type.text",
+            client.player.getDisplayName(), Component.literal(event.getMessage())));
         openedService.sendMention(agent.get("id").getAsString(), body, pointing == null ? null : pointing.deepCopy())
             .whenComplete((unused,failure) -> client.execute(() -> {
                 if(failure!=null)error("Agent message was not delivered: " + failure.getMessage());
-                else error("Message accepted for " + name(agent) + ". It runs when ready; queued messages appear in the agent chat.");
             }));
     }
 

@@ -379,7 +379,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         String session=loadedSession;
         return game.recoverBody(a.body,a.id,a.projectId,a.settings,session).thenCompose(done -> { synchronized(this) { requireCurrent(a,session); a.lost=false; } return save(); });
     }); }
-    CompletableFuture<Void> sendMention(String id,String message,JsonObject pointing) { return send(id,object("text",message,"pointing",pointing)); }
+    CompletableFuture<Void> sendMention(String id,String message,JsonObject pointing) { return send(id,object("text",message,"pointing",pointing,"delivery","steer-if-active")); }
     @Override public CompletableFuture<Void> send(String id,JsonObject message) {
         return agentRpc("agent.message",id,object("message",message)).thenApply(done -> null);
     }
