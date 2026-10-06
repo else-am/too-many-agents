@@ -85,7 +85,7 @@ final class AmbientBehavior {
         else if (returning++ == 0) {
             var path = navigation.createPath(box.clamp(mob.blockPosition()), 1);
             if (path == null || !path.canReach() || !GameAccess.staysInside(path, box) || !navigation.moveTo(path, 1.0)) teleportInside(box);
-        } else if (navigation.isDone() || returning > 100) teleportInside(box);
+        } else if (navigation.isDone() || returning > 20 * 30) teleportInside(box); // Allow 30 seconds to walk back.
         else {
             navigation.tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
             GameAccess.travelFollowingBody(mob, box);
