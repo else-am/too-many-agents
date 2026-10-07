@@ -29,6 +29,7 @@ import net.minecraft.util.Unit;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
+import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
@@ -38,11 +39,13 @@ import net.minecraft.world.entity.player.Player.BedSleepingProblem;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.animal.horse.AbstractHorse;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.inventory.ContainerSynchronizer;
 import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.HorseInventoryMenu;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
@@ -904,6 +907,29 @@ final class AgentHands extends FakePlayer {
         return OptionalInt.of(nextMenuId);
     }
 
+    @Override public void openHorseInventory(AbstractHorse horse, Container inventory) {
+        requireThread();
+        requireIdleHands();
+        if (isSpectator() || !canReach(horse)) throw error("horse_inventory_not_accessible");
+        // AbstractHorse already applied native tame/age/interaction conditions.
+        // FakePlayer's implementation is a no-op; construct the same real menu
+        // as ServerPlayer, without a network screen or another player entity.
+        if (containerMenu != inventoryMenu) closeContainer();
+        nextMenuId = nextMenuId % 100 + 1;
+        containerMenu = new HorseInventoryMenu(nextMenuId, getInventory(), inventory, horse, horse.getInventoryColumns());
+        menuOrigin = null;
+        menuEntity = horse;
+        observeMenu(horse.getDisplayName());
+        NeoForge.EVENT_BUS.post(new PlayerContainerEvent.Open(this, containerMenu));
+    }
+
+    private String menuType() {
+        if (containerMenu == inventoryMenu) return "minecraft:inventory";
+        // HorseInventoryMenu deliberately has no MenuType registry entry.
+        if (containerMenu instanceof HorseInventoryMenu) return "HorseWindow";
+        return BuiltInRegistries.MENU.getKey(containerMenu.getType()).toString();
+    }
+
     @Override public void doCloseContainer() {
         requireThread();
         super.doCloseContainer();
@@ -1042,6 +1068,45 @@ final class AgentHands extends FakePlayer {
         return menuSnapshot();
     }
 
+    JsonObject setCommandBlock(BlockPos pos, int expectedStateId, String command, int mode, boolean trackOutput,
+                               boolean conditional, boolean automatic, boolean operatorPermission) {
+        syncBody();
+        requireIdleHands();
+        if (!BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).commands
+            || !isCreative() || !operatorPermission) throw error("command_block_edit_not_permitted");
+        if (!getServer().isCommandBlockEnabled()) throw error("command_blocks_disabled");
+        if (command == null || command.length() > 32767 || mode < 0 || mode > 2) throw error("invalid_command_block_options");
+        checkedHit(pos, null);
+        if (expectedStateId < 0 || net.minecraft.world.level.block.Block.getId(level().getBlockState(pos)) != expectedStateId)
+            throw error("target_changed");
+        if (!(level().getBlockEntity(pos) instanceof net.minecraft.world.level.block.entity.CommandBlockEntity entity))
+            throw error("not_a_command_block");
+        var oldMode = entity.getMode();
+        var state = level().getBlockState(pos);
+        var block = switch (mode) {
+            case 0 -> net.minecraft.world.level.block.Blocks.CHAIN_COMMAND_BLOCK;
+            case 1 -> net.minecraft.world.level.block.Blocks.REPEATING_COMMAND_BLOCK;
+            default -> net.minecraft.world.level.block.Blocks.COMMAND_BLOCK;
+        };
+        var updated = block.defaultBlockState()
+            .setValue(net.minecraft.world.level.block.CommandBlock.FACING, state.getValue(net.minecraft.world.level.block.CommandBlock.FACING))
+            .setValue(net.minecraft.world.level.block.CommandBlock.CONDITIONAL, conditional);
+        if (updated != state) {
+            if (!level().setBlock(pos, updated, 2)) throw error("command_block_state_update_rejected");
+            // Preserve the native command block data across its block-type change.
+            entity.setBlockState(updated);
+            level().getChunkAt(pos).setBlockEntity(entity);
+        }
+        var executor = entity.getCommandBlock();
+        executor.setCommand(command);
+        executor.setTrackOutput(trackOutput);
+        if (!trackOutput) executor.setLastOutput(null);
+        entity.setAutomatic(automatic);
+        if (oldMode != entity.getMode()) entity.onModeSwitch();
+        executor.onUpdated();
+        return status("updated");
+    }
+
     /** Null title writes; a nonnull title signs with this native player's identity. */
     JsonObject editBook(int expectedMenuId, long expectedGeneration, int inventorySlot,
                         String expectedItemKey, List<String> pages, String title) {
@@ -1127,8 +1192,7 @@ final class AgentHands extends FakePlayer {
         var properties = new JsonArray();
         for (int value : menuProperties) properties.add(value);
         result.add("properties", properties);
-        result.addProperty("type", containerMenu == inventoryMenu ? "minecraft:inventory"
-            : BuiltInRegistries.MENU.getKey(containerMenu.getType()).toString());
+        result.addProperty("type", menuType());
         result.addProperty("valid", validMenu());
         result.add("carried", item(containerMenu.getCarried()));
         var carried = containerMenu.getCarried();
@@ -1191,8 +1255,7 @@ final class AgentHands extends FakePlayer {
         var menu = new JsonObject();
         menu.addProperty("id", containerMenu.containerId);
         menu.addProperty("generation", menuGeneration);
-        menu.addProperty("type", containerMenu == inventoryMenu ? "minecraft:inventory"
-            : BuiltInRegistries.MENU.getKey(containerMenu.getType()).toString());
+        menu.addProperty("type", menuType());
         menu.addProperty("valid", validMenu());
         menu.addProperty("slotCount", containerMenu.slots.size());
         menu.add("carried", item(containerMenu.getCarried()));

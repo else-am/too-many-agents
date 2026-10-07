@@ -325,6 +325,24 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     const position = vector(destination, 'flight destination');
     await perform({ type: 'creative_fly', position });
   };
+  bot.setCommandBlock = (position, command, options = {}) => {
+    const pos = vector(position, 'command block position');
+    need(['x','y','z'].every(axis => Number.isSafeInteger(pos[axis])), 'InvalidBlock', 'Block position must be integral');
+    need(typeof command === 'string' && command.length <= 32767, 'InvalidCommand', 'Command must be a string of at most 32767 characters');
+    need(options && typeof options === 'object', 'InvalidOptions', 'Command block options must be an object');
+    const mode = options.mode ?? 2;
+    need(Number.isInteger(mode) && mode >= 0 && mode <= 2, 'InvalidCommandBlockMode', 'Command block mode must be 0, 1 or 2');
+    const flags = {};
+    for (const name of ['trackOutput', 'conditional', 'alwaysActive']) {
+      flags[name] = options[name] ?? false;
+      need(typeof flags[name] === 'boolean', 'InvalidOptions', `${name} must be boolean`);
+    }
+    need(snapshot().hands.mode === 'creative_commands', 'CommandPermissionRequired', 'Command editing requires creative_commands mode');
+    const block = bot.blockAt(pos);
+    need(block && ['command_block', 'chain_command_block', 'repeating_command_block'].includes(block.name),
+      'InvalidCommandBlock', 'The observed block is not a command block');
+    control({ type: 'set_command_block', ...observed(block), command, mode, ...flags });
+  };
   bot.tabComplete = async (text, assumeCommand = false, sendBlockInSight = true, timeout = 5000) => {
     need(typeof text === 'string' && text.length <= 4096, 'InvalidCompletionText', 'Completion text must be a string of at most 4096 characters');
     need(Number.isInteger(timeout) && timeout > 0 && timeout <= 300000, 'InvalidTimeout', 'Completion timeout must be 1..300000ms');

@@ -1,4 +1,5 @@
 import { installScoreboards } from './scoreboard.mjs';
+import { installExplosion } from './explosion.mjs';
 import { Vec3 } from 'vec3';
 import upstreamGoals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
@@ -424,6 +425,7 @@ export function createBot(initial) {
     waitForActionState, snapshot: () => snapshot,
   });
   installRecipeQueries(bot, recipeFactory);
+  installExplosion(bot);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
     MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

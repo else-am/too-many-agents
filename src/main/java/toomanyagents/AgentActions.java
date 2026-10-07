@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -260,12 +260,15 @@ final class AgentActions {
         }
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
-        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly").contains(type) && !request.has("position")) throw error("position_required");
+        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly", "set_command_block").contains(type) && !request.has("position")) throw error("position_required");
         if (List.of("give", "attack").contains(type) && !request.has("entity")) throw error("entity_required");
+        if (type.equals("set_command_block") && (!request.has("command") || !request.get("command").isJsonPrimitive()
+            || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
+            throw error("invalid_command_block_command");
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
-            if (List.of("mine", "place", "interact", "place_entity", "update_sign").contains(type)) {
+            if (List.of("mine", "place", "interact", "place_entity", "update_sign", "set_command_block").contains(type)) {
                 var level = (ServerLevel) mob.level();
                 if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
                 if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
@@ -468,6 +471,9 @@ final class AgentActions {
                     else if (mob.position().distanceToSqr(lastPosition) < 0.000001) throw error("creative_flight_obstructed");
                     lastPosition = mob.position();
                 }
+                case "set_command_block" -> finish("completed", "command_block_updated", hands.setCommandBlock(
+                    checkedBlockTarget(), integer(args, "expectedStateId", -1), text(args, "command"), integer(args, "mode", 2), booleanOption(args, "trackOutput"),
+                    booleanOption(args, "conditional"), booleanOption(args, "alwaysActive"), player.get().hasPermissions(2)));
                 case "creative_slot" -> finish("completed", "creative_slot_set", hands.creativeSlot(
                     integer(args, "menuId", -1), menuGeneration(), integer(args, "slot", -1), text(args, "wire")));
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
@@ -927,6 +933,11 @@ final class AgentActions {
         return value;
     }
     private static int integer(JsonObject args,String key,int fallback) { if (!args.has(key)) return fallback; double n=number(args,key); if(n!=Math.rint(n)) throw error("invalid_"+key); return (int)n; }
+    private static boolean booleanOption(JsonObject args, String key) {
+        if (!args.has(key)) return false;
+        if (!args.get(key).isJsonPrimitive() || !args.getAsJsonPrimitive(key).isBoolean()) throw error("invalid_" + key);
+        return args.get(key).getAsBoolean();
+    }
     private static String text(JsonObject args,String key) { return args.has(key) ? args.get(key).getAsString() : ""; }
     private static JsonObject object(Object... values) { var result=new JsonObject(); var gson=new Gson(); for(int i=0;i<values.length;i+=2) result.add((String)values[i],gson.toJsonTree(values[i+1])); return result; }
     private static IllegalStateException error(String message) { return new IllegalStateException(message); }
