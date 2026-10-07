@@ -31,7 +31,7 @@ Agent submits JavaScript through a registered Minecraft script tool
 
 The BB plugin owns script execution, API objects, request forwarding, and translating results into promises and errors. Java owns authoritative game state, native actions, navigation, and execution safeguards. Keep this within the existing plugin and single Gradle module unless a change clearly simplifies the implementation.
 
-The initial runner uses QuickJS WASM in a Node worker, with bounded memory, execution, and JSON messages. Scripts receive no host module loader or connection credentials. Java retains a renewable, expiring body-control lease. Initial action-completion polling stays inside the plugin; replace it with more efficient waits as integration measurements warrant.
+The runner uses QuickJS WASM in a Node worker, with bounded memory, execution, and JSON messages. Scripts receive no host module loader or connection credentials. Java retains a renewable, expiring body-control lease. Native completion waits replace action polling; they complete from the owning thread without blocking it, and close with the execution's world/turn scope.
 
 Each awaited action resolves on actual completion or reports failure. Longer script runs expose progress and can be cancelled without forcing the model to poll every individual action. Existing status polling may be hidden inside the client during the first slice; the intended interface should support efficient completion waits.
 
@@ -70,6 +70,8 @@ Verify actual world and inventory results independently. Include cancellation du
 Investigate whether the existing Pathfinder implementation can run against an adapter supplying the expected world data and body controls. If satisfying its assumptions would recreate most of a network client, adapt useful planning code or implement the required behavior using native controls instead.
 
 This is a feasibility question, not a predetermined rewrite. Explain the findings and any material change of approach to the user. Supporting `goto()` through today's Java navigation is a useful first slice, but does not by itself establish Pathfinder conformance. Preserve goal behavior, movement settings, cancellation, and the applicable digging/placing capabilities as coverage expands.
+
+The source-only feasibility review supports reusing upstream AStar, heap, Move, goals, and movement-policy logic in QuickJS. Adapt movement generation to actual body dimensions and use bounded native execution of the selected route edges; unrestricted native waypoint navigation cannot enforce Pathfinder's route policies. Continuous ordered state updates and stable entity objects are prerequisites for dynamic goals and events. Preserve documented behavior over reproduced upstream defects, recording explicit differential exceptions: pinned `goto` can resolve an empty `noPath` result, and `GoalBreakBlock.isEnd` omits the node argument. Neither defect justifies dropping an API.
 
 ### 4. Expand in coherent, verified groups
 

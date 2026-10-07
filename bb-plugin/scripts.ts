@@ -63,13 +63,9 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           const record: Record<string, unknown> = { id: action.id, type: request.type, lastObserved: action.status };
           actions.push(record);
           if (actions.length > 32) actions.shift();
-          let status = action;
-          while (status.terminal !== true) {
-            await delay(50, undefined, { signal: requestSignal });
-            status = await call('status', { id: action.id }, requestSignal);
-            record.lastObserved = status.status;
-            record.detail = status.detail;
-          }
+          const status = action.terminal === true ? action : await call('awaitAction', { id: action.id }, requestSignal);
+          record.lastObserved = status.status;
+          record.detail = status.detail;
           if (status.status !== 'completed') throw new Error(`Action ${action.id}: ${status.status}: ${status.detail ?? ''}`);
           return { action: status, snapshot: await call('snapshot', {}, requestSignal) };
         }
@@ -77,13 +73,8 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         if (operation === 'waitTicks') {
           if (typeof request.ticks !== 'number' || !Number.isSafeInteger(request.ticks) || request.ticks < 0 || request.ticks > 6000)
             throw new Error('ticks must be an integer between 0 and 6000');
-          let snapshot = await call('snapshot', {}, requestSignal);
-          const target = Number(snapshot.tick) + request.ticks;
-          while (Number(snapshot.tick) < target) {
-            await delay(50, undefined, { signal: requestSignal });
-            snapshot = await call('snapshot', {}, requestSignal);
-          }
-          return snapshot;
+          await call('awaitTicks', { ticks: request.ticks }, requestSignal);
+          return call('snapshot', {}, requestSignal);
         }
         throw new Error(`Unknown script operation: ${operation}`);
       };

@@ -12,6 +12,7 @@ import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
@@ -34,6 +35,10 @@ final class AgentActions {
     private boolean approachTargets;
     private String scriptId;
     private long scriptDeadline, scriptHeartbeat;
+    private CompletableFuture<JsonObject> completion;
+    private long bodyTicks;
+    private record TickWait(long target, CompletableFuture<JsonObject> result) {}
+    private final List<TickWait> tickWaits = new ArrayList<>();
 
     AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
         this.mob = mob;
@@ -72,6 +77,28 @@ final class AgentActions {
     void releaseScript() {
         scriptId = null;
         cancel("");
+        rejectTickWaits("script_no_longer_controls_body");
+    }
+
+    CompletableFuture<JsonObject> awaitAction(String id) {
+        var state = status(id);
+        if (!"running".equals(text(state, "status"))) return CompletableFuture.completedFuture(state);
+        return completion.thenApply(JsonObject::deepCopy);
+    }
+
+    CompletableFuture<JsonObject> awaitTicks(int ticks) {
+        if (ticks < 0 || ticks > 6000) throw error("invalid_tick_wait");
+        if (tickWaits.size() >= 32) throw error("too_many_tick_waits");
+        var result = new CompletableFuture<JsonObject>();
+        if (ticks == 0) result.complete(new JsonObject());
+        else tickWaits.add(new TickWait(bodyTicks + ticks, result));
+        return result;
+    }
+
+    private void rejectTickWaits(String reason) {
+        var waits = List.copyOf(tickWaits);
+        tickWaits.clear();
+        for (var wait : waits) wait.result.completeExceptionally(error(reason));
     }
 
     private void expireScript() {
@@ -115,6 +142,7 @@ final class AgentActions {
         if (List.of("place", "interact").contains(type) && args.has("position")) blockFace();
         if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
         kind = type;
+        completion = new CompletableFuture<>();
         action = object("id", UUID.randomUUID().toString(), "type", kind, "status", "running", "phase", "starting", "terminal", false, "session", session);
         history.put(text(action, "id"), action);
         while (history.size() > 32) history.remove(history.keySet().iterator().next());
@@ -141,11 +169,13 @@ final class AgentActions {
     void close(String reason) {
         scriptId = null;
         if (busy()) finish("interrupted", reason, null);
+        rejectTickWaits(reason);
         if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
         else hands.closeHands();
     }
 
     void tick(boolean minecraftAccess) {
+        bodyTicks++;
         try {
             expireScript();
             if (!minecraftAccess && scripted()) releaseScript();
@@ -251,6 +281,10 @@ final class AgentActions {
         } catch (RuntimeException failure) {
             if (busy()) finish("failed", failure.getMessage(), null);
             else throw failure;
+        } finally {
+            var ready = tickWaits.stream().filter(wait -> wait.target <= bodyTicks).toList();
+            tickWaits.removeAll(ready);
+            for (var wait : ready) wait.result.complete(new JsonObject());
         }
     }
 
@@ -396,6 +430,7 @@ final class AgentActions {
         action.addProperty("ticks",ticks);
         action.add("position", Observations.position(mob.position()));
         if (result != null) action.add("result",result.deepCopy());
+        completion.complete(action.deepCopy());
     }
     static Vec3 position(JsonObject args) {
         if (!args.has("position") || !args.get("position").isJsonObject()) throw error("position_must_be_xyz_object");

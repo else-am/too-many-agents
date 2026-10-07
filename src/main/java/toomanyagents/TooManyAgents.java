@@ -142,7 +142,12 @@ public final class TooManyAgents {
             if (path.equals("/v1/dev") && DevelopmentWorld.ENABLED) {
                 result = method.equals("GET") ? DevelopmentChecks.snapshot() : game.development(request).get(10,TimeUnit.SECONDS);
             } else if (path.equals("/v1/bb") && method.equals("POST")) {
-                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(15,TimeUnit.SECONDS)); }
+                // Script completion waits hold a virtual HTTP thread, never the
+                // game thread. Their script deadline and scope cancellation still apply.
+                boolean scriptWait = "script".equals(field(request, "op"))
+                    && request.has("arguments") && request.get("arguments").isJsonObject()
+                    && java.util.Set.of("awaitAction", "awaitTicks").contains(field(request.getAsJsonObject("arguments"), "operation"));
+                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(scriptWait ? 310 : 15,TimeUnit.SECONDS)); }
                 catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
                 catch(Exception failure) {
                     Throwable cause = failure;

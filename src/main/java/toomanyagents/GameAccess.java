@@ -86,6 +86,7 @@ final class GameAccess {
         private final MinecraftServer current;
         private String closed;
         private int pending;
+        private final Set<CompletableFuture<JsonObject>> waits = new HashSet<>();
 
         private ToolScope(String session, MinecraftServer current) {
             this.session = session;
@@ -96,10 +97,13 @@ final class GameAccess {
 
         void close(String reason) {
             var rejected = new ArrayList<PendingCall>();
+            var waiting = new ArrayList<CompletableFuture<JsonObject>>();
             synchronized (queueLock) {
                 if (closed != null) return;
                 closed = reason == null ? "turn_closed" : reason;
                 toolScopes.remove(this);
+                waiting.addAll(waits);
+                waits.clear();
                 toolQueue.removeIf(call -> {
                     if (call.scope != this) return false;
                     pending--;
@@ -109,6 +113,7 @@ final class GameAccess {
             }
             // Completion can call AgentService; never run those callbacks with queueLock held.
             for (var call : rejected) call.result.completeExceptionally(error(closed));
+            for (var wait : waiting) wait.completeExceptionally(error(closed));
         }
     }
 
@@ -169,11 +174,14 @@ final class GameAccess {
     void clientTick() {
         var rejected = new ArrayList<PendingCall>();
         var reasons = new ArrayList<String>();
+        var waiting = new ArrayList<CompletableFuture<JsonObject>>();
         synchronized (queueLock) {
             updateQueueClock();
             for (var scope : toolScopes) {
                 if (scope.current != server.get() || !Objects.equals(scope.session, worldSession.get())) {
                     scope.closed = "world_session_changed";
+                    waiting.addAll(scope.waits);
+                    scope.waits.clear();
                 }
             }
             toolScopes.removeIf(scope -> scope.closed != null);
@@ -189,6 +197,7 @@ final class GameAccess {
             });
         }
         for (int i = 0; i < rejected.size(); i++) rejected.get(i).result.completeExceptionally(error(reasons.get(i)));
+        for (var wait : waiting) wait.completeExceptionally(error("world_session_changed"));
     }
 
     private void updateQueueClock() {
@@ -222,6 +231,19 @@ final class GameAccess {
                 if (call.operation == Operation.POV) {
                     body(current, call.body);
                     pov.capture(UUID.fromString(call.body.entityUuid()), call.scope.session, POV).whenComplete((result, failure) -> {
+                        if (failure != null) call.result.completeExceptionally(failure);
+                        else call.result.complete(result);
+                    });
+                } else if (scriptWait(call.operation, call.args)) {
+                    synchronized (queueLock) {
+                        if (call.scope.closed != null) throw error(call.scope.closed);
+                        call.scope.waits.add(call.result);
+                    }
+                    call.result.whenComplete((result, failure) -> {
+                        synchronized (queueLock) { call.scope.waits.remove(call.result); }
+                    });
+                    // Register on the owning thread; the result itself contains only JSON.
+                    awaitScript(current, call.body, call.args).whenComplete((result, failure) -> {
                         if (failure != null) call.result.completeExceptionally(failure);
                         else call.result.complete(result);
                     });
@@ -647,11 +669,27 @@ final class GameAccess {
     CompletableFuture<JsonObject> call(Body body, String expectedSession, Operation operation, JsonObject args) {
         // Do not allow callers to mutate queued arguments after validation.
         var arguments = args == null ? new JsonObject() : args.deepCopy();
+        if (scriptWait(operation, arguments))
+            return schedule(expectedSession, current -> awaitScript(current, body, arguments)).thenCompose(Function.identity());
         if (operation == Operation.POV) {
             return schedule(expectedSession, current -> { body(current, body); return UUID.fromString(body.entityUuid()); })
                 .thenCompose(id -> pov.capture(id,expectedSession,POV));
         }
         return schedule(expectedSession, current -> executeOperation(current, body, operation, arguments));
+    }
+
+    private static boolean scriptWait(Operation operation, JsonObject args) {
+        return operation == Operation.SCRIPT && args.has("operation")
+            && Set.of("awaitAction", "awaitTicks").contains(args.get("operation").getAsString());
+    }
+
+    private CompletableFuture<JsonObject> awaitScript(MinecraftServer current, Body body, JsonObject args) {
+        var controller = actions(body, body(current, body));
+        controller.requireScript(string(args, "scriptId", 80));
+        if (string(args, "operation", 40).equals("awaitAction")) return controller.awaitAction(string(args, "id", 80));
+        double ticks = number(args.get("ticks"), "ticks");
+        if (ticks != Math.rint(ticks) || ticks < 0 || ticks > 6000) throw error("invalid_tick_wait");
+        return controller.awaitTicks((int) ticks);
     }
 
     private JsonObject executeOperation(MinecraftServer current, Body body, Operation operation, JsonObject arguments) {
