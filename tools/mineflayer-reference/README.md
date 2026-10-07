@@ -67,6 +67,16 @@ records, and private/source-only candidates are separately indexed. The only
 current inapplicable entries remain `createBot`, `Bot.connect`, and `Bot._client`.
 Nothing else is silently excluded because it is unimplemented or unclear.
 
+## Locate current implementation
+
+`implementationSites` records direct guest Bot/creative/Pathfinder assignments
+and object registrations, with file/line locations and file hashes in
+`implementationInputs`. Matching declarations receive `implementationSources`.
+These are navigation aids, not implementation or conformance passes. Computed
+registrations, inherited methods, dependency factories and indirect installers
+may have no site; absence is not evidence that a member is missing. Native Java
+behavior and each method’s complete contract still require review.
+
 ## Evidence and decisions
 
 `coverage.json.evidence` indexes executables by kind:
@@ -84,9 +94,12 @@ Nothing else is silently excluded because it is unimplemented or unclear.
 erases results previously discussed in a thread. `relatedEvidence` identifies
 relevant suites, **not proof that every member or condition was exercised**.
 Library suites and native procedures without durable reports remain available
-only. Five supplied native reports (Window, raycast, route policy, lifecycle,
-and shapes) are indexed as narrow passes after checking their executed code
-against the scenario files. No full API is promoted. Missing scripts or ignored
+only. Five earlier native reports (Window, raycast, route policy, lifecycle,
+and shapes), plus six later packaged runs (consumption/signs/game, fishing, boat
+controls, sleep, wake, observed events), are indexed as narrow passes after
+checking their executed code against the scenario files. Later reports identify
+the tested revision and retain the independent native summary. They do not
+validate newer source. No full API is promoted. Missing scripts or ignored
 reports in another worktree are listed explicitly and remain unverified.
 `artifactReview` indexes available `*-native.json` reports by hash, and
 `scenarioReview` flags new unindexed `observe-*`/`navigate-*` procedures; neither
@@ -108,9 +121,10 @@ evidence; a library-only pass cannot promote a full native gameplay API. Pending
 members remain pending by default. Applicability changes require explicit review;
 the generator permits only the three existing exclusions.
 
-Immediate review priorities are native Entity/recipe/chat/registry observations,
-container mutations, remaining world/chunk methods, event ordering, and actual
-Pathfinder execution/lifecycle. Source-only fields and declaration contradictions
+Current implementation and native-verification gaps are tracked in
+[the handoff checklist](../../MINEFLAYER-STATUS.md). Recent ports awaiting native
+checks, remaining world/chunk methods, body-versus-player semantics and broader
+Pathfinder execution/lifecycle remain review priorities. Source-only fields and declaration contradictions
 are in the generated review queues. Paired live-reference runs remain absent.
 
 ## Reference server (separate, not authorized by catalog generation)
@@ -136,3 +150,13 @@ world to LAN or manages BB.
 trusted host encoder against the existing literal Slot bytes, reverse registry
 mapping, Unicode NBT and malformed values. It does not run Minecraft or establish
 native creative-slot behavior. See [creative scenarios](creative-native-scenarios.md).
+
+## Historical native scripts
+
+`recorded/` preserves exact scripts from successful focused packaged runs;
+these are not fixture-independent tests or automatic replay instructions. They
+refer to the original guarded world, inventory, coordinates and sometimes entity
+UUIDs. Re-observe and deliberately prepare prerequisites before any future run.
+Some scripts require coordinated native changes while listeners wait. Reports
+remain under ignored `run/mineflayer-reference/`; another checkout without them
+correctly reports unverified evidence. No live tests are run by catalog generation.

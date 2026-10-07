@@ -384,6 +384,45 @@ for (const [key, note] of Object.entries(coverage.reviewNotes ?? {})) {
 for (const entry of declarations.values()) {
   entry.relatedEvidence = evidence.filter(e => (e.subjects ?? []).some(s => entry.key === s || entry.owner === s || entry.canonical?.startsWith(`${s}.`) || entry.baseMembers?.some(b => b === s || b.startsWith(`${s}.`)))).map(e => e.id);
 }
+// Locate guest registrations separately from conformance. A source assignment
+// cannot prove correct native behavior; missing sites may be indirect installs.
+const implementationInputs = [], implementationSites = [];
+const guestTargets = { bot: 'mineflayer.Bot', 'bot.creative': 'mineflayer.creativeMethods',
+  pathfinder: 'mineflayer-pathfinder.Pathfinder', 'bot.pathfinder': 'mineflayer-pathfinder.Pathfinder' };
+for (const name of (await readdir(join(sourceRoot, 'bb-plugin/scripting'))).filter(name => name.endsWith('.mjs') && name !== 'build.mjs').sort()) {
+  const path = `bb-plugin/scripting/${name}`;
+  const text = await readFile(join(sourceRoot, path), 'utf8');
+  const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+  implementationInputs.push({ path, sha256: sha(text) });
+  function record(owner, member, node) {
+    if (!owner || !member) return;
+    const key = `${owner}.${member}`;
+    const site = { key, path, line: file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1 };
+    implementationSites.push(site);
+    const entry = declarations.get(key);
+    if (entry) (entry.implementationSources ??= []).push(site);
+  }
+  function object(owner, value) {
+    if (value && ts.isObjectLiteralExpression(value)) for (const member of value.properties)
+      record(owner, memberName(member), member);
+  }
+  function visit(node) {
+    if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken && ts.isPropertyAccessExpression(node.left))
+      record(guestTargets[node.left.expression.getText(file)], node.left.name.text, node);
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.getText(file) === 'Object') {
+      const target = node.arguments[0] && guestTargets[node.arguments[0].getText(file)];
+      if (node.expression.name.text === 'defineProperty' && node.arguments[1] && ts.isStringLiteralLike(node.arguments[1]))
+        record(target, node.arguments[1].text, node);
+      if (node.expression.name.text === 'defineProperties') object(target, node.arguments[1]);
+      if (node.expression.name.text === 'assign') {
+        const owner = target ?? (ts.isVariableDeclaration(node.parent) ? guestTargets[node.parent.name.getText(file)] : undefined);
+        for (const value of node.arguments.slice(1)) object(owner, value);
+      }
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(file);
+}
 // Discover new lead procedures/reports without claiming they ran or passed.
 // Only index names/hashes; do not copy potentially sensitive report payloads.
 async function listIfPresent(path) {
@@ -413,6 +452,8 @@ const report = {
   declarations: entries, inheritance, runtimeInheritance, documentationReview: documents,
   sourceReview: [...sourceFindings, ...entries.filter(e => e.category === 'source-candidate' && !e.inheritedFrom).map(e => ({ key: e.key, status: 'pending-review', sources: e.sources }))],
   privateDeclarations: privateMembers,
+  implementationInputs, implementationSites,
+  implementationNote: 'Source locations only, not supported status or implementation completeness. Indirect installs, inherited implementations and computed registrations may have no site. Native source and executable evidence require review.',
   dependencyReview: imports.filter(i => !declarationFiles[i.module] && !['events', 'typed-emitter'].includes(i.module)).map(i => ({ ...i, status: 'pending-review' })),
   evidence, artifactReview, scenarioReview, evidencePolicy: coverage.evidencePolicy, liveReferenceRunsRecorded: evidence.filter(e => e.kind === 'live-reference' && e.result !== 'not-recorded').length, legacyKeysPreserved: legacyKeys.size,
   note: 'Discovery is not conformance. Related suites do not prove every member. Data shapes and source candidates are separately reviewable; pending requirements are not exclusions. Live-reference results are recorded separately, never inferred from library checks.',

@@ -119,7 +119,8 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [ ] **Pathfinder completion:** shortcut/free-motion behavior, wider dynamic/custom-goal coverage, species-specific physics and remaining route-policy/geometry combinations.
 - [ ] **Permission/lifecycle coverage:** remaining cancellation, world/session change, stale handles, timeout and unknown-reply combinations across new APIs.
 - [ ] **Complete member-by-member audit:** reconcile declarations, documentation, source and implementation, including dependency objects and ambiguous applicable APIs.
-- [ ] **Update evidence/catalog records:** `coverage.json` and the generated catalog are conservative and lag newer native results. Their pending counts are not an implementation percentage.
+- [x] **Catalog refresh:** indexed six exact historical packaged scripts with verified scenario/report hashes, tested revisions and independent native summaries; added recent library candidates and guest registration source locations. No old native test was rerun or API promoted to fully supported.
+- [ ] **Complete evidence reconciliation:** remaining historical runs, individual contract coverage and paired reference evidence still need review. Catalog pending counts remain conformance obligations, not an implementation percentage.
 - [ ] **Paired live reference runs:** reference server is prepared, but Minecraft server EULA acceptance remains unanswered. Do not accept/start it without authorization.
 - [ ] **Performance comparison:** complete the planned wall-building and gathering/crafting comparison against direct tools, using meaningful outcomes/tool counts/time.
 - [ ] **Final full-scope packaged/persistence validation** after remaining ports. Recent changes have focused verification, not a new exhaustive persistence cycle.

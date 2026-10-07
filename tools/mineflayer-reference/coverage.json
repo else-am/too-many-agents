@@ -20,7 +20,7 @@
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
     "supported": "Requires verified passing native-integration and live-reference evidence. All current native requirements remain pending.",
     "referenceServer": "No live reference run is recorded; Minecraft EULA acceptance remains unanswered.",
-    "nativeRuns": "Five supplied reports prove only their scripted slices. Integration was uncommitted; these reports do not identify a build/JAR hash. Only route-policy-native includes a separate independent observation section."
+    "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
   "evidence": {
     "block-library": {
@@ -284,15 +284,225 @@
       },
       "limitations": "Narrow native slice only; no paired live-reference run. Shortcut/free motion/partial execution/custom physics/large loaded caches and other API conditions remain pending.",
       "independentObservation": "No separate independent observation section in this report; do not infer one."
+    },
+    "native-consume-sign-game": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-consume-sign-game.js",
+      "subjects": [
+        "mineflayer.Bot.consume",
+        "mineflayer.Bot.dismount",
+        "mineflayer.Bot.updateSign",
+        "mineflayer.Bot.players",
+        "mineflayer.Bot.game"
+      ],
+      "scope": "Potion/milk effects and authoritative remainders, sign editing, dismount and player/game snapshots. No broad gameplay or multiplayer claim.",
+      "testedRevision": "880c87b",
+      "result": "passed",
+      "sourceSha256": "422183bad80351ec59cbc92a1ef38db79e2c9cab066ad8a46fd53ae3e800bf6f",
+      "report": {
+        "path": "run/mineflayer-reference/native-consume-sign-game-recorded.json",
+        "sha256": "6f284d5b2f2acb297b07345124f25318e38a66abf40275a46272bce030ba50ed",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "native-fishing-catch": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-fishing-catch.js",
+      "subjects": [
+        "mineflayer.Bot.fish"
+      ],
+      "scope": "One natural catch: salmon, native rod durability/XP, hook removal and twenty healthy subsequent ticks. No statistical loot or every cancellation claim.",
+      "testedRevision": "8bfa67e",
+      "result": "passed",
+      "sourceSha256": "b639099825e2656b485644fcc6f736644904d46a1d453689bcefd5f3b1b6e38f",
+      "report": {
+        "path": "run/mineflayer-reference/native-fishing-catch-recorded.json",
+        "sha256": "534a72ea71990c8a8becce771a6752df892ecee7e2a2f7d9cbf2dd68c196b355",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "native-boat-controls": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-boat-controls.js",
+      "subjects": [
+        "mineflayer.Bot.moveVehicle",
+        "mineflayer.Bot.setControlState",
+        "mineflayer.Bot.dismount"
+      ],
+      "scope": "Existing boat forward/turn/coast/control clearing/dismount. Initial fixture already mounted; does not prove a new mount event. Native Mob may reboard after cooldown.",
+      "testedRevision": "8bfa67e",
+      "result": "passed",
+      "sourceSha256": "5531f3c7f29b421e8d966a92f979d48a0e5a5feb7d66fcd60ac1a8d00db0c123",
+      "report": {
+        "path": "run/mineflayer-reference/native-boat-controls-recorded.json",
+        "sha256": "01f3d9cf945e237058d5aa9e78eab6e62d748879586fa0a95784cc90d095e555",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "native-bed-sleep": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-bed-sleep.js",
+      "subjects": [
+        "mineflayer.Bot.sleep"
+      ],
+      "scope": "Actual native sleeping state, occupied bed halves and hydrated callbacks; retained after script release. No player night skipping/respawn claim.",
+      "testedRevision": "6ee4bb3",
+      "result": "passed",
+      "sourceSha256": "0cb59a33f51ed85852ffdc79cc734a4dc5048624b9a715a724db3c8fc01ca121",
+      "report": {
+        "path": "run/mineflayer-reference/native-bed-sleep-recorded.json",
+        "sha256": "b006b0cd893d874e733b4a36b99be7c3578fa2833755ecbadbf3e9034ea314f7",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "native-bed-wake": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-bed-wake.js",
+      "subjects": [
+        "mineflayer.Bot.wake"
+      ],
+      "scope": "Wake callbacks/native occupancy, unchanged inventory and AlreadyAwake rejection. Wider permissions/lifecycle cases untested.",
+      "testedRevision": "6ee4bb3",
+      "result": "passed",
+      "sourceSha256": "845ad43a040f9abc4ae98c466f284e8d515715cfc7893718835a4ba1b160e30c",
+      "report": {
+        "path": "run/mineflayer-reference/native-bed-wake-recorded.json",
+        "sha256": "0b287e38aec370a63e4f1e00d3e029f8eb63f3f315da4e8560756f828765235b",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "native-observation-events": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/native-observation-events.js",
+      "subjects": [
+        "mineflayer.Bot.look",
+        "mineflayer.Bot.setControlState",
+        "prismarine-entity.Entity"
+      ],
+      "scope": "Crouch/uncrouch, one native effect add/removal, stable identities during countdown and look-only move event. No arbitrary event/amplifier refresh claim.",
+      "testedRevision": "3875c0b",
+      "result": "passed",
+      "sourceSha256": "9113d79b30a91ab5013c52de864d7b31e392043304e3a73a404486de3852c786",
+      "report": {
+        "path": "run/mineflayer-reference/native-observation-events-recorded.json",
+        "sha256": "029a71004da9a9447ecf1ed0c5cc976a0fce330aa86f0548e110ba1c35b39483",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not a run of current HEAD, not paired live-reference or exhaustive member conformance. Independent summary is retained in report.independentSummary."
+    },
+    "recipe-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/recipes.mjs",
+      "subjects": [
+        "prismarine-recipe.Recipe"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "chat-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/chat.mjs",
+      "subjects": [
+        "prismarine-chat.ChatMessage"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "entity-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/entities.mjs",
+      "subjects": [
+        "prismarine-entity.Entity"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "inventory-guest": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/inventory.mjs",
+      "subjects": [
+        "mineflayer.Bot.equip",
+        "mineflayer.Bot.craft",
+        "mineflayer.Bot.transfer"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "specialized-guest": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/specialized-windows.mjs",
+      "subjects": [
+        "mineflayer.Bot.openFurnace",
+        "mineflayer.Bot.openAnvil",
+        "mineflayer.Bot.openVillager"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "books-guest": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/books.mjs",
+      "subjects": [
+        "mineflayer.Bot.writeBook",
+        "mineflayer.Bot.signBook"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "world-queries-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/world-queries.mjs",
+      "subjects": [
+        "mineflayer.Bot.findBlocks",
+        "mineflayer.Bot.canSeeBlock"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "explosion-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/explosion.mjs",
+      "subjects": [
+        "mineflayer.Bot.getExplosionDamages"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
+    },
+    "boss-bars-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/boss-bars.mjs",
+      "subjects": [
+        "mineflayer.BossBar"
+      ],
+      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
+      "result": "not-recorded"
     }
   },
   "reviewNotes": {
     "prismarine-item.Item": "Components/componentMap/removedComponents are source-visible but omitted from declarations; Item.equal ignores components in the pin.",
     "prismarine-windows.Window": "Declarations/docs/runtime disagree on some signatures, layouts and events; windows.mjs separates intended corrections from parity. Drag/double-click throw upstream.",
-    "prismarine-world.WorldSync": "Only synchronous getBlock/raycast view has library evidence. Other world/chunk APIs remain pending. Raycast returns annotated Block despite the flat result declaration.",
+    "prismarine-world.WorldSync": "Synchronous getBlock/raycast and numeric getters/events are implemented. Only raycast has library evidence; runtime additions await native verification. Full columns/async storage/client-cache mutation semantics remain pending.",
     "mineflayer-pathfinder.Pathfinder": "Undeclared source settings include searchRadius, enablePathShortcut and LOSWhenPlacingBlocks. Selected-route native slices passed; shortcut/free motion/partial execution/custom physics/large loaded cache and other behavior remain pending.",
     "events.EventEmitter": "Inherited instance surface comes from pinned events 3.3.0, not current Node type declarations. Event payloads/ordering need independent native evidence.",
     "prismarine-registry.loader.RegistryPc": "Registry tables and codecs, chunk access/storage, Bedrock-labelled data and source-only helpers require applicability review; none are silently excluded.",
-    "mineflayer-pathfinder.goals.GoalBreakBlock": "Pinned declarations extend GoalLookAtBlock, but source extends Goal and wraps this.goal; source isEnd drops its node argument. Inherited declaration promises require review."
+    "mineflayer-pathfinder.goals.GoalBreakBlock": "Pinned declarations extend GoalLookAtBlock, but source extends Goal and wraps this.goal; source isEnd drops its node argument. Inherited declaration promises require review.",
+    "mineflayer.Bot.chatPatterns": "Declared public ChatPattern[] in index.d.ts, but pinned chat.js keeps private _patterns and never assigns bot.chatPatterns. Requires an explicit declaration/source decision; do not treat declaration presence as upstream runtime behavior."
   }
 }
