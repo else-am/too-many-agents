@@ -749,6 +749,38 @@ final class AgentHands extends FakePlayer {
         return snapshot();
     }
 
+    JsonObject creativeSlot(int menuId, long generation, int slot, String wire) {
+        checkMenuAction(menuId, generation);
+        if (!isCreative()) throw error("creative_mode_required");
+        if (slot < 1 || slot > 45) throw error("invalid_creative_inventory_slot");
+        var items = new ScriptItems(serverLevel());
+        var stack = items.read(wire);
+        if (!stack.isEmpty()) {
+            if (!stack.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
+            if (stack.getCount() < 1 || stack.getCount() > stack.getMaxStackSize()) throw error("invalid_item_count");
+            // Match native creative block-entity copying, without reading beyond the body's box.
+            var data = stack.getOrDefault(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.CustomData.EMPTY);
+            if (data.contains("x") && data.contains("y") && data.contains("z")) {
+                var pos = net.minecraft.world.level.block.entity.BlockEntity.getPosFromTag(data.getUnsafe());
+                var bounds = bodyBox.get();
+                if (bounds != null && !bounds.contains(pos)) throw error("creative_block_data_outside_box");
+                if (level().isLoaded(pos)) {
+                    var entity = level().getBlockEntity(pos);
+                    if (entity != null) entity.saveToItem(stack, registryAccess());
+                }
+            }
+            if (ItemStack.CODEC.encodeStart(registryAccess().createSerializationContext(NbtOps.INSTANCE), stack).error().isPresent())
+                throw error("invalid_creative_item_components");
+            items.wire(stack); // Validate final native serialization before touching the slot.
+        }
+        inventoryMenu.getSlot(slot).setByPlayer(stack);
+        getInventory().setChanged();
+        inventoryMenu.broadcastChanges();
+        if (containerMenu != inventoryMenu) containerMenu.broadcastChanges();
+        save();
+        return snapshot();
+    }
+
     JsonObject creativeItem(String item, int count) {
         syncBody();
         requireIdleHands();

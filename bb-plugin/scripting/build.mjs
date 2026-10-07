@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import minecraftData from 'minecraft-data';
 import { fileURLToPath } from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
-import { decodeItemTransport } from './item-wire.mjs';
+import { decodeItemTransport, encodeItemTransport } from './item-wire.mjs';
 
 const registry = minecraftData('1.21.1');
 const features = JSON.parse(await readFile(new URL('../node_modules/minecraft-data/minecraft-data/data/pc/common/features.json', import.meta.url), 'utf8'));
@@ -30,11 +30,12 @@ licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), '
 licenses.push(await readFile(new URL('./world-queries.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chat.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./chat-patterns.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
-licenses.push('Mineflayer 4.39.0: adapted waitForTicks implementation\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
+licenses.push('Mineflayer 4.39.0: adapted waitForTicks and creative inventory API\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
@@ -56,7 +57,7 @@ await build({
   legalComments: 'eof', keepNames: true,
   plugins: [{ name: 'minecraft-version-data', setup(build) {
     build.onResolve({ filter: /^minecraft-item-transport$/ }, () => ({ path: 'revive', namespace: 'minecraft-item-transport' }));
-    build.onLoad({ filter: /.*/, namespace: 'minecraft-item-transport' }, () => ({ contents: `export const decodeItemTransport = ${decodeItemTransport.toString()};`, loader: 'js' }));
+    build.onLoad({ filter: /.*/, namespace: 'minecraft-item-transport' }, () => ({ contents: `export const decodeItemTransport = ${decodeItemTransport.toString()}; export const encodeItemTransport = ${encodeItemTransport.toString()};`, loader: 'js' }));
     build.onResolve({ filter: /^(node:)?perf_hooks$/ }, () => ({ path: 'clock', namespace: 'minecraft-clock' }));
     build.onLoad({ filter: /.*/, namespace: 'minecraft-clock' }, () => ({ contents: 'const now = __mcNow; export const performance = { now };', loader: 'js' }));
     build.onResolve({ filter: /^minecraft-version-data$/ }, () => ({ path: '1.21.1', namespace: 'minecraft-version-data' }));

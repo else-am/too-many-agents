@@ -1,5 +1,5 @@
 /*!
- * Bounded PC 1.21.1 Item wire decoder. Portions adapted from ProtoDef 1.19.0
+ * Bounded PC 1.21.1 Item wire codec. Portions adapted from ProtoDef 1.19.0
  * (MIT, Copyright (c) 2018 ProtoDef-io), prismarine-nbt 2.8.0 (MIT), and
  * minecraft-protocol 1.68.0 (BSD-3-Clause). See item-wire.LICENSE.
  */
@@ -11,7 +11,7 @@ import minecraftTypes from 'minecraft-protocol/src/datatypes/compiler-minecraft.
 
 // Only the pinned game's wire schema and item IDs belong in the host bundle.
 const guestItemIds = new Map(items.map(item => [`minecraft:${item.name}`, item.id]));
-const decoders = new Map();
+const codecs = new Map();
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ENTRIES = 65536;
 const MAX_READS = 200000;
@@ -33,11 +33,14 @@ const MAX_DEPTH = 128;
 // Call once per world mapping. Up to four identical registry fingerprints are
 // cached; nothing is compiled per item. Encode Java bytes with the current
 // RegistryAccess and NeoForge ConnectionType.OTHER, not NEOFORGE.
-export function createItemDecoder (registries) {
+export function createItemDecoder (registries) { return createItemCodec(registries).decode; }
+export function createItemEncoder (registries) { return createItemCodec(registries).encode; }
+
+function createItemCodec (registries) {
   const items = registryEntries(registries?.items, 'items');
   const components = registryEntries(registries?.components, 'components');
   const fingerprint = JSON.stringify([items, components]);
-  if (decoders.has(fingerprint)) return decoders.get(fingerprint);
+  if (codecs.has(fingerprint)) return codecs.get(fingerprint);
   const itemIds = new Map(items.map(([id, name]) => [id, guestItemIds.get(name)]));
   const types = correctedTypes();
   const knownComponents = new Set(Object.values(types.SlotComponentType[1].mappings));
@@ -53,6 +56,18 @@ export function createItemDecoder (registries) {
 
   const compiler = new protodef.Compiler.ProtoDefCompiler();
   compiler.addTypes(minecraftTypes);
+  // Pinned writer skips the inline-holder discriminator, leaving garbage bytes.
+  compiler.writeCompiler.addTypes({
+    registryEntryHolder: ['parametrizable', (compiler, opts) => compiler.wrapCode(`
+      if (value.${opts.baseName} != null) {
+        offset = ${compiler.callType(`value.${opts.baseName} + 1`, 'varint')}
+      } else if (value.${opts.otherwise.name}) {
+        buffer[offset++] = 0
+        offset = ${compiler.callType(`value.${opts.otherwise.name}`, opts.otherwise.type)}
+      } else throw new Error('Invalid registry holder')
+      return offset
+    `)],
+  });
   compiler.addTypesToCompile(types);
   nbt.addTypesToCompiler('big', compiler);
   // Check lengths before looping, including arrays of zero-byte values.
@@ -178,9 +193,86 @@ export function createItemDecoder (registries) {
     if (result.size !== buffer.length) throw new Error('Trailing item wire bytes');
     return result.value;
   };
-  if (decoders.size === 4) decoders.delete(decoders.keys().next().value);
-  decoders.set(fingerprint, decode);
-  return decode;
+  const writers = proto.writeCtx, sizes = proto.sizeOfCtx;
+  const nativeItemIds = new Map([...itemIds].filter(([, guest]) => guest !== undefined).map(([native, guest]) => [guest, native]));
+  const nativeComponents = new Map([...componentNames].map(([id, name]) => [name, id]));
+  function mapped(map, value, label) {
+    if (!map.has(value)) throw new Error(`Unsupported ${label} ${value}`);
+    return map.get(value);
+  }
+  writers.itemWireItemId = (value, buffer, offset) => writers.varint(mapped(nativeItemIds, value, 'guest item ID'), buffer, offset);
+  sizes.itemWireItemId = value => sizes.varint(mapped(nativeItemIds, value, 'guest item ID'));
+  writers.SlotComponentType = (value, buffer, offset) => writers.varint(mapped(nativeComponents, value, 'component'), buffer, offset);
+  sizes.SlotComponentType = value => sizes.varint(mapped(nativeComponents, value, 'component'));
+  function modifiedUtf8(value) {
+    if (typeof value !== 'string') throw new Error('NBT string must be a string');
+    const bytes = [];
+    for (let i = 0; i < value.length; i++) {
+      const unit = value.charCodeAt(i);
+      if (unit > 0 && unit < 128) bytes.push(unit);
+      else if (unit < 2048) bytes.push(0xc0 | unit >> 6, 0x80 | unit & 63);
+      else bytes.push(0xe0 | unit >> 12, 0x80 | unit >> 6 & 63, 0x80 | unit & 63);
+      if (bytes.length > 65535) throw new Error('NBT string exceeds modified UTF-8 limit');
+    }
+    return Buffer.from(bytes);
+  }
+  sizes.shortString = value => modifiedUtf8(value).length + 2;
+  writers.shortString = (value, buffer, offset) => {
+    const bytes = modifiedUtf8(value);
+    buffer.writeUInt16BE(bytes.length, offset);
+    bytes.copy(buffer, offset + 2);
+    return offset + bytes.length + 2;
+  };
+  sizes.nbtTagName = sizes.shortString;
+  writers.nbtTagName = writers.shortString;
+  const sizeSlot = sizes.Slot;
+  sizes.Slot = value => {
+    if (!value || !Number.isInteger(value.itemCount) || value.itemCount < 0 || value.itemCount > MAX_ENTRIES)
+      throw new Error('Invalid item count');
+    if (value.itemCount !== 0 && (!Array.isArray(value.components) || !Array.isArray(value.removeComponents)
+      || value.addedComponentCount !== value.components.length || value.removedComponentCount !== value.removeComponents.length))
+      throw new Error('Inconsistent component counts');
+    return sizeSlot(value);
+  };
+  for (const [name, [min, max]] of Object.entries({ varint: [-2147483648, 2147483647],
+    i8: [-128,127], u8: [0,255], i16: [-32768,32767], u16: [0,65535],
+    i32: [-2147483648,2147483647], u32: [0,4294967295] })) {
+    const write = writers[name];
+    if (typeof write !== 'function') continue;
+    writers[name] = (value, ...args) => {
+      if (!Number.isInteger(value) || value < min || value > max) throw new Error(`Invalid ${name} item value`);
+      return write(value, ...args);
+    };
+  }
+  let operations = 0, writeDepth = 0;
+  for (const context of [sizes, writers]) for (const [name, fn] of Object.entries(context)) {
+    if (typeof fn !== 'function') continue;
+    context[name] = (...args) => {
+      if (++operations > MAX_READS || ++writeDepth > MAX_DEPTH) throw new Error('Item encoding exceeds bounds');
+      try {
+        const result = fn(...args);
+        if (!Number.isSafeInteger(result) || result < 0 || result > MAX_BYTES) throw new Error('Item encoding exceeds byte bounds');
+        return result;
+      } finally { writeDepth--; }
+    };
+  }
+  const encode = value => {
+    // Validate the entire supplied tree, including unused fields, before schema traversal.
+    if (JSON.stringify(encodeItemTransport(value)).length > MAX_BYTES) throw new Error('Item input exceeds bounds');
+    operations = writeDepth = 0;
+    const size = proto.sizeOf(value, 'Slot');
+    if (size > MAX_BYTES) throw new Error('Item wire exceeds bounds');
+    const buffer = Buffer.alloc(size);
+    const end = proto.write(value, buffer, 0, 'Slot');
+    if (end !== size) throw new Error('Item writer size mismatch');
+    const base64 = buffer.toString('base64');
+    decode(base64); // Require a fully bounded, consumable Slot, not unchecked writer output.
+    return base64;
+  };
+  const codec = { decode, encode };
+  if (codecs.size === 4) codecs.delete(codecs.keys().next().value);
+  codecs.set(fingerprint, codec);
+  return codec;
 }
 
 function registryEntries (mapping, label) {

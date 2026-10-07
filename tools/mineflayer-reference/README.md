@@ -129,3 +129,10 @@ on `127.0.0.1:25575`, uses offline authentication and a disposable world, execut
 `gather-reference.json`, and stops that server. Do not use an already-running
 server. This is one scenario, not full conformance; it never opens the user's
 world to LAN or manages BB.
+
+## Creative item encoding
+
+`node tools/mineflayer-reference/item-wire.mjs --encode` additionally checks the
+trusted host encoder against the existing literal Slot bytes, reverse registry
+mapping, Unicode NBT and malformed values. It does not run Minecraft or establish
+native creative-slot behavior. See [creative scenarios](creative-native-scenarios.md).

@@ -41,6 +41,24 @@ final class ScriptItems {
         } finally { raw.release(); }
     }
 
+    ItemStack read(String wire) {
+        if (!level.getServer().isSameThread()) throw new IllegalStateException("script_item_requires_server_thread");
+        if (wire == null || wire.length() > 1398104) throw new IllegalStateException("script_item_exceeds_1_MiB");
+        byte[] bytes;
+        try { bytes = Base64.getDecoder().decode(wire); }
+        catch (IllegalArgumentException invalid) { throw new IllegalStateException("invalid_item_wire"); }
+        if (bytes.length > 1024 * 1024 || !Base64.getEncoder().encodeToString(bytes).equals(wire))
+            throw new IllegalStateException("invalid_item_wire");
+        var raw = Unpooled.wrappedBuffer(bytes);
+        try {
+            var buffer = new RegistryFriendlyByteBuf(raw, level.registryAccess(), ConnectionType.OTHER);
+            var stack = ItemStack.OPTIONAL_STREAM_CODEC.decode(buffer);
+            if (buffer.isReadable()) throw new IllegalStateException("trailing_item_wire");
+            return stack;
+        } catch (RuntimeException invalid) { throw new IllegalStateException("invalid_item_component_wire"); }
+        finally { raw.release(); }
+    }
+
     static JsonObject registries(ServerLevel level) {
         var result = new JsonObject();
         result.add("items", names(BuiltInRegistries.ITEM));

@@ -7,7 +7,7 @@ import type { BbPluginApi, PluginAgentToolResult } from '@get-bb/plugin-sdk';
 import type { MinecraftWorlds } from './minecraft.js';
 import { ApiError, object, describe, type Session } from './protocol.js';
 import { runScript } from './scripting/runner.mjs';
-import { createItemDecoder, encodeItemTransport } from './scripting/item-wire.mjs';
+import { createItemDecoder, createItemEncoder, encodeItemTransport, decodeItemTransport } from './scripting/item-wire.mjs';
 
 export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const running = new Map<string, AbortController>();
@@ -60,6 +60,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       began = true;
       const initial = await call('begin', { timeoutMs });
       const decodeItem = createItemDecoder(initial.itemRegistries);
+      const encodeItem = createItemEncoder(initial.itemRegistries);
       // Repeated equipment/menu/stream copies usually contain identical bytes.
       // Bound both entry count and retained bytes for large books or nested items.
       const itemCache = new Map<string, { value: ReturnType<typeof encodeItemTransport>; bytes: number; key: string }>();
@@ -115,6 +116,15 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         } catch (error) { if (!signal.aborted) controller.abort(error); }
       })();
       const startAction = async (request: Record<string, unknown>, requestSignal: AbortSignal) => {
+        if (request.type === 'creative_slot') {
+          // Guest values are data only; registry remapping/encoding stays trusted.
+          try {
+            const { item, ...rest } = request;
+            request = { ...rest, wire: encodeItem(decodeItemTransport(item)) };
+          } catch (error) {
+            throw Object.assign(new Error(`Invalid creative item: ${describe(error)}`), { code: 'minecraft_action_rejected_before_start' });
+          }
+        }
         try {
           const action = await call('action', { action: request }, requestSignal);
           if (typeof action.id !== 'string' || action.status !== 'running' || !Number.isInteger(action.sequence))

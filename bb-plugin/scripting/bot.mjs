@@ -385,7 +385,7 @@ export function createBot(initial) {
     }
     return events;
   }
-  const inventory = installInventory(bot, { action, snapshot: () => snapshot, decodeItem: item,
+  const inventory = installInventory(bot, { action, Item, snapshot: () => snapshot, decodeItem: item,
     isKnownActionError: error => error instanceof NativeActionError,
     assertActive() {
       if (snapshot.session !== initial.session || snapshot.body.uuid !== initial.body.uuid || !bot.entity.isValid)

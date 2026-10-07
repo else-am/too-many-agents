@@ -185,7 +185,8 @@ if (process.argv.includes('--reference-only')) {
   const loaded = new Module(resolve(referenceRoot, 'item-wire-check.cjs'));
   loaded.paths = require.resolve.paths('minecraft-data');
   loaded._compile(built.outputFiles[0].text, resolve(referenceRoot, 'item-wire-check.cjs'));
-  const { createItemDecoder, encodeItemTransport, decodeItemTransport } = loaded.exports;
+  const { createItemDecoder, createItemEncoder, encodeItemTransport, decodeItemTransport } = loaded.exports;
+  const actualEncode = process.argv.includes("--encode") ? createItemEncoder(registryMaps) : null;
   const actualDecode = createItemDecoder(registryMaps);
   assert.equal(createItemDecoder(structuredClone(registryMaps)), actualDecode, 'reuse identical registry fingerprint');
   const vm = (await plugin('quickjs-emscripten').getQuickJS()).newContext();
@@ -196,10 +197,20 @@ if (process.argv.includes('--reference-only')) {
   };
   try {
     evaluate(`globalThis.revive = (${decodeItemTransport.toString()});`);
+    if (actualEncode) {
+      const valid = actualDecode(fixtures[1][1].toString('base64'));
+      for (const changed of [{ itemCount: -1 }, { itemId: -1 }, { addedComponentCount: 999 },
+        { components: [{ type: 'unknown_component', data: {} }], addedComponentCount: 1 }])
+        assert.throws(() => actualEncode({ ...valid, ...changed }));
+      const cyclic = { ...valid }; cyclic.components = [cyclic];
+      assert.throws(() => actualEncode(cyclic));
+      assert.throws(() => actualEncode({ ...valid, extra: 'x'.repeat(3 * 1024 * 1024) }));
+    }
     let upstreamMatches = 0;
     for (const [name, bytes] of fixtures) {
       const result = actualDecode(bytes.toString('base64'));
       assert.deepEqual(result, decode(corrected, bytes), name);
+      if (actualEncode) assert.deepEqual(Buffer.from(actualEncode(result), "base64"), bytes, `${name}: native encoding bytes`);
       try { assert.deepEqual(result, decode(stock, bytes)); upstreamMatches++; } catch {}
       const transport = encodeItemTransport(result);
       const revived = decodeItemTransport(JSON.parse(JSON.stringify(transport)));
@@ -212,11 +223,13 @@ if (process.argv.includes('--reference-only')) {
       }
     }
     assert.equal(actualDecode(unicodeBytes.toString('base64')).components[0].data.value, '\0😀', 'native modified UTF-8');
+    if (actualEncode) assert.equal(actualEncode(actualDecode(unicodeBytes.toString('base64'))), unicodeBytes.toString('base64'), 'encode native modified UTF-8');
     const odd = actualDecode(oddBytes.toString('base64'));
     assert.equal(odd.components[0].data.value.__proto__.value, 'own data');
     const oddRevived = decodeItemTransport(JSON.parse(JSON.stringify(encodeItemTransport(odd))));
     assert(Object.hasOwn(oddRevived.components[0].data.value, '__proto__'));
     assert.deepEqual(corrected.createPacketBuffer('Slot', oddRevived), oddBytes);
+    if (actualEncode) assert.equal(actualEncode(oddRevived), oddBytes.toString('base64'), 'encode prototype key as own data');
     for (const [name, bytes] of malformed) {
       const expected = name.startsWith('recursive') ? /structure exceeds bounds/
         : name.startsWith('huge') || name === 'negative NBT array' ? /array count exceeds bounds/
@@ -231,6 +244,7 @@ if (process.argv.includes('--reference-only')) {
     for (const [id, name] of Object.entries(registryMaps.components)) shifted.components[Number(id) + 1000] = name;
     const shiftedBytes = cat(1, vi(mcData.itemsByName.shulker_box.id + 2000), 1, 1, vi(1052), 1, 1, vi(mcData.itemsByName.diamond_sword.id + 2000), 1, 0, vi(1003), vi(42), vi(1005));
     const remapped = createItemDecoder(shifted)(shiftedBytes.toString('base64'));
+    if (actualEncode) assert.equal(createItemEncoder(shifted)(remapped), shiftedBytes.toString('base64'), 'reverse registry remapping');
     assert.equal(remapped.itemId, mcData.itemsByName.shulker_box.id);
     assert.equal(remapped.components[0].data.contents[0].itemId, mcData.itemsByName.diamond_sword.id);
     assert.equal(remapped.components[0].data.contents[0].components[0].data, 42);

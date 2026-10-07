@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -380,6 +380,8 @@ final class AgentActions {
                     if (!approachTargets && args.has("hotbar")) hands.selectHotbar(integer(args, "hotbar", 0));
                     finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
                 }
+                case "creative_slot" -> finish("completed", "creative_slot_set", hands.creativeSlot(
+                    integer(args, "menuId", -1), menuGeneration(), integer(args, "slot", -1), text(args, "wire")));
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
                 case "attack" -> finish("completed", "attack_attempted", hands.attackTarget(entity(), !args.has("swing") || args.get("swing").getAsBoolean()));
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()

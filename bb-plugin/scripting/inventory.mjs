@@ -1,3 +1,4 @@
+import { installCreativeInventory } from './creative.mjs';
 import { installBooks } from './books.mjs';
 // Public orchestration adapted from Mineflayer 4.39.0 inventory,
 // simple_inventory, chest and craft plugins (MIT). See inventory.LICENSE.
@@ -26,7 +27,7 @@ const sameStack = (a, b) => a && b && a.type === b.type && a.metadata === b.meta
 const matches = (item, type, metadata, nbt) => item && item.type === type &&
   (metadata == null || item.metadata === metadata) && (nbt == null || sameData(item.nbt, nbt));
 
-export function installInventory(bot, { action, snapshot, decodeItem, assertActive = () => {}, isKnownActionError = () => false }) {
+export function installInventory(bot, { action, snapshot, decodeItem, Item, assertActive = () => {}, isKnownActionError = () => false }) {
   const menus = new WeakMap(), closed = new WeakSet();
   let tail = Promise.resolve(), poisoned, controlFailure, order = 0, pendingSelection, nextQuickBarSlot = 0;
   const controls = new Set();
@@ -527,6 +528,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, assertActi
   };
   const specialized = installSpecializedWindows(bot, io);
   installBooks(bot, io);
+  installCreativeInventory(bot, io, Item);
   function syncWindow(window, menu) {
     requireValue(integer(menu.id) && integer(menu.generation), 'MissingMenuGeneration', 'Native menu id/generation is required');
     const decorated = menus.has(window);
