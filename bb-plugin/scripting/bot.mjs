@@ -10,6 +10,8 @@ import { EventEmitter } from 'events';
 import { Movements } from './movements.mjs';
 import { installPathfinder } from './pathfinder.mjs';
 import { createRecipeFactory, installRecipeQueries } from './recipes.mjs';
+import { createChatMessageClass } from './chat.mjs';
+import { createEntityClass } from './entities.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -24,6 +26,7 @@ const goals = { ...upstreamGoals,
 export function createBot(initial) {
   const registry = {
     ...data,
+    chatFormattingById: initial.chatFormattingById ?? {},
     blocksArray: data.blocksArray, itemsArray: data.itemsArray,
     blocksByName: Object.fromEntries(data.blocksArray.map(block => [block.name, block])),
     itemsByName: Object.fromEntries(data.itemsArray.map(item => [item.name, item])),
@@ -33,9 +36,12 @@ export function createBot(initial) {
   };
   const Block = createBlockClass(registry);
   const Item = createItemClass(registry);
+  const ChatMessage = createChatMessageClass(registry);
+  const Entity = createEntityClass(registry, { Item, ChatMessage });
   const recipeFactory = createRecipeFactory(registry);
   const { createWindow } = createWindowFactory(Item);
   const windowKeys = new WeakMap();
+  const equipmentKeys = new WeakMap();
   let snapshot;
   let lastPhysicsTick;
   let nextQuickBarSlot = 0;
@@ -189,15 +195,28 @@ export function createBot(initial) {
       present.add(source.id);
       let entity = bot.entities[source.id];
       const fresh = !entity || entity.uuid !== source.uuid;
-      if (fresh) entity = bot.entities[source.id] = Object.assign(new EventEmitter(), { position: new Vec3(0, 0, 0), velocity: new Vec3(0, 0, 0) });
+      if (fresh) entity = bot.entities[source.id] = new Entity(source.id);
       const moved = !entity.position.equals(source.position);
-      const { position, velocity, yaw, pitch, type, name, ...fields } = source;
+      const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, ...fields } = source;
       const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
       Object.assign(entity, fields, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
-        name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other', isValid: true });
+        name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other',
+        entityType: kind?.id, kind: kind?.category, isValid: true });
       if (kind?.name === 'player') entity.username = name;
       entity.position.update(position);
       entity.velocity.update(velocity);
+      entity.metadata[2] = customName ?? undefined;
+      if (droppedItem) entity.metadata[8] = decodeItemTransport(droppedItem.item);
+      if (equipment) {
+        let keys = equipmentKeys.get(entity);
+        if (!keys) { keys = []; equipmentKeys.set(entity, keys); }
+        for (let slot = 0; slot < equipment.length; slot++) {
+          if (keys[slot] !== equipment[slot].itemKey) {
+            keys[slot] = equipment[slot].itemKey;
+            entity.setEquipment(slot, item(equipment[slot]));
+          }
+        }
+      }
       if (source.id === next.body.id) bot.entity = entity;
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
@@ -208,6 +227,13 @@ export function createBot(initial) {
         delete bot.entities[id];
         entityEvents.push(['entityGone', entity]);
       }
+    }
+    for (const source of [next.body, ...next.entities]) {
+      const entity = bot.entities[source.id];
+      // Missing observations stay undefined, distinct from no vehicle. Do not
+      // invent entities or erase passenger positions at the cache boundary.
+      entity.passengers = (source.passengers ?? []).map(id => bot.entities[id]);
+      entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
     const heldBefore = bot.heldItem;
@@ -273,5 +299,6 @@ export function createBot(initial) {
   lastPhysicsTick = initial.tick;
   installPathfinder(bot, { request, waitForActionState, snapshot: () => snapshot });
   installRecipeQueries(bot, recipeFactory);
-  return { bot, Vec3, goals, Movements, ...recipeFactory, update };
+  return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
+    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update };
 }

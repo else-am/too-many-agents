@@ -69,6 +69,11 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         const hands = object(snapshot.hands), menu = object(hands.menu);
         const entries = [...hands.inventory as unknown[], ...Object.values(object(hands.equipment)),
           ...menu.slots as unknown[], menu.carried];
+        for (const value of [snapshot.body, ...snapshot.entities as unknown[]]) {
+          const entity = object(value);
+          if (entity.equipment) entries.push(...entity.equipment as unknown[]);
+          if (entity.droppedItem) entries.push(entity.droppedItem);
+        }
         for (const value of entries) {
           const entry = object(value);
           if (typeof entry.wire !== 'string') throw new Error('Native item wire is missing');
@@ -154,7 +159,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Recipe, RecipeItem, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, Recipe, RecipeItem, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
         timeoutMs, signal, onRequest,

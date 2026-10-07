@@ -308,7 +308,7 @@ await writeFile(join(temporary, 'dist/scripting/bot.js'), `var MinecraftBot = {
 };\n`);
 
 function initial() {
-  return { revision: 1, tick: 1, action: { status: 'idle' },
+  return { revision: 1, tick: 1, action: { status: 'idle' }, body: {}, entities: [],
     itemRegistries: { items: ['minecraft:air'], components: ['minecraft:custom_data'] },
     hands: { inventory: [], equipment: {}, menu: { slots: [], carried: { wire: 'AA==', count: 0 } } },
   };

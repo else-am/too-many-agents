@@ -23,6 +23,8 @@ licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'u
 licenses.push(await readFile(new URL('./windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./chat.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'utf8'));
 licenses.push('Mineflayer 4.39.0: adapted waitForTicks implementation\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
@@ -42,7 +44,7 @@ await build({
   entryPoints: [fileURLToPath(new URL('./bot.mjs', import.meta.url))],
   outfile: fileURLToPath(new URL('../dist/scripting/bot.js', import.meta.url)),
   bundle: true, platform: 'browser', format: 'iife', globalName: 'MinecraftBot', target: 'es2022',
-  legalComments: 'eof',
+  legalComments: 'eof', keepNames: true,
   plugins: [{ name: 'minecraft-version-data', setup(build) {
     build.onResolve({ filter: /^minecraft-item-transport$/ }, () => ({ path: 'revive', namespace: 'minecraft-item-transport' }));
     build.onLoad({ filter: /.*/, namespace: 'minecraft-item-transport' }, () => ({ contents: `export const decodeItemTransport = ${decodeItemTransport.toString()};`, loader: 'js' }));

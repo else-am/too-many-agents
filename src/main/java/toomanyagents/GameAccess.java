@@ -712,7 +712,15 @@ final class GameAccess {
 
     private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
         var snapshot = observe(current, mob, new JsonObject());
-        snapshot.add("hands", controller.hands.scriptSnapshot());
+        var level = (ServerLevel) mob.level();
+        var items = new ScriptItems(level);
+        snapshot.add("hands", controller.hands.scriptSnapshot(items));
+        ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
+        for (var value : snapshot.getAsJsonArray("entities")) {
+            var observed = value.getAsJsonObject();
+            var entity = level.getEntity(observed.get("id").getAsInt());
+            if (entity != null) ScriptEntities.enrich(entity, observed, items);
+        }
         snapshot.add("nativeBody", ScriptNavigation.capabilities(mob));
         snapshot.add("action", controller.status(""));
         snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
@@ -760,7 +768,10 @@ final class GameAccess {
         return switch (operation) {
             case "begin", "snapshot" -> {
                 var snapshot = scriptSnapshot(current, mob, controller);
-                if (operation.equals("begin")) snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
+                if (operation.equals("begin")) {
+                    snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
+                    snapshot.add("chatFormattingById", ScriptEntities.chatFormatting((ServerLevel) mob.level()));
+                }
                 yield snapshot;
             }
             case "heartbeat" -> new JsonObject();

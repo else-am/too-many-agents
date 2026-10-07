@@ -537,9 +537,8 @@ final class AgentHands extends FakePlayer {
         return result;
     }
 
-    JsonObject scriptSnapshot() {
+    JsonObject scriptSnapshot(ScriptItems items) {
         var result = snapshot();
-        var items = new ScriptItems(serverLevel());
         for (var entry : result.getAsJsonArray("inventory")) {
             var item = entry.getAsJsonObject();
             item.addProperty("wire", items.wire(getInventory().getItem(item.get("slot").getAsInt())));
