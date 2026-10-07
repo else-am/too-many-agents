@@ -47,6 +47,7 @@ export function createBot(initial) {
   const { createWindow } = createWindowFactory(Item);
   const windowKeys = new WeakMap();
   const equipmentKeys = new WeakMap();
+  const playerKeys = new Map();
   let snapshot;
   let lastPhysicsTick;
   const stateWaits = new Set();
@@ -64,6 +65,7 @@ export function createBot(initial) {
     // are translated to the pinned Mineflayer registry by the trusted decoder.
     nativeRegistries: initial.itemRegistries.references,
     entities: {},
+    players: Object.create(null), uuidToUsername: Object.create(null),
     inventory: createWindow(0, 'minecraft:inventory', 'Inventory'),
     currentWindow: null,
     QUICK_BAR_START: 36,
@@ -105,6 +107,7 @@ export function createBot(initial) {
     },
   });
   installEntityQueries(bot);
+  bot._playerFromUUID = uuid => Object.values(bot.players).find(player => player.uuid === uuid);
   const updateState = installState(bot, data.featureTable);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
@@ -225,6 +228,29 @@ export function createBot(initial) {
     if (streamed && previousVehicle !== bot.vehicle) {
       if (bot.vehicle) entityEvents.push(['mount']);
       else if (bot.vehicle === null && previousVehicle) entityEvents.push(['dismount', previousVehicle]);
+    }
+    const presentPlayers = new Set();
+    for (const source of next.players ?? []) {
+      presentPlayers.add(source.username);
+      const key = JSON.stringify(source);
+      let player = bot.players[source.username];
+      const fresh = !player || player.uuid !== source.uuid;
+      if (fresh) {
+        if (player) { delete bot.uuidToUsername[player.uuid]; playerKeys.delete(player.uuid); }
+        player = bot.players[source.username] = {};
+      }
+      const changed = playerKeys.get(source.uuid) !== key;
+      if (changed || fresh) {
+        Object.assign(player, source, { displayName: new ChatMessage(source.displayName), skinData: source.skinData });
+        playerKeys.set(source.uuid, key);
+      }
+      player.entity = Object.values(bot.entities).find(entity => entity.uuid === source.uuid) ?? null;
+      bot.uuidToUsername[source.uuid] = source.username;
+      if (streamed && (fresh || changed)) entityEvents.push([fresh ? 'playerJoined' : 'playerUpdated', player]);
+    }
+    for (const [username, player] of Object.entries(bot.players)) if (!presentPlayers.has(username)) {
+      delete bot.players[username]; delete bot.uuidToUsername[player.uuid]; playerKeys.delete(player.uuid);
+      if (streamed) entityEvents.push(['playerLeft', player]);
     }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
     let experienceChanged = false;

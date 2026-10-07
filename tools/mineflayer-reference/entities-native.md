@@ -87,3 +87,10 @@ the tag is absent. It does not exercise setCustomName(null). Use a native setter
 for the clearing case; command-driven name updates can verify replacement, but
 must not be reported as clearing. Offhand clearing, dismounting, and dropped-item
 damage changes were independently observed in the first command-driven phase.
+
+Connected-player list (before implementation): expose actual integrated-server
+players independently of the nearby entity cache, with stable entries, UUID/name,
+ChatMessage display name, native game mode/ping and optional observed Entity.
+Player join/update/leave events must follow complete hydration; do not fabricate
+an account/player entry for an NPC body. Standard profile skin data is optional.
+Verify the local player remains listed while outside the body observation radius.

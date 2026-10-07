@@ -6,6 +6,11 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.ComponentSerialization;
+import net.minecraft.network.chat.Component;
+import com.mojang.serialization.JsonOps;
+import com.google.gson.JsonParser;
+import java.util.Base64;
+import java.nio.charset.StandardCharsets;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -21,6 +26,42 @@ final class ScriptEntities {
     };
 
     private ScriptEntities() {}
+
+    static JsonArray players(ServerLevel level) {
+        requireServerThread(level);
+        var result = new JsonArray();
+        for (var player : level.getServer().getPlayerList().getPlayers()) {
+            var entry = new JsonObject();
+            entry.addProperty("uuid", player.getStringUUID());
+            entry.addProperty("username", player.getGameProfile().getName());
+            entry.addProperty("gamemode", player.gameMode.getGameModeForPlayer().getId());
+            entry.addProperty("ping", player.connection.latency());
+            entry.addProperty("listed", true);
+            Component name = player.getTabListDisplayName();
+            if (name == null) name = Component.literal(player.getGameProfile().getName());
+            entry.add("displayName", ComponentSerialization.CODEC.encodeStart(
+                level.registryAccess().createSerializationContext(JsonOps.INSTANCE), name).getOrThrow());
+            for (var property : player.getGameProfile().getProperties().get("textures")) {
+                if (property.value().length() > 16384) continue;
+                try {
+                    var textures = JsonParser.parseString(new String(Base64.getDecoder().decode(property.value()), StandardCharsets.UTF_8))
+                        .getAsJsonObject().getAsJsonObject("textures");
+                    if (textures == null || !textures.has("SKIN")) continue;
+                    var skin = textures.getAsJsonObject("SKIN");
+                    if (!skin.has("url")) continue;
+                    var data = new JsonObject();
+                    data.add("url", skin.get("url"));
+                    if (skin.has("metadata")) data.add("model", skin.getAsJsonObject("metadata").get("model"));
+                    if (textures.has("CAPE")) data.add("capeUrl", textures.getAsJsonObject("CAPE").get("url"));
+                    entry.add("skinData", data);
+                } catch (RuntimeException malformed) {
+                    // Optional profile textures must not stop native observations.
+                }
+            }
+            result.add(entry);
+        }
+        return result;
+    }
 
     /** The caller shares one item encoder across inventory and all observed entities. */
     static void enrich(Entity entity, JsonObject result, ScriptItems items) {
