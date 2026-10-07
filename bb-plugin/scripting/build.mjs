@@ -22,6 +22,7 @@ licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'ut
 licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./world-queries.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chat.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'utf8'));

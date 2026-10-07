@@ -13,6 +13,7 @@ import { createRecipeFactory, installRecipeQueries } from './recipes.mjs';
 import { createChatMessageClass } from './chat.mjs';
 import { createEntityClass } from './entities.mjs';
 import { installInventory } from './inventory.mjs';
+import { installWorldQueries } from './world-queries.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -80,24 +81,6 @@ export function createBot(initial) {
         block.entity = JSON.parse(JSON.stringify(snapshot.blocks.entities[index]));
       return block;
     },
-    findBlocks({ point = bot.entity.position, matching, maxDistance = 16, count = 1, useExtraInfo = false }) {
-      if (useExtraInfo) throw new Error('findBlocks useExtraInfo is pending implementation');
-      const matches = typeof matching === 'function' ? matching
-        : block => (Array.isArray(matching) ? matching : [matching]).includes(block.type);
-      const found = [];
-      const { min, size } = snapshot.blocks;
-      for (let y = min[1]; y < min[1] + size[1]; y++)
-        for (let z = min[2]; z < min[2] + size[2]; z++)
-          for (let x = min[0]; x < min[0] + size[0]; x++) {
-            const position = new Vec3(x, y, z);
-            if (position.distanceTo(point) > maxDistance) continue;
-            const block = bot.blockAt(position);
-            if (block && matches(block)) found.push(position);
-          }
-      found.sort((a, b) => a.distanceSquared(point) - b.distanceSquared(point));
-      return found.slice(0, count);
-    },
-    findBlock(options) { const [position] = bot.findBlocks({ ...options, count: 1 }); return position ? bot.blockAt(position) : null; },
     async dig(block, forceLook = true, digFace = 'auto') {
       if (block == null) throw new Error('dig was called with an undefined or null block');
       if (forceLook !== true || digFace !== 'auto') throw new Error('dig look/face options are pending implementation');
@@ -126,6 +109,10 @@ export function createBot(initial) {
   });
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
+  installWorldQueries(bot, { getLoadedBounds() {
+    const { min, size } = snapshot.blocks;
+    return { min: new Vec3(...min), max: new Vec3(...min.map((value, axis) => value + size[axis])) };
+  } });
   class NativeActionError extends Error {}
   async function request(operation, value) {
     try { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
