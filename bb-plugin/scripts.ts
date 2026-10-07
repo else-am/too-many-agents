@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -30,6 +30,16 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
     const started = performance.now();
     const timer = setTimeout(() => controller.abort(new Error('Script deadline exceeded')), timeoutMs);
     const actions: Array<Record<string, unknown>> = [];
+    const observeAction = (state: Record<string, unknown>) => {
+      const record = actions.find(action => action.id === state.id);
+      if (!record) return;
+      // An action reply can arrive before an older queued stream frame.
+      if (state.status === 'running' && record.lastObserved !== 'running') return;
+      record.lastObserved = state.status;
+      record.detail = state.detail;
+      // Keep verified edits even when the final action reply or world is lost.
+      if (record.type === 'route') record.progress = state.result ?? state.progress;
+    };
     let bridgeOperations = 0;
     let began = false;
     let heartbeat: Promise<void> | undefined;
@@ -52,9 +62,10 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       const decodeItem = createItemDecoder(initial.itemRegistries);
       // Repeated equipment/menu/stream copies usually contain identical bytes.
       // Bound both entry count and retained bytes for large books or nested items.
-      const itemCache = new Map<string, { value: ReturnType<typeof encodeItemTransport>; bytes: number }>();
+      const itemCache = new Map<string, { value: ReturnType<typeof encodeItemTransport>; bytes: number; key: string }>();
       let itemCacheBytes = 0;
       const prepareSnapshot = (snapshot: Record<string, unknown>) => {
+        observeAction(object(snapshot.action));
         const hands = object(snapshot.hands), menu = object(hands.menu);
         const entries = [...hands.inventory as unknown[], ...Object.values(object(hands.equipment)),
           ...menu.slots as unknown[], menu.carried];
@@ -66,7 +77,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           if (!cached) {
             const value = encodeItemTransport(decodeItem(wire));
             const bytes = Buffer.byteLength(wire) + Buffer.byteLength(JSON.stringify(value));
-            cached = { value, bytes };
+            cached = { value, bytes, key: createHash('sha256').update(wire).digest('hex') };
             if (bytes <= 8 * 1024 * 1024) {
               while (itemCache.size >= 128 || itemCacheBytes + bytes > 8 * 1024 * 1024) {
                 const oldest = itemCache.keys().next().value!;
@@ -78,6 +89,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
             }
           }
           entry.item = cached.value;
+          entry.itemKey = cached.key;
           delete entry.wire;
         }
         return snapshot;
@@ -91,23 +103,39 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           }
         } catch (error) { if (!signal.aborted) controller.abort(error); }
       })();
+      const startAction = async (request: Record<string, unknown>, requestSignal: AbortSignal) => {
+        const action = await call('action', { action: request }, requestSignal);
+        actions.push({ id: action.id, type: request.type, lastObserved: action.status });
+        if (actions.length > 32) actions.shift();
+        return action;
+      };
+      const awaitAction = async (id: unknown, requestSignal: AbortSignal) => {
+        const record = actions.find(action => action.id === id);
+        if (!record) throw new Error('Action does not belong to this execution');
+        const status = await call('awaitAction', { id }, requestSignal);
+        observeAction(status);
+        return status;
+      };
       const onRequest = async (operation: string, value: unknown, requestSignal: AbortSignal) => {
         const request = object(value);
-        if (operation === 'action') {
-          const action = await call('action', { action: request }, requestSignal);
-          const record: Record<string, unknown> = { id: action.id, type: request.type, lastObserved: action.status };
-          actions.push(record);
-          if (actions.length > 32) actions.shift();
-          const status = action.terminal === true ? action : await call('awaitAction', { id: action.id }, requestSignal);
-          record.lastObserved = status.status;
-          record.detail = status.detail;
-          return status;
+        if (operation === 'startAction') return startAction(request, requestSignal);
+        if (operation === 'awaitAction') return awaitAction(request.id, requestSignal);
+        if (operation === 'action') return awaitAction((await startAction(request, requestSignal)).id, requestSignal);
+        if (operation === 'cancelAction' || operation === 'stopRoute') {
+          if (!actions.some(action => action.id === request.id)) throw new Error('Action does not belong to this execution');
+          try { return await call(operation === 'cancelAction' ? 'cancel' : 'stopRoute', { id: request.id }, requestSignal); }
+          catch (error) {
+            // A missing stop acknowledgement must not permit a replacement
+            // route to start while the old route might still control the body.
+            controller.abort(error);
+            throw error;
+          }
         }
         throw new Error(`Unknown script operation: ${operation}`);
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
         timeoutMs, signal, onRequest,

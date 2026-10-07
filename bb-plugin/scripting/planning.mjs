@@ -50,6 +50,7 @@ function positionOnTop(block) {
 
 /** Install only synchronous planning. The caller owns movements, execution and events. */
 export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
+  const rawPaths = new WeakMap();
   pathfinder.thinkTimeout ??= 5000;
   pathfinder.tickTimeout ??= 40;
   pathfinder.searchRadius ??= -1;
@@ -96,6 +97,7 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
     let result;
     do {
       result = astarContext.compute();
+      rawPaths.set(result, copyPath(result.path));
       result.path = copyPath(result.path);
       if (optimizePath) {
         requireShortcutCapability(true);
@@ -166,4 +168,8 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
     // Keep that entire suffix, including its actions, until execution replans it.
     return shortened.concat(path.slice(prefixLength));
   }
+
+  // Execution needs the selected grid edges even when the public result is
+  // optimized to physical stances. Do not expose mutable AStar-owned records.
+  return { getRawPath: result => copyPath(rawPaths.get(result) ?? []) };
 }

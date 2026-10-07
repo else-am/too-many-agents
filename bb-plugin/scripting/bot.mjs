@@ -1,10 +1,22 @@
 import { Vec3 } from 'vec3';
-import goals from 'mineflayer-pathfinder/lib/goals.js';
+import upstreamGoals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
 import { createBlockClass } from './blocks.mjs';
 import { createItemClass } from './items.mjs';
+import { createWindowFactory } from './windows.mjs';
+import { createWorldView } from './world-view.mjs';
 import { decodeItemTransport } from 'minecraft-item-transport';
 import { EventEmitter } from 'events';
+import { Movements } from './movements.mjs';
+import { installPathfinder } from './pathfinder.mjs';
+
+const goals = { ...upstreamGoals,
+  GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
+    constructor(x, y, z, bot, options) { super(x, y, z, bot.world ?? bot, options); }
+    // Pinned upstream drops the required node argument here.
+    isEnd(node) { return this.goal.isEnd(node); }
+  },
+};
 
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
@@ -20,6 +32,8 @@ export function createBot(initial) {
   };
   const Block = createBlockClass(registry);
   const Item = createItemClass(registry);
+  const { createWindow } = createWindowFactory(Item);
+  const windowKeys = new WeakMap();
   let snapshot;
   let lastPhysicsTick;
   let nextQuickBarSlot = 0;
@@ -38,7 +52,10 @@ export function createBot(initial) {
     // are translated to the pinned Mineflayer registry by the trusted decoder.
     nativeRegistries: initial.itemRegistries.references,
     entities: {},
-    inventory: { slots: new Array(46).fill(null), items() { return this.slots.slice(9, 45).filter(Boolean); } },
+    inventory: createWindow(0, 'minecraft:inventory', 'Inventory'),
+    currentWindow: null,
+    QUICK_BAR_START: 36,
+    quickBarSlot: null,
     blockAt(position, extraInfos = true) {
       const p = position.floored();
       const { min, size, states } = snapshot.blocks;
@@ -114,36 +131,19 @@ export function createBot(initial) {
         bot.on('physicsTick', tickListener);
       });
     },
-    pathfinder: {
-      async goto(goal) {
-        if (!(goal instanceof goals.GoalBlock) && !(goal instanceof goals.GoalNear))
-          throw new Error('This goal is pending native Pathfinder integration');
-        if (goal.isEnd(bot.entity.position.floored())) return;
-        const candidates = [];
-        const range = Math.ceil(Math.sqrt(goal.rangeSq ?? 0));
-        for (let x = goal.x - range; x <= goal.x + range; x++)
-          for (let y = goal.y - range; y <= goal.y + range; y++)
-            for (let z = goal.z - range; z <= goal.z + range; z++) {
-              const p = new Vec3(x, y, z);
-              if (!goal.isEnd(p)) continue;
-              const feet = bot.blockAt(p), head = bot.blockAt(p.offset(0, 1, 0)), floor = bot.blockAt(p.offset(0, -1, 0));
-              if (feet && head && floor && feet.shapes.length === 0 && head.shapes.length === 0 && floor.shapes.length > 0)
-                candidates.push(p);
-            }
-        candidates.sort((a, b) => a.distanceSquared(bot.entity.position) - b.distanceSquared(bot.entity.position));
-        if (!candidates.length) throw new Error('No loaded standing position satisfies the goal');
-        await action({ type: 'walk', position: candidates[0].offset(0.5, 0, 0.5) });
-        if (!goal.isEnd(bot.entity.position.floored())) throw new Error('Native navigation stopped before reaching the goal');
-      },
-    },
   });
+  Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
+  bot.world = createWorldView(position => bot.blockAt(position));
   async function request(operation, value) { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
   async function action(args) {
     const result = await request('action', args);
-    if (snapshot.completedActionSequence < result.sequence)
-      await new Promise(resolve => { stateWaits.add({ sequence: result.sequence, resolve }); });
+    await waitForActionState(result);
     if (result.status !== 'completed') throw new Error(`Action ${result.id}: ${result.status}: ${result.detail ?? ''}`);
     return result;
+  }
+  async function waitForActionState(result) {
+    if (snapshot.completedActionSequence < result.sequence)
+      await new Promise(resolve => { stateWaits.add({ sequence: result.sequence, resolve }); });
   }
   function update(next, streamed = false) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
@@ -180,6 +180,7 @@ export function createBot(initial) {
       }
     }
     snapshot = next;
+    bot.nativeBody = next.nativeBody;
     const present = new Set();
     const entityEvents = [];
     for (const source of [next.body, ...next.entities]) {
@@ -207,10 +208,35 @@ export function createBot(initial) {
       }
     }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
-    bot.inventory.slots.fill(null);
-    for (const entry of next.hands.inventory) { const stack = item(entry); bot.inventory.slots[stack.slot] = stack; }
-    bot.heldItem = bot.inventory.slots[36 + next.hands.selected];
+    const heldBefore = bot.heldItem;
     bot.quickBarSlot = next.hands.selected;
+    const menu = next.hands.menu;
+    const inventorySlots = Array.from({ length: 46 }, () => null);
+    for (const entry of next.hands.inventory) {
+      const slot = entry.slot < 9 ? entry.slot + 36 : entry.slot === 40 ? 45 : entry.slot < 36 ? entry.slot : 44 - entry.slot;
+      inventorySlots[slot] = entry;
+    }
+    if (menu.type === 'minecraft:inventory') {
+      for (const entry of menu.slots) inventorySlots[entry.slot] = entry;
+    }
+    hydrateWindow(bot.inventory, inventorySlots, menu.carried);
+    let opened;
+    const previousWindow = bot.currentWindow;
+    if (menu.type === 'minecraft:inventory') bot.currentWindow = null;
+    else {
+      if (!previousWindow || previousWindow.id !== menu.id || previousWindow.type !== menu.type) {
+        opened = createWindow(menu.id, menu.type, menu.title ?? '', menu.slots.length - 36);
+        if (!opened) throw new Error(`Unknown native window type ${menu.type}`);
+        bot.currentWindow = opened;
+      }
+      hydrateWindow(bot.currentWindow, menu.slots, menu.carried);
+    }
+    bot.entity.equipment = [bot.heldItem, bot.inventory.slots[45], bot.inventory.slots[8],
+      bot.inventory.slots[7], bot.inventory.slots[6], bot.inventory.slots[5]];
+    bot.usingHeldItem = next.hands.usingItem;
+    if (previousWindow && previousWindow !== bot.currentWindow) bot.emit('windowClose', previousWindow);
+    if (opened) bot.emit('windowOpen', opened);
+    if (heldBefore !== bot.heldItem) bot.emit('heldItemChanged', bot.heldItem);
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.emit('blockUpdate', before, after);
@@ -224,7 +250,25 @@ export function createBot(initial) {
       if (next.completedActionSequence >= wait.sequence) { stateWaits.delete(wait); wait.resolve(); }
     }
   }
+  function hydrateWindow(window, entries, carried) {
+    let keys = windowKeys.get(window);
+    if (!keys) { keys = []; windowKeys.set(window, keys); }
+    for (let slot = 0; slot < window.slots.length; slot++) {
+      const entry = entries[slot];
+      const key = entry && entry.count > 0 ? entry.itemKey : null;
+      if (keys[slot] !== key) {
+        keys[slot] = key;
+        // updateSlot assigns this window's slot index, including craft slots.
+        window.updateSlot(slot, entry ? item(entry) : null);
+      }
+    }
+    if (keys.carried !== carried.itemKey) {
+      keys.carried = carried.itemKey;
+      window.selectedItem = item(carried);
+    }
+  }
   update(initial);
   lastPhysicsTick = initial.tick;
-  return { bot, Vec3, goals, update };
+  installPathfinder(bot, { request, waitForActionState, snapshot: () => snapshot });
+  return { bot, Vec3, goals, Movements, update };
 }

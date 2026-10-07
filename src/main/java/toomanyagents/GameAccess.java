@@ -713,6 +713,7 @@ final class GameAccess {
     private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
         var snapshot = observe(current, mob, new JsonObject());
         snapshot.add("hands", controller.hands.scriptSnapshot());
+        snapshot.add("nativeBody", ScriptNavigation.capabilities(mob));
         snapshot.add("action", controller.status(""));
         snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
         snapshot.addProperty("minY", mob.level().getMinBuildHeight());
@@ -766,6 +767,7 @@ final class GameAccess {
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
             case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
             case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
+            case "stopRoute" -> controller.stopRoute(string(args, "id", 80));
             default -> throw error("unknown_script_operation");
         };
     }

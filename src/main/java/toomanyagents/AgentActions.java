@@ -33,6 +33,8 @@ final class AgentActions {
     private BlockState original;
     private boolean mining;
     private boolean approachTargets;
+    private ScriptNavigation route;
+    private boolean travelled;
     private String scriptId, lastScriptId;
     private long scriptDeadline, scriptHeartbeat;
     private CompletableFuture<JsonObject> completion;
@@ -133,7 +135,7 @@ final class AgentActions {
     private JsonObject start(JsonObject request, boolean approachTargets) {
         if (busy()) throw error("action_already_running_cancel_or_wait");
         String type = text(request, "type");
-        if (!TYPES.contains(type)) throw error("unknown_action_type");
+        if (!TYPES.contains(type) && !(type.equals("route") && !approachTargets)) throw error("unknown_action_type");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity")) throw error("position_or_entity_required");
         if (List.of("mine", "place").contains(type) && !request.has("position")) throw error("position_required");
@@ -149,6 +151,12 @@ final class AgentActions {
         }
         if (List.of("place", "interact").contains(type) && args.has("position")) blockFace();
         if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
+        if (type.equals("route")) {
+            var selected = new ScriptNavigation(mob, hands, box);
+            try { selected.start(args); }
+            catch (RuntimeException failure) { selected.stop(); throw failure; }
+            route = selected;
+        }
         kind = type;
         completion = new CompletableFuture<>();
         action = object("id", UUID.randomUUID().toString(), "type", kind, "status", "running", "phase", "starting", "terminal", false, "session", session);
@@ -175,6 +183,15 @@ final class AgentActions {
         return status("");
     }
 
+    JsonObject stopRoute(String id) {
+        var state = status(id);
+        if (action != null && id.equals(text(action, "id")) && busy()) {
+            if (route == null) throw error("action_is_not_route");
+            route.requestStop();
+        }
+        return state;
+    }
+
     void close(String reason) {
         scriptId = null;
         if (stateStream != null) stateStream.fail(error(reason));
@@ -186,6 +203,7 @@ final class AgentActions {
     }
 
     void tick(boolean minecraftAccess) {
+        travelled = false;
         try {
             expireScript();
             if (!minecraftAccess && scripted()) releaseScript();
@@ -193,8 +211,17 @@ final class AgentActions {
             // Explicit pickup must collect and report its own target before it disappears.
             if (minecraftAccess && (!busy() || !kind.equals("pickup"))) hands.pickupNearby();
             if (!busy()) return;
-            if (++ticks > 1200) { finish("timeout", "Action exceeded 60 seconds of game time.", null); return; }
+            if (++ticks > (route == null ? 1200 : 2400)) { finish("timeout", "Action exceeded its game-time limit.", null); return; }
             switch (kind) {
+                case "route" -> {
+                    // The executor owns this tick's travel, including edit waits.
+                    // If it fails after moving, cleanup must not move a second time.
+                    travelled = true;
+                    var progress = route.tick();
+                    action.addProperty("phase", text(progress, "phase"));
+                    action.add("progress", progress.deepCopy());
+                    if ("completed".equals(text(progress, "status"))) finish("completed", "route_finished", progress);
+                }
                 case "walk" -> {
                     var wanted = target();
                     var confined = box.get();
@@ -295,6 +322,9 @@ final class AgentActions {
             if (busy()) finish("failed", failure.getMessage(), null);
             else throw failure;
         } finally {
+            if (scripted() && !travelled) {
+                GameAccess.travelFollowingBody(mob, box.get());
+            }
             if (stateStream != null) {
                 if (stateStream.open()) {
                     try { stateStream.offer(stateSnapshot.get()); }
@@ -358,6 +388,7 @@ final class AgentActions {
         if (goal != target && mob.position().distanceToSqr(goal) < 0.81) throw error("target_out_of_reach_from_box");
         var pos = BlockPos.containing(goal);
         if (mob.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation && !mob.onGround()) {
+            travelled = true;
             GameAccess.travelFollowingBody(mob, confined);
             action.addProperty("phase","landing");
             return;
@@ -405,6 +436,7 @@ final class AgentActions {
         if (path != null && !path.isDone() && !level.isPositionEntityTicking(path.getNextNodePos())) throw error("path_leaves_simulated_chunks");
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
         mob.getNavigation().tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
+        travelled = true;
         GameAccess.travelFollowingBody(mob, confined);
         action.addProperty("phase", "approaching");
         action.add("position", Observations.position(mob.position()));
@@ -441,6 +473,14 @@ final class AgentActions {
     }
 
     private void finish(String status, String detail, JsonObject result) {
+        if (route != null) {
+            route.stop();
+            if (result == null) {
+                result = route.progress();
+                result.addProperty("status", status);
+            }
+            route = null;
+        }
         hands.cancelMine();
         GameAccess.stopFollowingMotion(mob);
         action.addProperty("terminal",true); action.addProperty("status",status); action.addProperty("detail",detail == null ? "action_failed" : detail);

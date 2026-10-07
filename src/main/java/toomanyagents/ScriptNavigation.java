@@ -248,14 +248,14 @@ final class ScriptNavigation {
         clearControls();
     }
 
-    private JsonObject progress() {
+    JsonObject progress() {
         JsonObject result = new JsonObject();
         result.addProperty("status", completed ? "completed" : "running");
         result.addProperty("phase", phase);
         result.addProperty("node", index); result.addProperty("totalNodes", nodes.size()); result.addProperty("ticks", ticks);
         result.addProperty("stopped", stopped);
-        result.addProperty("isMining", mining != null);
-        result.addProperty("isBuilding", phase.equals("building") || phase.equals("placement_stance"));
+        result.addProperty("isMining", active && mining != null);
+        result.addProperty("isBuilding", active && (phase.equals("building") || phase.equals("placement_stance")));
         result.add("position", xyz(mob.position())); result.add("edits", edits.deepCopy());
         return result;
     }
