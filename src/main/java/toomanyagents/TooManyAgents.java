@@ -73,6 +73,9 @@ public final class TooManyAgents {
     public TooManyAgents(IEventBus modBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, (IConfigScreenFactory) (mod, parent) -> TooManyAgentsSettingsScreen.open(parent));
         AgentInventoryMenu.MENUS.register(modBus);
+        BodyFishingHook.ENTITIES.register(modBus);
+        modBus.addListener((net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
+            event.registerEntityRenderer(BodyFishingHook.TYPE.get(), net.minecraft.client.renderer.entity.FishingHookRenderer::new));
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));
         controls = new ClientControls(modBus, () -> agents);

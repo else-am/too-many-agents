@@ -23,7 +23,8 @@ final class Observations {
         var result = new JsonObject();
         result.addProperty("id", entity.getId());
         result.addProperty("uuid", entity.getUUID().toString());
-        result.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        result.addProperty("type", entity instanceof BodyFishingHook ? "minecraft:fishing_bobber"
+            : BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         result.addProperty("name", entity.getName().getString());
         result.add("position", position(entity.position()));
         result.add("velocity", position(entity.getDeltaMovement()));

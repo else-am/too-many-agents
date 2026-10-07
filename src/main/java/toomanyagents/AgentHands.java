@@ -91,6 +91,7 @@ final class AgentHands extends FakePlayer {
     private boolean miningNeedsStop;
     private int lastHandsTick = -1;
     private long nextMeleeAttackTick;
+    private net.minecraft.world.entity.projectile.FishingHook scriptFishing;
     private net.minecraft.world.level.block.entity.SignBlockEntity editedSign;
     private long signEditorExpires;
     private InteractionHand nativeUseHand;
@@ -348,13 +349,59 @@ final class AgentHands extends FakePlayer {
             body.startUsingItem(hand);
             if (!body.isUsingItem()) { reconcileNativeUse(); throw error("native_item_use_rejected"); }
             result = InteractionResult.CONSUME;
-        } else result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
+        } else if (held.is(Items.FISHING_ROD) && fishing == null) result = castFishingRod(held, hand);
+        else result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
             : gameMode.useItem(this, level(), held, hand);
         if (result.shouldSwing()) body.swing(hand);
         save();
         var response = interaction(result);
         response.addProperty("usingItem", isUsingItem() || body.isUsingItem());
         return response;
+    }
+
+    private InteractionResult castFishingRod(ItemStack rod, InteractionHand hand) {
+        if (getCooldowns().isOnCooldown(rod.getItem())) return InteractionResult.PASS;
+        var denied = CommonHooks.onItemRightClick(this, hand);
+        if (denied != null) return denied;
+        int lure = (int) (EnchantmentHelper.getFishingTimeReduction(serverLevel(), rod, this) * 20);
+        int luck = EnchantmentHelper.getFishingLuckBonus(serverLevel(), rod, this);
+        var hook = new BodyFishingHook(this, body, luck, lure);
+        if (!serverLevel().addFreshEntity(hook)) { hook.discard(); throw error("fishing_spawn_rejected"); }
+        level().playSound(null, body.getX(), body.getY(), body.getZ(), net.minecraft.sounds.SoundEvents.FISHING_BOBBER_THROW,
+            net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
+        body.gameEvent(GameEvent.ITEM_INTERACT_START);
+        return InteractionResult.CONSUME;
+    }
+
+    void beginFishing() {
+        syncBody();
+        requireIdleHands();
+        if (!(getMainHandItem().getItem() instanceof net.minecraft.world.item.FishingRodItem))
+            throw error("fishing_rod_required");
+        if (fishing != null && !fishing.isRemoved()) throw error("fishing_already_active");
+        useHeld(InteractionHand.MAIN_HAND);
+        if (fishing == null || fishing.isRemoved() || fishing.getPlayerOwner() != this)
+            throw error("native_fishing_not_started");
+        scriptFishing = fishing;
+    }
+
+    boolean tickFishing() {
+        syncBody();
+        if (scriptFishing == null || fishing != scriptFishing || scriptFishing.isRemoved())
+            throw error("fishing_cancelled");
+        if (!(getMainHandItem().getItem() instanceof net.minecraft.world.item.FishingRodItem))
+            throw error("fishing_rod_changed");
+        if (!scriptFishing.biting) return false;
+        var hook = scriptFishing;
+        useHeld(InteractionHand.MAIN_HAND);
+        if (!hook.isRemoved()) throw error("native_fishing_not_retrieved");
+        scriptFishing = null;
+        return true;
+    }
+
+    void cancelFishing() {
+        if (scriptFishing != null && !scriptFishing.isRemoved()) scriptFishing.discard();
+        scriptFishing = null;
     }
 
     void beginConsume() {
@@ -399,6 +446,8 @@ final class AgentHands extends FakePlayer {
     }
 
     void cancelUse() {
+        cancelFishing();
+        if (fishing != null && !fishing.isRemoved()) fishing.discard();
         editedSign = null;
         requireThread();
         if (nativeUseHand != null) body.stopUsingItem();

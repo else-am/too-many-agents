@@ -24,7 +24,7 @@ function forceValue(force) {
 
 export function installActions(bot, { request, waitForActionState, action, snapshot, enqueueControl, drainControls = async () => {}, isKnownActionError = () => false }) {
   const session = snapshot().session;
-  let activeDig, activeConsume, targetOwner, poisoned, controlFailure;
+  let activeDig, activeConsume, activeFishing, targetOwner, poisoned, controlFailure;
   const stops = new Set();
   bot.targetDigBlock = null;
   bot.targetDigFace = null;
@@ -311,6 +311,40 @@ export function installActions(bot, { request, waitForActionState, action, snaps
       } finally {
         active.terminal = true;
         if (activeConsume === active) activeConsume = undefined;
+      }
+    })();
+    return active.done;
+  };
+  bot.fish = () => {
+    const previous = activeFishing;
+    cancel(previous);
+    const active = { id: null, terminal: false, cancelRequested: false, control: null };
+    activeFishing = active;
+    active.done = (async () => {
+      try {
+        if (previous) await previous.done.catch(() => {});
+        ready(); await drainControls(); ready();
+        if (active.cancelRequested) throw failure('FishingAborted', 'Fishing cancelled');
+        const started = await native('startAction', { type: 'fish' });
+        if (typeof started?.id !== 'string' || !started.id) {
+          poisoned = failure('InvalidNativeReply', 'Native fishing start did not return an action ID'); throw poisoned;
+        }
+        active.id = started.id;
+        if (active.cancelRequested) sendCancel(active);
+        const result = await native('awaitAction', { id: active.id });
+        if (!Number.isSafeInteger(result?.sequence) || result.sequence < 0 || typeof result.status !== 'string') {
+          poisoned = failure('InvalidNativeReply', 'Native fishing wait did not return a terminal sequence'); throw poisoned;
+        }
+        active.terminal = true;
+        await active.control;
+        try { await waitForActionState(result); } catch (error) { poisoned = error; throw error; }
+        ready();
+        if (active.controlError && result.status !== 'completed') throw active.controlError;
+        if (active.cancelRequested && result.status !== 'completed') throw failure('FishingAborted', 'Fishing cancelled');
+        need(result.status === 'completed', 'FishingFailed', `Native fishing failed: ${result.detail ?? result.status}`);
+      } finally {
+        active.terminal = true;
+        if (activeFishing === active) activeFishing = undefined;
       }
     })();
     return active.done;

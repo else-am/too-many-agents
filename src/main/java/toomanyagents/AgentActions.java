@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
     final Mob mob;
@@ -344,6 +344,11 @@ final class AgentActions {
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
                     ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "fish" -> {
+                    if (ticks == 1) hands.beginFishing();
+                    action.addProperty("phase", "waiting_for_bite");
+                    if (hands.tickFishing()) finish("completed", "fishing_retrieved", null);
+                }
                 case "consume" -> {
                     if (ticks == 1) hands.beginConsume();
                     String state = hands.consumptionStatus();
@@ -608,6 +613,7 @@ final class AgentActions {
     }
 
     private void finish(String status, String detail, JsonObject result) {
+        if ("fish".equals(kind)) hands.cancelFishing();
         if (route != null) {
             route.stop();
             if (result == null) {

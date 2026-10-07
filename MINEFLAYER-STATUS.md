@@ -9,8 +9,8 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 - Last built and live-validated implementation: **`880c87b`**.
 - Built artifact: `build/libs/too-many-agents-0.9.0.jar`.
 - Validated JAR SHA-256: `b0448ff51ff20ac5e360ab1aa7e17c8b87cdfa65ed1a7b779ef33587a7f56614`.
-- **Working tree contains newer, uncommitted fishing work. It has not been Java-built or live-tested. The JAR does not include it.** See the fishing handoff below.
-- Final test world was saved/disconnected; test JVM `23109` was stopped. No test client or child assignment remains active at this handoff. The lead owns lifecycle again.
+- **Newer fishing implementation passes the full Java/plugin/package build but is not live-validated.** The build output may be newer than the last validated JAR hash above; do not confuse the two. See the fishing handoff below.
+- At the `880c87b` handoff, the test world was saved/disconnected and JVM `23109` stopped. A new focused fishing run may follow; check the test coordinator before touching lifecycle.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -62,7 +62,8 @@ These are focused results, not proof of the whole API.
 - [x] Final `880c87b` checks: actual body mounted/dismounted; potion and milk consumed with bottle/bucket returned before promise resolution; effects applied/cleared on the body; unrelated inventory preserved; sign and player/game data correct.
 - [x] Actual packaged JAR hashes matched, mod loaded once, project classes/resources excluded; native BB setup succeeded. POV was captured and inspected in the earlier packaged pass.
 - [x] Final Java build, plugin typecheck/bundle and packaging passed for `880c87b`.
-- [ ] New fishing draft: only JavaScript syntax and whitespace checked. No Java build or gameplay verification.
+- [x] Fishing action and body-aware hook adapter compile with Java 21; JavaScript syntax passes.
+- [ ] Fishing packaged/native catch, rendering and cancellation verification.
 - [ ] Exhaustive native conformance, all body species, all lifecycle combinations and paired live Mineflayer-server comparisons.
 
 Key evidence (local BB thread storage):
@@ -76,7 +77,8 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 
 ## Still to implement or finish
 
-- [ ] **Fishing:** finish the draft, body-aware bobber/line rendering, then native catch/cancellation verification.
+- [x] **Fishing implementation:** scoped action, native bite/retrieval/loot, cancellation and a body-aware hook with native renderer.
+- [ ] **Fishing verification:** actual catch, loot/XP/durability, rendering and scoped cancellation.
 - [ ] **Vehicle steering/riding controls:** mounting alone is implemented; steering is not.
 - [ ] **Creative gameplay API:** arbitrary item/component setters and remaining creative movement APIs. Existing physical `creative_item` is not the full Mineflayer creative API.
 - [ ] **Bed/sleep/wake and remaining body-specific gameplay:** determine truthful native-body behavior without inventing player hunger or other unavailable state.
@@ -95,24 +97,26 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 
 Connection/account setup and Mineflayer's internal packet client are the agreed inapplicable pieces. Multiplayer and arbitrary third-party plugin compatibility are not promised. Other unclear APIs remain pending review rather than automatically excluded. Use [the catalog guide](tools/mineflayer-reference/README.md) and pinned source to find omissions; this grouped checklist is not the complete declaration inventory.
 
-## Fishing draft: resume here
+## Fishing: resume here
 
-Uncommitted files:
+Implementation files:
 
 - `bb-plugin/scripting/actions.mjs`: async `bot.fish()` with scoped start/wait/cancel and replacement handling, following the existing consume lifecycle.
 - `src/main/java/toomanyagents/AgentHands.java`: begin/tick/cancel fishing through the existing native interaction proxy; native rod use handles retrieval, loot, XP and durability.
 - `src/main/java/toomanyagents/AgentActions.java`: bounded `fish` action and terminal cleanup.
 - `src/main/resources/META-INF/accesstransformer.cfg`: access to native `FishingHook.biting`, avoiding guessed particle/timer completion.
+- `src/main/java/toomanyagents/BodyFishingHook.java`: registered native-hook subclass, body self-collision exclusion, native projectile launch, and a render-only client owner adapter.
+- `TooManyAgents.java` registers the hook/renderer; `Observations.java` exposes its familiar `fishing_bobber` name.
 - [Prewritten scenarios](tools/mineflayer-reference/fishing-native-scenarios.md).
 
-**Important unresolved issue:** FishingHook requires a Player owner. The server-side interaction proxy can own it, but vanilla client bobber reconstruction expects a tracked player and rejects that proxy. Do not claim visible bobber/line support or silently add a network player. Design a body-aware rendering/ownership adapter, retain native mechanics, then build and verify. Also review replacement/cancellation and cleanup before treating this draft as usable.
+The player-owner constraint now has an implementation: the server keeps the existing body-owned interaction proxy, while a client-only, unregistered render adapter follows the actual body. No network player or account is created. The hook excludes the visible body/vehicle from its own collision and retains native fishing timing, loot, XP and rod damage. Its launch uses Minecraft's projectile helper rather than copying exact player casting coordinates.
 
-Do not discard these edits or mistake the existing JAR for a build of them. The next Java build must regenerate access-transformed artifacts.
+**Next:** package and run one focused native cast/replacement/catch check. Confirm the bobber and line render, native loot/XP and durability change, and cancellation removes only this body's hook. Compilation alone does not establish those outcomes. Access-transformed artifacts have been regenerated successfully.
 
 ## Working approach and logistics
 
 - Keep porting first; run only important new/changed E2E cases. Do not repeat all passing suites or chase irrelevant coordinate precision. Wrong targets, item loss, false success and ownership failures still matter.
-- Implementation children: BB threads, Astra as appropriate. Dedicated test coordinator: `thr_xykqkgui57` (Codex 6.1 Sol medium); in-world executor: `thr_tp9qyhq6ed` (Codex 6.1 Sol low). Both are idle at this handoff. Never give overlapping lifecycle ownership.
+- Implementation children: BB threads, Astra as appropriate. Dedicated test coordinator: `thr_xykqkgui57` (Codex 6.1 Sol medium); in-world executor: `thr_tp9qyhq6ed` (Codex 6.1 Sol low). Check their current BB status before resuming. Never give overlapping lifecycle ownership.
 - Test body UUID: `3793b7e5-d567-45f5-8767-8ca5151863a0`, bound to the in-world executor. Re-observe fixtures; do not assume historical positions/inventory.
 - Use `tools/build build`, then separately `tools/build runPackagedClient -PpackagedJarRun -PdevWorld`. Follow AGENTS.md for exact-PID shutdown and native setup. The npm cache override used successfully is `npm_config_cache="$PWD/.local/npm-cache"`.
 - Only use isolated `run/saves/too-many-agents-development`; never personal `run/play`. Save/disconnect before stopping the verified JVM. Never manage/restart the user's BB installation.
