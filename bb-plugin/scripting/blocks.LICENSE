@@ -1,0 +1,175 @@
+Attribution for blocks.mjs
+==========================
+
+This is a PC Minecraft 1.21.1 adaptation of prismarine-block 1.23.0
+(index.js and blockEntity.js), including biome fallback behavior from
+prismarine-biome 1.4.0 (index.js), NBT builders and simplification from
+prismarine-nbt 2.8.0 (nbt.js), and the sign plain-text component parser,
+formatter, sanitizer and string nesting from prismarine-chat 1.13.0
+(index.js, format.js and MessageBuilder.js).
+
+Changes remove other Minecraft versions, Bedrock support, dynamic requires,
+binary NBT I/O, and chat functionality not observable through Block. Registry
+data is supplied by the build. This module does not expose ChatMessage or an
+NBT serialization API.
+
+Upstream repositories:
+https://github.com/PrismarineJS/prismarine-block
+https://github.com/PrismarineJS/prismarine-biome
+https://github.com/PrismarineJS/prismarine-nbt
+https://github.com/PrismarineJS/prismarine-chat
+
+The installed prismarine-block, prismarine-biome and prismarine-nbt packages
+contain MIT declarations in package.json but no LICENSE file. Their original
+package metadata, including author and license declarations, is retained
+verbatim below. No copyright owner or year has been invented for them.
+The prismarine-chat license is reproduced verbatim here:
+
+MIT License
+
+Copyright (c) 2020 PrismarineJS
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+----- prismarine-block/package.json -----
+
+{
+  "name": "prismarine-block",
+  "version": "1.23.0",
+  "description": "Represent a minecraft block with its associated data",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha --reporter spec --exit",
+    "pretest": "npm run lint",
+    "fix": "standard --fix",
+    "lint": "standard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrismarineJS/prismarine-block.git"
+  },
+  "dependencies": {
+    "minecraft-data": "^3.38.0",
+    "prismarine-biome": "^1.1.0",
+    "prismarine-chat": "^1.5.0",
+    "prismarine-item": "^1.10.1",
+    "prismarine-nbt": "^2.0.0",
+    "prismarine-registry": "^1.1.0"
+  },
+  "devDependencies": {
+    "expect": "^30.0.5",
+    "minecraft-protocol": "^1.30.0",
+    "minecraft-wrap": "^1.4.0",
+    "mocha": "^11.0.1",
+    "prismarine-block": "file:",
+    "standard": "^17.1.0"
+  },
+  "keywords": [
+    "prismarine",
+    "minecraft",
+    "block",
+    "js"
+  ],
+  "author": "Romain Beaumont <romain.rom1@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/PrismarineJS/prismarine-block/issues"
+  }
+}
+
+
+----- prismarine-biome/package.json -----
+
+{
+  "name": "prismarine-biome",
+  "version": "1.4.0",
+  "description": "Represent a minecraft biome with its associated data",
+  "main": "index.js",
+  "typings": "index.d.ts",
+  "scripts": {
+    "test": "npm run lint",
+    "fix": "standard --fix",
+    "lint": "standard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PrismarineJS/prismarine-biome.git"
+  },
+  "peerDependencies": {
+    "prismarine-registry": "^1.1.0"
+  },
+  "devDependencies": {
+    "standard": "^17.0.0"
+  },
+  "keywords": [
+    "biome",
+    "minecraft",
+    "prismarine"
+  ],
+  "author": "Romain Beaumont <romain.rom1@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/PrismarineJS/prismarine-biome/issues"
+  },
+  "dependencies": {}
+}
+
+
+----- prismarine-nbt/package.json -----
+
+{
+  "name": "prismarine-nbt",
+  "version": "2.8.0",
+  "description": "A parser and serializer for NBT archives",
+  "keywords": [
+    "nbt",
+    "minecraft"
+  ],
+  "homepage": "https://github.com/prismarinejs/prismarine-nbt",
+  "author": "roblabla <robinlambertz+dev@gmail.com>",
+  "maintainers": [
+    "roblabla <robinlambertz+dev@gmail.com",
+    "Will Franzen <wtfranzen@gmail.com> (http://will.xyz/)",
+    "Dennis Bartlett <bartlett.dc.1@gmail.com>",
+    "Romain Beaumont <romain.rom1@gmail.com>"
+  ],
+  "main": "nbt",
+  "types": "./typings/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prismarinejs/prismarine-nbt.git"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "chai": "^6.2.1",
+    "mocha": "^11.0.1",
+    "standard": "^17.0.0"
+  },
+  "scripts": {
+    "test": "mocha --reporter spec",
+    "pretest": "npm run lint",
+    "lint": "standard",
+    "fix": "standard --fix"
+  },
+  "dependencies": {
+    "protodef": "^1.18.0"
+  },
+  "license": "MIT"
+}
