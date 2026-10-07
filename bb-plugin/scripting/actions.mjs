@@ -259,6 +259,14 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     control({ type: 'swing', offhand: arm !== 'right', showHand: !!showHand });
   };
   bot.useOn = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
+  bot.updateSign = (block, text, back = false) => {
+    const lines = text.split('\n');
+    if (lines.length > 4 || lines.some(line => line.length > 45)) {
+      bot.emit('error', new Error('Signs require at most four lines of 45 characters')); return;
+    }
+    while (lines.length < 4) lines.push('');
+    control({ type: 'update_sign', ...observed(block), lines, front: !back });
+  };
   bot.mount = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
   bot.dismount = () => {
     if (!bot.vehicle) { bot.emit('error', new Error('dismount: not mounted')); return; }

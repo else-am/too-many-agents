@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
     final Mob mob;
@@ -150,12 +150,12 @@ final class AgentActions {
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
-        if (List.of("mine", "place", "place_entity").contains(type) && !request.has("position")) throw error("position_required");
+        if (List.of("mine", "place", "place_entity", "update_sign").contains(type) && !request.has("position")) throw error("position_required");
         if (List.of("give", "attack").contains(type) && !request.has("entity")) throw error("entity_required");
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
-            if (List.of("mine", "place", "interact", "place_entity").contains(type)) {
+            if (List.of("mine", "place", "interact", "place_entity", "update_sign").contains(type)) {
                 var level = (ServerLevel) mob.level();
                 if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
                 if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
@@ -352,6 +352,18 @@ final class AgentActions {
                 }
                 case "release" -> finish("completed", "released", hands.releaseHeld());
                 case "dismount" -> finish("completed", "dismounted", hands.dismountBody());
+                case "update_sign" -> {
+                    if (!args.has("lines") || !args.get("lines").isJsonArray() || args.getAsJsonArray("lines").size() != 4)
+                        throw error("invalid_sign_lines");
+                    var lines = new ArrayList<String>();
+                    for (var line : args.getAsJsonArray("lines")) {
+                        if (!line.isJsonPrimitive() || !line.getAsJsonPrimitive().isString() || line.getAsString().length() > 45)
+                            throw error("invalid_sign_line");
+                        lines.add(line.getAsString());
+                    }
+                    finish("completed", "sign_updated", hands.updateSign(BlockPos.containing(position(args)),
+                        !args.has("front") || args.get("front").getAsBoolean(), lines));
+                }
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
                 case "menu_click" -> {
                     int menuId = integer(args, "menuId", -1), slot = integer(args, "slot", -1), button = integer(args, "button", 0);

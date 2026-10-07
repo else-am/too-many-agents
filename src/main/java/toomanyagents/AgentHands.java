@@ -91,6 +91,8 @@ final class AgentHands extends FakePlayer {
     private boolean miningNeedsStop;
     private int lastHandsTick = -1;
     private long nextMeleeAttackTick;
+    private net.minecraft.world.level.block.entity.SignBlockEntity editedSign;
+    private long signEditorExpires;
     private InteractionHand nativeUseHand;
     private ItemStack creativeUseStack = ItemStack.EMPTY;
     private String nativeUseOutcome = "idle";
@@ -387,6 +389,7 @@ final class AgentHands extends FakePlayer {
     }
 
     void cancelUse() {
+        editedSign = null;
         requireThread();
         if (nativeUseHand != null) body.stopUsingItem();
         reconcileNativeUse();
@@ -513,11 +516,6 @@ final class AgentHands extends FakePlayer {
                 result = CommonHooks.onInteractEntityAt(this, target, localHit, InteractionHand.MAIN_HAND);
                 if (result == null) result = target.interactAt(this, localHit, InteractionHand.MAIN_HAND);
             }
-            if (isPassenger()) {
-                var vehicle = getVehicle();
-                stopRiding();
-                if (!body.startRiding(vehicle)) throw error("body_mount_rejected");
-            }
         }
         finally {
             if (containerMenu == oldMenu) { menuOrigin = oldOrigin; menuEntity = oldEntity; }
@@ -527,6 +525,38 @@ final class AgentHands extends FakePlayer {
         var response = interaction(result);
         response.add("menu", menuSnapshot());
         return response;
+    }
+
+    @Override
+    public boolean startRiding(Entity vehicle, boolean force) {
+        // FakePlayer refuses riding; the native interaction mounts our visible body.
+        return body != null && body.startRiding(vehicle, force);
+    }
+
+    @Override
+    public void openTextEdit(net.minecraft.world.level.block.entity.SignBlockEntity sign, boolean front) {
+        // Sign ticks cannot find an unlisted FakePlayer; retain the native grant locally.
+        editedSign = sign;
+        signEditorExpires = level().getGameTime() + 1200;
+    }
+
+    JsonObject updateSign(BlockPos position, boolean front, List<String> lines) {
+        syncBody();
+        requireIdleHands();
+        checkBlockAccess(position);
+        if (!canInteractWithBlock(position, 0)) throw error("sign_out_of_reach");
+        if (!(level().getBlockEntity(position) instanceof net.minecraft.world.level.block.entity.SignBlockEntity sign))
+            throw error("target_not_sign");
+        var editor = sign.getPlayerWhoMayEdit();
+        if (sign.isWaxed() || editedSign != sign || level().getGameTime() > signEditorExpires
+            || editor != null && !getUUID().equals(editor)) throw error("sign_not_editable");
+        if (getTextFilter() != net.minecraft.server.network.TextFilter.DUMMY) throw error("sign_text_filter_unavailable");
+        sign.setAllowedPlayerEditor(getUUID());
+        editedSign = null;
+        sign.updateSignText(this, front, lines.stream().map(net.minecraft.server.network.FilteredText::passThrough).toList());
+        for (int i = 0; i < 4; i++)
+            if (!sign.getText(front).getMessage(i, false).getString().equals(lines.get(i))) throw error("sign_update_failed");
+        return status("sign_updated");
     }
 
     JsonObject dismountBody() {

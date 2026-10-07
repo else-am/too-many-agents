@@ -61,3 +61,12 @@ body, not its invisible hands, on the vehicle. mount/dismount return void; vehic
 and mount/dismount events come from observed native relationships. Check a boat,
 occupied/rejected ride, dismount and reopening; riding must not also run standalone
 body travel. Vehicle steering remains separate pending work.
+
+## Sign text (before implementation)
+
+Open an unwaxed native sign with activateBlock, then updateSign synchronously and
+await a tick/control drain. Check front/back text and blank lines through native
+block-entity NBT. Reject waxed signs, another editor, stale observed block state,
+out-of-reach signs, more than four lines and lines over 45 characters. Preserve
+sign color/glow and existing back/front text on the untouched side. Editing
+requires the native sign editor acquired by interaction; it is not a remote setter.
