@@ -101,12 +101,7 @@ final class ScriptNavigation {
         JsonArray raw = request.getAsJsonArray("nodes");
         if (raw == null || raw.size() > MAX_NODES) throw error("route_node_limit");
         int changes = 0;
-        BlockPos previous = BlockPos.containing(start);
-        // The planner represents fractional supports (slabs/carpet) by the
-        // cell above their occupied cell. Validate that offset against this body.
-        if (mob.onGround() && start.y - previous.getY() > 0.001
-            && !level.getBlockState(previous).getCollisionShape(level, previous, CollisionContext.of(mob)).isEmpty())
-            previous = previous.above();
+        BlockPos previous = logicalPosition(start);
         for (JsonElement element : raw) {
             JsonObject node = element.getAsJsonObject().deepCopy();
             BlockPos pos = integerPosition(node);
@@ -192,7 +187,7 @@ final class ScriptNavigation {
                     place(node.getAsJsonArray("toPlace").get(placeIndex).getAsJsonObject());
                 } else {
                     target = destination(integerPosition(node));
-                    if (arrived(target)) { clearControls(); edgeArrived = true; }
+                    if (arrivedAtNode(target)) { clearControls(); edgeArrived = true; }
                     else if (mob.isInWater() || mob.onClimbable() || waterOrClimb(integerPosition(node))) {
                         specialTravel(target);
                     } else {
@@ -207,7 +202,7 @@ final class ScriptNavigation {
             if (predicted != null && mob.position().distanceTo(predicted.after) > 0.075)
                 throw error("route_trajectory_changed");
             if (predicted != null) frameIndex++;
-            if (edgeArrived && arrived(target)) finishEdge();
+            if (edgeArrived && arrivedAtNode(target)) finishEdge();
             return progress();
         } catch (RuntimeException failure) {
             stop();
@@ -380,12 +375,20 @@ final class ScriptNavigation {
             if (!mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value())) throw error("route_cannot_swim");
             phase = "swimming";
             steer(goal, false);
-            if (goal.y > mob.getY() + 0.1) mob.jumpInFluid(NeoForgeMod.WATER_TYPE.value());
-            else if (goal.y < mob.getY() - 0.1) mob.sinkInFluid(NeoForgeMod.WATER_TYPE.value());
+            BlockPos node = integerPosition(nodes.get(index));
+            // Aim inside a water cell, not at its lower goal plane. Keep the
+            // collision-shape landing height when swimming out onto dry support.
+            double swimY = level.getFluidState(node).is(FluidTags.WATER) ? node.getY() + 0.5 : goal.y;
+            double velocityY = mob.getDeltaMovement().y;
+            double nextY = mob.getY() + velocityY;
+            // Mob.jumpInFluid adds 0.3 when canFloat is false. Do not stack
+            // impulses while already rising, or sink impulses while descending.
+            if (nextY < swimY && velocityY <= 0) mob.jumpInFluid(NeoForgeMod.WATER_TYPE.value());
+            else if (nextY > swimY && velocityY >= 0) mob.sinkInFluid(NeoForgeMod.WATER_TYPE.value());
         } else if (mob.onClimbable()) {
             phase = "climbing";
             steer(goal, false);
-            mob.setJumping(goal.y > mob.getY() + 0.1);
+            mob.setJumping(goal.y > mob.getY());
         } else {
             phase = "moving";
             steer(goal, false);
@@ -589,6 +592,25 @@ final class ScriptNavigation {
     private boolean settled() { return mob.onGround() || mob.isInWater() || mob.onClimbable(); }
     private boolean arrived(Vec3 goal) {
         return goal.subtract(mob.position()).horizontalDistance() < 0.12 && Math.abs(goal.y - mob.getY()) < 0.12 && settled();
+    }
+
+    private BlockPos logicalPosition(Vec3 position) {
+        BlockPos cell = BlockPos.containing(position);
+        // Fractional supports represent the cell above their occupied shape;
+        // swimming/climbing feet use their actual integer cell.
+        if (mob.onGround() && position.y - cell.getY() > 0.001
+            && !level.getBlockState(cell).getCollisionShape(level, cell, CollisionContext.of(mob)).isEmpty())
+            return cell.above();
+        return cell;
+    }
+
+    private boolean arrivedAtNode(Vec3 goal) {
+        BlockPos node = integerPosition(nodes.get(index));
+        if (!settled() || !logicalPosition(mob.position()).equals(node)
+            || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
+        // Fluid/climb nodes denote a cell, not a floor at its bottom plane.
+        // Dry landings still require the resolved collision-shape height.
+        return waterOrClimb(node) || Math.abs(goal.y - mob.getY()) < 0.12;
     }
 
     private Vec3 destination(BlockPos node) {
