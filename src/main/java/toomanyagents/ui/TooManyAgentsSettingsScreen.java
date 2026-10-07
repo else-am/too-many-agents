@@ -1,18 +1,26 @@
 package toomanyagents.ui;
 
 import java.util.ArrayList;
+import java.nio.file.Path;
+import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import toomanyagents.TooManyAgentsClientSettings;
+import toomanyagents.BbSetup;
 
 /** Installation-wide preferences; each change saves immediately. */
 public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     private final Screen parent;
     private final AgentUiAccess access;
     private final TooManyAgentsClientSettings settings = TooManyAgentsClientSettings.get();
+    private final BbSetup setup = BbSetup.get();
+    private BbSetup.View bb = setup.view();
+    private String bbPath = BbSetup.locationLabel(bb.cli());
+    private long bbPathApplyAt;
+    private boolean details, confirmInstall;
 
     public TooManyAgentsSettingsScreen(Screen parent) { this(parent, null); }
     /** With access (from inside a world), the screen also links to this world's archive. */
@@ -32,6 +40,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
 
     @Override protected void init() {
         begin();
+        bbConnection();
         section("Notifications");
         toggle("Notification sound", settings.notificationSound(), v -> { settings.setNotificationSound(v); rebuildForm(); }, true)
             .setTooltip(Tooltip.create(Component.literal("A quiet sound for a new unread reply or request for attention.")));
@@ -52,8 +61,86 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         done();
     }
 
+    private void bbConnection() {
+        section("BB connection");
+        note(bb.message());
+        String installLabel = setup.development() ? "Reload plugin…" : bb.pluginVersion().isBlank() ? "Install plugin…" : "Reinstall plugin…";
+        boolean enabled = !bb.busy() && bb.action() != BbSetup.Action.WAIT;
+        if (bb.instances().size() > 1) {
+            choice("Use BB", bb.instanceId(), bb.instances().stream()
+                .map(i -> new Choice(i.id(), i.label())).toList(), setup::select, enabled);
+        } else if (bb.instances().size() == 1 && !bb.instanceId().equals(bb.instances().getFirst().id())) {
+            // Keep the saved choice until the user deliberately switches installations.
+            action("BB found", "Use detected BB", () -> setup.select(bb.instances().getFirst().id()), enabled);
+        }
+        if (bb.bbNotFound()) {
+            note("Install and open BB, then return here. Minecraft will connect automatically.");
+            action("", "Get BB…", () -> net.minecraft.Util.getPlatform().openUri(java.net.URI.create("https://getbb.app/")), true);
+        } else if (bb.action() == BbSetup.Action.ALLOW_UPDATES) {
+            note("Let this mod install and update its Minecraft plugin in BB.");
+            action("", "Allow plugin installation and updates", () -> setup.automatic(true), enabled);
+        } else if (bb.action() == BbSetup.Action.RESTORE && !confirmInstall) {
+            action("", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled);
+        }
+        action("", details ? "Hide connection details" : "Connection details…", () -> { details = !details; rebuildForm(); }, true);
+        if (details) {
+            if (setup.development()) value("Plugin source", "This checkout (development)");
+            else toggle("Plugin auto-updates", bb.automatic(), setup::automatic, enabled)
+                .setTooltip(Tooltip.create(Component.literal("Allow this mod to install and update its Minecraft plugin in the selected BB.")));
+            value("Mod version", BbSetup.version());
+            value("Plugin version", bb.pluginVersion().isBlank() ? "Not connected" : bb.pluginVersion());
+            bb.instances().stream().filter(i -> i.id().equals(bb.instanceId())).findFirst()
+                .ifPresent(i -> value("BB data location", i.label()));
+            if (!confirmInstall && bb.action() != BbSetup.Action.RESTORE)
+                action("Plugin", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled && !bb.cli().isBlank());
+        }
+        if (confirmInstall) {
+            note((setup.development() ? "Reload the plugin from this checkout?" : "Install the bundled Minecraft plugin " + BbSetup.version() + "?")
+                + " Agents’ Minecraft actions will stop briefly. Your world stays open.");
+            if (!bb.pluginVersion().isBlank() && !bb.pluginVersion().equals(BbSetup.version()))
+                note("This replaces plugin version " + bb.pluginVersion() + " with " + BbSetup.version() + ".");
+            actions("", setup.development() ? "Reload plugin" : "Install plugin", () -> { confirmInstall = false; setup.install(); rebuildForm(); },
+                "Cancel", () -> { confirmInstall = false; rebuildForm(); }, enabled);
+        }
+        if (details || bb.needsLocation()) {
+            note("If detection fails, paste the path to your BB app or executable.");
+            input("BB app location", bbPath, 4096, value -> {
+                bbPath = value;
+                bbPathApplyAt = System.currentTimeMillis() + 700;
+            }, enabled);
+        }
+    }
+
+    private void useBbPath() {
+        bbPathApplyAt = 0;
+        if (!bbPath.equals(BbSetup.locationLabel(setup.view().cli()))) setup.chooseCli(bbPath);
+    }
+
+    @Override public void onFilesDrop(List<Path> files) {
+        if ((details || bb.needsLocation()) && files.size() == 1 && !bb.busy()) {
+            bbPath = files.getFirst().toString(); useBbPath(); rebuildForm();
+        }
+    }
+
+    @Override public void tick() {
+        super.tick();
+        if (bbPathApplyAt != 0 && System.currentTimeMillis() >= bbPathApplyAt && !setup.view().busy()) useBbPath();
+        var latest = setup.view();
+        if (!latest.equals(bb)) {
+            boolean unchanged = bbPath.equals(BbSetup.locationLabel(bb.cli()));
+            bb = latest;
+            if (unchanged) bbPath = BbSetup.locationLabel(bb.cli());
+            rebuildForm();
+        }
+    }
+
+    @Override public boolean isPauseScreen() { return false; }
+
     // Linked screens return to whatever holds this form.
     private Screen back() { return docked() ? minecraft.screen : this; }
 
-    @Override public void onClose() { leave(parent); }
+    @Override public void onClose() {
+        if (bbPathApplyAt != 0) useBbPath();
+        leave(parent);
+    }
 }

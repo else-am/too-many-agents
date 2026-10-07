@@ -268,7 +268,7 @@ final class GameAccess {
             JsonObject result;
             String operation = JsonState.text(request,"operation"), dimension = player(current).level().dimension().location().toString();
             try { result = operation.equals("world-resolve") ? state.resolve(JsonState.text(request,"choice"))
-                : operation.equals("world-project") ? state.project(JsonState.text(request,"projectId"))
+                : operation.equals("world-project") ? state.project(JsonState.text(request,"bbInstanceId"),JsonState.text(request,"projectId"))
                 : operation.startsWith("station-") ? state.stations(request,dimension)
                 : state.bounds(request,dimension);
             } catch (java.io.IOException failure) { throw new IllegalStateException("Could not save world data.",failure); }

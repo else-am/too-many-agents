@@ -9,13 +9,15 @@ import { minecraftAgents } from "./agents.js";
 import { minecraftProjects } from "./projects.js";
 import { describe } from "./protocol.js";
 import { savePovSnapshot } from "./images.js";
+import { publishDiscovery } from "./discovery.js";
 
 export default async function minecraft(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
   const threads = minecraftThreads(bb, worlds);
   const projects = minecraftProjects(bb, worlds);
   const agents = minecraftAgents(bb, worlds, threads, projects);
-  registerGameApi(bb, worlds, threads, agents, projects);
+  const setup = publishDiscovery(bb, worlds);
+  registerGameApi(bb, worlds, threads, agents, projects, setup.check);
   communicationNotices(bb, worlds);
   registerMinecraftCli(bb, worlds, agents);
 

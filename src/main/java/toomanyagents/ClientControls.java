@@ -263,10 +263,14 @@ public final class ClientControls {
                     return;
                 }
                 var agents = service.get();
-                if (agents == null || !client.hasSingleplayerServer() || client.level == null) {
+                boolean setupScreen = client.screen instanceof TooManyAgentsSettingsScreen;
+                boolean setupInput = DevelopmentWorld.ENABLED && client.level == null && client.getSingleplayerServer() == null
+                    && (action.equals("bb_setup") || setupScreen && java.util.Set.of("click","hover","text","key","close","scroll").contains(action));
+                if (!setupInput && (agents == null || !client.hasSingleplayerServer() || client.level == null)) {
                     throw new IllegalStateException("Open a local singleplayer world first");
                 }
                 switch (action) {
+                    case "bb_setup" -> client.setScreen(TooManyAgentsSettingsScreen.open(client.screen));
                     case "usage" -> {
                         agents.usage().whenComplete((value, failure) -> {
                             if (failure != null) result.completeExceptionally(failure);
@@ -554,6 +558,7 @@ public final class ClientControls {
         if (screen instanceof AgentInventoryScreen inventory) reply.add("inventory", inventory.inventoryState());
         if (screen instanceof AgentApprovalScreen approval) reply.add("approval", approval.diagnostics());
         if (screen instanceof AgentQuestionScreen question) reply.add("question", question.diagnostics());
+        if (screen instanceof TooManyAgentsSettingsScreen || screen instanceof toomanyagents.ui.AgentWorkspaceScreen) reply.add("bbSetup", JsonState.object("state", BbSetup.get().view()).get("state"));
         if (inventoryAgents.supports(screen)) reply.add("inventoryAgents", inventoryAgents.diagnostics());
         reply.addProperty("width", client.getWindow().getGuiScaledWidth());
         reply.addProperty("height", client.getWindow().getGuiScaledHeight());

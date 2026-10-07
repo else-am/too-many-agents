@@ -92,10 +92,10 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
           thread = await bb.sdk.threads.get({ threadId });
           const view = await read(thread);
           update = {
-            view,
+            view: thread.deletedAt != null ? { ...view, status: "disconnected", error: "This conversation is unavailable in BB." } : view,
             state:
               view.thread.deletedAt != null
-                ? "deleted"
+                ? "disconnected"
                 : view.conversationArchived
                   ? "suspended"
                   : "present",
@@ -103,11 +103,8 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
             projectId: view.thread.projectId,
           };
         } catch (error) {
-          // Disconnection must never be mistaken for deletion.
-          update =
-            !thread && error instanceof Error && "status" in error && error.status === 404
-              ? { state: "deleted" }
-              : { view: { error: describe(error) } };
+          // A missing conversation leaves its saved binding intact, just like an offline BB.
+          update = { state: "disconnected", view: { error: describe(error) } };
         }
         if (!disposed) await worlds.callback(live, "body.sync", { agentId, threadId, ...update });
       });

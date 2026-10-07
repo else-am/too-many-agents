@@ -4,11 +4,13 @@ plugins {
 }
 
 group = 'toomanyagents'
-version = '0.8.0'
+// The plugin manifest is the single release version for both halves.
+version = new groovy.json.JsonSlurper().parse(file('bb-plugin/package.json')).version
 base.archivesName = 'too-many-agents'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
+def clientGameDirectory = file(providers.gradleProperty('personalDev').isPresent() ? 'run/play' : 'run')
 repositories { mavenCentral() }
 def imageLibraries = ['com.twelvemonkeys.imageio:imageio-webp', 'com.twelvemonkeys.imageio:imageio-core',
     'com.twelvemonkeys.imageio:imageio-metadata', 'com.twelvemonkeys.common:common-lang',
@@ -29,7 +31,7 @@ dependencies {
     }
 }
 def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
-    delete fileTree('run/mods') { include 'too-many-agents*.jar' }
+    delete fileTree(new File(clientGameDirectory, 'mods')) { include 'too-many-agents*.jar' }
 }
 // A fresh test run starts muted, without the narrator prompt or tutorial toasts.
 // Existing options are left alone.
@@ -60,12 +62,9 @@ neoForge {
     runs {
         client {
             client()
+            systemProperty 'too_many_agents.devPlugin', project.file('bb-plugin').absolutePath
             taskBefore cleanStagedTooManyAgents
-            if (providers.gradleProperty('hotReload').isPresent()) {
-                gameDirectory = project.file(providers.gradleProperty('hotReloadTest').isPresent() ? 'run' : 'run/play')
-                jvmArgument '-XX:+AllowEnhancedClassRedefinition'
-                jvmArgument '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0'
-            }
+            gameDirectory = clientGameDirectory
             if (providers.gradleProperty('devWorld').isPresent()) {
                 taskBefore quietTestOptions
                 systemProperty 'too_many_agents.devWorld', 'true'
@@ -97,26 +96,6 @@ if (!packagedJarRun) {
     }
 }
 
-// Prepare NeoForge's normal launch, then let tools/dev own the JVM so Gradle is
-// free to compile changes while Minecraft stays open.
-if (providers.gradleProperty('hotReload').isPresent()) {
-    tasks.named('runClient') {
-        doFirst {
-            classpath(classpathProvider)
-            def launchCommand = [javaLauncher.get().executablePath.asFile.absolutePath] + allJvmArgs +
-                jvmArgumentProviders.collectMany { it.asArguments().toList() } +
-                ['-cp', classpath.asPath, mainClass.get()] + args +
-                argumentProviders.collectMany { it.asArguments().toList() }
-            def launch = [command: launchCommand, environment: environmentProperty.get(),
-                          directory: gameDirectory.get().asFile.absolutePath]
-            def output = layout.buildDirectory.file('hot-reload/launch.json').get().asFile
-            output.parentFile.mkdirs()
-            output.text = groovy.json.JsonOutput.toJson(launch)
-            throw new StopExecutionException('Launch prepared for tools/dev')
-        }
-    }
-}
-
 tasks.named('runPackagedClient') {
     // Empty loadedMods alone still lets FML discover main's processed resources on the classpath.
     classpathProvider.setFrom(configurations.runtimeClasspath)
@@ -125,7 +104,17 @@ tasks.named('runPackagedClient') {
     }
 }
 
+def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
+    inputs.files(fileTree('bb-plugin') { exclude 'node_modules/**', 'dist/**' }, fileTree('surface'), file('tools/package-plugin'))
+    outputs.file(layout.buildDirectory.file('bb-plugin.zip'))
+    outputs.file(file('bb-plugin/dist/server.js'))
+    outputs.file(file('bb-plugin/node_modules/.package-lock.json'))
+    commandLine 'python3', 'tools/package-plugin'
+}
+
 tasks.named('processResources', ProcessResources) {
+    dependsOn packageBbPlugin
+    from(layout.buildDirectory.file('bb-plugin.zip')) { into 'too_many_agents' }
     inputs.property 'version', project.version
     from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')

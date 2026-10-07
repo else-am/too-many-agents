@@ -8,6 +8,7 @@ import subprocess
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,6 +18,22 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--agent-id', required=True, help='An idle fixture in the guarded development world')
     args = parser.parse_args()
+    setup = json.loads((ROOT / 'run/config/too-many-agents-bb.json').read_text())
+    addresses = set()
+    for path in (Path.home() / '.too-many-agents/bb').glob('*.json'):
+        try:
+            record = json.loads(path.read_text())
+            url = urlparse(record['serverUrl'])
+            if (record.get('instanceId') == setup['instanceId']
+                    and record['protocol'] == 1 and record['expiresAt'] > time.time() * 1000
+                    and url.scheme == 'http' and url.hostname in ('127.0.0.1', '::1')
+                    and not (url.username or url.password or url.query or url.fragment)):
+                addresses.add(record['serverUrl'])
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            continue
+    if len(addresses) != 1:
+        parser.error('The test game must have one reachable selected BB with its Minecraft plugin enabled')
+    server_url = addresses.pop().rstrip('/')
     descriptor = json.loads((ROOT / 'run/too-many-agents/connection.json').read_text())
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
@@ -37,7 +54,7 @@ def main():
         raise RuntimeError(label + ' timed out; fixture retained, do not repeat mutations')
 
     def bb(*command):
-        env = dict(os.environ)
+        env = dict(os.environ, BB_SERVER_URL=server_url)
         env.pop('BB_THREAD_ID', None)
         result = subprocess.run(['bb', *command, '--json'], env=env, capture_output=True, text=True, timeout=120)
         if result.returncode:
@@ -69,7 +86,7 @@ def main():
     state = request('/v1/state')
     before = {a['id'] for a in request('/v1/agents')}
     def rejected(label, fields, expected):
-        payload = {'protocol': 3, 'worldId': world['id'], 'worldSessionId': state['session'],
+        payload = {'protocol': 3, 'connectionId': agent['connectionId'], 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
             'op': 'body.create', 'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10000,
             'agentId': args.agent_id, 'threadId': thread, 'settings': {'name': 'Must not be created'},
             'projectId': agent['projectId'], 'minecraftAccess': True, 'draft': {}, **fields}
@@ -83,7 +100,7 @@ def main():
     rejected('Stale world', {'worldSessionId': str(uuid.uuid4())}, 'world_session_changed')
     rejected('Expired creation', {'expiresAt': 0}, 'expired_before_execution')
     cancelled = str(uuid.uuid4())
-    request('/v1/bb', {'protocol': 3, 'worldId': world['id'], 'worldSessionId': state['session'],
+    request('/v1/bb', {'protocol': 3, 'connectionId': agent['connectionId'], 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
         'op': 'cancel', 'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10000,
         'cancelRequestId': cancelled})
     rejected('Cancelled creation', {'requestId': cancelled}, 'tool_cancelled')
@@ -91,8 +108,7 @@ def main():
     print('PASS: wrong-thread, stale-world, expired and cancelled body creation produce no body', flush=True)
 
     # Emulate the exact disk state left if BB created the thread but its bind reply was lost.
-    runtime = json.loads((Path.home() / '.bb/bb-app-runtime.json').read_text())
-    with opener.open(runtime['serverUrl'] + '/api/v1/threads/' + thread + '/plugin-metadata?pluginId=minecraft', timeout=20) as response:
+    with opener.open(server_url + '/api/v1/threads/' + thread + '/plugin-metadata?pluginId=minecraft', timeout=20) as response:
         metadata = json.load(response)
     assert metadata['agentId'] == args.agent_id and metadata['worldId'] == world['id']
     threads_before = {row['id'] for row in bb('thread', 'list', '--project', agent['projectId'], '--include-hidden')}

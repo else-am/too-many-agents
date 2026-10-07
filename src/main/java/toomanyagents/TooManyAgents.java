@@ -144,7 +144,13 @@ public final class TooManyAgents {
             } else if (path.equals("/v1/bb") && method.equals("POST")) {
                 try { result = JsonState.object("ok",true,"result",agents.callback(request).get(15,TimeUnit.SECONDS)); }
                 catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
-                catch(Exception failure) { return new LocalBridge.Reply(400,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message",failure.getMessage())))); }
+                catch(Exception failure) {
+                    Throwable cause = failure;
+                    while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) cause = cause.getCause();
+                    boolean stale = cause instanceof AgentService.StaleSessionException;
+                    return new LocalBridge.Reply(stale ? 409 : 400, JSON.toJson(JsonState.object("ok",false,"error",
+                        JsonState.object("code",stale ? "world_session_changed" : "callback_failed","message",cause.getMessage()))));
+                }
             } else if (path.equals("/v1/agents/providers")) result = agents.backendStatus().get(30,TimeUnit.SECONDS);
             else if (path.equals("/v1/agents/projects")) result = method.equals("GET") ? agents.projects() : agents.projectCommand(request).get(110,TimeUnit.SECONDS);
             else if (method.equals("GET") && path.equals("/v1/agents")) result = agents.list();

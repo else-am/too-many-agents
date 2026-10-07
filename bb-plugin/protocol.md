@@ -7,17 +7,39 @@ execution and native rendering. Both UI and CLI creation use `agents.ts`.
 
 ## Minecraft → plugin
 
-Minecraft reads `serverUrl` from BB's `~/.bb/bb-app-runtime.json` and calls
+The plugin publishes short-lived discovery records in the mod-owned
+`~/.too-many-agents/bb/` directory using `bb.server.loopbackBaseUrl`.
+Records include `instanceId` (SHA-256 of BB's SDK-provided data-directory string),
+`pluginVersion`, and a 15-second expiry. Minecraft remembers the chosen identity,
+ignores expired records, and calls its advertised loopback address at
 `POST /api/v1/plugins/minecraft/http/v1/rpc`. BB's default local check refuses
-browser origins. Requests are `{op,worldId,worldSessionId,...arguments}`;
+browser origins. Requests are `{op,modVersion,bbInstanceId,connectionId,worldId,worldSessionId,...arguments}`;
 responses are `{ok:true,result}` or `{ok:false,error:{code,message}}`.
 Mutations are sent once. A lost response has an unknown outcome; inspect state
 before any retry.
 
-- `session.attach`: `{protocol:3,worldId,worldSessionId,callbackUrl,callbackToken}`.
+Every operation except `hello` requires the exact release version from the plugin
+manifest. `GET /v1/setup` reports identity, version, and connected games.
+`POST /v1/setup/prepare` refuses connected games and closes the attach race while
+the mod replaces the plugin through `bb plugin install path:… --yes --json`.
+The replacement reservation expires after two minutes if installation fails.
+Before replacement, Java cancels its queued physical actions and changes its
+`connectionId`; callbacks from the old connection return `world_session_changed`.
+The prepare probe therefore removes this game's old connection, while other
+connected games still block replacement. The world stays loaded; BB threads are
+not stopped. Java reattaches with its new connection ID after verification.
+Sessions not seen for 30 seconds are probed before they can block replacement.
+Only connection refusal or a structured `world_session_changed` response removes
+a session; timeouts and other uncertain failures still block replacement. Local
+installers share a file lock per BB identity, re-reading installation state and
+authorization under that lock and holding it through verification. Plugin packages are extracted into immutable,
+versioned release directories under `~/.too-many-agents/plugins/`. Explicit
+reinstallation extracts a fresh copy instead of trusting an existing directory.
+
+- `session.attach`: `{protocol:3,connectionId,worldId,worldSessionId,callbackUrl,callbackToken}`.
   Idempotent and repeated periodically to reconnect after plugin reload.
   The callback URL must be literal loopback HTTP. `session.detach` takes the
-  world and session IDs.
+  world, session and connection IDs.
 - `world.sync` reconciles associated BB threads and returns display-ready
   project rows. The plugin creates a world's BB project lazily, using the
   save's workspace folder, and resolves BB environments. Java saves its ID.
@@ -51,10 +73,13 @@ before any retry.
 ## Plugin → Minecraft
 
 `POST callbackUrl` uses `Authorization: Bearer callbackToken`. Body:
-`{protocol:3,op,worldId,worldSessionId,requestId,expiresAt,...arguments}`.
-Java rejects stale sessions and expires physical requests before execution.
+`{protocol:3,bbInstanceId,connectionId,op,worldId,worldSessionId,requestId,expiresAt,...arguments}`.
+Java rejects callbacks from a BB other than the selected instance, rejects stale
+world sessions and BB connections, and expires physical requests before execution. Saved agents keep
+their owning BB identity; changing instances never changes their thread bindings.
 
-- `agents` returns saved body associations, physical settings and opaque drafts.
+- `agents` returns only the selected BB's saved body associations, physical settings
+  and opaque drafts. Other agents remain visible but disconnected in Minecraft.
 - `body.create`: `{settings,projectId,minecraftAccess,draft}` creates and saves
   a physical body. CLI calls also carry the acting `agentId` and `threadId`;
   Java checks ownership, physical permission inheritance and cancellation.
@@ -73,13 +98,17 @@ Java rejects stale sessions and expires physical requests before execution.
   `body.bind`: `{agentId,threadId,nonce}` accepts only that saved nonce. On
   reconnect the plugin finds its own BB threads by metadata, recovers missed
   bindings, and never repeats creation. A pending unknown start is not retried.
+  This metadata also establishes BB ownership for previously saved bound agents
+  that have no recorded instance yet; a missing lookup never claims them.
 - `body.draft`: `{agentId,patch}` saves opaque BB choices for an unstarted body.
   `body.settings`: `{agentId,settings}` applies physical settings.
 - `body.sync`: `{agentId,threadId,view?,state?,running?,projectId?}`. `view` is the
   plugin's ready-to-display agent state. `state` is `present`, `suspended` or
-  `deleted`. Java cancels physical actions when `running` is false, drops inventory
+  `disconnected`. Java cancels physical actions when `running` is false, drops inventory
   and saves the empty body before suspension, restores it on return, and releases
-  stations on suspension/deletion. BB lifecycle fields are interpreted only in the plugin.
+  stations on suspension. Missing/deleted conversations retain their binding and
+  body as disconnected agents. Local archive and restore choices work offline and remain in force
+  across remote updates until the user changes that local choice.
   The view passes through BB's `status`, `latestAttentionAt` and `lastReadAt` for
   native UI indicators. `hasPendingInteraction` comes from the pending-interaction
   list; `queuedWork` is `failed` if any queued message has a non-null `failureReason`,
@@ -88,7 +117,8 @@ Java rejects stale sessions and expires physical requests before execution.
   attention first; otherwise `working` for active/pending/starting/stopping;
   otherwise `idle`. Java uses that value directly.
 - `world_metadata`, `world.workspace`, `world.project` expose the saved world
-  record, create its owned workspace directory, and persist the BB project ID.
+  record, create its owned workspace directory, and persist the project ID under
+  the calling BB's identity. Each instance has its own default world project.
 - `tool`: `{agentId,threadId,tool,arguments}` executes only for the body's own
   BB thread. `cancel`: `{cancelRequestId}` cancels a physical request, even if
   cancellation arrives first.
@@ -99,7 +129,7 @@ Java rejects stale sessions and expires physical requests before execution.
 
 Thread metadata `{worldId,agentId,minecraftAccess,nonce}` controls tool offering,
 but grants no authority: Java validates every physical request. Connection
-failures do not delete bodies; only definite BB deletion does.
+failures and BB thread deletion never delete saved body associations.
 
 `bb minecraft spawn` uses BB's public CLI builder and SDK. Parent and lifecycle
 owner are native BB fields; omitting a parent creates an independent thread.
@@ -116,3 +146,9 @@ and prohibits delegated cross-project spawns. Body `mode` is `survival`,
 `creative`, or `creative_commands`; only the last permits world commands.
 Both Creative modes permit Creative physical actions. Delegated bodies cannot
 gain either capability beyond their caller. Saved data has no old-format conversions.
+
+Development launches provide the checkout plugin path to the same Java setup manager.
+They build first, then install/reload that source once before connecting, including
+same-version edits. The setup endpoint exposes the running generation and BB-reported
+plugin root so installation verification cannot mistake the previous same-version
+plugin for the new one. Packaged runs have no development source override.
