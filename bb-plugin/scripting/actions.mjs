@@ -261,6 +261,22 @@ export function installActions(bot, { request, waitForActionState, action, snaps
   bot.useOn = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
   bot.activateItem = (offhand = false) => { control({ type: 'use', offhand: !!offhand }); };
   bot.deactivateItem = () => { control({ type: 'release' }); };
+  const heldControls = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, sneak: false };
+  bot.setControlState = (name, state) => {
+    need(Object.hasOwn(heldControls, name) && typeof state === 'boolean', 'InvalidControl', 'Expected a control name and boolean state');
+    if (heldControls[name] === state) return;
+    control({ type: 'control', control: name, state });
+    heldControls[name] = state;
+  };
+  bot.getControlState = name => {
+    need(Object.hasOwn(heldControls, name), 'InvalidControl', 'Unknown control name');
+    return heldControls[name];
+  };
+  bot.clearControlStates = () => { for (const name of Object.keys(heldControls)) bot.setControlState(name, false); };
+  bot.controlState = {};
+  for (const name of Object.keys(heldControls)) Object.defineProperty(bot.controlState, name, {
+    get: () => heldControls[name], set: state => { bot.setControlState(name, state); },
+  });
   return { async drainControls() {
     while (stops.size) await Promise.allSettled([...stops]);
     ready();

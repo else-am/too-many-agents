@@ -127,6 +127,7 @@ final class AgentHands extends FakePlayer {
         setYRot(body.getViewYRot(1));
         setXRot(body.getXRot());
         setOnGround(body.onGround());
+        setShiftKeyDown(body.isShiftKeyDown());
         var mode = BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).creative
             ? GameType.CREATIVE : GameType.SURVIVAL;
         if (gameMode.getGameModeForPlayer() != mode) gameMode.changeGameModeForPlayer(mode);
@@ -308,7 +309,7 @@ final class AgentHands extends FakePlayer {
         InteractionResult result;
         try { result = gameMode.useItemOn(this, level(), getItemInHand(hand), hand, hit); }
         finally {
-            setShiftKeyDown(false);
+            setShiftKeyDown(body.isShiftKeyDown());
             if (containerMenu == oldMenu) { menuOrigin = oldOrigin; menuEntity = oldEntity; }
             save();
         }
@@ -394,7 +395,7 @@ final class AgentHands extends FakePlayer {
         if (item instanceof BoatItem boat) {
             try { result = interaction(useBoat(boat, hand, pos)); }
             finally { save(); }
-        } else result = useBlock(pos, face, false, cursor, hand, null, swingHand, showHand);
+        } else result = useBlock(pos, face, body.isShiftKeyDown(), cursor, hand, null, swingHand, showHand);
         var spawned = new JsonArray();
         for (var entity : serverLevel().getEntities((Entity) null, bounds)) {
             if (!before.contains(entity.getUUID())) spawned.add(entity.getStringUUID());

@@ -37,3 +37,13 @@ consumption and spawn. Identify the entity created during this action, not an
 older nearby match; return no success if it cannot be observed. No creative item
 creation. Water boat placement must use native fluid ray tracing. Cancellation
 or transport uncertainty never retries a spawn.
+
+Direct controls (before implementation): setControlState/getControlState,
+clearControlStates, and controlState property access preserve synchronous
+signatures. One bounded control queue preserves invocation order with equipment
+and actions. Test forward/back/strafe relative to actual yaw, jump and release,
+sprint/sneak flags, collisions and body-box confinement. Native mob physics owns
+acceleration/jumping; no player-trajectory equality or player-only ledge hold is
+promised. End/cancel/world departure clears held inputs. Do not silently blend
+manual controls with a Pathfinder route: require releasing held inputs before
+starting navigation, and report a known busy failure if a route is already active.

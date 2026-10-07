@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -21,7 +22,9 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control");
+    private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
+    private final Set<String> heldControls = new HashSet<>();
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -92,6 +95,7 @@ final class AgentActions {
 
     void releaseScript() {
         scriptId = null;
+        clearControls();
         cancel("");
         if (stateStream != null) stateStream.finish();
         stateStream = null;
@@ -140,6 +144,9 @@ final class AgentActions {
         if (busy()) throw error("action_already_running_cancel_or_wait");
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
+        if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw error("release_manual_controls_before_navigation");
+        if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
+            || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
         if (List.of("mine", "place", "place_entity").contains(type) && !request.has("position")) throw error("position_required");
@@ -199,6 +206,7 @@ final class AgentActions {
 
     void close(String reason) {
         scriptId = null;
+        clearControls();
         if (stateStream != null) stateStream.fail(error(reason));
         stateStream = null;
         stateSnapshot = null;
@@ -294,7 +302,7 @@ final class AgentActions {
                         boolean showHand = !args.has("showHand") || args.get("showHand").getAsBoolean();
                         BlockPos destination = args.has("expectedDestination") ? BlockPos.containing(point(args.getAsJsonObject("expectedDestination"))) : null;
                         var result = kind.equals("place_entity") ? hands.placeEntity(pos, face, cursor, hand, swingHand, showHand)
-                            : hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor,
+                            : hands.useBlock(pos, face, mob.isShiftKeyDown() || (args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean()), cursor,
                                 hand, destination, swingHand, showHand);
                         finish("completed", "interaction_finished_check_result", result);
                     }
@@ -348,6 +356,13 @@ final class AgentActions {
                     hands.selectHotbar(integer(args, "slot", -1));
                     finish("completed", "hotbar_selected", null);
                 }
+                case "control" -> {
+                    String control = text(args, "control");
+                    if (args.get("state").getAsBoolean()) heldControls.add(control);
+                    else heldControls.remove(control);
+                    if (heldControls.isEmpty()) clearControls();
+                    finish("completed", "control_updated", null);
+                }
                 case "menu_button" -> finish("completed", "menu_button", hands.menuButton(integer(args, "menuId", -1), menuGeneration(), integer(args, "button", -1)));
                 case "anvil_name" -> finish("completed", "anvil_named", hands.renameAnvil(integer(args, "menuId", -1), menuGeneration(), text(args, "name")));
                 case "select_trade" -> finish("completed", "trade_selected", hands.selectTrade(integer(args, "menuId", -1), menuGeneration(), integer(args, "index", -1)));
@@ -374,6 +389,7 @@ final class AgentActions {
             else throw failure;
         } finally {
             if (scripted() && !travelled) {
+                if (!heldControls.isEmpty()) applyControls();
                 GameAccess.travelFollowingBody(mob, box.get());
             }
             if (stateStream != null) {
@@ -384,6 +400,31 @@ final class AgentActions {
                 if (!stateStream.open()) releaseScript();
             }
         }
+    }
+
+    private void applyControls() {
+        mob.setSprinting(heldControls.contains("sprint"));
+        mob.setShiftKeyDown(heldControls.contains("sneak"));
+        float speed = (float) mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
+        if (heldControls.contains("sneak")) speed *= 0.3F;
+        int forward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+        int strafe = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+        float scale = forward != 0 && strafe != 0 ? 0.70710677F : 1;
+        mob.setSpeed(speed);
+        mob.setZza(forward * speed * scale);
+        mob.setXxa(strafe * speed * scale);
+        mob.setYya(0);
+        // Normal LivingEntity.aiStep owns jump timing, fluid impulses and the
+        // repeat delay even for a NoAI body. Post-tick travel still runs once.
+        mob.setJumping(heldControls.contains("jump"));
+    }
+
+    private void clearControls() {
+        heldControls.clear();
+        mob.setSprinting(false);
+        mob.setShiftKeyDown(false);
+        mob.setJumping(false);
+        mob.setXxa(0); mob.setYya(0); mob.setZza(0);
     }
 
     private boolean pickupReachable(ItemEntity item) {
