@@ -1,0 +1,22 @@
+.mc-sidebar-dock { flex-shrink: 0; padding: 3px 8px 5px; }
+.mc-collection-trigger { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--sidebar-foreground); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.mc-collection-trigger:hover, .mc-collection-trigger[data-state="open"] { background: var(--sidebar-accent); }
+.mc-collection-label { flex: 1; }
+.mc-world-mark { flex: 0 0 12px; width: 12px; height: 12px; box-sizing: border-box; background: #896244; border-top: 3px solid #8cab65; }
+.mc-chevron { flex: 0 0 12px; color: var(--muted-foreground); }
+.mc-menu { z-index: 80; min-width: 232px; max-width: min(340px, calc(100vw - 24px)); max-height: min(420px, var(--radix-dropdown-menu-content-available-height)); overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: 8px; background: var(--popover); color: var(--popover-foreground); box-shadow: 0 5px 18px #0002; font-size: 12px; }
+.mc-thread-menu { min-width: 260px; }
+.mc-subheading { display: block; padding: 6px 8px 9px; font-size: 10px; color: var(--muted-foreground); }
+.mc-menu-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: 4px; outline: none; cursor: pointer; text-decoration: none; color: inherit; user-select: none; }
+.mc-menu-row[data-highlighted], .mc-menu-row[data-state="open"], .mc-menu-row[aria-current="page"] { background: var(--accent); color: var(--accent-foreground); }
+.mc-world-name, .mc-thread-title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mc-count { color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; }
+.mc-thread-title[data-unread="true"] { font-weight: 600; }
+.mc-status { display: inline-block; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--muted-foreground); opacity: .3; }
+.mc-status[data-tone="attention"] { background: var(--warning, #b88941); opacity: 1; }
+.mc-status[data-tone="unread"] { background: currentColor; opacity: .85; }
+.mc-status[data-tone="working"] { background: #8caa7b; opacity: 1; animation: mc-breathe 1.8s ease-in-out infinite; }
+.mc-empty { padding: 8px; margin: 0; color: var(--muted-foreground); line-height: 1.6; }
+.mc-collection-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+@keyframes mc-breathe { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .mc-status { animation: none !important; } }

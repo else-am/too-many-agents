@@ -1,6 +1,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import type { MinecraftWorlds } from "./minecraft.js";
 import { ApiError, object, string, type Session, type SpawnOptions } from "./protocol.js";
+import { isWorldWorkspace } from "./world-workspace.js";
 
 /** BB project/workspace choices for a world. The save owns only its project ID and folder. */
 export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
@@ -152,7 +153,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
           project.kind !== "personal" &&
           // World projects own this save-relative folder, even after a rename or move.
           !project.sources.some((source) =>
-            /[\\/]too-many-agents[\\/]workspace[\\/]?$/.test(source.path),
+            isWorldWorkspace(source.path),
           ),
       ),
       ...projects

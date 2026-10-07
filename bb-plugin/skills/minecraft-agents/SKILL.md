@@ -5,6 +5,23 @@ description: Create embodied agents, roles and stations in an attached Minecraft
 
 # Embodied agents
 
+## World browser
+
+**Minecraft worlds** above BB's project list opens a dedicated menu. Each
+world opens a second menu of its threads; select one to open the normal BB
+conversation. This menu shows active threads; older conversations are in BB's
+**Settings → Archived threads**. Worlds remain accessible when Minecraft is
+not running.
+
+World project groups are omitted from the regular project list while this
+collection is mounted. Pinned threads and other organization modes are
+unchanged. This uses a removable content-script extension of the bundled
+Thread list's sidebar markup, not BB's hidden-project preferences or **More**
+menu. If that sidebar is unavailable, or the plugin is disabled, the normal
+list stays visible.
+
+## In Minecraft
+
 Use `bb minecraft spawn --help` for current options. The command runs from a
 Minecraft-associated BB thread and creates a body in that thread's world.
 `--parent-self` creates a BB child; omit it for an independent BB thread.

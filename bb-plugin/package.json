@@ -13,14 +13,18 @@
     "branding": {
       "icon": "Box"
     },
-    "server": "./server.ts"
+    "server": "./server.ts",
+    "app": "./app.tsx"
   },
   "keywords": [
     "bb-plugin"
   ],
   "devDependencies": {
     "@get-bb/plugin-sdk": "0.6.15",
+    "@radix-ui/react-dropdown-menu": "^2.1.20",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "^5.9.3"
   },
   "scripts": {
