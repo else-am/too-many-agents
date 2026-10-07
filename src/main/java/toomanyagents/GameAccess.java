@@ -752,6 +752,7 @@ final class GameAccess {
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
         snapshot.add("messages", controller.drainMessages());
         snapshot.add("entityEvents", controller.drainEntityEvents());
+        snapshot.add("sounds", controller.drainSounds());
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
         for (var value : snapshot.getAsJsonArray("entities")) {
             var observed = value.getAsJsonObject();
@@ -1401,6 +1402,18 @@ final class GameAccess {
         result.addProperty("position", position);
         if (sender != null) result.addProperty("sender", sender.toString());
         return result;
+    }
+
+    void soundEvent(net.neoforged.neoforge.event.PlayLevelSoundEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level.getServer() != server.get()
+            || !level.getServer().isSameThread()) return;
+        Vec3 position;
+        if (event instanceof net.neoforged.neoforge.event.PlayLevelSoundEvent.AtPosition at) position = at.getPosition();
+        else if (event instanceof net.neoforged.neoforge.event.PlayLevelSoundEvent.AtEntity at) position = at.getEntity().position();
+        else return;
+        for (var controller : actions.values()) {
+            if (controller.scripted() && controller.mob.level() == level) controller.recordSound(event, position);
+        }
     }
 
     void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {

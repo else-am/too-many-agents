@@ -366,6 +366,9 @@ export function createBot(initial) {
       const subject = bot.entities[event.subject], cause = event.cause == null ? undefined : bot.entities[event.cause];
       bot.emit(event.name, subject, cause);
     }
+    for (const sound of next.sounds ?? []) {
+      bot.emit('soundEffectHeard', sound.name, vector(sound.position), sound.volume, sound.pitch);
+    }
     for (const entry of next.messages ?? []) {
       const message = new ChatMessage(entry.message);
       const sender = entry.sender ?? null;
