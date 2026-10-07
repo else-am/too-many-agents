@@ -14,6 +14,7 @@ public final class AgentWorkspaceScreen extends Screen {
     private final JsonObject pointing;
     private Consumer<List<Path>> fileDropHandler;
     private boolean modSettings;
+    private boolean offeredSetup;
 
     public AgentWorkspaceScreen(String agentId, JsonObject pointing) {
         super(Component.literal("Agents"));
@@ -29,6 +30,12 @@ public final class AgentWorkspaceScreen extends Screen {
     }
 
     public boolean opensModSettings() { return modSettings; }
+    @Override protected void init() {
+        if (!offeredSetup && !modSettings && !toomanyagents.BbSetup.get().view().ready()) {
+            offeredSetup = true;
+            modSettings = true;
+        }
+    }
     public String initialAgentId() { return initialAgentId; }
     public JsonObject pointingContext() { return pointing == null ? null : pointing.deepCopy(); }
     public void setFileDropHandler(Consumer<List<Path>> handler) { fileDropHandler = handler; }

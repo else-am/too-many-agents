@@ -4,6 +4,7 @@ import type { MinecraftProjects } from "./projects.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import type { MinecraftThreads } from "./threads.js";
 import { chatAssets } from "./chat-assets.js";
+import { MOD_VERSION } from "./discovery.js";
 import {
   ApiError,
   PROTOCOL,
@@ -26,9 +27,11 @@ export function registerGameApi(
   threads: MinecraftThreads,
   agents: MinecraftAgents,
   projects: MinecraftProjects,
+  checkVersion: (data: ObjectValue) => void,
 ) {
   const chat = chatAssets(bb);
   async function dispatch(data: ObjectValue): Promise<unknown> {
+    checkVersion(data);
     const op = string(data.op, "op");
     const live = () => {
       const session = worlds.session(uuid(data.worldId, "worldId"));
@@ -48,6 +51,7 @@ export function registerGameApi(
         return {
           protocol: PROTOCOL,
           pluginId: bb.pluginId,
+          pluginVersion: MOD_VERSION,
           runtimeVersion: (await bb.sdk.system.version()).currentVersion,
         };
       case "catalog":

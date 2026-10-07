@@ -13,7 +13,6 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
-JAVA_SOURCES = ROOT / 'src/main/java'
 CLASSES = ROOT / 'build/classes/java/main'
 
 
@@ -43,9 +42,14 @@ def runtime():
 
 def sources():
     paths = []
-    for folder in ('src', 'surface'):
-        paths.extend(p for p in (ROOT / folder).rglob('*') if p.is_file())
-    paths.extend(ROOT / p for p in ('build.gradle', 'settings.gradle', 'gradle.properties', 'tools/HotReload.java', 'tools/dev'))
+    for folder in ('src', 'surface', 'bb-plugin'):
+        for directory, children, files in os.walk(ROOT / folder):
+            children[:] = [name for name in children if name not in ('node_modules', 'dist')]
+            for name in files:
+                path = Path(directory) / name
+                if path != ROOT / 'bb-plugin/surface/tools.json':
+                    paths.append(path)
+    paths.extend(ROOT / p for p in ('build.gradle', 'settings.gradle', 'gradle.properties', 'tools/HotReload.java', 'tools/dev', 'tools/package-plugin'))
     return {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
 
 
@@ -64,9 +68,6 @@ def main():
         fcntl.flock(instance_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
         raise RuntimeError('This development profile is already running.') from None
-    # Agents run on the current plugin; Minecraft still opens if BB is unavailable.
-    if subprocess.run([str(ROOT / 'tools/bb')], cwd=ROOT).returncode:
-        say('BB plugin was not installed; agents stay disconnected until `tools/bb` succeeds.')
     output = ROOT / 'build/hot-reload'
     output.mkdir(parents=True, exist_ok=True)
     build_lock = (ROOT / '.gradle-user/hot-reload-build.lock')
@@ -102,13 +103,13 @@ def main():
             return 'RESTART Reload debugger did not respond within 30 seconds; do not retry this session.'
         return process.stdout.readline().strip()
 
-    baseline = sources()
     status('starting', 'Preparing Minecraft with enhanced HotSwap…')
     flags = ['-PhotReload'] + (['-PhotReloadTest', '-PdevWorld'] if args.test else [])
     launch = build('runClient', *flags)
     if not launch:
         status('failed', 'Launch preparation failed; see hot-reload-build.log.')
         return 1
+    baseline = sources()
     subprocess.run([str(home / 'bin/javac'), '--add-modules', 'jdk.jdi', '-d', str(output),
                     str(ROOT / 'tools/HotReload.java')], check=True)
     command = launch['command']
@@ -167,7 +168,7 @@ def main():
                 changed = {p for p in baseline.keys() | current.keys() if baseline.get(p) != current.get(p)}
                 # Live callbacks retain compiler-generated lambda targets across reloads.
                 restart = [p for p in changed if not p.startswith('src/main/java/') or
-                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/AgentSurface.java', '/BbClient.java', '/LocalBridge.java', '/ClientControls.java')) or '/mixin/' in p or p not in current]
+                           p.endswith(('/AgentService.java', '/AgentInventoryMenu.java', '/TooManyAgents.java', '/AgentSurface.java', '/BbClient.java', '/BbSetup.java', '/LocalBridge.java', '/ClientControls.java')) or '/mixin/' in p or p not in current]
                 if restart:
                     status('restart-required', 'Restart required for: ' + ', '.join(sorted(restart)))
                     continue

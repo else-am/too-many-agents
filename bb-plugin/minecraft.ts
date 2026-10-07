@@ -7,6 +7,7 @@ const START_EXPIRY_MS = 10_000;
 export function minecraftWorlds(bb: BbPluginApi) {
   const lifetime = new AbortController();
   const sessions = new Map<string, Session>();
+  const seen = new Map<string, number>();
   // Thread metadata is writable by others, so it only names a candidate. Java checks each thread against its own record.
   const identities = new Map<string, Identity | null>();
 
@@ -53,7 +54,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
       // Minecraft is gone without detaching; it attaches again if it is still running.
-      if (sessions.get(live.worldId) === live) sessions.delete(live.worldId);
+      if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); }
       throw new ApiError("world_disconnected", "Minecraft world is disconnected");
     }
     const body = object(await response.json(), "Minecraft response");
@@ -123,20 +124,34 @@ export function minecraftWorlds(bb: BbPluginApi) {
   function attach(live: Session) {
     const previous = sessions.get(live.worldId);
     sessions.set(live.worldId, live);
+    seen.set(live.worldId, Date.now());
     return !previous || previous.worldSessionId !== live.worldSessionId;
   }
 
   function detach(worldId: string, worldSessionId: string) {
-    if (sessions.get(worldId)?.worldSessionId === worldSessionId) sessions.delete(worldId);
+    if (sessions.get(worldId)?.worldSessionId === worldSessionId) { sessions.delete(worldId); seen.delete(worldId); }
+  }
+
+  async function activeGames(probe = false) {
+    // A stopped JVM cannot keep blocking updates. Probe old sessions so a slow
+    // world sync does not make a still-running game look disconnected.
+    await Promise.all([...sessions.values()].map(async live => {
+      if (!probe && Date.now() - (seen.get(live.worldId) ?? 0) < 30_000) return;
+      try { await callback(live, "agents", {}, AbortSignal.timeout(3000)); }
+      catch { if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); } }
+    }));
+    return [...sessions.values()].map(live => ({ worldId: live.worldId }));
   }
 
   bb.onDispose(() => {
     lifetime.abort();
     sessions.clear();
+    seen.clear();
     identities.clear();
   });
   return {
     session,
+    activeGames,
     validationSession,
     attach,
     detach,

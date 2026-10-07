@@ -7,12 +7,27 @@ execution and native rendering. Both UI and CLI creation use `agents.ts`.
 
 ## Minecraft → plugin
 
-Minecraft reads `serverUrl` from BB's `~/.bb/bb-app-runtime.json` and calls
+The plugin publishes short-lived discovery records in the mod-owned
+`~/.too-many-agents/bb/` directory using `bb.server.loopbackBaseUrl`.
+Records include `instanceId` (SHA-256 of BB's SDK-provided data-directory string),
+`pluginVersion`, and a 15-second expiry. Minecraft remembers the chosen identity,
+ignores expired records, and calls its advertised loopback address at
 `POST /api/v1/plugins/minecraft/http/v1/rpc`. BB's default local check refuses
-browser origins. Requests are `{op,worldId,worldSessionId,...arguments}`;
+browser origins. Requests are `{op,modVersion,worldId,worldSessionId,...arguments}`;
 responses are `{ok:true,result}` or `{ok:false,error:{code,message}}`.
 Mutations are sent once. A lost response has an unknown outcome; inspect state
 before any retry.
+
+Every operation except `hello` requires the exact release version from the plugin
+manifest. `GET /v1/setup` reports identity, version, and connected games.
+`POST /v1/setup/prepare` refuses connected games and closes the attach race while
+the mod replaces the plugin through `bb plugin install path:… --yes --json`.
+The replacement reservation expires after two minutes if installation fails.
+Sessions not seen for 30 seconds are probed before they can block replacement;
+unreachable or no-longer-valid sessions are removed. Local installers also share
+a file lock per BB identity. Plugin packages are extracted into immutable,
+versioned release directories under `~/.too-many-agents/plugins/`. Explicit
+reinstallation extracts a fresh copy instead of trusting an existing directory.
 
 - `session.attach`: `{protocol:3,worldId,worldSessionId,callbackUrl,callbackToken}`.
   Idempotent and repeated periodically to reconnect after plugin reload.
@@ -116,3 +131,9 @@ and prohibits delegated cross-project spawns. Body `mode` is `survival`,
 `creative`, or `creative_commands`; only the last permits world commands.
 Both Creative modes permit Creative physical actions. Delegated bodies cannot
 gain either capability beyond their caller. Saved data has no old-format conversions.
+
+Development launches provide the checkout plugin path to the same Java setup manager.
+They build first, then install/reload that source once before connecting, including
+same-version edits. The setup endpoint exposes the running generation and BB-reported
+plugin root so installation verification cannot mistake the previous same-version
+plugin for the new one. Packaged runs have no development source override.

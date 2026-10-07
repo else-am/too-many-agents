@@ -1,0 +1,61 @@
+#!/usr/bin/env python3
+"""Build the plugin and bundle its runtime files for installation from the mod JAR."""
+import json
+import hashlib
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+PLUGIN = ROOT / 'bb-plugin'
+
+
+def main():
+    npm = os.environ.get('TOO_MANY_AGENTS_NPM', 'npm')
+    bb = os.environ.get('BB_CLI') or shutil.which('bb')
+    if not bb:
+        raise RuntimeError('Building the bundled plugin requires the installed BB CLI on PATH.')
+    # Source edits need a build, not a fresh dependency installation.
+    dependencies = hashlib.sha256((PLUGIN / 'package.json').read_bytes() + (PLUGIN / 'package-lock.json').read_bytes()).hexdigest()
+    installed = PLUGIN / 'node_modules/.too-many-agents-dependencies'
+    if not installed.is_file() or installed.read_text() != dependencies or not (PLUGIN / 'node_modules/.package-lock.json').is_file():
+        subprocess.run([npm, 'ci', '--prefix', str(PLUGIN), '--ignore-scripts', '--no-audit', '--no-fund'], check=True)
+        installed.write_text(dependencies)
+    shutil.copyfile(ROOT / 'surface/tools.json', PLUGIN / 'surface/tools.json')
+    subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], check=True)
+    subprocess.run([bb, 'plugin', 'build', str(PLUGIN)], check=True)
+    # The diagram worker runs independently of BB's server bundle. Include its
+    # pure-JavaScript dependencies and WASM; installation needs neither npm nor a compiler.
+    packages = subprocess.check_output([npm, 'ls', '--omit=dev', '--all', '--parseable'], cwd=PLUGIN, text=True).splitlines()
+    manifest = json.loads((PLUGIN / 'package.json').read_text())
+    manifest['bb']['server'] = './server.js'
+    manifest.pop('devDependencies', None)
+    manifest.pop('scripts', None)
+    files = {'package.json': (json.dumps(manifest, indent=2) + '\n').encode(),
+             'server.js': (PLUGIN / 'dist/server.js').read_bytes()}
+    for item in ['skills', 'surface', 'assets', 'diagram-worker.mjs']:
+        path = PLUGIN / item
+        for source in sorted(path.rglob('*')) if path.is_dir() else [path]:
+            if source.is_file():
+                files[source.relative_to(PLUGIN).as_posix()] = source.read_bytes()
+    for package in packages:
+        directory = Path(package)
+        if directory == PLUGIN:
+            continue
+        for source in sorted(directory.rglob('*')):
+            if source.is_file() and 'node_modules' not in source.relative_to(directory).parts:
+                files[source.relative_to(PLUGIN).as_posix()] = source.read_bytes()
+    output = ROOT / 'build/bb-plugin.zip'
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
+        for name, content in sorted(files.items()):
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, content)
+    print('Bundled Minecraft plugin ' + manifest['version'])
+
+
+if __name__ == '__main__':
+    main()

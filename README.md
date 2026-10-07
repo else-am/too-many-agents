@@ -16,7 +16,7 @@ integrated server.
 - Minecraft 1.21.1 with NeoForge 21.1.251+, singleplayer.
 - Java 21 to build the mod.
 - Your installed, running BB 0.45.0 or newer.
-- Node.js and npm to build the Minecraft TypeScript plugin.
+- Node.js and npm to build the bundled Minecraft TypeScript plugin; players do not need them.
 - At least one signed-in coding agent supported by BB, such as Codex or Claude Code.
 
 The TypeScript plugin in `bb-plugin/` uses the BB plugin SDK. BB remains your
@@ -27,7 +27,6 @@ input. Developed on macOS; `tools/dev` requires macOS or Linux.
 ## Build and run
 
 ```sh
-tools/bb                                 # build our plugin; install or reload it in your running BB
 tools/build build
 tools/build runClient -PdevWorld          # isolated flat test world
 ```
@@ -36,15 +35,34 @@ tools/build runClient -PdevWorld          # isolated flat test world
 The mod JAR is `build/libs/too-many-agents-<version>.jar`.
 
 To use your own NeoForge installation, copy only that JAR into its `mods/`
-folder.
+folder. The JAR includes its matching BB plugin. Open the agent interface (G),
+or **Mod settings**. BB connection appears at the top; opening the agent interface
+before setup is complete takes you there automatically. BB is detected for you;
+choose an instance only if more than one is found. Choose **Allow plugin installation
+and updates** to let the mod manage its Minecraft plugin. Manual location and repair
+controls expand inline under **Connection details**. This permission applies only to the selected BB.
 
-Any game finds BB by itself through the address BB records in
-`~/.bb/bb-app-runtime.json`; running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR or
+The Minecraft plugin publishes its running BB address automatically, and the mod
+finds it without environment variables or JVM options, including when BB uses a
+custom data directory. Each Minecraft installation remembers its selected BB.
+Mod and plugin versions must match exactly. A missing or older plugin can update
+automatically after permission; replacing a newer plugin requires confirmation.
+Leave all connected Minecraft worlds before replacing the plugin. Games using the
+same version may share it. The mod never replaces its own running JAR or manages BB.
+For an old or broken plugin that cannot report connected games, close its games
+and disable that plugin in BB before restoring the bundled copy. Plugins installed
+through another package manager require manual source changes in BB.
+
+Setup preferences live in `<game dir>/config/too-many-agents-bb.json`; extracted
+plugin releases live in `~/.too-many-agents/plugins/`. BB installs them through its
+CLI, preserving plugin settings when moving between local releases.
+Running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR or
 changing physical tools in `surface/`. After editing plugin code or its prompts,
-run `tools/bb` again.
+restart development, or run `tools/build packageBbPlugin`, leave connected worlds,
+and choose **Reload development plugin** under mod settings → Connection details.
 
-`tools/bb` finds `bb` on PATH, or the CLI bundled with the installed macOS BB app.
-Use `--bb-cli /path/to/bb` for another installed CLI.
+The shared release version is `bb-plugin/package.json`'s `version`; Gradle reads
+it and packages the built plugin and its runtime dependencies with the mod.
 
 The plugin's route accepts only local, non-browser JSON requests, as BB's own API
 does. The mod's physical API has a private `<game dir>/too-many-agents/connection.json`
@@ -169,12 +187,17 @@ tools/dev --test                         # hot reload in the guarded run/ test w
 tools/dev                                # personal development game in run/play/
 ```
 
-Both first run `tools/bb`, so BB always has the current plugin.
+Both build the plugin once through Gradle, then Minecraft uses its normal BB setup
+to install or reload this checkout before connecting. `tools/build runClient` uses
+the same development mode. A same-version plugin is refreshed once per launch;
+connected games block replacement. Development does not change your permission
+for automatic updates in packaged games. Newer plugins still require explicit
+confirmation before a downgrade. Packaged-JAR runs do not enable development mode.
 
 `tools/dev` needs a JetBrains Runtime 21 with enhanced HotSwap; it finds Android
 Studio or IntelliJ's bundled runtime, or uses `TMA_DEV_JAVA_HOME`. Saving supported
 Java edits compiles and reloads them. Resources, surface prompts, mixins, build
-files and live callback owners require a restart; the terminal reports this.
+files, BB plugin changes and live callback owners require a restart; the terminal reports this.
 `tools/Play.command` opens the personal development game on macOS.
 
 ```sh

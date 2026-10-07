@@ -4,7 +4,8 @@ plugins {
 }
 
 group = 'toomanyagents'
-version = '0.8.0'
+// The plugin manifest is the single release version for both halves.
+version = new groovy.json.JsonSlurper().parse(file('bb-plugin/package.json')).version
 base.archivesName = 'too-many-agents'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
@@ -60,6 +61,7 @@ neoForge {
     runs {
         client {
             client()
+            systemProperty 'too_many_agents.devPlugin', project.file('bb-plugin').absolutePath
             taskBefore cleanStagedTooManyAgents
             if (providers.gradleProperty('hotReload').isPresent()) {
                 gameDirectory = project.file(providers.gradleProperty('hotReloadTest').isPresent() ? 'run' : 'run/play')
@@ -125,7 +127,17 @@ tasks.named('runPackagedClient') {
     }
 }
 
+def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
+    inputs.files(fileTree('bb-plugin') { exclude 'node_modules/**', 'dist/**' }, fileTree('surface'), file('tools/package-plugin'))
+    outputs.file(layout.buildDirectory.file('bb-plugin.zip'))
+    outputs.file(file('bb-plugin/dist/server.js'))
+    outputs.file(file('bb-plugin/node_modules/.package-lock.json'))
+    commandLine 'python3', 'tools/package-plugin'
+}
+
 tasks.named('processResources', ProcessResources) {
+    dependsOn packageBbPlugin
+    from(layout.buildDirectory.file('bb-plugin.zip')) { into 'too_many_agents' }
     inputs.property 'version', project.version
     from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')

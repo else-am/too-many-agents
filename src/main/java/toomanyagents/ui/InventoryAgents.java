@@ -118,7 +118,10 @@ public final class InventoryAgents {
                     chat.capturePointing(workspace.pointingContext());
                     select.accept(selected);
                 }
-                workspace.setFileDropHandler(paths -> { if (chat != null) chat.onFilesDrop(paths); });
+                workspace.setFileDropHandler(paths -> {
+                    if (form != null) form.onFilesDrop(paths);
+                    else if (chat != null) chat.onFilesDrop(paths);
+                });
             }
             if (screen instanceof AgentInventoryScreen inventory) {
                 if (inventory.agentId().equals(inventoryPending)) {
@@ -466,6 +469,7 @@ public final class InventoryAgents {
         if (!(parent instanceof AgentInventoryScreen) && inventoryPending == null) inventoryTarget = null;
         sidebar.tick();
         if (chat != null) chat.tick();
+        if (form != null) form.tick();
     }
 
     private void render(ScreenEvent.Render.Post event) {
