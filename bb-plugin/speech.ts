@@ -14,12 +14,12 @@ function plain(markdown: string) {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/^\s*(#+|>|[-*+]|\d+\.)\s+/gm, "")
     .replace(/\*\*|__|`/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/[\s\u0000-\u001f§]+/g, " ")
     .trim();
   return text.length > MAX_TEXT ? text.slice(0, MAX_TEXT - 1).trimEnd() + "…" : text;
 }
 
-function interactionSpeech(interaction: Interaction): Speech {
+export function interactionSpeech(interaction: Interaction): Speech {
   const payload = interaction.payload as Record<string, any>;
   if (payload.kind === "approval") {
     const subject = payload.subject ?? {};
@@ -37,13 +37,13 @@ function interactionSpeech(interaction: Interaction): Speech {
  */
 export function agentSpeech(bb: BbPluginApi) {
   // Each thread's latest top-level assistant message in its latest turn, read incrementally.
-  const said = new Map<string, { seq: number; text: string; ended: boolean }>();
+  const said = new Map<string, { seq: number; text: string; ended: boolean; replyId: number; completedAt: number }>();
 
   async function latestMessage(threadId: string) {
     let known = said.get(threadId);
     if (!known) {
       const [start] = await bb.sdk.threads.events.list({ threadId, types: ["turn/started"], order: "desc", limit: "1" });
-      known = { seq: start ? start.seq - 1 : 0, text: "", ended: false };
+      known = { seq: start ? start.seq - 1 : 0, text: "", ended: false, replyId: 0, completedAt: 0 };
     }
     for (;;) {
       const events = await bb.sdk.threads.events.list({
@@ -54,8 +54,12 @@ export function agentSpeech(bb: BbPluginApi) {
       });
       for (const event of events) {
         known.seq = event.seq;
-        if (event.type === "turn/started") Object.assign(known, { text: "", ended: false });
-        else if (event.type === "turn/completed") known.ended = true;
+        if (event.type === "turn/started") Object.assign(known, { text: "", ended: false, replyId: 0, completedAt: 0 });
+        else if (event.type === "turn/completed") {
+          known.ended = true;
+          known.replyId = event.data.status === "completed" ? event.seq : 0;
+          known.completedAt = event.createdAt;
+        }
         else if (event.type === "item/completed" && event.data.item.type === "agentMessage" && !event.data.item.parentToolCallId)
           known.text = event.data.item.text;
       }
@@ -75,9 +79,16 @@ export function agentSpeech(bb: BbPluginApi) {
       return { kind: "working", text: latest.ended ? "" : plain(latest.text) };
     }
     if (thread.status !== "idle" || thread.latestAttentionAt <= (thread.lastReadAt ?? 0)) return null;
-    const reply = plain((await latestMessage(thread.id)).text);
-    return reply ? { kind: "reply", text: reply } : null;
+    const final = await reply(thread.id);
+    return final ? { kind: "reply", text: final.text } : null;
   }
 
-  return { speech, forget: (threadId: string) => said.delete(threadId) };
+  async function reply(threadId: string) {
+    const latest = await latestMessage(threadId);
+    const text = plain(latest.text);
+    // A stopped turn or a new turn's commentary is not a final reply.
+    return latest.replyId && text ? { id: String(latest.replyId), createdAt: latest.completedAt, text } : null;
+  }
+
+  return { speech, reply, forget: (threadId: string) => said.delete(threadId) };
 }

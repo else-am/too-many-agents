@@ -5,16 +5,20 @@ import com.google.gson.JsonObject;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import toomanyagents.ui.AgentUiAccess;
 
-/** Optional sounds for new replies and requests for attention. */
+/** Automatic chat previews and optional sounds for replies and requests for attention. */
 public final class AgentNotifications {
     private final Supplier<? extends AgentUiAccess> access;
     private final Predicate<String> viewingAgent;
@@ -27,6 +31,27 @@ public final class AgentNotifications {
         this.access = access;
         this.viewingAgent = viewingAgent;
         NeoForge.EVENT_BUS.addListener(this::tick);
+    }
+
+    /** Chat remains available while the integrated server is paused. */
+    static CompletableFuture<Void> chat(String agentId, String name, String message, BooleanSupplier current) {
+        var result = new CompletableFuture<Void>();
+        var client = Minecraft.getInstance();
+        client.execute(() -> {
+            if (result.isDone()) return;
+            try {
+                if (client.level != null && current.getAsBoolean()) {
+                    var notification = Component.literal("[" + name + "] " + message).withStyle(style -> style
+                        .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
+                            "/agents open " + agentId))
+                        .withHoverEvent(new net.minecraft.network.chat.HoverEvent(net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
+                            Component.literal("Open conversation"))));
+                    client.getChatListener().handleSystemMessage(notification, false);
+                }
+                result.complete(null);
+            } catch (Exception failure) { result.completeExceptionally(failure); }
+        });
+        return result.orTimeout(5, TimeUnit.SECONDS);
     }
 
     private void tick(ClientTickEvent.Post event) {

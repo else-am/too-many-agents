@@ -354,6 +354,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(text(settings,"body").isBlank()) settings.addProperty("body",StarterAgents.body());
         }
         if(!settings.has("mode")) settings.addProperty("mode","survival");
+        if(!settings.has("notifyInChat")) settings.addProperty("notifyInChat",false);
         validateRoleBody(BodySettings.profile(settings));
         String name=text(settings,"name");
         var agent=new Agent(); agent.id=id; agent.name=name; agent.projectId=projectId; agent.bbInstanceId=text(request,"bbInstanceId");
@@ -411,10 +412,11 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
     private CompletableFuture<Void> updateBodySettings(Agent agent,JsonObject settings,String session) {
         var physical=BodySettings.copy(settings);
-        if(physical.has("behaviors")) validateBehaviors(physical.get("behaviors"));
+        validateRoleBody(BodySettings.profile(physical));
         return game.updateSettings(agent.body,session,physical).thenCompose(body -> {
             synchronized(this) {
                 requireCurrent(agent,session); agent.body=body;
+                if(physical.has("notifyInChat")) agent.settings.add("notifyInChat",physical.get("notifyInChat"));
                 for(var entry:game.settings(body).entrySet()) agent.settings.add(entry.getKey(),entry.getValue());
                 agent.name=text(agent.settings,"name");
             }
@@ -559,6 +561,19 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     return CompletableFuture.supplyAsync(() -> { try { return object("path",Files.createDirectories(path).toString()); } catch(Exception failure) { throw new CompletionException(failure); } },disk);
                 }
                 case "world.project": return game.worldCommand(object("operation","world-project","bbInstanceId",instance,"projectId",text(request,"projectId")),session).thenApply(done -> new JsonObject());
+                case "chat.notice": {
+                    var agent=agents.get(text(request,"agentId"));
+                    if(agent==null || agent.removed || agent.archived || agent.deleted || !flag(agent.settings,"notifyInChat")
+                        || !agent.threadId.equals(text(request,"threadId"))) return CompletableFuture.completedFuture(new JsonObject());
+                    String message=text(request,"message");
+                    if(message.isBlank() || message.length()>280) return failed("invalid_chat_notice");
+                    return AgentNotifications.chat(agent.id,agent.name,message,() -> {
+                        synchronized(this) {
+                            return currentSession(session) && System.currentTimeMillis()<expiresAt && !agent.removed && !agent.archived
+                                && !agent.deleted && flag(agent.settings,"notifyInChat") && connectionId.equals(text(request,"connectionId"));
+                        }
+                    }).thenApply(done -> new JsonObject());
+                }
                 case "communication": {
                     var sender=agents.get(text(request,"senderAgentId"));
                     var recipient=agents.get(text(request,"recipientAgentId"));
@@ -631,7 +646,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     BodySettings.mode(value.getAsString());
                     yield true;
                 }
-                case "minecraftAccess" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
+                case "minecraftAccess", "notifyInChat" -> value.isJsonPrimitive() && value.getAsJsonPrimitive().isBoolean();
                 case "behaviors" -> value.isJsonObject();
                 default -> false;
             };

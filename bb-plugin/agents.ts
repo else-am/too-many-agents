@@ -22,6 +22,7 @@ const bodyFields = new Set([
   "behaviors",
   "stationId",
   "minecraftAccess",
+  "notifyInChat",
 ]);
 function split(request: ObjectValue) {
   const settings: ObjectValue = {},

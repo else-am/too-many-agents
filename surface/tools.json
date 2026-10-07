@@ -221,25 +221,5 @@
       "additionalProperties": false
     },
     "operation": "COMMAND"
-  },
-  {
-    "name": "notify_user",
-    "description": "Send the user a brief completion summary or request for attention. They can open your conversation for details. Keep full answers in the conversation.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "message": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 120,
-          "description": "One short plain-text line, at most 120 characters."
-        }
-      },
-      "required": [
-        "message"
-      ],
-      "additionalProperties": false
-    },
-    "operation": "NOTIFY"
   }
 ]

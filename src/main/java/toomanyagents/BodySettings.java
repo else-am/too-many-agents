@@ -8,7 +8,7 @@ public final class BodySettings {
     public static JsonObject copy(JsonObject settings) {
         var result = new JsonObject();
         if (settings == null) return result;
-        for (String key : List.of("name", "body", "mode", "behaviors", "stationId", "minecraftAccess"))
+        for (String key : List.of("name", "body", "mode", "behaviors", "stationId", "minecraftAccess", "notifyInChat"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
         return result;
     }

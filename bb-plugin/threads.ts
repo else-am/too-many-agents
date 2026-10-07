@@ -3,6 +3,7 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { imageUploads } from "./images.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import { agentSpeech } from "./speech.js";
+import { chatNotifications } from "./notifications.js";
 import { describe, type ObjectValue, type Session, type SpawnOptions, type Thread } from "./protocol.js";
 
 function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" | "working" | "idle" {
@@ -16,6 +17,7 @@ function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" |
 export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const withImages = imageUploads(bb);
   const speech = agentSpeech(bb);
+  chatNotifications(bb, worlds, speech);
   const pending = new Map<string, Promise<void>>();
   let disposed = false;
   const environments = new Map<string, { until: number; value: ReturnType<typeof readEnvironment> }>();

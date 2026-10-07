@@ -31,7 +31,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
     private JsonObject draft, saved;
     // UI-only undo state; never sent to BB or saved with a body.
     private JsonObject roleSelection = new JsonObject();
-    private static final List<String> ROLE_FIELDS = List.of("body", "mode", "behaviors", "minecraftAccess",
+    private static final List<String> ROLE_FIELDS = List.of("body", "mode", "behaviors", "minecraftAccess", "notifyInChat",
         "providerId", "model", "reasoningLevel", "serviceTier", "permissionMode", "worktree", "roleInstructions");
     private boolean busy;
     private boolean bodiesRequested, rolesRequested;
@@ -56,6 +56,7 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         this.editingRole=editingRole;
         this.access=access;this.parent=parent;this.agentId=agentId;this.apply=apply;draft=settings.deepCopy();
         if(!draft.has("minecraftAccess"))draft.addProperty("minecraftAccess",true);
+        if(!draft.has("notifyInChat"))draft.addProperty("notifyInChat",false);
         draft.remove("color");
         var source=agentId==null?draft:access.snapshot(agentId);projectId=AgentModels.text(source,"projectId");
         if (agentId == null && AgentModels.worldProject(access.projects(), projectId)) draft.addProperty("minecraftAccess", true);
@@ -175,6 +176,8 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         for (String body : bodies) bodyChoices.add(new Choice(body, bodyLabel(body)));
         choice("Body", value("body"), bodyChoices, v -> change("body", v), enabled);
         section("In the world");
+        toggle("Notify in chat",flag("notifyInChat"),v->change("notifyInChat",v),enabled)
+            .setTooltip(Tooltip.create(Component.literal("Show final replies and questions in Minecraft chat. Click a message to open the conversation.")));
         if (editingRole || !AgentModels.worldProject(access.projects(), projectId)) {
             if(agentId==null) toggle("Minecraft access",world,v->change("minecraftAccess",v),enabled);
             else value("Minecraft access",world?"On - fixed at spawn":"Off - fixed at spawn");

@@ -50,7 +50,7 @@ import java.util.function.Supplier;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, CHAT, NOTIFY }
+    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -671,8 +671,6 @@ final class GameAccess {
             case CANCEL -> controller.cancel(arguments.has("id") ? string(arguments,"id",80) : "");
             case BLOCKS -> blocks((ServerLevel) mob.level(), arguments);
             case COMMAND -> command(current, mob, arguments);
-            case CHAT -> chat(current, mob, arguments, 2000);
-            case NOTIFY -> chat(current, mob, arguments, 120);
             case POV -> throw error("pov_requires_client_renderer");
         };
     }
@@ -1286,23 +1284,6 @@ final class GameAccess {
                 .append(Component.literal(": " + summary).withStyle(style -> style.withColor(0xDDDDDD))));
             return null;
         });
-    }
-
-    private JsonObject chat(MinecraftServer current, Mob mob, JsonObject args, int limit) {
-        var message = string(args, "message", limit);
-        if (limit == 120 && message.codePoints().anyMatch(c -> Character.isISOControl(c) || c == '§' || c == 0x2028 || c == 0x2029)) throw error("message_must_be_one_plain_text_line");
-        if (message.isBlank()) throw error("empty_message");
-        var notification = Component.literal("[").append(Component.literal(mob.getName().getString()))
-            .append(Component.literal("] " + message));
-        if (limit == 120) notification.withStyle(style -> style
-            .withClickEvent(new net.minecraft.network.chat.ClickEvent(net.minecraft.network.chat.ClickEvent.Action.RUN_COMMAND,
-                "/agents open " + mob.getPersistentData().getString("too_many_agents_agent")))
-            .withHoverEvent(new net.minecraft.network.chat.HoverEvent(net.minecraft.network.chat.HoverEvent.Action.SHOW_TEXT,
-                Component.literal("Open conversation"))));
-        player(current).sendSystemMessage(notification);
-        var result = new JsonObject();
-        result.addProperty("status", "sent");
-        return result;
     }
 
     private static BlockPos coordinates(JsonObject args, String key) {

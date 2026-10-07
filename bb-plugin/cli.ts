@@ -73,6 +73,8 @@ export function registerMinecraftCli(
         body: text("Minecraft body type."), mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Game mode." },
         "minecraft-access": { type: "boolean", description: "Enable physical tools." },
         "no-minecraft-access": { type: "boolean", description: "Disable physical tools." },
+        "notify-in-chat": { type: "boolean", description: "Show final replies and questions in Minecraft chat." },
+        "no-notify-in-chat": { type: "boolean", description: "Keep replies and questions in the conversation only." },
         behaviors: text("Behavior object as JSON; replaces all behavior choices."),
         "instructions-file": text("UTF-8 file on the calling thread's host (BB's local host outside a thread); relative to the invoking directory."),
         instructions: { ...text("Instructions text; --instructions-stdin reads one line on the invoking machine."), stdin: true },
@@ -81,6 +83,7 @@ export function registerMinecraftCli(
       constraints: [
         { kind: "at-most-one", options: ["worktree", "no-worktree"] },
         { kind: "at-most-one", options: ["minecraft-access", "no-minecraft-access"] },
+        { kind: "at-most-one", options: ["notify-in-chat", "no-notify-in-chat"] },
         { kind: "at-most-one", options: ["instructions", "instructions-file"] },
       ],
       async run({ options: o, positionals: p }, ctx) {
@@ -92,6 +95,7 @@ export function registerMinecraftCli(
         if (o.body !== undefined) body.body = o.body;
         if (o.mode !== undefined) body.mode = o.mode;
         if (o["minecraft-access"] || o["no-minecraft-access"]) body.minecraftAccess = !o["no-minecraft-access"];
+        if (o["notify-in-chat"] || o["no-notify-in-chat"]) body.notifyInChat = !o["no-notify-in-chat"];
         if (o.behaviors !== undefined) body.behaviors = object(JSON.parse(o.behaviors));
         const instructions = o.instructions ?? (o["instructions-file"] !== undefined
           ? await readTextFile(o["instructions-file"], "--instructions-file", ctx) : undefined);
@@ -208,6 +212,7 @@ export function registerMinecraftCli(
             role: text("Role to copy from BB storage."),
             mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Minecraft game mode." },
             "minecraft-access": { type: "enum", values: ["true", "false"], description: "Physical tool access; cannot exceed your own." },
+            "notify-in-chat": { type: "enum", values: ["true", "false"], description: "Show final replies and questions in Minecraft chat; defaults to off." },
             behaviors: text("JSON behavior settings, replacing the role's behaviors."),
             body: text("Minecraft entity type, e.g. minecraft:fox."),
             station: text("Free station ID from bb minecraft stations."),
@@ -352,6 +357,7 @@ export function registerMinecraftCli(
                 ...(!o.environment && !o["new-environment"] && !o["environment-provider"] && !o.machine && typeof choices.worktree === "boolean" ? { worktree: choices.worktree } : {}),
                 ...(o.mode ? { mode: o.mode } : {}),
                 ...(o["minecraft-access"] ? { minecraftAccess: o["minecraft-access"] === "true" } : {}),
+                ...(o["notify-in-chat"] ? { notifyInChat: o["notify-in-chat"] === "true" } : {}),
                 ...(o.behaviors ? { behaviors: object(JSON.parse(o.behaviors)) } : {}),
                 name: o.name,
                 ...(o.body ? { body: o.body } : {}),

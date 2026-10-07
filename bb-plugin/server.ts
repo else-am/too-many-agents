@@ -34,7 +34,7 @@ export default async function minecraft(bb: BbPluginApi) {
     "utf8",
   );
   const instructions = await readFile(new URL("./surface/agents.md", import.meta.url), "utf8");
-  const physicalTools = tools.filter((tool) => tool.minecraft || tool.name === "notify_user");
+  const physicalTools = tools.filter((tool) => tool.minecraft);
 
   for (const tool of physicalTools) {
     bb.agents.registerTool({

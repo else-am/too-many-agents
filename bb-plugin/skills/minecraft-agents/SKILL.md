@@ -78,6 +78,12 @@ bb minecraft spawn --parent-self --role worker --station <id> --prompt 'Fix the 
 bb minecraft role delete worker
 ```
 
+`--notify-in-chat` on a role enables automatic Minecraft chat previews of final
+replies and questions; `--no-notify-in-chat` disables them. At spawn, override
+the role with `--notify-in-chat true` or `--notify-in-chat false`. The same
+setting is available as **Notify in chat** in agent and role settings, off by
+default. Chat messages open the full conversation when clicked.
+
 `create` fails for an existing name; `update` changes only supplied fields and
 fails for a missing name. `--no-worktree` and
 `--no-minecraft-access` explicitly turn those choices off. Use
