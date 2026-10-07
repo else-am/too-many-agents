@@ -4,6 +4,12 @@ import { ApiError, PROTOCOL, object, type Session, type Identity, type Agent } f
 
 const START_EXPIRY_MS = 10_000;
 
+function connectionRefused(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (error instanceof AggregateError) return error.errors.length > 0 && error.errors.every(connectionRefused);
+  return (error as NodeJS.ErrnoException).code === "ECONNREFUSED" || connectionRefused(error.cause);
+}
+
 export function minecraftWorlds(bb: BbPluginApi) {
   const lifetime = new AbortController();
   const sessions = new Map<string, Session>();
@@ -53,13 +59,17 @@ export function minecraftWorlds(bb: BbPluginApi) {
       });
     } catch (error) {
       if (signal?.aborted || (error instanceof Error && error.name === "AbortError")) throw error;
-      // Minecraft is gone without detaching; it attaches again if it is still running.
-      if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); }
-      throw new ApiError("world_disconnected", "Minecraft world is disconnected");
+      // A timeout or reset is not proof that the game stopped.
+      if (connectionRefused(error)) {
+        forget(live);
+        throw new ApiError("world_disconnected", "Minecraft world is disconnected");
+      }
+      throw new ApiError("world_unreachable", "Minecraft did not answer; its connection state is unknown.");
     }
     const body = object(await response.json(), "Minecraft response");
     if (!response.ok || body.ok !== true) {
       const error = body.error && typeof body.error === "object" ? object(body.error) : undefined;
+      if (response.status === 409 && error?.code === "world_session_changed") forget(live);
       throw new ApiError(
         "minecraft_action_failed",
         error && typeof error.message === "string"
@@ -132,13 +142,17 @@ export function minecraftWorlds(bb: BbPluginApi) {
     if (sessions.get(worldId)?.worldSessionId === worldSessionId) { sessions.delete(worldId); seen.delete(worldId); }
   }
 
+  function forget(live: Session) {
+    if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); }
+  }
+
   async function activeGames(probe = false) {
     // A stopped JVM cannot keep blocking updates. Probe old sessions so a slow
     // world sync does not make a still-running game look disconnected.
     await Promise.all([...sessions.values()].map(async live => {
       if (!probe && Date.now() - (seen.get(live.worldId) ?? 0) < 30_000) return;
       try { await callback(live, "agents", {}, AbortSignal.timeout(3000)); }
-      catch { if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); } }
+      catch { /* callback removes only definitively disconnected sessions; unknown games still block replacement. */ }
     }));
     return [...sessions.values()].map(live => ({ worldId: live.worldId }));
   }

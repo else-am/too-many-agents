@@ -426,12 +426,17 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         return guarded(() -> { var agent=require(id); return AgentSurface.call(agent.minecraftAccess,game,agent.body,loadedSession,null,tool,arguments); });
     }
 
+    static final class StaleSessionException extends IllegalStateException {
+        StaleSessionException() { super("world_session_changed"); }
+    }
+
     /** Requests from the BB plugin. Physical requests must come from the agent's own thread. */
     synchronized CompletableFuture<JsonObject> callback(JsonObject request) {
         try {
             String session=worldSession.get(), op=text(request,"op"), requestId=text(request,"requestId");
-            if(request.get("protocol").getAsInt()!=3 || session==null || !session.equals(loadedSession) || !session.equals(text(request,"worldSessionId"))
-                || !loadedWorldId.equals(text(request,"worldId"))) return failed("world_session_changed");
+            if(request.get("protocol").getAsInt()!=3) return failed("protocol_mismatch");
+            if(session==null || !session.equals(loadedSession) || !session.equals(text(request,"worldSessionId"))
+                || !loadedWorldId.equals(text(request,"worldId"))) return CompletableFuture.failedFuture(new StaleSessionException());
             long expiresAt=request.get("expiresAt").getAsLong();
             switch(op) {
                 case "body.validate": {

@@ -31,6 +31,7 @@ public final class BbSetup {
     private final Path settings = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-bb.json");
     private final String developmentSource = System.getProperty("too_many_agents.devPlugin", "");
     private boolean developmentLoaded;
+    private boolean installStartedThisLaunch;
     public boolean development() { return !developmentSource.isBlank(); }
     public String pluginSourceLabel() { return development() ? "development plugin" : "bundled plugin"; }
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("minecraft-bb-setup").factory());
@@ -67,7 +68,7 @@ public final class BbSetup {
     }
     public void retry() { worker.execute(() -> { if (!settingsUnreadable) error = ""; notice = ""; check(false); }); }
     public void select(String id) { worker.execute(() -> {
-        developmentLoaded = false;
+        developmentLoaded = false; installStartedThisLaunch = false;
         selected = id; selectedUrl = ""; automatic = false; installPending = false; settingsUnreadable = false; error = notice = "";
         persist(); check(false);
     }); }
@@ -77,7 +78,7 @@ public final class BbSetup {
             cli = resolveCli(path).toString();
             var status = command("", "status", "--json");
             selected = digest(text(status,"dataDir")); selectedUrl = "";
-            developmentLoaded = false;
+            developmentLoaded = false; installStartedThisLaunch = false;
             automatic = false; installPending = false; settingsUnreadable = false; error = notice = ""; persist();
         } catch (Exception failure) { cli = previousCli; error = notice = failure.getMessage(); }
         check(false);
@@ -96,6 +97,10 @@ public final class BbSetup {
     }
 
     private void check(boolean explicit) {
+        check(explicit, false);
+    }
+
+    private void check(boolean explicit, boolean locked) {
         List<Instance> instances = List.of();
         String installed = "";
         bbNotFound = false;
@@ -132,7 +137,7 @@ public final class BbSetup {
                 if (!url.equals(selectedUrl)) { selectedUrl = url; persist(); }
                 boolean sourceMatches = !development() || developmentDirectory.toString().equals(text(status,"pluginRoot"));
                 if (installPending && sourceMatches && installationVerified(status)) {
-                    installPending = false; developmentLoaded = development(); error = ""; persist();
+                    installPending = false; developmentLoaded = development() && installStartedThisLaunch; error = ""; persist();
                 }
                 if (version().equals(installed) && !explicit && !installPending && sourceMatches && (!development() || developmentLoaded)) {
                     action = notice.isBlank() ? Action.NONE : Action.RETRY;
@@ -141,6 +146,17 @@ public final class BbSetup {
                 }
             }
             if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Minecraft plugin.");
+            if (!locked) {
+                Files.createDirectories(root.resolve("locks"));
+                try (var channel = FileChannel.open(root.resolve("locks").resolve(selected + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+                     var lock = channel.tryLock()) {
+                    if (lock == null) throw new IOException("Another Minecraft installation is updating this BB. Retry shortly.");
+                    // Re-read discovery and authorization once under the selected instance's
+                    // lock. Keep it through installation and verification; never reacquire it.
+                    check(explicit, true);
+                }
+                return;
+            }
             if (found == null) {
                 // The selected BB may have restarted on another port with its plugin
                 // disabled. Only use CLI discovery when it identifies that same BB.
@@ -213,32 +229,32 @@ public final class BbSetup {
     }
 
     private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation) throws Exception {
-        Files.createDirectories(root.resolve("locks"));
-        try (var channel = FileChannel.open(root.resolve("locks").resolve(selected + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-             var lock = channel.tryLock()) {
-            if (lock == null) throw new IOException("Another Minecraft installation is updating this BB. Retry shortly.");
-            if (plugin != null) {
-                if (!text(plugin,"source").startsWith("path:"))
-                    throw new IOException("This plugin is managed by another installer. Change its source in BB before enabling mod-managed installation.");
-                if (found == null) {
-                    // An older or broken plugin cannot prove that it is safe to replace.
-                    if (!text(plugin,"status").equals("disabled"))
-                        throw new IOException("This plugin cannot report active games. Close its games and disable Minecraft in BB before replacing it.");
-                } else {
-                    var prepared = request(url, "/api/v1/plugins/minecraft/http/v1/setup/prepare", new JsonObject());
-                    if (!flag(prepared,"ok")) throw new IOException(text(prepared,"error"));
-                }
+        // check holds the selected instance's lock and has refreshed these inputs.
+        if (plugin != null) {
+            if (!text(plugin,"source").startsWith("path:"))
+                throw new IOException("This plugin is managed by another installer. Change its source in BB before enabling mod-managed installation.");
+            if (found == null) {
+                // An older or broken plugin cannot prove that it is safe to replace.
+                if (!text(plugin,"status").equals("disabled"))
+                    throw new IOException("This plugin cannot report active games. Close its games and disable Minecraft in BB before replacing it.");
+            } else {
+                var prepared = request(url, "/api/v1/plugins/minecraft/http/v1/setup/prepare", new JsonObject());
+                if (!flag(prepared,"ok")) throw new IOException(text(prepared,"error"));
+                if (!selected.equals(text(prepared,"instanceId")) || !generation.equals(text(prepared,"generation")))
+                    throw new IOException("BB's Minecraft plugin changed during setup. Retry to check its current version.");
+                generation = text(prepared,"generation");
             }
-            Path directory = developmentDirectory == null ? extractBundle() : developmentDirectory;
-            expectedPluginRoot = directory.toRealPath().toString(); previousGeneration = generation;
-            error = ""; installPending = true; persist();
-            if (!error.isBlank()) throw new IOException(error);
-            if (plugin != null && expectedPluginRoot.equals(text(plugin,"rootDir")))
-                command(url, "plugin", "reload", "minecraft", "--json");
-            else command(url, "plugin", "install", "path:" + directory, "--yes", "--json");
-            // A path move preserves a disabled plugin's state. Enabling is part of the user's install action.
-            command(url, "plugin", "enable", "minecraft", "--json");
         }
+        Path directory = developmentDirectory == null ? extractBundle() : developmentDirectory;
+        expectedPluginRoot = directory.toRealPath().toString(); previousGeneration = generation;
+        error = ""; installPending = true; persist();
+        if (!error.isBlank()) throw new IOException(error);
+        installStartedThisLaunch = true;
+        if (plugin != null && expectedPluginRoot.equals(text(plugin,"rootDir")))
+            command(url, "plugin", "reload", "minecraft", "--json");
+        else command(url, "plugin", "install", "path:" + directory, "--yes", "--json");
+        // A path move preserves a disabled plugin's state. Enabling is part of the user's install action.
+        command(url, "plugin", "enable", "minecraft", "--json");
     }
 
     private Path extractBundle() throws Exception {
@@ -329,10 +345,37 @@ public final class BbSetup {
             Path mac=path.getParent().resolve("../Resources/app.asar.unpacked/node_modules/bb-app/host-daemon/dist/bb").normalize();
             if (Files.isRegularFile(bundled)) path=bundled;
             else if (Files.isRegularFile(mac)) path=mac;
-            else if (path.toString().endsWith(".cmd") && Files.isRegularFile(path.resolveSibling("bb"))) path=path.resolveSibling("bb");
+            else if (path.toString().endsWith(".cmd") && nodeScript(path.resolveSibling("bb"))) path=path.resolveSibling("bb");
         }
-        if (!Files.isRegularFile(path) || !Files.isExecutable(path)) throw new IOException("Select the installed BB app or its executable bb CLI.");
+        if (!Files.isRegularFile(path)) throw new IOException("Select the installed BB app or its executable bb CLI.");
+        if (System.getProperty("os.name").startsWith("Windows") && !path.toString().toLowerCase(Locale.ROOT).endsWith(".exe")) {
+            if (!nodeScript(path)) path = npmCli(path);
+        } else if (!Files.isExecutable(path)) throw new IOException("Select the installed BB app or its executable bb CLI.");
         return path.toRealPath();
+    }
+    private static boolean nodeScript(Path path) throws IOException {
+        if (!Files.isRegularFile(path)) return false;
+        try (var reader = Files.newBufferedReader(path)) {
+            String first = reader.readLine();
+            return first != null && first.matches("#!.*[ /]node(?:\\.exe)?(?:\\s.*)?");
+        }
+    }
+    private static Path npmCli(Path wrapper) throws IOException {
+        // npm global and local .bin wrappers point at a package's declared bin.
+        // Resolve that declaration instead of executing or parsing a shell shim.
+        Path parent = wrapper.getParent();
+        Path directory = parent.getFileName() != null && parent.getFileName().toString().equals(".bin")
+            ? parent.getParent().resolve("bb-app") : parent.resolve("node_modules/bb-app");
+        if (Files.isRegularFile(directory.resolve("package.json"))) {
+            directory = directory.toRealPath();
+            var manifest = JsonParser.parseString(Files.readString(directory.resolve("package.json"))).getAsJsonObject();
+            String entry = text(obj(manifest,"bin"),"bb");
+            if (text(manifest,"name").equals("bb-app") && !entry.isBlank()) {
+                Path script = directory.resolve(entry).toRealPath();
+                if (script.startsWith(directory) && nodeScript(script)) return script;
+            }
+        }
+        throw new IOException("Could not resolve this BB command wrapper. Select BB's installed app or its JavaScript CLI entry point.");
     }
     private static Path desktopRuntime(Path script) throws IOException {
         for (Path parent=script.getParent();parent!=null;parent=parent.getParent()) {
@@ -352,10 +395,24 @@ public final class BbSetup {
         }
         return null;
     }
+    private static String nodeRuntime(Path script) {
+        Path sibling = script.resolveSibling("node.exe");
+        if (Files.isRegularFile(sibling)) return sibling.toString();
+        for (Path parent = script.getParent(); parent != null && parent.getParent() != null; parent = parent.getParent()) {
+            if (parent.getFileName().toString().equals("node_modules")) {
+                Path localRuntime = parent.resolve(".bin/node.exe");
+                if (Files.isRegularFile(localRuntime)) return localRuntime.toString();
+                Path runtime = parent.getParent().resolve("node.exe");
+                if (Files.isRegularFile(runtime)) return runtime.toString();
+            }
+        }
+        return "node.exe";
+    }
     private static String findCli() {
         var candidates=new ArrayList<String>();
         for (var directory:System.getenv().getOrDefault("PATH","").split(java.io.File.pathSeparator)) if (!directory.isBlank()) {
-            candidates.add(Path.of(directory,"bb").toString()); candidates.add(Path.of(directory,"bb.exe").toString()); candidates.add(Path.of(directory,"bb.cmd").toString());
+            for (var name : System.getProperty("os.name").startsWith("Windows") ? List.of("bb.exe","bb.cmd","bb") : List.of("bb","bb.exe","bb.cmd"))
+                candidates.add(Path.of(directory,name).toString());
         }
         candidates.add(Path.of(System.getProperty("user.home"),".local/bin/bb").toString());
         candidates.add("/Applications/BB.app");
@@ -373,8 +430,8 @@ public final class BbSetup {
         Path script=resolveCli(cli), runtime=desktopRuntime(script);
         var command=new ArrayList<String>();
         if (runtime!=null) command.add(runtime.toString());
-        else if (System.getProperty("os.name").startsWith("Windows") && !script.toString().endsWith(".exe"))
-            command.add("node.exe"); // npm-installed BB already requires Node; desktop BB uses its own runtime above.
+        else if (System.getProperty("os.name").startsWith("Windows") && !script.toString().toLowerCase(Locale.ROOT).endsWith(".exe"))
+            command.add(nodeRuntime(script)); // npm requires Node; desktop BB uses its own runtime above.
         command.add(script.toString()); command.addAll(List.of(args));
         var builder=new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.DISCARD);
         // A launcher may itself be a BB child. Its thread and binary overrides must

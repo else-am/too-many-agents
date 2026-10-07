@@ -23,9 +23,11 @@ manifest. `GET /v1/setup` reports identity, version, and connected games.
 `POST /v1/setup/prepare` refuses connected games and closes the attach race while
 the mod replaces the plugin through `bb plugin install path:… --yes --json`.
 The replacement reservation expires after two minutes if installation fails.
-Sessions not seen for 30 seconds are probed before they can block replacement;
-unreachable or no-longer-valid sessions are removed. Local installers also share
-a file lock per BB identity. Plugin packages are extracted into immutable,
+Sessions not seen for 30 seconds are probed before they can block replacement.
+Only connection refusal or a structured `world_session_changed` response removes
+a session; timeouts and other uncertain failures still block replacement. Local
+installers share a file lock per BB identity, re-reading installation state and
+authorization under that lock and holding it through verification. Plugin packages are extracted into immutable,
 versioned release directories under `~/.too-many-agents/plugins/`. Explicit
 reinstallation extracts a fresh copy instead of trusting an existing directory.
 
