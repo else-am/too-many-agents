@@ -417,7 +417,12 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()), request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
+        return actions.computeIfAbsent(ref, ignored -> {
+            var controller = new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()),
+                request -> scriptChat(mob, request), request -> tabComplete(mob, request));
+            controller.hands.collectSink = collected -> entityEvent("playerCollect", mob, collected, null);
+            return controller;
+        });
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
@@ -746,6 +751,7 @@ final class GameAccess {
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
         snapshot.add("messages", controller.drainMessages());
+        snapshot.add("entityEvents", controller.drainEntityEvents());
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
         for (var value : snapshot.getAsJsonArray("entities")) {
             var observed = value.getAsJsonObject();
@@ -1395,6 +1401,37 @@ final class GameAccess {
         result.addProperty("position", position);
         if (sender != null) result.addProperty("sender", sender.toString());
         return result;
+    }
+
+    void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {
+        if (!(subject.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
+        if (!level.getServer().isSameThread()) return;
+        if (subject instanceof AgentHands hands) subject = hands.visibleBody();
+        if (cause instanceof AgentHands hands) cause = hands.visibleBody();
+        for (var controller : actions.values()) {
+            if (!controller.scripted() || controller.mob.level() != level || controller.mob.distanceToSqr(subject) > OBSERVE_RADIUS * OBSERVE_RADIUS) continue;
+            try {
+                var event = new JsonObject(); event.addProperty("name", kind);
+                var entities = new JsonArray();
+                var items = new ScriptItems(level);
+                var primary = Observations.entity(subject);
+                ScriptEntities.enrich(subject, primary, items);
+                entities.add(primary);
+                event.addProperty("subject", subject.getId());
+                if (cause != null && controller.mob.distanceToSqr(cause) <= OBSERVE_RADIUS * OBSERVE_RADIUS) {
+                    event.addProperty("cause", cause.getId());
+                    var secondary = Observations.entity(cause);
+                    ScriptEntities.enrich(cause, secondary, items);
+                    if (originalItem != null) secondary.add("droppedItem", JsonState.object("wire", items.wire(originalItem)));
+                    entities.add(secondary);
+                }
+                event.add("entities", entities);
+                controller.recordEntityEvent(event);
+            } catch (RuntimeException failure) {
+                // Observation errors terminate only this lease, not native gameplay.
+                controller.failObservation("script_entity_event_serialization_failed");
+            }
+        }
     }
 
     void publicChat(ServerPlayer sender, Component message) {

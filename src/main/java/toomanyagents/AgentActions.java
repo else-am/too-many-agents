@@ -30,6 +30,8 @@ final class AgentActions {
     private long suggestionDeadline;
     private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
     private int messageSize;
+    private final ArrayDeque<JsonObject> entityEvents = new ArrayDeque<>();
+    private int entityEventSize;
     private boolean creativeFlying;
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
@@ -83,6 +85,7 @@ final class AgentActions {
         UUID.fromString(id);
         if (timeoutMs < 1 || timeoutMs > 300_000) throw error("invalid_script_deadline");
         messages.clear(); messageSize = 0;
+        entityEvents.clear(); entityEventSize = 0;
         scriptId = id;
         lastScriptId = id;
         snapshotRevision = 0;
@@ -112,6 +115,7 @@ final class AgentActions {
         scriptId = null;
         creativeFlying = false;
         messages.clear(); messageSize = 0;
+        entityEvents.clear(); entityEventSize = 0;
         clearControls();
         cancel("");
         if (stateStream != null) stateStream.finish();
@@ -135,6 +139,30 @@ final class AgentActions {
         var result = new JsonArray();
         messages.forEach(result::add);
         messages.clear(); messageSize = 0;
+        return result;
+    }
+
+    void recordEntityEvent(JsonObject event) {
+        if (!scripted()) return;
+        int size = event.toString().length();
+        if (entityEvents.size() >= 64 || entityEventSize + size > 1024 * 1024) {
+            failObservation("script_entity_event_overflow"); return;
+        }
+        entityEvents.addLast(event); entityEventSize += size;
+    }
+
+    void failObservation(String reason) {
+        if (stateStream != null) stateStream.fail(error(reason));
+        try { releaseScript(); }
+        catch (RuntimeException cleanup) {
+            // Native event listeners must not break damage/pickup if cleanup fails.
+            com.mojang.logging.LogUtils.getLogger().warn("Script event cleanup failed for body {}", mob.getStringUUID(), cleanup);
+        }
+    }
+
+    JsonArray drainEntityEvents() {
+        var result = new JsonArray(); entityEvents.forEach(result::add);
+        entityEvents.clear(); entityEventSize = 0;
         return result;
     }
 

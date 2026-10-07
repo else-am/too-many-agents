@@ -76,7 +76,9 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
             entries.push(offer.baseCostA, offer.costA, offer.costB, offer.result);
           }
         }
-        for (const value of [snapshot.body, ...snapshot.entities as unknown[]]) {
+        const eventEntities = ((snapshot.entityEvents ?? []) as unknown[])
+          .flatMap(value => object(value).entities as unknown[]);
+        for (const value of [snapshot.body, ...snapshot.entities as unknown[], ...eventEntities]) {
           const entity = object(value);
           if (entity.equipment) entries.push(...entity.equipment as unknown[]);
           if (entity.droppedItem) entries.push(entity.droppedItem);

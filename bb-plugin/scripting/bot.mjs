@@ -178,7 +178,13 @@ export function createBot(initial) {
     bot.nativeBody = next.nativeBody;
     const present = new Set();
     const entityEvents = [];
-    for (const source of [next.body, ...next.entities]) {
+    // Event-only entities can spawn and be collected between observations.
+    // Current observations win over the earlier event-time record for live entities.
+    const observed = new Map();
+    for (const event of next.entityEvents ?? []) for (const source of event.entities) observed.set(source.id, source);
+    for (const source of [next.body, ...next.entities]) observed.set(source.id, source);
+    const sources = [...observed.values()];
+    for (const source of sources) {
       present.add(source.id);
       let entity = bot.entities[source.id];
       const fresh = !entity || entity.uuid !== source.uuid;
@@ -253,7 +259,7 @@ export function createBot(initial) {
         entityEvents.push(['entityGone', entity]);
       }
     }
-    for (const source of [next.body, ...next.entities]) {
+    for (const source of sources) {
       const entity = bot.entities[source.id];
       // Missing observations stay undefined, distinct from no vehicle. Do not
       // invent entities or erase passenger positions at the cache boundary.
@@ -355,6 +361,10 @@ export function createBot(initial) {
     if (streamed) {
       for (const event of entityEvents) bot.emit(...event);
       if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }
+    }
+    for (const event of next.entityEvents ?? []) {
+      const subject = bot.entities[event.subject], cause = event.cause == null ? undefined : bot.entities[event.cause];
+      bot.emit(event.name, subject, cause);
     }
     for (const entry of next.messages ?? []) {
       const message = new ChatMessage(entry.message);

@@ -91,6 +91,13 @@ public final class TooManyAgents {
             });
         NeoForge.EVENT_BUS.addListener(this::despawn);
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.living.LivingDamageEvent.Post event) -> {
+            if (game != null && !event.getEntity().level().isClientSide)
+                game.entityEvent("entityHurt", event.getEntity(), event.getSource().getEntity(), null);
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Post event) -> {
+            if (game != null) game.entityEvent("playerCollect", event.getPlayer(), event.getItemEntity(), event.getOriginalStack());
+        });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) -> {
             if (game != null && !event.getEntity().level().isClientSide) game.nativeUseFinished(event);
         });
