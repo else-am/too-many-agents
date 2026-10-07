@@ -459,10 +459,17 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }); }
     @Override public synchronized CompletableFuture<Void> archiveConversation(String id,boolean archive) { return guarded(() -> {
         var agent=require(id); String session=loadedSession;
-        agent.localArchive=archive;
         closeScopes(id,archive?"agent_archived":"agent_restored");
-        boolean remoteRestore=!archive && ownsConnection(agent) && flag(agent.remote,"conversationArchived") && text(agent.remote,"error").isBlank();
-        return save().thenCompose(done -> remoteRestore ? agentRpc("agent.archive",id,object("archived",false)).thenApply(ignored -> null) : CompletableFuture.completedFuture(null))
+        boolean hasThread=!agent.threadId.isBlank();
+        var change=hasThread ? agentRpc("agent.archive",id,object("archived",archive)) : CompletableFuture.completedFuture(JsonNull.INSTANCE);
+        return change.thenCompose(done -> {
+                synchronized(this) {
+                    requireCurrent(agent,session);
+                    // Bound agents follow BB; only unstarted bodies need a local choice.
+                    agent.localArchive=hasThread?null:archive;
+                    return save();
+                }
+            })
             .thenCompose(done -> applyBodyState(agent,archive?"suspended":"present",false,session)).thenCompose(done -> save());
     }); }
     @Override public synchronized CompletableFuture<Void> remove(String id,boolean archive) { return guarded(() -> {

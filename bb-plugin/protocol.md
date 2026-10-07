@@ -107,8 +107,8 @@ their owning BB identity; changing instances never changes their thread bindings
   `disconnected`. Java cancels physical actions when `running` is false, drops inventory
   and saves the empty body before suspension, restores it on return, and releases
   stations on suspension. Missing/deleted conversations retain their binding and
-  body as disconnected agents. Local archive and restore choices work offline and remain in force
-  across remote updates until the user changes that local choice.
+  body as disconnected agents. Archiving or restoring a bound agent requires BB to confirm
+  the thread change; unstarted bodies can still be archived and restored locally offline.
   The view passes through BB's `status`, `latestAttentionAt` and `lastReadAt` for
   native UI indicators. `hasPendingInteraction` comes from the pending-interaction
   list; `queuedWork` is `failed` if any queued message has a non-null `failureReason`,

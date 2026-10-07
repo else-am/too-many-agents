@@ -60,9 +60,9 @@ def main():
     cancel.add_argument('message_id')
     for action, help_text in (
         ('remove', 'Remove the NPC body; keep the conversation'),
-        ('archive', 'Archive the agent locally; keep its saved BB binding'),
-        ('conversation-archive', 'Archive the agent locally, including while disconnected'),
-        ('conversation-restore', 'Restore an archived agent to the active list'),
+        ('archive', 'Archive the agent and its BB thread; requires BB for bound agents'),
+        ('conversation-archive', 'Archive the agent and its BB thread; requires BB for bound agents'),
+        ('conversation-restore', 'Restore the agent and unarchive its BB thread'),
         ('inventory', 'Inspect body inventory'),
     ):
         commands.add_parser(action, help=help_text).add_argument('id')
