@@ -40,6 +40,19 @@ final class Observations {
             result.addProperty("health", living.getHealth());
             result.addProperty("airSupply", living.getAirSupply());
             result.addProperty("maxAirSupply", living.getMaxAirSupply());
+            var attributes = new JsonObject();
+            for (var attribute : living.getAttributes().getSyncableAttributes()) {
+                var key = BuiltInRegistries.ATTRIBUTE.getKey(attribute.getAttribute().value());
+                if (key == null) continue;
+                var modifiers = new JsonArray();
+                attribute.getModifiers().stream().sorted(java.util.Comparator.comparing(modifier -> modifier.id().toString()))
+                    .forEach(modifier -> modifiers.add(JsonState.object("uuid", modifier.id().toString(),
+                        "amount", modifier.amount(), "operation", modifier.operation().id())));
+                var value = JsonState.object("value", attribute.getBaseValue());
+                value.add("modifiers", modifiers);
+                attributes.add(key.getNamespace().equals("minecraft") ? key.getPath() : key.toString(), value);
+            }
+            result.add("attributes", attributes);
             var effects = new JsonObject();
             for (var effect : living.getActiveEffects()) {
                 int id = BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value());

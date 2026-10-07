@@ -67,3 +67,5 @@ classes. No expanded test suite, native/live check, game/BB/server lifecycle or
 installation ran. Remaining specific gap: raw native thunderLevel requires access
 beyond the current public Level API/owned files; thunderState explicitly stays
 null. No rain division or weighted-thunder substitution is used.
+
+Raw thunder follow-up: while the tester uses the prior packaged build, expose Level.thunderLevel through the existing access transformer. Verify the next packaged build can read it (including zero rain); do not substitute getThunderLevel, which multiplies by rain. Compare native weather commands and actual raw state after restart.

@@ -721,7 +721,7 @@ final class GameAccess {
         worldState.addProperty("isRaining", level.isRaining());
         worldState.addProperty("rainState", level.getRainLevel(1.0F));
         // getThunderLevel multiplies by rain; it is not the raw protocol value.
-        worldState.add("thunderState", com.google.gson.JsonNull.INSTANCE);
+        worldState.addProperty("thunderState", level.thunderLevel);
         snapshot.add("worldState", worldState);
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));

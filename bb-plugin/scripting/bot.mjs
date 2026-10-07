@@ -16,6 +16,7 @@ import { installInventory } from './inventory.mjs';
 import { installWorldQueries } from './world-queries.mjs';
 import { installState } from './state.mjs';
 import { installActions } from './actions.mjs';
+import { installEntityQueries } from './entity-queries.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -103,6 +104,7 @@ export function createBot(initial) {
       });
     },
   });
+  installEntityQueries(bot);
   const updateState = installState(bot, data.featureTable);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
@@ -175,6 +177,8 @@ export function createBot(initial) {
       const fresh = !entity || entity.uuid !== source.uuid;
       if (fresh) entity = bot.entities[source.id] = new Entity(source.id);
       const moved = !entity.position.equals(source.position);
+      const attributesChanged = !fresh && JSON.stringify(entity.attributes) !== JSON.stringify(source.attributes);
+      let equipmentChanged = false;
       const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, ...fields } = source;
       const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
       Object.assign(entity, fields, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
@@ -190,6 +194,7 @@ export function createBot(initial) {
         if (!keys) { keys = []; equipmentKeys.set(entity, keys); }
         for (let slot = 0; slot < equipment.length; slot++) {
           if (keys[slot] !== equipment[slot].itemKey) {
+            equipmentChanged = true;
             keys[slot] = equipment[slot].itemKey;
             entity.setEquipment(slot, item(equipment[slot]));
           }
@@ -198,6 +203,8 @@ export function createBot(initial) {
       if (source.id === next.body.id) bot.entity = entity;
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
+      if (attributesChanged) entityEvents.push(['entityAttributes', entity]);
+      if (!fresh && equipmentChanged) entityEvents.push(['entityEquip', entity]);
     }
     for (const [id, entity] of Object.entries(bot.entities)) {
       if (!present.has(Number(id))) {
