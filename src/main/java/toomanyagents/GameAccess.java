@@ -855,9 +855,15 @@ final class GameAccess {
         var seen = new HashSet<Body>();
         String world = world(current);
         for (var level : current.getAllLevels()) {
+            // Actions add/remove entities (fishing hooks, loot, orphaned bodies).
+            // Snapshot bodies before running them; the live entity iterator is not mutation-safe.
+            var bodies = new ArrayList<Mob>();
             for (var entity : level.getAllEntities()) {
-                if (!(entity instanceof Mob mob) || !mob.isAlive()
-                    || mob.getPersistentData().getString("too_many_agents_agent").isBlank()) continue;
+                if (entity instanceof Mob mob && !mob.getPersistentData().getString("too_many_agents_agent").isBlank())
+                    bodies.add(mob);
+            }
+            for (var mob : bodies) {
+                if (!mob.isAlive() || mob.isRemoved()) continue;
                 if (world.startsWith("unresolved:")) { mob.setNoAi(true); mob.setDeltaMovement(Vec3.ZERO); continue; }
                 var saved = mob.getPersistentData();
                 if (!saved.getString("too_many_agents_world").equals(world)) {
