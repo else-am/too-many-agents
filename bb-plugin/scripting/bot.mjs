@@ -1,20 +1,20 @@
 import { Vec3 } from 'vec3';
 import goals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
+import { createBlockClass } from './blocks.mjs';
 
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
 export function createBot(initial) {
   const registry = {
+    ...data,
     blocksArray: data.blocksArray, itemsArray: data.itemsArray,
     blocksByName: Object.fromEntries(data.blocksArray.map(block => [block.name, block])),
     itemsByName: Object.fromEntries(data.itemsArray.map(item => [item.name, item])),
     blocks: Object.fromEntries(data.blocksArray.map(block => [block.id, block])),
     items: Object.fromEntries(data.itemsArray.map(item => [item.id, item])),
   };
-  const blockTypes = [];
-  for (const block of data.blocksArray)
-    for (let state = block.minStateId; state <= block.maxStateId; state++) blockTypes[state] = block;
+  const Block = createBlockClass(registry);
   let snapshot;
   const vector = ({ x, y, z }) => new Vec3(x, y, z);
   const item = entry => {
@@ -28,22 +28,21 @@ export function createBot(initial) {
   const bot = {
     registry, version: '1.21.1',
     inventory: { slots: new Array(46).fill(null), items() { return this.slots.slice(9, 45).filter(Boolean); } },
-    blockAt(position) {
+    blockAt(position, extraInfos = true) {
       const p = position.floored();
       const { min, size, states } = snapshot.blocks;
       const x = p.x - min[0], y = p.y - min[1], z = p.z - min[2];
       if (x < 0 || y < 0 || z < 0 || x >= size[0] || y >= size[1] || z >= size[2]) return null;
-      const stateId = states[(y * size[2] + z) * size[0] + x];
+      const index = (y * size[2] + z) * size[0] + x;
+      const stateId = states[index];
       if (stateId === -1) return null;
-      const type = blockTypes[stateId];
-      if (!type) throw new Error(`Unknown block state ${stateId}`);
-      const shapes = data.blockCollisionShapes;
-      const shape = shapes.blocks[type.name];
-      return { type: type.id, name: type.name, displayName: type.displayName,
-        stateId, metadata: stateId - type.minStateId, position: p,
-        hardness: type.hardness, diggable: type.diggable, boundingBox: type.boundingBox,
-        shapes: shapes.shapes[Array.isArray(shape) ? shape[stateId - type.minStateId] : shape] ?? [],
-      };
+      const block = Block.fromStateId(stateId, snapshot.blocks.biomes[index]);
+      block.position = p;
+      block.light = snapshot.blocks.light[index] & 15;
+      block.skyLight = snapshot.blocks.light[index] >> 4;
+      if (extraInfos && snapshot.blocks.entities[index])
+        block.entity = JSON.parse(JSON.stringify(snapshot.blocks.entities[index]));
+      return block;
     },
     findBlocks({ point = bot.entity.position, matching, maxDistance = 16, count = 1, useExtraInfo = false }) {
       if (useExtraInfo) throw new Error('findBlocks useExtraInfo is pending implementation');

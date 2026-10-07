@@ -9,8 +9,11 @@ const registry = minecraftData('1.21.1');
 const data = JSON.stringify({
   blocksArray: registry.blocksArray, itemsArray: registry.itemsArray,
   blockCollisionShapes: registry.blockCollisionShapes,
+  materials: registry.materials, effectsByName: registry.effectsByName,
+  enchantmentsByName: registry.enchantmentsByName, language: registry.language,
 });
 const licenses = [];
+licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
