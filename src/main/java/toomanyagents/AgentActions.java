@@ -3,6 +3,9 @@ package toomanyagents;
 import com.google.gson.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -18,7 +21,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book");
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -138,7 +141,7 @@ final class AgentActions {
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
-        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity")) throw error("position_or_entity_required");
+        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
         if (List.of("mine", "place").contains(type) && !request.has("position")) throw error("position_required");
         if (type.equals("give") && !request.has("entity")) throw error("entity_required");
         args = request.deepCopy();
@@ -148,6 +151,7 @@ final class AgentActions {
                 var level = (ServerLevel) mob.level();
                 if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
                 if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
+                if (args.has("expectedStateId") && Block.getId(level.getBlockState(pos)) != integer(args, "expectedStateId", -1)) throw error("target_changed");
             }
         }
         if (List.of("place", "interact").contains(type) && args.has("position")) blockFace();
@@ -242,19 +246,20 @@ final class AgentActions {
                     else navigate(target, false);
                 }
                 case "look" -> {
-                    face(target());
-                    finish("completed", "looking", null);
+                    if (!args.has("yaw") || !args.has("pitch")) { face(target()); finish("completed", "looking", null); }
+                    else if (lookAngles()) finish("completed", "looking", null);
                 }
                 case "mine" -> {
                     var pos = checkedBlockTarget();
                     if (!mining && !mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
-                    if (!hands.blockReachable(pos)) {
+                    Direction face = args.has("face") ? blockFace() : null;
+                    if (!hands.blockReachable(pos, face)) {
                         if (mining || !approachTargets) throw error("target_out_of_reach");
                         navigate(Vec3.atCenterOf(pos), true); return;
                     }
                     GameAccess.stopFollowingMotion(mob);
-                    face(Vec3.atCenterOf(pos));
-                    JsonObject result = mining ? hands.tickMine() : hands.beginMine(pos);
+                    if (!ignoreLook()) face(Vec3.atCenterOf(pos));
+                    JsonObject result = mining ? hands.tickMine() : hands.beginMine(pos, face);
                     mining = true;
                     action.addProperty("phase", "mining");
                     action.add("progress", result.deepCopy());
@@ -267,8 +272,9 @@ final class AgentActions {
                             if (!approachTargets) throw error("target_out_of_reach");
                             navigate(entity.getBoundingBox().getCenter(), true); return;
                         }
-                        face(entity.getEyePosition());
-                        finish("completed", "interacted", hands.interact(entity));
+                        if (!ignoreLook()) face(entity.getEyePosition());
+                        Vec3 hit = args.has("entityAt") ? point(args.getAsJsonObject("entityAt")) : null;
+                        finish("completed", "interacted", hands.interact(entity, hit));
                     } else {
                         var pos = checkedBlockTarget();
                         if (!mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
@@ -277,13 +283,18 @@ final class AgentActions {
                             if (!approachTargets) throw error("target_out_of_reach");
                             navigate(Vec3.atCenterOf(pos), true); return;
                         }
-                        face(Vec3.atCenterOf(pos));
+                        if (!ignoreLook()) face(Vec3.atCenterOf(pos));
                         Vec3 cursor = null;
                         if (args.has("cursorPos")) {
                             var point = args.getAsJsonObject("cursorPos");
                             cursor = new Vec3(number(point, "x"), number(point, "y"), number(point, "z"));
                         }
-                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor);
+                        InteractionHand hand = args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                        InteractionHand swingHand = args.has("swingArm") && text(args, "swingArm").equals("left") ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                        boolean showHand = !args.has("showHand") || args.get("showHand").getAsBoolean();
+                        BlockPos destination = args.has("expectedDestination") ? BlockPos.containing(point(args.getAsJsonObject("expectedDestination"))) : null;
+                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor,
+                            hand, destination, swingHand, showHand);
                         finish("completed", "interaction_finished_check_result", result);
                     }
                 }
@@ -336,6 +347,23 @@ final class AgentActions {
                 case "menu_button" -> finish("completed", "menu_button", hands.menuButton(integer(args, "menuId", -1), menuGeneration(), integer(args, "button", -1)));
                 case "anvil_name" -> finish("completed", "anvil_named", hands.renameAnvil(integer(args, "menuId", -1), menuGeneration(), text(args, "name")));
                 case "select_trade" -> finish("completed", "trade_selected", hands.selectTrade(integer(args, "menuId", -1), menuGeneration(), integer(args, "index", -1)));
+                case "edit_book" -> {
+                    if (!args.has("pages") || !args.get("pages").isJsonArray() || args.getAsJsonArray("pages").size() > 100)
+                        throw error("invalid_book_pages");
+                    var pages = new ArrayList<String>();
+                    for (var page : args.getAsJsonArray("pages")) {
+                        if (!page.isJsonPrimitive() || !page.getAsJsonPrimitive().isString()) throw error("invalid_book_page");
+                        pages.add(page.getAsString());
+                    }
+                    String title = null;
+                    if (args.has("title") && !args.get("title").isJsonNull()) {
+                        if (!args.get("title").isJsonPrimitive() || !args.getAsJsonPrimitive("title").isString())
+                            throw error("invalid_book_title");
+                        title = args.get("title").getAsString();
+                    }
+                    finish("completed", "book_edited", hands.editBook(integer(args, "menuId", -1), menuGeneration(),
+                        integer(args, "slot", -1), text(args, "expectedItemKey"), pages, title));
+                }
             }
         } catch (RuntimeException failure) {
             if (busy()) finish("failed", failure.getMessage(), null);
@@ -390,6 +418,28 @@ final class AgentActions {
         return entity;
     }
     private Vec3 target() { return args.has("entity") ? (kind.equals("look") ? entity().getEyePosition() : entity().position()) : position(args); }
+
+    private boolean ignoreLook() { return args.has("forceLook") && args.get("forceLook").isJsonPrimitive()
+        && args.get("forceLook").getAsString().equals("ignore"); }
+
+    private static Vec3 point(JsonObject value) { return new Vec3(number(value, "x"), number(value, "y"), number(value, "z")); }
+
+    private boolean lookAngles() {
+        double yawRadians = number(args, "yaw"), pitchRadians = number(args, "pitch");
+        if (Math.abs(pitchRadians) > Math.PI / 2) throw error("invalid_pitch");
+        float yaw = Mth.wrapDegrees((float) (180 - Math.toDegrees(yawRadians)));
+        float pitch = (float) -Math.toDegrees(pitchRadians);
+        boolean force = args.has("force") && args.get("force").getAsBoolean();
+        // A normal look rotates at most 30 degrees per native tick. Forced looks
+        // update the same real body orientation immediately.
+        float dy = Mth.wrapDegrees(yaw - mob.getYRot()), dp = pitch - mob.getXRot();
+        boolean done = force || (Math.abs(dy) <= 30 && Math.abs(dp) <= 30);
+        float nextYaw = done ? yaw : mob.getYRot() + Mth.clamp(dy, -30, 30);
+        float nextPitch = done ? pitch : mob.getXRot() + Mth.clamp(dp, -30, 30);
+        mob.setYRot(nextYaw); mob.setYHeadRot(nextYaw); mob.setYBodyRot(nextYaw); mob.setXRot(nextPitch);
+        hands.syncBody();
+        return done;
+    }
 
     private void face(Vec3 target) {
         var delta = target.subtract(mob.getEyePosition());

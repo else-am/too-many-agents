@@ -210,6 +210,8 @@ window.open; settle any added storage open event through an explicit contract ca
 
 ## Preauthored live scenarios
 
+XP integration prerequisite (before native pickup implementation): the fake hands already persist experience but the visible Mob cannot collect experience orbs as a Player. Collect nearby orbs through native `ExperienceOrb.playerTouch(hands)` with vanilla's two-tick pickup delay, keeping the actual body pickup bounds and existing access gate. Verify an orb's real removal/count change, native points/level/progress and event ordering; repeat with a damaged Mending item so repair consumes XP under native rules. Furnace output XP and anvil/enchant/trade costs must use this same state. Save/reopen and confirm remaining XP persists. Do not award synthetic points or silently consume orbs without invoking native events/repair logic.
+
 Lead alone creates fixtures in the guarded development world. Use survival first,
 fixed known inventories, no background hopper/player changes except in designated
 race tests. Independently inspect block-entity inventories, AgentHands saved

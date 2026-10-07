@@ -81,7 +81,9 @@ Live water checks also exposed upstream planning gaps: its landing scan skips an
 
 Work through observations and API objects; basic physical actions; navigation; containers and crafting; then remaining applicable gameplay features and events. Reorder groups when dependencies or evidence justify it, keeping the compatibility target unchanged.
 
-Use real scripts to establish each group's behavior before moving on. Reuse upstream implementations where practical; avoid a growing collection of aliases with incompatible behavior. Supply concise API guidance and examples to agents, clearly identifying extensions and any pending coverage.
+The user requested a code-first finishing pass with reduced test repetition on October 7. Integrate the remaining bounded ports first, then prioritize one combined native check and actual packaged validation; do not rerun already passing suites without a concrete failure or changed dependency. This changes verification order, not the compatibility target.
+
+Use real scripts to establish each group's behavior. Reuse upstream implementations where practical; avoid a growing collection of aliases with incompatible behavior. Supply concise API guidance and examples to agents, clearly identifying extensions and any pending coverage.
 
 ### 5. Complete integration and packaged validation
 

@@ -14,6 +14,8 @@ import { createChatMessageClass } from './chat.mjs';
 import { createEntityClass } from './entities.mjs';
 import { installInventory } from './inventory.mjs';
 import { installWorldQueries } from './world-queries.mjs';
+import { installState } from './state.mjs';
+import { installActions } from './actions.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -81,12 +83,6 @@ export function createBot(initial) {
         block.entity = JSON.parse(JSON.stringify(snapshot.blocks.entities[index]));
       return block;
     },
-    async dig(block, forceLook = true, digFace = 'auto') {
-      if (block == null) throw new Error('dig was called with an undefined or null block');
-      if (forceLook !== true || digFace !== 'auto') throw new Error('dig look/face options are pending implementation');
-      await inventory.drainControls();
-      await action({ type: 'mine', position: block.position });
-    },
     // Adapted from Mineflayer 4.39.0 physics.js; see mineflayer.LICENSE.
     async waitForTicks(ticks) {
       if (ticks <= 0) return;
@@ -107,6 +103,7 @@ export function createBot(initial) {
       });
     },
   });
+  const updateState = installState(bot, data.featureTable);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
   installWorldQueries(bot, { getLoadedBounds() {
@@ -217,7 +214,10 @@ export function createBot(initial) {
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
+    let experienceChanged = false;
     if (next.hands.experience) {
+      experienceChanged = !!bot.experience && (bot.experience.level !== next.hands.experience.level
+        || bot.experience.progress !== next.hands.experience.progress || bot.experience.points !== next.hands.experience.total);
       bot.experience ??= {};
       Object.assign(bot.experience, { level: next.hands.experience.level,
         progress: next.hands.experience.progress, points: next.hands.experience.total });
@@ -249,6 +249,7 @@ export function createBot(initial) {
     bot.entity.equipment = [bot.heldItem, bot.inventory.slots[45], bot.inventory.slots[8],
       bot.inventory.slots[7], bot.inventory.slots[6], bot.inventory.slots[5]];
     bot.usingHeldItem = next.hands.usingItem;
+    const stateEvents = updateState(next);
     inventory.syncWindow(bot.currentWindow ?? bot.inventory, menu);
     // A native frame changes all slots/cursor together. Listeners must see the
     // complete inventory and container state, including held equipment.
@@ -259,6 +260,8 @@ export function createBot(initial) {
     if (previousWindow && previousWindow !== bot.currentWindow) bot.emit('windowClose', previousWindow);
     if (opened) bot.emit('windowOpen', opened);
     if (heldBefore !== bot.heldItem) bot.emit('heldItemChanged', bot.heldItem);
+    if (experienceChanged) bot.emit('experience');
+    for (const event of stateEvents) bot.emit(...event);
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.emit('blockUpdate', before, after);
@@ -294,7 +297,7 @@ export function createBot(initial) {
     }
     return events;
   }
-  const inventory = installInventory(bot, { action, snapshot: () => snapshot,
+  const inventory = installInventory(bot, { action, snapshot: () => snapshot, decodeItem: item,
     isKnownActionError: error => error instanceof NativeActionError,
     assertActive() {
       if (snapshot.session !== initial.session || snapshot.body.uuid !== initial.body.uuid || !bot.entity.isValid)
@@ -302,15 +305,18 @@ export function createBot(initial) {
     },
   });
   update(initial);
+  const actions = installActions(bot, { request, action, waitForActionState, snapshot: () => snapshot,
+    drainControls: inventory.drainControls, isKnownActionError: error => error instanceof NativeActionError });
+  async function drainControls() { await inventory.drainControls(); await actions.drainControls(); }
   lastPhysicsTick = initial.tick;
   installPathfinder(bot, {
     async request(operation, value) {
-      if (operation === 'action') await inventory.drainControls();
+      if (operation === 'action') await drainControls();
       return request(operation, value);
     },
     waitForActionState, snapshot: () => snapshot,
   });
   installRecipeQueries(bot, recipeFactory);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
-    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls: inventory.drainControls };
+    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

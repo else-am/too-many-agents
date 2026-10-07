@@ -60,12 +60,18 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return vector(bot.entity.position, 'body position').offset(0, bot.entity.eyeHeight, 0);
   }
   bot._getBlockAtEyeLevel = () => bot.blockAt(eyes());
+  function miningEnchants(item) {
+    const value = item?.enchants;
+    if (Array.isArray(value)) return value;
+    const names = bot.nativeRegistries?.['minecraft:enchantment'];
+    return (value?.enchantments ?? []).map(entry => ({ name: names?.[entry.id], lvl: entry.level }));
+  }
   bot.digTime = block => {
     need(block && typeof block.digTime === 'function', 'InvalidBlock', 'digTime requires a Block');
     const held = bot.heldItem, helmet = bot.inventory.slots[bot.getEquipmentDestSlot('head')];
     return block.digTime(held?.type ?? null, bot.game.gameMode === 'creative',
       ['water','flowing_water'].includes(bot._getBlockAtEyeLevel()?.name), !bot.entity.onGround,
-      [...(held?.enchants ?? []), ...(helmet?.enchants ?? [])], bot.entity.effects);
+      [...miningEnchants(held), ...miningEnchants(helmet)], bot.entity.effects);
   };
   bot.canDigBlock = block => {
     if (!block?.diggable || !block.position) return false;

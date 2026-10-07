@@ -1,3 +1,4 @@
+import { installBooks } from './books.mjs';
 // Public orchestration adapted from Mineflayer 4.39.0 inventory,
 // simple_inventory, chest and craft plugins (MIT). See inventory.LICENSE.
 // Every mutation is native and authoritative; never call Window.acceptClick.
@@ -522,9 +523,10 @@ export function installInventory(bot, { action, snapshot, decodeItem, assertActi
   const io = {
     queueWindow, check, send, pickup, storeCursor, reserveCursor, transfer, move, sourceSlot, recover,
     requireValue, sameStack, sameData, isKnownActionError, decodeItem, assertReady: ready,
-    capture, current, close, select, snapshot,
+    capture, current, close, select, snapshot, click,
   };
   const specialized = installSpecializedWindows(bot, io);
+  installBooks(bot, io);
   function syncWindow(window, menu) {
     requireValue(integer(menu.id) && integer(menu.generation), 'MissingMenuGeneration', 'Native menu id/generation is required');
     const decorated = menus.has(window);

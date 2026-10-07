@@ -29,6 +29,7 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -131,6 +132,7 @@ final class AgentHands extends FakePlayer {
         if (tick == lastHandsTick) return;
         lastHandsTick = tick;
         tickCount++;
+        if (takeXpDelay > 0) takeXpDelay--;
         getCooldowns().tick();
         tickEffects();
         EnchantmentHelper.tickEffects(serverLevel(), this);
@@ -145,10 +147,12 @@ final class AgentHands extends FakePlayer {
         save();
     }
 
-    JsonObject beginMine(BlockPos pos) {
+    JsonObject beginMine(BlockPos pos) { return beginMine(pos, null); }
+
+    JsonObject beginMine(BlockPos pos, Direction face) {
         syncBody();
         cancelMine();
-        var hit = checkedHit(pos, null);
+        var hit = checkedHit(pos, face);
         var state = serverLevel().getBlockState(pos);
         if (state.isAir()) throw error("mine_target_is_air");
         if (!isCreative() && state.getDestroySpeed(level(), pos) < 0) throw error("block_is_unbreakable");
@@ -175,7 +179,7 @@ final class AgentHands extends FakePlayer {
         syncBody();
         if (miningPos == null) throw error("no_active_mining");
         try {
-            checkedHit(miningPos, null);
+            checkedHit(miningPos, miningFace);
             if (serverLevel().getBlockState(miningPos) != miningState) throw error("mining_target_changed");
             int tick = getServer().getTickCount();
             if (tick == lastMiningTick) return miningResult("mining");
@@ -208,7 +212,7 @@ final class AgentHands extends FakePlayer {
     }
 
     private JsonObject finishMine() {
-        checkedHit(miningPos, null);
+        checkedHit(miningPos, miningFace);
         var pos = miningPos;
         var before = miningState;
         // destroyBlock implements NeoForge BreakEvent, harvest checks, durability, drops and enchantments.
@@ -230,6 +234,7 @@ final class AgentHands extends FakePlayer {
         var result = status("completed");
         result.add("position", Observations.position(Vec3.atLowerCornerOf(pos)));
         result.addProperty("progress", 1);
+        result.addProperty("face", miningFace.get3DDataValue());
         return result;
     }
 
@@ -262,6 +267,11 @@ final class AgentHands extends FakePlayer {
     }
 
     JsonObject useBlock(BlockPos pos, Direction face, boolean secondaryUse, Vec3 cursorPos) {
+        return useBlock(pos, face, secondaryUse, cursorPos, InteractionHand.MAIN_HAND, null, InteractionHand.MAIN_HAND, true);
+    }
+
+    JsonObject useBlock(BlockPos pos, Direction face, boolean secondaryUse, Vec3 cursorPos,
+                       InteractionHand hand, BlockPos expectedDestination, InteractionHand swingHand, boolean showHand) {
         syncBody();
         requireIdleHands();
         var hit = checkedHit(pos, face);
@@ -273,10 +283,12 @@ final class AgentHands extends FakePlayer {
             // loaded-line and visible-face checks, including partial block shapes.
             hit = new BlockHitResult(Vec3.atLowerCornerOf(pos).add(cursorPos), hit.getDirection(), pos, false);
         }
-        if (!getMainHandItem().isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
-        if (getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem) {
-            var placement = new BlockPlaceContext(this, InteractionHand.MAIN_HAND, getMainHandItem(), hit);
+        if (!getItemInHand(hand).isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
+        if (getItemInHand(hand).getItem() instanceof net.minecraft.world.item.BlockItem) {
+            var placement = new BlockPlaceContext(this, hand, getItemInHand(hand), hit);
             checkBlockAccess(placement.getClickedPos());
+            if (expectedDestination != null && !placement.getClickedPos().equals(expectedDestination))
+                throw error("placement_destination_changed");
         }
         var oldMenu = containerMenu;
         var oldOrigin = menuOrigin;
@@ -285,13 +297,13 @@ final class AgentHands extends FakePlayer {
         menuEntity = null;
         setShiftKeyDown(secondaryUse);
         InteractionResult result;
-        try { result = gameMode.useItemOn(this, level(), getMainHandItem(), InteractionHand.MAIN_HAND, hit); }
+        try { result = gameMode.useItemOn(this, level(), getItemInHand(hand), hand, hit); }
         finally {
             setShiftKeyDown(false);
             if (containerMenu == oldMenu) { menuOrigin = oldOrigin; menuEntity = oldEntity; }
             save();
         }
-        if (result.shouldSwing()) body.swing(InteractionHand.MAIN_HAND);
+        if (showHand && result.shouldSwing()) body.swing(swingHand);
         var response = interaction(result);
         response.add("menu", menuSnapshot());
         return response;
@@ -317,7 +329,9 @@ final class AgentHands extends FakePlayer {
         return status("released");
     }
 
-    JsonObject interact(Entity target) {
+    JsonObject interact(Entity target) { return interact(target, null); }
+
+    JsonObject interact(Entity target, Vec3 localHit) {
         syncBody();
         requireIdleHands();
         if (!canReach(target)) throw error("entity_out_of_reach_or_obstructed");
@@ -327,7 +341,18 @@ final class AgentHands extends FakePlayer {
         menuOrigin = null;
         menuEntity = target;
         InteractionResult result;
-        try { result = interactOn(target, InteractionHand.MAIN_HAND); }
+        try {
+            if (localHit == null) result = interactOn(target, InteractionHand.MAIN_HAND);
+            else {
+                if (!Double.isFinite(localHit.x) || !Double.isFinite(localHit.y) || !Double.isFinite(localHit.z))
+                    throw error("invalid_entity_hit");
+                var hit = target.position().add(localHit);
+                if (!target.getBoundingBox().inflate(0.001).contains(hit) || !clearLine(hit))
+                    throw error("entity_hit_outside_target_or_obstructed");
+                result = CommonHooks.onInteractEntityAt(this, target, localHit, InteractionHand.MAIN_HAND);
+                if (result == null) result = target.interactAt(this, localHit, InteractionHand.MAIN_HAND);
+            }
+        }
         finally {
             if (containerMenu == oldMenu) { menuOrigin = oldOrigin; menuEntity = oldEntity; }
             save();
@@ -416,6 +441,12 @@ final class AgentHands extends FakePlayer {
             int before = item.getItem().getCount();
             item.playerTouch(this);
             collected |= item.isRemoved() || item.getItem().getCount() < before;
+        }
+        // The visible Mob has no player XP pickup. Native touch owns the delay,
+        // Mending, experience events and orb consumption for its hands.
+        if (takeXpDelay == 0) for (var orb : serverLevel().getEntitiesOfClass(ExperienceOrb.class, bounds)) {
+            orb.playerTouch(this);
+            if (takeXpDelay > 0) { collected = true; break; }
         }
         if (collected) save();
     }
@@ -791,6 +822,7 @@ final class AgentHands extends FakePlayer {
 
     JsonObject scriptSnapshot(ScriptItems items) {
         var result = snapshot();
+        result.addProperty("blockInteractionRange", blockInteractionRange());
         for (var entry : result.getAsJsonArray("inventory")) {
             var item = entry.getAsJsonObject();
             item.addProperty("wire", items.wire(getInventory().getItem(item.get("slot").getAsInt())));
@@ -1020,6 +1052,7 @@ final class AgentHands extends FakePlayer {
     private JsonObject miningResult(String state) {
         var result = status(state);
         result.addProperty("progress", Math.min(1, miningProgress));
+        result.addProperty("face", miningFace.get3DDataValue());
         result.add("position", Observations.position(Vec3.atLowerCornerOf(miningPos)));
         result.addProperty("block", BuiltInRegistries.BLOCK.getKey(miningState.getBlock()).toString());
         return result;
