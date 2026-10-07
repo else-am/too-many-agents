@@ -130,6 +130,8 @@ final class AgentHands extends FakePlayer {
         // Vanilla reach/mining/projectiles use player eyes. Match the actual NPC viewpoint.
         setPos(body.getX(), body.getEyeY() - getEyeHeight(), body.getZ());
         setYRot(body.getViewYRot(1));
+        setYHeadRot(body.getViewYRot(1));
+        setYBodyRot(body.getYRot());
         setXRot(body.getXRot());
         setOnGround(body.onGround());
         setShiftKeyDown(body.isShiftKeyDown());
