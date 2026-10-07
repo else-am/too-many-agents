@@ -39,6 +39,17 @@ import java.util.function.Supplier;
 final class ScriptNavigation {
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     private static final double EPS = 1e-6;
+    // Method ownership is immutable for a loaded class; body state is not.
+    private static final ClassValue<Boolean> ORDINARY_PHYSICS = new ClassValue<>() {
+        @Override protected Boolean computeValue(Class<?> type) {
+            try {
+                return type.getMethod("travel", Vec3.class).getDeclaringClass() == LivingEntity.class
+                    && type.getMethod("jumpFromGround").getDeclaringClass() == LivingEntity.class
+                    && inherits(type, "getJumpPower") && inherits(type, "getFlyingSpeed")
+                    && inherits(type, "isAffectedByFluids");
+            } catch (ReflectiveOperationException failure) { return false; }
+        }
+    };
     private final Mob mob;
     private final AgentHands hands;
     private final Supplier<BodyBox> box;
@@ -649,27 +660,26 @@ final class ScriptNavigation {
 
     static JsonObject capabilities(Mob mob) {
         boolean supported = ordinaryPhysics(mob);
-        double rise = supported ? jumpRise(mob) : 0;
+        double gravity = supported ? mob.getGravity() : 0;
+        double power = supported ? jumpPower(mob, mob.position()) : 0;
+        double rise = supported && !mob.hasEffect(MobEffects.LEVITATION) ? jumpRise(power, gravity) : 0;
+        double speed = supported ? mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1) : 0;
+        double velocity = mob.getDeltaMovement().horizontalDistance();
+        double width = mob.getBbWidth();
         JsonObject result = new JsonObject();
         result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
         result.addProperty("jumpHeight", rise);
         result.addProperty("canJump", supported && rise > 0);
         result.addProperty("canSwim", supported && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
-        result.addProperty("maxJumpDistance", supported ? reachEnvelope(mob, false) : 0);
-        result.addProperty("maxSprintJumpDistance", supported ? reachEnvelope(mob, true) : 0);
+        result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false) : 0);
+        result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true) : 0);
         result.addProperty("physics", supported ? "native-ground-post-tick" : "unsupported");
         return result;
     }
 
     private static boolean ordinaryPhysics(Mob mob) {
-        try {
-            return mob.getMoveControl().getClass() == MoveControl.class && !mob.isPassenger() && !mob.isNoGravity()
-                && !mob.isFallFlying() && !mob.shouldDiscardFriction()
-                && mob.getClass().getMethod("travel", Vec3.class).getDeclaringClass() == LivingEntity.class
-                && mob.getClass().getMethod("jumpFromGround").getDeclaringClass() == LivingEntity.class
-                && inherits(mob.getClass(), "getJumpPower") && inherits(mob.getClass(), "getFlyingSpeed")
-                && inherits(mob.getClass(), "isAffectedByFluids");
-        } catch (ReflectiveOperationException failure) { return false; }
+        return mob.getMoveControl().getClass() == MoveControl.class && !mob.isPassenger() && !mob.isNoGravity()
+            && !mob.isFallFlying() && !mob.shouldDiscardFriction() && ORDINARY_PHYSICS.get(mob.getClass());
     }
 
     private static boolean inherits(Class<?> type, String method) {
@@ -692,33 +702,36 @@ final class ScriptNavigation {
     }
 
     private static double jumpRise(Mob mob) {
-        if (mob.getGravity() <= 0 || mob.hasEffect(MobEffects.LEVITATION)) return 0;
-        double velocity = jumpPower(mob, mob.position()), height = 0;
+        return mob.hasEffect(MobEffects.LEVITATION) ? 0 : jumpRise(jumpPower(mob, mob.position()), mob.getGravity());
+    }
+
+    private static double jumpRise(double power, double gravity) {
+        if (gravity <= 0) return 0;
+        double velocity = power, height = 0;
         for (int i = 0; i < 100 && velocity > 0; i++) {
             height += velocity;
-            velocity = (velocity - mob.getGravity()) * 0.98F * 0.98;
+            velocity = (velocity - gravity) * 0.98F * 0.98;
         }
         return Double.isFinite(height) ? Math.min(16, height) : 0;
     }
 
     /** Candidate envelope, not a promise: includes a bounded takeoff approach and body overlap. */
-    private static double reachEnvelope(Mob mob, boolean sprint) {
-        if (jumpRise(mob) <= 0) return 0;
-        double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1) * (sprint ? 1.3 : 1);
+    private static double reachEnvelope(double speed, double initialVelocity, double power, double gravity, double width, boolean sprint) {
+        speed *= sprint ? 1.3 : 1;
         // Native forward input equals speed. For supported friction [.6, 1], use
         // the largest ground acceleration and drag as a conservative 12-tick run-up bound.
         double acceleration = speed * Math.min(1, speed) * 1.001;
-        double horizontal = mob.getDeltaMovement().horizontalDistance();
+        double horizontal = initialVelocity;
         for (int i = 0; i < 12; i++) horizontal = (horizontal * 0.98 + acceleration) * 0.91;
         horizontal = horizontal * 0.98 + acceleration + (sprint ? 0.2 : 0);
-        double vertical = jumpPower(mob, mob.position()), height = 0, distance = 0;
+        double vertical = power, height = 0, distance = 0;
         for (int i = 0; i < 100; i++) {
             distance += horizontal; height += vertical;
             if (height < -1) break;
             horizontal = (horizontal * 0.91F * 0.98) + 0.02F * Math.min(1, speed);
-            vertical = (vertical - mob.getGravity()) * 0.98F * 0.98;
+            vertical = (vertical - gravity) * 0.98F * 0.98;
         }
-        return Math.min(4, distance + 1 + mob.getBbWidth());
+        return Math.min(4, distance + 1 + width);
     }
 
     private static Vec3 small(Vec3 value) { return new Vec3(Math.abs(value.x) < 0.003 ? 0 : value.x, Math.abs(value.y) < 0.003 ? 0 : value.y, Math.abs(value.z) < 0.003 ? 0 : value.z); }
