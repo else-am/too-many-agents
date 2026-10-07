@@ -1,0 +1,104 @@
+Attribution for items.mjs
+========================
+
+Adapted from prismarine-item 1.18.0 (index.js and lib/anvil.js), with typed
+NBT builders and simplification from prismarine-nbt 2.8.0 (nbt.js).
+
+Upstream repositories:
+https://github.com/PrismarineJS/prismarine-item
+https://github.com/PrismarineJS/prismarine-nbt
+
+Changes specialize Item for PC Minecraft 1.21.1, remove host requires and
+other-version branches, and accept plain build-time registry data. No binary
+NBT library is included. Public upstream behavior and quirks are retained.
+
+Both installed npm packages declare MIT in package.json but supply no LICENSE
+file or separate copyright notice. Original package metadata, including the
+license and authorship declarations, is retained verbatim below. No copyright
+holder or copyright year has been invented.
+
+
+----- prismarine-item/package.json -----
+
+{
+  "name": "prismarine-item",
+  "version": "1.18.0",
+  "description": "Represent a minecraft item with its associated data",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "scripts": {
+    "test": "mocha --reporter spec --exit",
+    "pretest": "npm run lint",
+    "fix": "standard --fix",
+    "lint": "standard"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/PrismarineJS/prismarine-item.git"
+  },
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "expect": "^29.1.2",
+    "mocha": "^11.0.1",
+    "prismarine-item": "file:.",
+    "standard": "^17.0.0"
+  },
+  "keywords": [
+    "minecraft",
+    "item",
+    "prismarine"
+  ],
+  "author": "Romain Beaumont <romain.rom1@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/PrismarineJS/prismarine-item/issues"
+  },
+  "homepage": "https://github.com/PrismarineJS/prismarine-item#readme",
+  "dependencies": {
+    "prismarine-nbt": "^2.0.0",
+    "prismarine-registry": "^1.4.0"
+  }
+}
+
+
+----- prismarine-nbt/package.json -----
+
+{
+  "name": "prismarine-nbt",
+  "version": "2.8.0",
+  "description": "A parser and serializer for NBT archives",
+  "keywords": [
+    "nbt",
+    "minecraft"
+  ],
+  "homepage": "https://github.com/prismarinejs/prismarine-nbt",
+  "author": "roblabla <robinlambertz+dev@gmail.com>",
+  "maintainers": [
+    "roblabla <robinlambertz+dev@gmail.com",
+    "Will Franzen <wtfranzen@gmail.com> (http://will.xyz/)",
+    "Dennis Bartlett <bartlett.dc.1@gmail.com>",
+    "Romain Beaumont <romain.rom1@gmail.com>"
+  ],
+  "main": "nbt",
+  "types": "./typings/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prismarinejs/prismarine-nbt.git"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "chai": "^6.2.1",
+    "mocha": "^11.0.1",
+    "standard": "^17.0.0"
+  },
+  "scripts": {
+    "test": "mocha --reporter spec",
+    "pretest": "npm run lint",
+    "lint": "standard",
+    "fix": "standard --fix"
+  },
+  "dependencies": {
+    "protodef": "^1.18.0"
+  },
+  "license": "MIT"
+}
