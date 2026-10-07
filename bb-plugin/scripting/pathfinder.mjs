@@ -158,6 +158,11 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         planned = false;
         search = undefined;
         if (goal && atGoal()) reachedGoal();
+        else if (goal && count === nodes.length) {
+          // The complete selected path ended without satisfying its goal.
+          // Replaying it can repeat edits indefinitely without making progress.
+          throw error('NoPath', 'Native route completed without reaching the goal');
+        }
       } catch (failure) {
         active.terminal = true;
         if (!active.cancelled && active.epoch === epoch) {
