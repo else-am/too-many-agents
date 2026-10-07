@@ -1,5 +1,5 @@
 Public orchestration adapted from mineflayer 4.39.0:
-lib/plugins/inventory.js, simple_inventory.js and chest.js.
+lib/plugins/inventory.js, simple_inventory.js, chest.js and craft.js.
 Native generation, permission, authoritative-state and queue adaptation is local.
 
 The MIT License (MIT)

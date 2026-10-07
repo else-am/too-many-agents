@@ -18,6 +18,11 @@ const scenarios = [
   ['synchronous hotbar controls', 'setQuickBarSlot returns void and immediately selects; native selection is ordered, errors owned, selection survives older hydration, final drain covers controls only.'],
   ['explicit drops and overflow', 'toss count/default and tossStack drop exact authoritative stacks; only explicit putSelectedItemRange overflow may discard leftover.'],
   ['input bounds', 'Reject invalid/fractional counts, invalid/overlapping ranges, modes/buttons and unknown item IDs before mutation; zero count is a no-op.'],
+  ['craft source/count/layout', 'Run pinned craft plugin for ordinary 2x2 shaped/shapeless recipes and compare placements, quantities and return behavior; parseInt counts/default/null/zero.'],
+  ['craft authoritative results', 'Controlled result-slot authority consumes real fixture inputs and supplies components/count/remainders absent from Recipe.outShape; guest never predicts output or bucket mutations.'],
+  ['craft table lifecycle', '2x2 and 3x3 role/index layouts, preexisting grid recovery, unrelated menu close, exact table interaction, required/wrong table and final acknowledged close.'],
+  ['craft bounded failure', 'Missing ingredients/disabled or wrong result/full storage reject with actual completed count; same-menu recovery preserves inputs/cursor and never closes to drop.'],
+  ['craft cancellation and queue', 'Invalidate menu or lose reply after a result pickup: no cleanup/replay after unknown outcome; whole craft owns cursor ahead of concurrent/reentrant operation.'],
   ['QuickJS runtime', 'Run actual browser-bundled adapter with existing Item/Window constructors, plugin vec3/events identities, 64 MiB memory and 512 KiB stack.'],
 ];
 
@@ -38,6 +43,11 @@ const { build } = plugin('esbuild');
 const { getQuickJS } = plugin('quickjs-emscripten');
 const stone = registry.itemsByName.stone.id, dirt = registry.itemsByName.dirt.id;
 const helmet = registry.itemsByName.diamond_helmet.id;
+const plank = registry.itemsByName.oak_planks.id, stick = registry.itemsByName.stick.id;
+const milk = registry.itemsByName.milk_bucket.id, bucket = registry.itemsByName.bucket.id;
+const cake = registry.itemsByName.cake.id, sugar = registry.itemsByName.sugar.id;
+const wheat = registry.itemsByName.wheat.id, egg = registry.itemsByName.egg.id;
+const Recipe = reference('prismarine-recipe')(registry).Recipe;
 const probe = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
 probe.middleClick({ item: { type: stone, stackSize: 64, metadata: 0, nbt: null } }, 1);
 const Item = probe.selectedItem.constructor;
@@ -71,7 +81,7 @@ const data = JSON.stringify({ itemsArray: registry.itemsArray, enchantmentsByNam
 function authority(spec = {}) {
   const inventory = windows.createWindow(0, 'minecraft:inventory', 'Inventory');
   let window = spec.container ? windows.createWindow(4, spec.container, { text: 'Chest' }) : inventory;
-  let generation = 1, selected = 0, active = true, count = 0;
+  let generation = 1, selected = 0, active = true, count = 0, crafts = 0;
   const calls = [], dropped = [];
   const slotRules = spec.rules ?? {};
   for (const [slot, item] of spec.inventory ?? []) inventory.updateSlot(slot, make(item));
@@ -79,6 +89,20 @@ function authority(spec = {}) {
     window.updateSlot(slot, make(encode(inventory.slots[slot - window.inventoryStart + 9])));
   for (const [slot, item] of spec.slots ?? []) window.updateSlot(slot, make(item));
   window.selectedItem = make(spec.cursor);
+  const gridWidth = () => window.type === 'minecraft:inventory' ? 2 : window.type === 'minecraft:crafting' ? 3 : 0;
+  // Fixed scenario recipe authority, deliberately independent of guest Recipe
+  // placement/delta/outShape. This is an input/output fixture, not native proof.
+  function recipeMatches() {
+    if (!spec.nativeRecipe || gridWidth() !== spec.nativeRecipe.width) return false;
+    return Array.from({length:gridWidth()**2},(_,index)=>index).every(index => {
+      const type = spec.nativeRecipe.inputs[index], item = window.slots[index+1];
+      return type == null ? !item : item?.type === type;
+    });
+  }
+  function updateResult() {
+    if (spec.nativeRecipe && gridWidth()) window.updateSlot(0, recipeMatches() && !spec.disabledRecipe ? make(spec.nativeRecipe.output) : null);
+  }
+  updateResult();
   function mirror() {
     if (window !== inventory) for (let slot = window.inventoryStart; slot < window.inventoryEnd; slot++)
       inventory.updateSlot(slot - window.inventoryStart + 9, make(encode(window.slots[slot])));
@@ -90,7 +114,9 @@ function authority(spec = {}) {
       slots: window.slots.map((item, slot) => {
         const playerSlot = window === inventory ? slot : slot >= window.inventoryStart && slot < window.inventoryEnd ? slot - window.inventoryStart + 9 : null;
         const rules = slotRules[slot] ?? {};
-        return { slot, item: encode(item), role: slot === window.craftingResultSlot ? 'result' : 'ordinary',
+        return { slot, item: encode(item), role: slot === window.craftingResultSlot ? 'crafting_result'
+          : gridWidth() && slot >= 1 && slot <= gridWidth()**2 ? 'crafting_input' : 'ordinary',
+          ...(gridWidth() && slot >= 1 && slot <= gridWidth()**2 ? {craftingIndex:slot-1,craftingWidth:gridWidth(),craftingHeight:gridWidth()} : {}),
           inventorySlot: playerSlot != null && (playerSlot >= 5) ? invSlot(playerSlot) : null, inventoryWindowSlot: playerSlot,
           mayPickup: rules.mayPickup !== false, mayPlaceCarried: rules.mayPlace !== false && slot !== window.craftingResultSlot,
           maxStackSize: rules.maxStackSize ?? window.selectedItem?.stackSize ?? 64,
@@ -116,7 +142,16 @@ function authority(spec = {}) {
         const mode = ['PICKUP', 'QUICK_MOVE', 'SWAP', 'CLONE', 'THROW'].indexOf(args.clickType);
         const rules = slotRules[args.slot] ?? {};
         if (args.slot === -999 && window.selectedItem) dropped.push({ ...encode(window.selectedItem), count: args.button === 0 ? window.selectedItem.count : 1 });
-        if (mode === 2 && args.button === 40) {
+        if (spec.nativeRecipe && args.slot === 0 && mode === 0 && recipeMatches() && window.slots[0] && !window.selectedItem) {
+          // A single successful ResultSlot take consumes one operation and
+          // returns server-chosen leftovers, including absent outShape entries.
+          window.selectedItem = make(encode(window.slots[0])); crafts++;
+          for (const index of Object.keys(spec.nativeRecipe.inputs)) {
+            const slot = Number(index)+1, input = window.slots[slot];
+            assert.equal(input.count,1,'fixture receives exactly one operation');
+            window.updateSlot(slot,make(spec.nativeRecipe.remainders?.[index]));
+          }
+        } else if (mode === 2 && args.button === 40) {
           const offhand = inventory.slots[45]; inventory.updateSlot(45, make(encode(window.slots[args.slot])));
           window.updateSlot(args.slot, make(encode(offhand)));
         } else if (!spec.noop && !(window.selectedItem ? rules.mayPlace === false : rules.mayPickup === false)) {
@@ -131,10 +166,11 @@ function authority(spec = {}) {
         if (!spec.noOpen) replace(spec.openType);
       } else throw new Error(`Unexpected action ${args.type}`);
     }
-    await spec.after?.({ args, count, window, inventory, replace });
-    return { state: state() };
+    updateResult();
+    const after = await spec.after?.({ args, count, window, inventory, replace });
+    return { state: state(), ...(after?.error ? {error:after.error} : {}) };
   }
-  return { state, action, calls, dropped, replace, get window() { return window; } };
+  return { state, action, calls, dropped, replace, get window() { return window; }, get crafts() {return crafts;} };
 }
 
 const bootstrap = `
@@ -192,7 +228,7 @@ const bootstrap = `
   const summarize = () => ({ slots: (bot.currentWindow || bot.inventory).slots.map(i => i && [i.type, i.count]),
     cursor: (bot.currentWindow || bot.inventory).selectedItem?.count ?? 0, selected: bot.quickBarSlot,
     inventory: bot.inventory.slots.map(i => i && [i.type, i.count]), current: bot.currentWindow?.type ?? null });
-  const caught = async work => { try { await work(); return null; } catch(e) { return { name:e.name, code:e.code, message:e.message }; } };
+  const caught = async work => { try { await work(); return null; } catch(e) { return { name:e.name, code:e.code, message:e.message, completedCrafts:e.completedCrafts }; } };
 `;
 async function guest(spec, program) {
   const native = authority(spec), runtime = quickjs.newRuntime();
@@ -423,6 +459,110 @@ test('input bounds', async () => {
     await bot.transfer({itemType:stone,count:0,sourceStart:9,destStart:36});
     return errors.map(e=>e.code);`);
   assert.equal(actual.native.calls.length,0); assert(actual.value.every(Boolean));
+});
+
+const stickRecipe = Recipe.find(stick).find(recipe=>recipe.inShape?.[0][0].id===plank);
+const stickAuthority = {width:2,inputs:{0:plank,2:plank},output:{type:stick,count:4}};
+const total = (slots,type) => slots.reduce((sum,item)=>sum+(item?.[0]===type?item[1]:0),0);
+test('craft source/count/layout',async()=>{
+  const trace=[];
+  const expected=await pinned(async bot=>{
+    reference('mineflayer/lib/plugins/craft')(bot);
+    // Feed the result refresh packet the real inventory plugin waits for.
+    // Craft's own legacy local result synthesis remains visible to this oracle.
+    bot._client.write=(name,packet)=>{
+      if(name==='window_click'&&packet.slot>=0&&packet.slot<=4)
+        setImmediate(()=>bot._client.emit('set_slot',{windowId:0,stateId:1,slot:0,item:Item.toNotch(bot.inventory.slots[0])}));
+    };
+    const click=bot.clickWindow; bot.clickWindow=async(...args)=>{trace.push(args); return click(...args);};
+    assert.equal(await bot.craft(stickRecipe,2),undefined);
+  },[[9,{type:plank,count:4}]]);
+  const actual=await guest({slots:[[9,{type:plank,count:4}]],nativeRecipe:stickAuthority},`
+    const value=await bot.craft(${JSON.stringify(stickRecipe)},2); return {value:value===undefined,state:summarize()};`);
+  assert.equal(actual.value.value,true); assert.equal(actual.native.crafts,2);
+  assert.equal(total(actual.value.state.inventory,stick),8); assert.equal(total(expected.slots,stick),8);
+  assert.equal(total(actual.value.state.inventory,plank),0);
+  // A one-item carried stack may use left-click instead of source's always-right
+  // placement; compare actual placement cells and quantities, not click spelling.
+  const placements=actual.native.calls.filter(a=>a.type==='menu_click'&&a.slot>=1&&a.slot<=4).map(a=>a.slot);
+  assert.deepEqual(placements,trace.filter(a=>a[1]===1&&a[0]>=1&&a[0]<=4).map(a=>a[0]));
+  for(const count of [undefined,null,0,1.9]) {
+    const value=await guest({slots:[[9,{type:plank,count:4}]],nativeRecipe:stickAuthority},`
+      await bot.craft(${JSON.stringify(stickRecipe)},${count===undefined?'undefined':JSON.stringify(count)}); return summarize();`);
+    assert.equal(value.native.crafts,count===0?0:1);
+  }
+  const planksRecipe=Recipe.find(plank)[0], log=planksRecipe.ingredients[0].id;
+  const shapeless=await guest({slots:[[9,{type:log,count:1}]],nativeRecipe:{width:2,inputs:{3:log},output:{type:plank,count:4}}},`
+    await bot.craft(${JSON.stringify(planksRecipe)}); return summarize();`);
+  assert.equal(shapeless.native.crafts,1); assert.equal(total(shapeless.value.inventory,plank),4);
+});
+test('craft authoritative results',async()=>{
+  const cakeRecipe=Recipe.find(cake)[0]; assert.equal(cakeRecipe.outShape,null);
+  const inputs={0:milk,1:milk,2:milk,3:sugar,4:egg,5:sugar,6:wheat,7:wheat,8:wheat};
+  const milkSlots=Array.from({length:6},(_,i)=>[i+9,{type:milk,count:1}]);
+  const actual=await guest({inventory:[...milkSlots,[15,{type:sugar,count:4}],[16,{type:egg,count:2}],[17,{type:wheat,count:6}]],
+    openType:'minecraft:crafting',nativeRecipe:{width:3,inputs,output:{type:cake,count:1},remainders:{0:{type:bucket,count:1},1:{type:bucket,count:1},2:{type:bucket,count:1}}}},`
+    await bot.craft(${JSON.stringify(cakeRecipe)},2,{position:new Vec3(1,2,3)}); return summarize();`);
+  assert.equal(actual.native.crafts,2); assert.equal(total(actual.value.inventory,cake),2);
+  assert.equal(total(actual.value.inventory,bucket),6); assert.equal(actual.value.cursor,0);
+  assert.equal(actual.native.dropped.length,0); assert.equal(actual.native.calls.at(-1).type,'menu_close');
+  const components=[{type:'custom_name',data:{type:'string',value:'Native result'}}];
+  const nativeCount=await guest({slots:[[9,{type:plank,count:2}]],nativeRecipe:{...stickAuthority,output:{type:stick,count:2,components}}},`
+    await bot.craft(${JSON.stringify(stickRecipe)}); const output=bot.inventory.items().find(item=>item.type===${stick});
+    return {count:output.count,components:output.components};`);
+  assert.deepEqual(nativeCount.value,{count:2,components});
+});
+test('craft table lifecycle',async()=>{
+  const chest=registry.itemsByName.chest.id;
+  const recipe=Recipe.find(chest).find(r=>r.inShape[0][0].id===plank);
+  const inputs={0:plank,1:plank,2:plank,3:plank,5:plank,6:plank,7:plank,8:plank};
+  const actual=await guest({container:'minecraft:generic_9x3',inventory:[[9,{type:plank,count:8}]],openType:'minecraft:crafting',
+    nativeRecipe:{width:3,inputs,output:{type:chest,count:1}}},`
+    await bot.craft(${JSON.stringify(recipe)},1,{position:new Vec3(1,2,3)}); return summarize();`);
+  assert.equal(actual.native.calls[0].type,'menu_close'); assert.equal(actual.native.calls[1].type,'interact');
+  assert.equal(actual.value.current,null); assert.equal(total(actual.value.inventory,chest),1);
+  assert(!actual.native.calls.some(a=>a.type==='menu_click'&&a.slot===5&&a.button===1));
+  const existing=await guest({slots:[[1,{type:dirt,count:3}],[9,{type:plank,count:2}]],nativeRecipe:stickAuthority},`
+    await bot.craft(${JSON.stringify(stickRecipe)}); return summarize();`);
+  assert.equal(total(existing.value.inventory,dirt),3); assert.equal(total(existing.value.inventory,stick),4);
+  const required=await guest({},`return await caught(()=>bot.craft(${JSON.stringify(recipe)}));`);
+  assert.equal(required.value.code,'RequiresCraftingTable'); assert.equal(required.native.calls.length,0);
+  const wrong=await guest({},`return await caught(()=>bot.craft(${JSON.stringify(recipe)},1,{position:new Vec3(1,2,3)}));`);
+  assert.equal(wrong.value.code,'NotCraftingTable'); assert.equal(wrong.native.calls.length,1);
+});
+test('craft bounded failure',async()=>{
+  for(const options of [{slots:[[9,{type:plank,count:1}]],code:'InsufficientItems'},
+    {slots:[[9,{type:plank,count:2}]],disabledRecipe:true,code:'CraftResultUnavailable'},
+    {slots:[[9,{type:plank,count:2}]],nativeRecipe:{...stickAuthority,output:{type:dirt,count:1}},code:'CraftResultUnavailable'}]) {
+    const value=await guest({nativeRecipe:stickAuthority,...options},`
+      const error=await caught(()=>bot.craft(${JSON.stringify(stickRecipe)})); return {error,state:summarize()};`);
+    assert.equal(value.value.error.code,options.code); assert.equal(value.value.error.completedCrafts,0);
+    assert.equal(value.value.state.cursor,0); assert.equal(value.native.crafts,0); assert.equal(value.native.dropped.length,0);
+    assert.equal(total(value.value.state.inventory,plank),options.slots[0][1].count);
+  }
+  const full=await guest({slots:Array.from({length:36},(_,i)=>[i+9,{type:i===0?plank:dirt,count:64}]),nativeRecipe:stickAuthority},`
+    const error=await caught(()=>bot.craft(${JSON.stringify(stickRecipe)})); return {error,state:summarize()};`);
+  assert.equal(full.value.error.code,'DestinationFull'); assert.equal(full.value.error.completedCrafts,1);
+  assert.equal(full.value.state.cursor,4); assert.equal(full.native.dropped.length,0);
+  assert(!full.native.calls.some(a=>a.type==='menu_close'));
+});
+test('craft cancellation and queue',async()=>{
+  const unknown=await guest({slots:[[9,{type:plank,count:4}]],nativeRecipe:stickAuthority,
+    after:({args})=>args.type==='menu_click'&&args.slot===0?{error:{message:'lost result reply'}}:undefined},`
+    const outcomes=await Promise.allSettled([bot.craft(${JSON.stringify(stickRecipe)},2),bot.clickWindow(10,0,0)]);
+    return outcomes.map(r=>r.status);`);
+  assert.deepEqual(unknown.value,['rejected','rejected']); assert.equal(unknown.native.crafts,1);
+  const last=unknown.native.calls.at(-1); assert.equal(last.type,'menu_click');
+  // Actual result pickup executed but its reply failed: no storage, cleanup,
+  // second operation or queued click may run.
+  assert.equal(last.slot,0); assert.equal(unknown.native.window.selectedItem.count,4);
+  const changed=await guest({slots:[[9,{type:plank,count:4}]],nativeRecipe:stickAuthority,
+    after:({args,replace})=>{if(args.type==='menu_click'&&args.slot===0) replace();}},`
+    return await caught(()=>bot.craft(${JSON.stringify(stickRecipe)},2));`);
+  assert.equal(changed.value.code,'WindowChanged'); assert.equal(changed.native.calls.at(-1).slot,0);
+  const queued=await guest({slots:[[9,{type:plank,count:4}]],nativeRecipe:stickAuthority},`
+    await Promise.all([bot.craft(${JSON.stringify(stickRecipe)},2),bot.clickWindow(40,0,0)]); return summarize();`);
+  assert.equal(queued.native.crafts,2); assert.equal(queued.native.calls.at(-1).slot,40);
 });
 
 const results=[];

@@ -1,5 +1,5 @@
 // Public orchestration adapted from Mineflayer 4.39.0 inventory,
-// simple_inventory and chest plugins (MIT). See inventory.LICENSE.
+// simple_inventory, chest and craft plugins (MIT). See inventory.LICENSE.
 // Every mutation is native and authoritative; never call Window.acceptClick.
 import { Vec3 } from 'vec3';
 
@@ -390,6 +390,130 @@ export function installInventory(bot, { action, snapshot, assertActive = () => {
     return open(target, direction, cursorPos, kind === 'Entity', true);
   };
   bot.openChest = bot.openDispenser = bot.openContainer;
+
+  function craftingGrid(ctx) {
+    const slots = check(ctx).slots;
+    const inputs = slots.filter(slot => slot.role === 'crafting_input');
+    const result = slots.filter(slot => slot.role === 'crafting_result');
+    const width = inputs[0]?.craftingWidth, height = inputs[0]?.craftingHeight;
+    requireValue(integer(width) && integer(height) && width >= 1 && width <= 3 && height >= 1 && height <= 3 &&
+      inputs.length === width * height && result.length === 1, 'MissingCraftingGrid', 'Native crafting grid metadata is missing');
+    const ordered = new Array(inputs.length);
+    for (const input of inputs) {
+      requireValue(input.craftingWidth === width && input.craftingHeight === height && integer(input.craftingIndex) &&
+        input.craftingIndex >= 0 && input.craftingIndex < inputs.length && !ordered[input.craftingIndex],
+      'InvalidCraftingGrid', 'Native crafting grid indices are inconsistent');
+      ordered[input.craftingIndex] = input;
+    }
+    return { width, height, inputs: ordered.map(input => input.slot), result: result[0].slot };
+  }
+  function craftingPlan(recipe, width, height) {
+    const cells = new Array(width * height).fill(null);
+    const ingredient = value => {
+      if (value == null || value.id === -1) return null;
+      requireValue(integer(value.id) && bot.registry.itemsArray.some(item => item.id === value.id),
+        'InvalidRecipe', 'Recipe contains an invalid ingredient');
+      return { id: value.id, metadata: value.metadata };
+    };
+    if (recipe.inShape) {
+      requireValue(Array.isArray(recipe.inShape) && recipe.inShape.length <= height, 'InvalidRecipe', 'Recipe is taller than the crafting grid');
+      recipe.inShape.forEach((row, y) => {
+        requireValue(Array.isArray(row) && row.length <= width, 'InvalidRecipe', 'Recipe is wider than the crafting grid');
+        row.forEach((item, x) => { cells[x + width * y] = ingredient(item); });
+      });
+    }
+    const unused = cells.flatMap((item, index) => item ? [] : [index]);
+    if (recipe.ingredients) {
+      requireValue(Array.isArray(recipe.ingredients) && recipe.ingredients.length <= unused.length,
+        'InvalidRecipe', 'Recipe has too many ingredients for the crafting grid');
+      // Pinned shapeless placement consumes the last available grid slot first.
+      for (const item of recipe.ingredients) cells[unused.pop()] = ingredient(item);
+    }
+    requireValue(cells.some(Boolean), 'InvalidRecipe', 'Recipe has no ingredients');
+    return cells;
+  }
+  async function clearCraftingGrid(ctx, grid) {
+    await reserveCursor(ctx);
+    for (const slot of grid.inputs) {
+      if (!ctx.window.slots[slot]) continue;
+      await recover(ctx, async () => {
+        await pickup(ctx, slot);
+        await storeCursor(ctx, ctx.window.inventoryStart, ctx.window.inventoryEnd);
+      }, () => slot);
+    }
+  }
+  bot.craft = (recipe, count, craftingTable) => {
+    let operations, request;
+    try {
+      requireValue(recipe && typeof recipe === 'object', 'InvalidRecipe', 'craft requires a Recipe');
+      operations = parseInt(count ?? 1, 10);
+      requireValue(!recipe.requiresTable || craftingTable, 'RequiresCraftingTable', 'Recipe requires craftingTable, but one was not supplied');
+      // Nonpositive/NaN counts retain pinned's zero-iteration behavior.
+      if (!(operations > 0)) return Promise.resolve();
+      requireValue(integer(operations) && operations <= 256, 'OperationLimit', 'Craft is limited to 256 operations per call');
+      requireValue(integer(recipe.result?.id) && bot.registry.itemsArray.some(item => item.id === recipe.result.id),
+        'InvalidRecipe', 'Recipe result has an invalid item id');
+      craftingPlan(recipe, craftingTable ? 3 : 2, craftingTable ? 3 : 2);
+      if (craftingTable) request = openRequest(craftingTable, null, null, false);
+    } catch (error) { return Promise.reject(error); }
+    return queueWindow(current(), async ctx => {
+      let grid, opened = false, completedCrafts = 0;
+      try {
+        await reserveCursor(ctx);
+        if (bot.currentWindow) {
+          if (check(ctx).slots.some(slot => slot.role === 'crafting_input')) await clearCraftingGrid(ctx, craftingGrid(ctx));
+          await close(ctx); ctx = capture(bot.inventory); check(ctx);
+        }
+        if (request) {
+          await send(request);
+          const window = bot.currentWindow;
+          requireValue(window && nativeMenu().generation !== ctx.generation,
+            'NoWindowOpened', 'Interaction did not open a crafting table');
+          ctx = capture(window); check(ctx);
+          requireValue(window.type.startsWith('minecraft:crafting'), 'NotCraftingTable', 'Non-crafting window used as a crafting table');
+          opened = true;
+        }
+        grid = craftingGrid(ctx);
+        const plan = craftingPlan(recipe, grid.width, grid.height);
+        for (let operation = 0; operation < operations; operation++) {
+          await clearCraftingGrid(ctx, grid);
+          for (let index = 0; index < plan.length; index++) {
+            const item = plan[index];
+            if (!item) continue;
+            await transfer(ctx, { itemType: item.id, metadata: item.metadata, count: 1,
+              sourceStart: ctx.window.inventoryStart, sourceEnd: ctx.window.inventoryEnd,
+              destStart: grid.inputs[index], destEnd: grid.inputs[index] + 1 });
+          }
+          check(ctx);
+          const result = ctx.window.slots[grid.result];
+          requireValue(matches(result, recipe.result.id, recipe.result.metadata),
+            'CraftResultUnavailable', 'Native crafting result is empty or does not match the requested recipe');
+          // ResultSlot.onTake owns consumption, components and all remainders.
+          // Never QUICK_MOVE: it can perform more than one recipe operation.
+          await pickup(ctx, grid.result);
+          requireValue(ctx.window.selectedItem.count === result.count,
+            'UnexpectedClickResult', 'Native crafting result count changed during pickup');
+          completedCrafts++;
+          await storeCursor(ctx, ctx.window.inventoryStart, ctx.window.inventoryEnd);
+          await clearCraftingGrid(ctx, grid);
+        }
+        if (opened) await close(ctx);
+      } catch (error) {
+        error.completedCrafts = completedCrafts;
+        if (grid && !poisoned && (error.name === 'InventoryError' || isKnownActionError(error))) {
+          try {
+            check(ctx);
+            await clearCraftingGrid(ctx, grid);
+            // Failed recovery leaves the real cursor/grid visible, never closes
+            // the menu to provoke native overflow drops.
+            if (opened) await close(ctx);
+          } catch (recoveryError) { error.recoveryError = recoveryError; }
+        }
+        if (poisoned) throw poisoned;
+        throw error;
+      }
+    });
+  };
   bot.on('windowClose', window => {
     if (window && !closed.has(window)) { closed.add(window); window.emit('close'); }
   });
