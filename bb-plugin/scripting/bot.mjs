@@ -252,7 +252,13 @@ export function createBot(initial) {
       delete bot.players[username]; delete bot.uuidToUsername[player.uuid]; playerKeys.delete(player.uuid);
       if (streamed) entityEvents.push(['playerLeft', player]);
     }
-    bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
+    const game = { minY: next.minY, height: next.height, dimension: next.dimension.replace(/^minecraft:/, ''),
+      gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
+    for (const key of ['difficulty', 'hardcore', 'levelType', 'maxPlayers', 'serverViewDistance'])
+      if (next.worldState?.[key] !== undefined) game[key] = next.worldState[key];
+    const gameChanged = bot.game && Object.keys(game).some(key => bot.game[key] !== game[key]);
+    Object.assign(bot.game ??= {}, game);
+    if (streamed && gameChanged) entityEvents.push(['game']);
     let experienceChanged = false;
     if (next.hands.experience) {
       experienceChanged = !!bot.experience && (bot.experience.level !== next.hands.experience.level

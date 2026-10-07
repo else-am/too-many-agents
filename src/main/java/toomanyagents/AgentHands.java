@@ -368,9 +368,19 @@ final class AgentHands extends FakePlayer {
 
     String consumptionStatus() { reconcileNativeUse(); return nativeUseOutcome; }
 
-    void nativeUseFinished(InteractionHand hand) {
+    void nativeUseFinished(net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) {
         requireThread();
-        if (nativeUseHand == hand) nativeUseOutcome = "completed";
+        if (nativeUseHand != event.getHand()) return;
+        var original = event.getItem();
+        // Vanilla applies these effects to mobs but reserves consumption/remainders
+        // for players. Use its inventory helper after the body received the effects.
+        net.minecraft.world.item.Item remainder = original.is(Items.POTION) || original.is(Items.HONEY_BOTTLE)
+            ? Items.GLASS_BOTTLE : original.is(Items.MILK_BUCKET) ? Items.BUCKET : null;
+        if (remainder != null && !getAbilities().instabuild) {
+            event.setResultStack(net.minecraft.world.item.ItemUtils.createFilledResult(
+                original.copy(), this, new ItemStack(remainder), false));
+        }
+        nativeUseOutcome = "completed";
     }
 
     private void reconcileNativeUse() {

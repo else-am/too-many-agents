@@ -69,3 +69,8 @@ beyond the current public Level API/owned files; thunderState explicitly stays
 null. No rain division or weighted-thunder substitution is used.
 
 Raw thunder follow-up: while the tester uses the prior packaged build, expose Level.thunderLevel through the existing access transformer. Verify the next packaged build can read it (including zero rain); do not substitute getThunderLevel, which multiplies by rain. Compare native weather commands and actual raw state after restart.
+
+Additional native game-state check: retain bot.game across physics ticks and
+confirm actual difficulty, hardcore/flat-world flags, server view distance and
+max players. Native dimension keys lose only the minecraft: prefix, as upstream.
+Changing difficulty must update observed state; no login/respawn is fabricated.

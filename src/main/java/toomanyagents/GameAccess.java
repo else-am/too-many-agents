@@ -615,10 +615,11 @@ final class GameAccess {
     }
 
     /** Native item effects have completed; the next frame carries the resulting hand stack. */
-    void nativeUseFinished(net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.InteractionHand hand) {
+    void nativeUseFinished(net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) {
+        var entity = event.getEntity();
         if (!(entity.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
         for (var controller : actions.values()) {
-            if (controller.mob == entity) { controller.hands.nativeUseFinished(hand); return; }
+            if (controller.mob == entity) { controller.hands.nativeUseFinished(event); return; }
         }
     }
 
@@ -730,6 +731,11 @@ final class GameAccess {
         worldState.addProperty("rainState", level.getRainLevel(1.0F));
         // getThunderLevel multiplies by rain; it is not the raw protocol value.
         worldState.addProperty("thunderState", level.thunderLevel);
+        worldState.addProperty("difficulty", level.getDifficulty().getKey());
+        worldState.addProperty("hardcore", current.isHardcore());
+        worldState.addProperty("levelType", level.isFlat() ? "flat" : "default");
+        worldState.addProperty("maxPlayers", current.getPlayerList().getMaxPlayers());
+        worldState.addProperty("serverViewDistance", current.getPlayerList().getViewDistance());
         snapshot.add("worldState", worldState);
         snapshot.add("players", ScriptEntities.players(level));
         var items = new ScriptItems(level);
