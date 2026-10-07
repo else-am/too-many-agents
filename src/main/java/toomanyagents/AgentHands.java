@@ -88,6 +88,7 @@ import java.util.function.Supplier;
 
 /** Native player interactions for one visible body. Never added to the world or player list. */
 final class AgentHands extends FakePlayer {
+    java.util.function.BiConsumer<Component, Boolean> messageSink;
     private final Mob body;
     private final Supplier<BodyBox> bodyBox;
     private final EnumMap<EquipmentSlot, ItemStack> previousEquipment = new EnumMap<>(EquipmentSlot.class);
@@ -128,6 +129,14 @@ final class AgentHands extends FakePlayer {
         restore();
         observeMenu(getInventory().getDisplayName());
         save();
+    }
+
+    @Override public void displayClientMessage(Component message, boolean actionBar) {
+        if (messageSink != null) messageSink.accept(message, actionBar);
+    }
+
+    @Override public void sendSystemMessage(Component message, boolean overlay) {
+        if (messageSink != null) messageSink.accept(message, overlay);
     }
 
     @Override public MinecraftServer getServer() { return serverLevel().getServer(); }

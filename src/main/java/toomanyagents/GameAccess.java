@@ -416,7 +416,7 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer())));
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()), request -> scriptChat(mob, request)));
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
@@ -740,6 +740,7 @@ final class GameAccess {
         snapshot.add("players", ScriptEntities.players(level));
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
+        snapshot.add("messages", controller.drainMessages());
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
         for (var value : snapshot.getAsJsonArray("entities")) {
             var observed = value.getAsJsonObject();
@@ -1380,6 +1381,59 @@ final class GameAccess {
         result.addProperty("includeAir", includeAir);
         result.add("blocks", found);
         return result;
+    }
+
+    static JsonObject chatRecord(ServerLevel level, Component message, String position, UUID sender) {
+        var result = new JsonObject();
+        result.add("message", net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(
+            level.registryAccess().createSerializationContext(JsonOps.INSTANCE), message).getOrThrow());
+        result.addProperty("position", position);
+        if (sender != null) result.addProperty("sender", sender.toString());
+        return result;
+    }
+
+    void publicChat(ServerPlayer sender, Component message) {
+        if (sender.getServer() != server.get()) return;
+        if (!sender.getServer().isSameThread()) throw error("chat_requires_server_thread");
+        var formatted = Component.translatable("chat.type.text", sender.getDisplayName(), message);
+        broadcastScriptChat(chatRecord(sender.serverLevel(), formatted, "chat", sender.getUUID()));
+    }
+
+    private void broadcastScriptChat(JsonObject message) {
+        for (var controller : actions.values()) controller.recordMessage(message);
+    }
+
+    private JsonObject scriptChat(Mob mob, JsonObject args) {
+        String text = string(args, "message", 4096);
+        if (text.isBlank() || text.codePoints().anyMatch(c -> c < 32 || c == 127 || c == 167)) throw error("invalid_chat_message");
+        var current = mob.getServer();
+        if ((args.has("target") || !text.startsWith("/")) && text.length() > 256) throw error("chat_message_too_long");
+        if (args.has("target")) {
+            String target = string(args, "target", 256);
+            var recipient = current.getPlayerList().getPlayerByName(target);
+            var matches = actions.values().stream().filter(a -> a.mob.getName().getString().equals(target) && a.mob.isAlive()).toList();
+            if (recipient == null && matches.size() != 1 || recipient != null && !matches.isEmpty()) throw error("whisper_target_missing_or_ambiguous");
+            var incoming = Component.translatable("commands.message.display.incoming", mob.getName(), Component.literal(text));
+            if (recipient != null) recipient.sendSystemMessage(incoming);
+            else matches.get(0).recordMessage(chatRecord((ServerLevel) mob.level(), incoming, "chat", mob.getUUID()));
+            var outgoing = Component.translatable("commands.message.display.outgoing", Component.literal(target), Component.literal(text));
+            var owner = actions.values().stream().filter(a -> a.mob == mob).findFirst().orElseThrow();
+            owner.recordMessage(chatRecord((ServerLevel) mob.level(), outgoing, "system", null));
+        } else if (text.startsWith("/")) {
+            var request = new JsonObject(); request.addProperty("command", text);
+            var result = command(current, mob, request);
+            var owner = actions.values().stream().filter(a -> a.mob == mob).findFirst().orElseThrow();
+            for (var feedback : result.getAsJsonArray("feedback"))
+                owner.recordMessage(chatRecord((ServerLevel) mob.level(), Component.literal(feedback.getAsString()), "system", null));
+            return result;
+        } else {
+            var formatted = Component.translatable("chat.type.text", mob.getName(), Component.literal(text));
+            current.getPlayerList().broadcastSystemMessage(formatted, false);
+            var record = chatRecord((ServerLevel) mob.level(), formatted, "chat", mob.getUUID());
+            record.addProperty("verified", false); // Native body speech has no player signature.
+            broadcastScriptChat(record);
+        }
+        return JsonState.object("status", "sent");
     }
 
     private JsonObject command(MinecraftServer current, Mob mob, JsonObject args) {

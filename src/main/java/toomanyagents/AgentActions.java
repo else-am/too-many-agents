@@ -22,8 +22,11 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
+    private final java.util.function.Function<JsonObject, JsonObject> chatAction;
+    private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
+    private int messageSize;
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
     private float vehicleLeft, vehicleForward;
@@ -52,12 +55,15 @@ final class AgentActions {
     private long snapshotRevision;
     private long actionSequence, completedActionSequence;
 
-    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
+    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction) {
         this.mob = mob;
         this.session = session;
         this.box = box;
         this.player = player;
+        this.chatAction = chatAction;
         hands = new AgentHands(mob, box);
+        hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
+            overlay ? "game_info" : "system", null));
         ambient = new AmbientBehavior(mob);
     }
 
@@ -70,6 +76,7 @@ final class AgentActions {
         if (scripted() || busy()) throw error("body_already_busy");
         UUID.fromString(id);
         if (timeoutMs < 1 || timeoutMs > 300_000) throw error("invalid_script_deadline");
+        messages.clear(); messageSize = 0;
         scriptId = id;
         lastScriptId = id;
         snapshotRevision = 0;
@@ -97,11 +104,31 @@ final class AgentActions {
 
     void releaseScript() {
         scriptId = null;
+        messages.clear(); messageSize = 0;
         clearControls();
         cancel("");
         if (stateStream != null) stateStream.finish();
         stateStream = null;
         stateSnapshot = null;
+    }
+
+    void recordMessage(JsonObject message) {
+        if (!scripted()) return;
+        int size = message.toString().length();
+        if (messages.size() >= 64 || messageSize + size > 65536) {
+            if (stateStream != null) stateStream.fail(error("script_chat_overflow"));
+            releaseScript();
+            return;
+        }
+        messages.addLast(message);
+        messageSize += size;
+    }
+
+    JsonArray drainMessages() {
+        var result = new JsonArray();
+        messages.forEach(result::add);
+        messages.clear(); messageSize = 0;
+        return result;
     }
 
     long nextSnapshotRevision() { return ++snapshotRevision; }
@@ -353,6 +380,7 @@ final class AgentActions {
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
                     ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "chat" -> finish("completed", "chat_processed", chatAction.apply(args));
                 case "wake" -> finish("completed", "awake", hands.wakeBody());
                 case "fish" -> {
                     if (ticks == 1) hands.beginFishing();

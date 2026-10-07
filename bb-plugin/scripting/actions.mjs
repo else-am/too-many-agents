@@ -319,6 +319,20 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     })();
     return active.done;
   };
+  function sendChat(message, target) {
+    if (typeof message === 'number') message = String(message);
+    need(typeof message === 'string', 'InvalidChat', 'Chat message type must be a string or number');
+    if (target === undefined && message.startsWith('/')) { control({ type: 'chat', message }); return; }
+    const limit = target === undefined ? 256 : 256 - (`/tell ${target} `).length;
+    need(limit > 0, 'InvalidChatTarget', 'Whisper target is too long');
+    for (const line of message.split('\n')) for (let i = 0; i < line.length; i += limit)
+      control({ type: 'chat', message: line.slice(i, i + limit), ...(target === undefined ? {} : { target }) });
+  }
+  bot.chat = message => { sendChat(message); };
+  bot.whisper = (target, message) => {
+    need(typeof target === 'string' && target.length > 0, 'InvalidChatTarget', 'Whisper target must be a name');
+    sendChat(message, target);
+  };
   bot.isABed = block => !!block && /^(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_bed$/.test(block.name);
   bot.parseBedMetadata = block => {
     need(bot.isABed(block), 'InvalidBed', 'wrong block : not a bed block');

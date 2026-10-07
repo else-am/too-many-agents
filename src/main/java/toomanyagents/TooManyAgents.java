@@ -85,6 +85,10 @@ public final class TooManyAgents {
         NeoForge.EVENT_BUS.addListener(this::serverTick);
         NeoForge.EVENT_BUS.addListener(this::clientTick);
         NeoForge.EVENT_BUS.addListener(this::chatReceived);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,
+            (net.neoforged.neoforge.event.ServerChatEvent event) -> {
+                if (game != null && !event.isCanceled()) game.publicChat(event.getPlayer(), event.getMessage());
+            });
         NeoForge.EVENT_BUS.addListener(this::despawn);
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) -> {

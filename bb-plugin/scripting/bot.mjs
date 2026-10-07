@@ -17,6 +17,7 @@ import { installWorldQueries } from './world-queries.mjs';
 import { installState } from './state.mjs';
 import { installActions } from './actions.mjs';
 import { installEntityQueries } from './entity-queries.mjs';
+import { installChatPatterns } from './chat-patterns.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -351,6 +352,13 @@ export function createBot(initial) {
       for (const event of entityEvents) bot.emit(...event);
       if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }
     }
+    for (const entry of next.messages ?? []) {
+      const message = new ChatMessage(entry.message);
+      const sender = entry.sender ?? null;
+      bot.emit('message', message, entry.position, sender, entry.verified);
+      bot.emit('messagestr', message.toString(), entry.position, message, sender, entry.verified);
+      if (entry.position === 'game_info') bot.emit('actionBar', message, sender);
+    }
     for (const wait of stateWaits) {
       if (next.completedActionSequence >= wait.sequence) { stateWaits.delete(wait); wait.resolve(); }
     }
@@ -384,6 +392,7 @@ export function createBot(initial) {
         throw new Error('Script body or world session changed');
     },
   });
+  installChatPatterns(bot);
   update(initial);
   const actions = installActions(bot, { request, action, waitForActionState, snapshot: () => snapshot,
     enqueueControl: inventory.enqueueControl,
