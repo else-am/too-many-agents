@@ -416,7 +416,7 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()), request -> scriptChat(mob, request)));
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()), request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
@@ -1401,6 +1401,20 @@ final class GameAccess {
 
     private void broadcastScriptChat(JsonObject message) {
         for (var controller : actions.values()) controller.recordMessage(message);
+    }
+
+    private CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> tabComplete(Mob mob, JsonObject args) {
+        String text = string(args, "text", 4096);
+        if (text.codePoints().anyMatch(c -> c < 32 || c == 127)) throw error("invalid_completion_text");
+        var current = mob.getServer();
+        var source = player(current).createCommandSourceStack().withSuppressedOutput()
+            .withEntity(mob).withLevel((ServerLevel) mob.level()).withPosition(mob.position()).withRotation(mob.getRotationVector());
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).commands)
+            source = source.withPermission(0);
+        var reader = new com.mojang.brigadier.StringReader(text);
+        if (reader.canRead() && reader.peek() == '/') reader.skip();
+        var dispatcher = current.getCommands().getDispatcher();
+        return dispatcher.getCompletionSuggestions(dispatcher.parse(reader, source));
     }
 
     private JsonObject scriptChat(Mob mob, JsonObject args) {

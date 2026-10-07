@@ -319,6 +319,13 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     })();
     return active.done;
   };
+  bot.tabComplete = async (text, assumeCommand = false, sendBlockInSight = true, timeout = 5000) => {
+    need(typeof text === 'string' && text.length <= 4096, 'InvalidCompletionText', 'Completion text must be a string of at most 4096 characters');
+    need(Number.isInteger(timeout) && timeout > 0 && timeout <= 300000, 'InvalidTimeout', 'Completion timeout must be 1..300000ms');
+    // Minecraft 1.21.1 sends only text; the other arguments are legacy fields.
+    const result = await perform({ type: 'tab_complete', text, timeout });
+    return result.result.matches;
+  };
   function sendChat(message, target) {
     if (typeof message === 'number') message = String(message);
     need(typeof message === 'string', 'InvalidChat', 'Chat message type must be a string or number');

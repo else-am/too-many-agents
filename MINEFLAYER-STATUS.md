@@ -9,7 +9,7 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 - Latest focused live-validated implementation: **`3875c0b`** (observed events); sleep/wake passed on `6ee4bb3`; fishing/boat controls passed on `8bfa67e`, earlier broad workflows on `880c87b`.
 - Built artifact: `build/libs/too-many-agents-0.9.0.jar`.
 - Latest validated JAR SHA-256: `29f49ed99c7aea61150198991a9dddcfa392591a3a4c2fe7ef56f1c4889b87c2`.
-- Test JVM `62814` saved/disconnected successfully and was stopped. Root owns lifecycle. Sleep/wake passed its focused native check on `6ee4bb3`; observed entity events passed on `3875c0b`; newer chat source builds but remains native-unverified.
+- Test JVM `85181` saved/disconnected successfully and was stopped after the blocked chat setup. Root owns lifecycle. Sleep/wake passed its focused native check on `6ee4bb3`; observed entity events passed on `3875c0b`; chat/whisper/pattern source builds but remains native-unverified. Chat testing on `bec7958` was blocked before installation because another game was connected to BB; the installed scripting bundle differs. No chat scenario ran and no shared plugin was replaced.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -74,6 +74,7 @@ Key evidence (local BB thread storage):
 - [Persistence, combat and entity placement](</Users/scott/.bb/thread-storage/thr_xykqkgui57/combat-focused-summary.json>)
 - [Movement, jump, eating and shield use](</Users/scott/.bb/thread-storage/thr_xykqkgui57/eede028-focused-summary.json>)
 - [Final fixes, signs and player/game state](</Users/scott/.bb/thread-storage/thr_xykqkgui57/880c87b-final-focused-summary.json>)
+- [Chat setup blocked by another connected game](</Users/scott/.bb/thread-storage/thr_xykqkgui57/bec7958-chat-blocked-summary.json>)
 - [Fishing replacement/retrieval/rendering and historical iterator stall](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-fishing-summary.json>)
 
 [Fishing fix and boat steering evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/8bfa67e-fishing-boat-summary.json>). [Sleep evidence](</Users/scott/.bb/thread-storage/bed-sleep-corrected-evidence-99c6c629.json>), [wake evidence](</Users/scott/.bb/thread-storage/bed-wake-evidence-74c649ec.json>). [Independent bed evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/6ee4bb3-bed-summary.json>). [Observed events evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/3875c0b-observation-summary.json>).
@@ -89,7 +90,8 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [ ] **Creative gameplay API:** arbitrary item/component setters and remaining creative movement APIs. Existing physical `creative_item` is not the full Mineflayer creative API.
 - [x] **Bed/sleep/wake implementation:** actual body sleep, native bed occupancy, wake, parsed bed metadata and sleep/wake events; full build passed.
 - [x] **Bed/sleep/wake focused verification:** actual sleeping body and occupied halves persisted after script release; sleep/wake handlers saw updated state; wake cleared occupancy, ticks continued, inventory stayed unchanged, already-awake rejected. Wider permissions/lifecycle cases remain pending. Native Mob sleep does not add a player or establish player respawn/night-skipping. Remaining body-specific gameplay stays pending.
-- [ ] **Chat gameplay API:** source now includes chat/whisper, bounded per-script message queues, public server chat and proxy-addressed messages, patterns and awaitMessage. Command sending reuses the existing creative_commands permission boundary. Java/plugin/package build passed; native-unverified. tabComplete and wider message sources remain pending. Human-client private chat history is not copied.
+- [x] **Chat and completion implementation:** chat/whisper, bounded per-script queues, public server chat and proxy-addressed messages, patterns, awaitMessage and tabComplete. Command sending retains creative_commands permissions; completion queries the native dispatcher without executing commands. Java/plugin/package build passed. Human-client private chat history is not copied.
+- [ ] **Chat verification and remaining sources:** native chat/completion checks are blocked while another game uses the shared plugin. No chat scenario ran. Broader server message sources and lifecycle/overflow cases remain pending; body speech has no signed player identity.
 - [ ] **World/chunk API:** remaining applicable world/chunk methods and load events. Current synchronous observations cover a bounded **33×17×33** region; missing/unloaded cells are not known air.
 - [x] **Observed entity state event implementation:** emits effect additions/changes/removals (excluding normal countdown), crouch transitions, self move and rotation-only entityMoved; stable effects map. Full Java/plugin/package build passed.
 - [x] **Observed entity event focused verification:** one add/removal, stable objects through 280 countdown ticks, updated crouch/uncrouch callbacks and look-only move(previous Vec3). Amplifier refresh and another entity’s rotation remain unverified. Changes entirely between observations are not reconstructed.

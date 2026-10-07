@@ -22,9 +22,12 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
+    private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
+    private CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestions;
+    private long suggestionDeadline;
     private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
     private int messageSize;
     private final Set<String> heldControls = new HashSet<>();
@@ -55,12 +58,14 @@ final class AgentActions {
     private long snapshotRevision;
     private long actionSequence, completedActionSequence;
 
-    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction) {
+    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
+                 java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete) {
         this.mob = mob;
         this.session = session;
         this.box = box;
         this.player = player;
         this.chatAction = chatAction;
+        this.tabComplete = tabComplete;
         hands = new AgentHands(mob, box);
         hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
             overlay ? "game_info" : "system", null));
@@ -380,6 +385,36 @@ final class AgentActions {
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
                     ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "tab_complete" -> {
+                    if (ticks == 1) {
+                        int timeout = integer(args, "timeout", 5000);
+                        if (timeout < 1 || timeout > 300000) throw error("invalid_completion_timeout");
+                        suggestionDeadline = System.nanoTime() + timeout * 1000000L;
+                        suggestions = tabComplete.apply(args);
+                    }
+                    if (suggestions.isDone()) {
+                        var matches = new JsonArray();
+                        var level = (ServerLevel) mob.level();
+                        int size = 0;
+                        for (var suggestion : suggestions.join().getList()) {
+                            if (matches.size() >= 1000) break; // Same native packet cap.
+                            var entry = new JsonObject();
+                            entry.addProperty("match", suggestion.getText());
+                            if (suggestion.getTooltip() == null) entry.add("tooltip", JsonNull.INSTANCE);
+                            else {
+                                var component = net.minecraft.network.chat.ComponentUtils.fromMessage(suggestion.getTooltip());
+                                var tag = net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(
+                                    level.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), component).getOrThrow();
+                                entry.add("tooltip", ScriptNbt.typed(tag));
+                            }
+                            size += entry.toString().length();
+                            if (size > 65536) throw error("completion_output_too_large");
+                            matches.add(entry);
+                        }
+                        var result = new JsonObject(); result.add("matches", matches);
+                        finish("completed", "suggestions", result);
+                    } else if (System.nanoTime() >= suggestionDeadline) finish("timeout", "command_suggestions_timeout", null);
+                }
                 case "chat" -> finish("completed", "chat_processed", chatAction.apply(args));
                 case "wake" -> finish("completed", "awake", hands.wakeBody());
                 case "fish" -> {
@@ -711,6 +746,7 @@ final class AgentActions {
     }
 
     private void finish(String status, String detail, JsonObject result) {
+        if (suggestions != null) { suggestions.cancel(false); suggestions = null; }
         if ("fish".equals(kind)) hands.cancelFishing();
         if (route != null) {
             route.stop();

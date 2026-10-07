@@ -18,7 +18,7 @@ scripts/world sessions. Use bounded ordered native queues and surface overflow.
 
 The initial helper and transport source is not yet live-verified. Public server
 chat, body speech, targeted whispers, native proxy feedback and actionBar are
-wired; tabComplete and broader server message sources remain pending. Validate
+wired; broader server message sources remain pending. Validate
 chat/whisper are synchronous void with successful final control drain, typed
 message callbacks, no cross-script replay, and command permission rejection.
 Native body speech is unsigned; no signed player identity is fabricated.
@@ -27,3 +27,22 @@ Explicit pinned-source corrections: pattern-set IDs identify their registration;
 partial sets do not suppress other matches; completed sets retire before user
 callbacks; all matches consume a message before reentrant delivery; global/sticky
 regex lastIndex does not alternate message matches. Empty sets reject upfront.
+
+## Command suggestions (before implementation)
+
+Use the current native command dispatcher, body position/entity and permitted
+command level. Never execute the input. Return the modern pinned matches shape:
+{match, tooltip: typed anonymous NBT or null}. A slash is optional; current
+1.21.1 ignores legacy assumeCommand/lookedAtBlock packet fields. Preserve those
+public parameters without inventing cursor-dependent behavior. Bound input,
+results, output and timeout; poll incomplete futures without blocking the server.
+Release/cancel drops the pending result. Native future completion must not read
+world/registry data off the owning thread.
+
+Focused check: `/te` under ordinary body mode must not expose privileged teleport
+commands; `/tell D` includes the actual connected Dev player without sending a
+message. Unknown prefix resolves an empty array. Verify ticks advance and no
+world/chat mutation occurs. Privileged suggestions and tooltip content remain
+pending unless exercised. Concurrent body actions use the existing busy fence.
+
+Implementation build passed, including native completion polling and typed tooltip encoding. Native verification remains unrun: another connected game prevented installing the chat scripting bundle. No replacement was attempted.
