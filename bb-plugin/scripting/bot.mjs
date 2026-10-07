@@ -1,3 +1,4 @@
+import { installBossBars } from './boss-bars.mjs';
 import { installScoreboards } from './scoreboard.mjs';
 import { installExplosion } from './explosion.mjs';
 import { Vec3 } from 'vec3';
@@ -130,6 +131,7 @@ export function createBot(initial) {
     plugins.forEach(bot.loadPlugin);
   };
   const scoreboards = installScoreboards(bot, ChatMessage);
+  const bossBars = installBossBars(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
   installWorldQueries(bot, { getLoadedBounds() {
@@ -364,6 +366,7 @@ export function createBot(initial) {
     bot.usingHeldItem = next.hands.usingItem;
     const stateEvents = updateState(next);
     const scoreEvents = scoreboards.update(next.scoreboard, streamed);
+    const bossEvents = bossBars.update(next.bossBars, streamed);
     inventory.syncWindow(bot.currentWindow ?? bot.inventory, menu);
     // A native frame changes all slots/cursor together. Listeners must see the
     // complete inventory and container state, including held equipment.
@@ -377,6 +380,7 @@ export function createBot(initial) {
     if (experienceChanged) bot.emit('experience');
     for (const event of stateEvents) bot.emit(...event);
     for (const event of scoreEvents) bot.emit(...event);
+    for (const event of bossEvents) bot.emit(...event);
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.world.emit('blockUpdate', before, after);
@@ -452,5 +456,5 @@ export function createBot(initial) {
   installRecipeQueries(bot, recipeFactory);
   installExplosion(bot);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
-    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
+    BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

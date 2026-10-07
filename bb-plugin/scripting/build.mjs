@@ -36,7 +36,7 @@ licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'ut
 licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
-licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
+licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));

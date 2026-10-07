@@ -750,6 +750,7 @@ final class GameAccess {
         if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
             scriptScoreboard = new ScriptScoreboard(current.getScoreboard());
         snapshot.add("scoreboard", scriptScoreboard.snapshot(level));
+        snapshot.add("bossBars", ScriptBossBars.snapshot(level, mob, controller.hands, snapshot.getAsJsonArray("entities")));
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
         snapshot.add("messages", controller.drainMessages());
