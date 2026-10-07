@@ -38,6 +38,8 @@ final class Observations {
         result.addProperty("alive", entity.isAlive());
         if (entity instanceof LivingEntity living) {
             result.addProperty("health", living.getHealth());
+            result.addProperty("airSupply", living.getAirSupply());
+            result.addProperty("maxAirSupply", living.getMaxAirSupply());
             var effects = new JsonObject();
             for (var effect : living.getActiveEffects()) {
                 int id = BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value());

@@ -713,6 +713,16 @@ final class GameAccess {
     private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
         var snapshot = observe(current, mob, new JsonObject());
         var level = (ServerLevel) mob.level();
+        var worldState = new JsonObject();
+        // Decimal strings preserve all signed-long bits through JSON/QuickJS.
+        worldState.addProperty("dayTime", Long.toString(level.getDayTime()));
+        worldState.addProperty("gameTime", Long.toString(level.getGameTime()));
+        worldState.addProperty("doDaylightCycle", level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DAYLIGHT));
+        worldState.addProperty("isRaining", level.isRaining());
+        worldState.addProperty("rainState", level.getRainLevel(1.0F));
+        // getThunderLevel multiplies by rain; it is not the raw protocol value.
+        worldState.add("thunderState", com.google.gson.JsonNull.INSTANCE);
+        snapshot.add("worldState", worldState);
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
