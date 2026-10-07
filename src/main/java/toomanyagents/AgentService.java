@@ -21,6 +21,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     // Physical tool calls in flight, by the plugin's request ID.
     private final Map<String,GameAccess.ToolScope> scopes = new HashMap<>();
     private final Map<String,String> scopeAgents = new HashMap<>();
+    private final Map<String,String> scopeScripts = new HashMap<>();
     // A cancel can arrive before the call it cancels.
     private final Set<String> cancelled = new HashSet<>();
 
@@ -496,6 +497,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     /** Requests from the BB plugin. Physical requests must come from the agent's own thread. */
     synchronized CompletableFuture<JsonObject> callback(JsonObject request) {
+        return callback(request, null);
+    }
+
+    synchronized CompletableFuture<JsonObject> callback(JsonObject request, ScriptStream stream) {
         try {
             String session=worldSession.get(), op=text(request,"op"), requestId=text(request,"requestId");
             if(request.get("protocol").getAsInt()!=3) return failed("protocol_mismatch");
@@ -588,7 +593,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     String target=text(request,"cancelRequestId");
                     cancelled.add(target);
                     var scope=scopes.remove(target);
-                    if(scope!=null) { scope.close("tool_cancelled"); var agent=agents.get(scopeAgents.remove(target)); if(agent!=null) game.requestActionStop(agent.body,session); }
+                    if(scope!=null) {
+                        var agent=agents.get(scopeAgents.remove(target));
+                        var scriptId=scopeScripts.remove(target);
+                        scope.close("tool_cancelled");
+                        if(agent!=null) game.requestActionStop(agent.body,session,scriptId);
+                    }
                     return CompletableFuture.completedFuture(new JsonObject());
                 }
                 case "world_metadata": return CompletableFuture.completedFuture(worldView());
@@ -605,14 +615,15 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(cancelled.remove(requestId) || scopes.containsKey(requestId)) return failed("tool_cancelled");
             var scope=game.newToolScope(session);
             scopes.put(requestId,scope); scopeAgents.put(requestId,actor);
+            if(op.equals("script")) scopeScripts.put(requestId,text(obj(request,"arguments"),"scriptId"));
             CompletableFuture<JsonObject> work=switch(op) {
                 case "station.edit" -> editStation(agent,obj(request,"request"),session,scope,expiresAt);
                 case "tool" -> game.callInTurn(scope,agent.body,AgentSurface.operation(agent.minecraftAccess,text(request,"tool")),obj(request,"arguments"),expiresAt).thenApply(AgentService::toolResult);
-                case "script" -> game.callInTurn(scope,agent.body,AgentSurface.operation(agent.minecraftAccess,"minecraft_run"),obj(request,"arguments"),expiresAt);
+                case "script" -> game.callInTurn(scope,agent.body,AgentSurface.operation(agent.minecraftAccess,"minecraft_run"),obj(request,"arguments"),expiresAt,stream);
                 case "body.create" -> createBody(request,agent,session,scope,expiresAt).thenApply(created -> { synchronized(this) { return bodyRecord(created); } });
                 default -> failed("unknown_callback_operation");
             };
-            return work.whenComplete((done,failure) -> { synchronized(this) { if(scopes.remove(requestId)!=null) scope.close("tool_finished"); scopeAgents.remove(requestId); } });
+            return work.whenComplete((done,failure) -> { synchronized(this) { if(scopes.remove(requestId)!=null) scope.close("tool_finished"); scopeAgents.remove(requestId); scopeScripts.remove(requestId); } });
         } catch(Exception failure) { return CompletableFuture.failedFuture(failure); }
     }
     private CompletableFuture<JsonObject> editStation(Agent caller,JsonObject request,String session,GameAccess.ToolScope scope,long expiresAt) {
@@ -664,7 +675,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
     private synchronized void closeScopes(String agentId,String reason) {
         var keys=scopes.keySet().stream().filter(key -> agentId==null || agentId.equals(scopeAgents.get(key))).toList();
-        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); }
+        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); scopeScripts.remove(key); }
         for(var agent:agents.values()) if(agentId==null || agentId.equals(agent.id)) game.requestActionStop(agent.body,loadedSession);
     }
     synchronized void disconnectBb() {

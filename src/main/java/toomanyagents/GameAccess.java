@@ -76,7 +76,8 @@ final class GameAccess {
     private final Object queueLock = new Object();
     private final Set<ToolScope> toolScopes = new HashSet<>();
     private final ArrayDeque<PendingCall> toolQueue = new ArrayDeque<>();
-    private final ConcurrentHashMap<Body, String> actionStops = new ConcurrentHashMap<>();
+    private record ActionStop(Body body, String session, String scriptId) {}
+    private final Set<ActionStop> actionStops = ConcurrentHashMap.newKeySet();
     private long activeNanos, clockNanos = System.nanoTime();
     private boolean clockPaused;
 
@@ -124,13 +125,15 @@ final class GameAccess {
         final JsonObject args;
         final long deadline;
         final long expiresAt;
+        final ScriptStream stream;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
 
-        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
+        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt, ScriptStream stream) {
             this.scope = scope;
             this.body = body;
             this.operation = operation;
             this.args = args;
+            this.stream = stream;
             deadline = activeNanos + TimeUnit.SECONDS.toNanos(QUEUE_SECONDS);
             this.expiresAt = expiresAt;
         }
@@ -153,6 +156,10 @@ final class GameAccess {
     }
 
     CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
+        return callInTurn(scope, body, operation, args, expiresAt, null);
+    }
+
+    CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt, ScriptStream stream) {
         var arguments = args == null ? new JsonObject() : args.deepCopy();
         synchronized (queueLock) {
             updateQueueClock();
@@ -163,7 +170,7 @@ final class GameAccess {
             if (scope.pending >= 16 || toolQueue.size() >= 256) {
                 return CompletableFuture.failedFuture(error("world_tool_queue_full"));
             }
-            var call = new PendingCall(scope, body, operation, arguments, expiresAt);
+            var call = new PendingCall(scope, body, operation, arguments, expiresAt, stream);
             toolQueue.addLast(call);
             scope.pending++;
             return call.result;
@@ -234,7 +241,7 @@ final class GameAccess {
                         if (failure != null) call.result.completeExceptionally(failure);
                         else call.result.complete(result);
                     });
-                } else if (scriptWait(call.operation, call.args)) {
+                } else if (call.stream != null || scriptWait(call.operation, call.args)) {
                     synchronized (queueLock) {
                         if (call.scope.closed != null) throw error(call.scope.closed);
                         call.scope.waits.add(call.result);
@@ -243,7 +250,9 @@ final class GameAccess {
                         synchronized (queueLock) { call.scope.waits.remove(call.result); }
                     });
                     // Register on the owning thread; the result itself contains only JSON.
-                    awaitScript(current, call.body, call.args).whenComplete((result, failure) -> {
+                    var waiting = call.stream == null ? awaitScript(current, call.body, call.args)
+                        : streamScript(current, call.body, call.args, call.stream);
+                    waiting.whenComplete((result, failure) -> {
                         if (failure != null) call.result.completeExceptionally(failure);
                         else call.result.complete(result);
                     });
@@ -254,17 +263,20 @@ final class GameAccess {
 
     /** Stop is accepted even while paused, and applied before the next action controller tick. */
     void requestActionStop(Body body, String expectedSession) {
+        requestActionStop(body, expectedSession, null);
+    }
+
+    void requestActionStop(Body body, String expectedSession, String scriptId) {
         if (body != null && expectedSession != null && expectedSession.equals(worldSession.get())) {
-            actionStops.put(body, expectedSession);
+            actionStops.add(new ActionStop(body, expectedSession, scriptId));
         }
     }
 
     private void drainActionStops() {
-        for (var entry : actionStops.entrySet()) {
-            if (!actionStops.remove(entry.getKey(), entry.getValue())) continue;
-            if (!entry.getValue().equals(worldSession.get())) continue;
-            var controller = actions.get(entry.getKey());
-            if (controller != null) controller.releaseScript();
+        for (var stop : actionStops) {
+            if (!actionStops.remove(stop) || !stop.session.equals(worldSession.get())) continue;
+            var controller = actions.get(stop.body);
+            if (controller != null && (stop.scriptId == null || controller.controlsScript(stop.scriptId))) controller.releaseScript();
         }
     }
 
@@ -625,7 +637,7 @@ final class GameAccess {
         var controller = actions.remove(previous);
         if (controller != null) controller.close("body_dimension_changed");
         bodySnapshots.remove(previous);
-        actionStops.remove(previous);
+        actionStops.removeIf(stop -> stop.body.equals(previous));
         var rejected = new ArrayList<PendingCall>();
         synchronized (queueLock) {
             toolQueue.removeIf(call -> {
@@ -692,6 +704,26 @@ final class GameAccess {
         return controller.awaitTicks((int) ticks);
     }
 
+    private CompletableFuture<JsonObject> streamScript(MinecraftServer current, Body body, JsonObject args, ScriptStream stream) {
+        var mob = body(current, body);
+        var controller = actions(body, mob);
+        controller.requireScript(string(args, "scriptId", 80));
+        if (!string(args, "operation", 40).equals("stream")) throw error("invalid_script_stream_operation");
+        var snapshots = new ScriptSnapshot();
+        return controller.stream(stream, () -> snapshots.frame(scriptSnapshot(current, mob, controller)));
+    }
+
+    private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
+        var snapshot = observe(current, mob, new JsonObject());
+        snapshot.add("hands", controller.hands.snapshot());
+        snapshot.add("action", controller.status(""));
+        snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
+        snapshot.addProperty("minY", mob.level().getMinBuildHeight());
+        snapshot.addProperty("height", mob.level().getHeight());
+        snapshot.addProperty("revision", controller.nextSnapshotRevision());
+        return snapshot;
+    }
+
     private JsonObject executeOperation(MinecraftServer current, Body body, Operation operation, JsonObject arguments) {
         var mob = body(current, body);
         var controller = actions(body,mob);
@@ -721,25 +753,17 @@ final class GameAccess {
     private JsonObject script(MinecraftServer current, Body body, Mob mob, AgentActions controller, JsonObject args) {
         String id = string(args, "scriptId", 80);
         String operation = string(args, "operation", 40);
+        if (operation.equals("end")) { controller.endScript(id); return new JsonObject(); }
         if (operation.equals("begin")) {
             int timeout = args.get("timeoutMs").getAsInt();
             controller.claimScript(id, timeout);
         } else controller.requireScript(id);
         return switch (operation) {
-            case "begin", "snapshot" -> {
-                var snapshot = observe(current, mob, new JsonObject());
-                snapshot.add("hands", controller.hands.snapshot());
-                snapshot.add("action", controller.status(""));
-                snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
-                snapshot.addProperty("minY", mob.level().getMinBuildHeight());
-                snapshot.addProperty("height", mob.level().getHeight());
-                yield snapshot;
-            }
+            case "begin", "snapshot" -> scriptSnapshot(current, mob, controller);
             case "heartbeat" -> new JsonObject();
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
             case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
             case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
-            case "end" -> { controller.releaseScript(); yield new JsonObject(); }
             default -> throw error("unknown_script_operation");
         };
     }

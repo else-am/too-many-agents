@@ -4,8 +4,9 @@ export function runScript(options: {
   initial?: unknown;
   workerUrl?: URL;
   onRequest(operation: string, value: unknown, signal: AbortSignal): Promise<unknown>;
+  onUpdates?(send: (value: unknown) => Promise<void>, signal: AbortSignal): Promise<void>;
   signal?: AbortSignal;
   timeoutMs?: number;
   cpuSliceMs?: number;
   maxOutputBytes?: number;
-}): Promise<{ value: unknown; requests: number; completedRequests: number; elapsedMs: number; logs: string[] }>;
+}): Promise<{ value: unknown; requests: number; completedRequests: number; updates: number; elapsedMs: number; logs: string[] }>;

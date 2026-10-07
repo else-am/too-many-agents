@@ -21,16 +21,31 @@ final class Observations {
 
     static JsonObject entity(Entity entity) {
         var result = new JsonObject();
+        result.addProperty("id", entity.getId());
         result.addProperty("uuid", entity.getUUID().toString());
         result.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         result.addProperty("name", entity.getName().getString());
         result.add("position", position(entity.position()));
+        result.add("velocity", position(entity.getDeltaMovement()));
+        result.addProperty("width", entity.getBbWidth());
+        result.addProperty("height", entity.getBbHeight());
+        result.addProperty("onGround", entity.onGround());
+        result.addProperty("eyeHeight", entity.getEyeHeight());
         result.add("eyePosition", position(entity.getEyePosition()));
         result.add("direction", position(entity.getLookAngle()));
         result.addProperty("yaw", entity.getYRot());
         result.addProperty("pitch", entity.getXRot());
         result.addProperty("alive", entity.isAlive());
-        if (entity instanceof LivingEntity living) result.addProperty("health", living.getHealth());
+        if (entity instanceof LivingEntity living) {
+            result.addProperty("health", living.getHealth());
+            var effects = new JsonObject();
+            for (var effect : living.getActiveEffects()) {
+                int id = BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value());
+                effects.add(Integer.toString(id), JsonState.object("id", id, "amplifier", effect.getAmplifier(),
+                    "duration", effect.getDuration()));
+            }
+            result.add("effects", effects);
+        }
         var saved = entity.getPersistentData();
         if (saved.contains("too_many_agents_agent")) {
             var agent = new JsonObject();

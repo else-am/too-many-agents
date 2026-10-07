@@ -37,6 +37,8 @@ Each awaited action resolves on actual completion or reports failure. Longer scr
 
 Mineflayer also exposes immediately readable properties and synchronous queries. The runner therefore needs a local view of relevant blocks, entities, inventory, and other state, supplied by Java. Define initialization, updates, freshness, and unloaded-state behavior explicitly. Java validates mutations against the current world rather than trusting a cached observation. Do not make upstream synchronous methods asynchronous merely because the transport is HTTP.
 
+Continuous state uses one authenticated HTTP stream per script, with a bounded queue and ordered frames produced on the owning game thread. Block deltas reduce repeated data; snapshot revisions fence replies arriving through different requests. Delivery into QuickJS is acknowledged and subject to the same execution limits as the script. Stream loss stops execution; it does not trigger a reconnect or replay.
+
 The runner should retain control of the body between script actions so ambient following or wandering cannot displace it mid-procedure. Restore configured ambient behavior when execution releases the body. Scripts use the authorized bridge; connection credentials remain with the plugin.
 
 Preserve these lifecycle rules throughout implementation:

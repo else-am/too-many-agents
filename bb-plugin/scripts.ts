@@ -80,9 +80,17 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3 } = MinecraftBot.createBot(JSON.parse(__mcInitial));`,
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+          function __mcUpdate(payload) { update(JSON.parse(payload), true); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
         timeoutMs, signal, onRequest,
+        onUpdates: async (send, streamSignal) => {
+          bridgeOperations++;
+          await worlds.toolCallback(live, { threadId: ctx.threadId, signal: streamSignal }, 'script', {
+            agentId, arguments: { operation: 'stream', scriptId },
+          }, send);
+          if (!streamSignal.aborted) throw new Error('Minecraft state stream closed while the script was running');
+        },
       });
     } catch (error) { failure = error; }
     finally {
@@ -101,6 +109,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         execution: {
           requests: failure.requests,
           completedRequests: (failure as Error & { completedRequests?: number }).completedRequests,
+          updates: (failure as Error & { updates?: number }).updates,
           outstandingRequests: (failure as Error & { outstandingRequests?: number }).outstandingRequests,
           logs: (failure as Error & { logs?: string[] }).logs,
         },

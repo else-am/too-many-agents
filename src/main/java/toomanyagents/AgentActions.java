@@ -33,12 +33,15 @@ final class AgentActions {
     private BlockState original;
     private boolean mining;
     private boolean approachTargets;
-    private String scriptId;
+    private String scriptId, lastScriptId;
     private long scriptDeadline, scriptHeartbeat;
     private CompletableFuture<JsonObject> completion;
     private long bodyTicks;
     private record TickWait(long target, CompletableFuture<JsonObject> result) {}
     private final List<TickWait> tickWaits = new ArrayList<>();
+    private ScriptStream stateStream;
+    private Supplier<JsonObject> stateSnapshot;
+    private long snapshotRevision;
 
     AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
         this.mob = mob;
@@ -51,6 +54,7 @@ final class AgentActions {
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
     boolean scripted() { return scriptId != null; }
+    boolean controlsScript(String id) { return Objects.equals(scriptId, id); }
 
     void claimScript(String id, int timeoutMs) {
         expireScript();
@@ -58,6 +62,8 @@ final class AgentActions {
         UUID.fromString(id);
         if (timeoutMs < 1 || timeoutMs > 300_000) throw error("invalid_script_deadline");
         scriptId = id;
+        lastScriptId = id;
+        snapshotRevision = 0;
         scriptDeadline = System.nanoTime() + timeoutMs * 1_000_000L;
         scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
         GameAccess.stopFollowingMotion(mob);
@@ -74,10 +80,29 @@ final class AgentActions {
         if (scripted()) throw error("body_controlled_by_script");
     }
 
+    void endScript(String id) {
+        if (!Objects.equals(lastScriptId, id) || (scripted() && !controlsScript(id)))
+            throw error("script_no_longer_controls_body");
+        if (controlsScript(id)) releaseScript();
+    }
+
     void releaseScript() {
         scriptId = null;
         cancel("");
         rejectTickWaits("script_no_longer_controls_body");
+        if (stateStream != null) stateStream.finish();
+        stateStream = null;
+        stateSnapshot = null;
+    }
+
+    long nextSnapshotRevision() { return ++snapshotRevision; }
+
+    CompletableFuture<JsonObject> stream(ScriptStream stream, Supplier<JsonObject> snapshot) {
+        if (stateStream != null) throw error("script_state_stream_already_open");
+        stateStream = stream;
+        stateSnapshot = snapshot;
+        stream.offer(snapshot.get());
+        return stream.completion;
     }
 
     CompletableFuture<JsonObject> awaitAction(String id) {
@@ -168,6 +193,9 @@ final class AgentActions {
 
     void close(String reason) {
         scriptId = null;
+        if (stateStream != null) stateStream.fail(error(reason));
+        stateStream = null;
+        stateSnapshot = null;
         if (busy()) finish("interrupted", reason, null);
         rejectTickWaits(reason);
         if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
@@ -285,6 +313,13 @@ final class AgentActions {
             var ready = tickWaits.stream().filter(wait -> wait.target <= bodyTicks).toList();
             tickWaits.removeAll(ready);
             for (var wait : ready) wait.result.complete(new JsonObject());
+            if (stateStream != null) {
+                if (stateStream.open()) {
+                    try { stateStream.offer(stateSnapshot.get()); }
+                    catch (RuntimeException failure) { stateStream.fail(failure); }
+                }
+                if (!stateStream.open()) releaseScript();
+            }
         }
     }
 

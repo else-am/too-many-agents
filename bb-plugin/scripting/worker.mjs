@@ -12,9 +12,14 @@ vm.setProp(vm.global, '__mcInitial', initial);
 initial.dispose();
 let deadline = 0;
 runtime.setInterruptHandler(() => performance.now() > deadline);
+const clock = vm.newFunction('__mcNow', () => vm.newNumber(performance.now()));
+vm.setProp(vm.global, '__mcNow', clock);
+clock.dispose();
 const pending = new Map();
 let nextId = 0;
 let main;
+let updateHandler;
+let nextUpdate = 1;
 let ended = false;
 let scheduled = false;
 let outputBytes = 0;
@@ -28,6 +33,7 @@ function end(message) {
   for (const deferred of pending.values()) deferred.dispose();
   pending.clear();
   main?.dispose();
+  updateHandler?.dispose();
   vm.dispose();
   runtime.dispose();
 }
@@ -97,7 +103,28 @@ vm.setProp(vm.global, '__mcLog', log);
 log.dispose();
 
 parentPort.on('message', message => {
-  if (ended || message.type !== 'response') return;
+  if (ended) return;
+  if (message.type === 'update') {
+    deadline = performance.now() + cpuSliceMs;
+    try {
+      if (!updateHandler || message.id !== nextUpdate || typeof message.payload !== 'string' ||
+          Buffer.byteLength(message.payload) > 8 * 1024 * 1024 || nextUpdate > 10_000)
+        throw new Error('Invalid script update');
+      const payload = vm.newString(message.payload);
+      const result = vm.callFunction(updateHandler, vm.undefined, payload);
+      payload.dispose();
+      if (result.error) {
+        const error = guestError(result.error);
+        result.error.dispose();
+        throw new Error(error);
+      }
+      result.value.dispose();
+      parentPort.postMessage({ type: 'updated', id: nextUpdate++ });
+      schedulePump();
+    } catch (error) { end({ type: 'error', message: String(error.message ?? error) }); }
+    return;
+  }
+  if (message.type !== 'response') return;
   const deferred = pending.get(message.id);
   if (!deferred) return;
   deadline = performance.now() + cpuSliceMs;
@@ -132,6 +159,11 @@ try {
     end({ type: 'error', message });
   } else {
     main = result.value;
+    if (workerData.updates) {
+      updateHandler = vm.getProp(vm.global, '__mcUpdate');
+      if (vm.typeof(updateHandler) !== 'function') throw new Error('Script bootstrap has no update handler');
+    }
+    parentPort.postMessage({ type: 'ready' });
     schedulePump();
   }
 } catch (error) { end({ type: 'error', message: String(error.message ?? error) }); }

@@ -142,6 +142,16 @@ public final class TooManyAgents {
             if (path.equals("/v1/dev") && DevelopmentWorld.ENABLED) {
                 result = method.equals("GET") ? DevelopmentChecks.snapshot() : game.development(request).get(10,TimeUnit.SECONDS);
             } else if (path.equals("/v1/bb") && method.equals("POST")) {
+                if ("script".equals(field(request, "op")) && request.has("arguments")
+                    && request.get("arguments").isJsonObject()
+                    && "stream".equals(field(request.getAsJsonObject("arguments"), "operation"))) {
+                    var stream = new ScriptStream();
+                    agents.callback(request, stream).whenComplete((done, failure) -> {
+                        if (failure == null) stream.finish();
+                        else stream.fail(failure);
+                    });
+                    return new LocalBridge.Reply(200, "", stream);
+                }
                 // Script completion waits hold a virtual HTTP thread, never the
                 // game thread. Their script deadline and scope cancellation still apply.
                 boolean scriptWait = "script".equals(field(request, "op"))

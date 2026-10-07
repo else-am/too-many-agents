@@ -26,6 +26,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "esbuild": "0.25.12",
+    "events": "3.3.0",
     "minecraft-data": "3.117.0",
     "mineflayer-pathfinder": "2.4.5",
     "typescript": "^5.9.3",

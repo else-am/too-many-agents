@@ -68,3 +68,51 @@ await assert.rejects(runScript({
   onRequest: async () => null,
 }), /output/i);
 console.log('PASS: oversized output is rejected');
+
+const updates = await runScript({
+  bootstrap: `
+    const received = [];
+    let finishUpdates;
+    const readyUpdates = new Promise(resolve => { finishUpdates = resolve; });
+    function __mcUpdate(payload) {
+      const update = JSON.parse(payload);
+      received.push(update.sequence);
+      if (update.sequence === 3) finishUpdates();
+    }
+  `,
+  source: 'await readyUpdates; return received;',
+  onRequest: async () => { throw new Error('Updates must not become guest requests'); },
+  onUpdates: async send => { for (let sequence = 1; sequence <= 3; sequence++) await send({ sequence }); },
+});
+assert.deepEqual(updates.value, [1, 2, 3]);
+assert.equal(updates.requests, 0);
+assert.equal(updates.updates, 3);
+console.log('PASS: ordered host updates resolve guest event promises without guest polling');
+
+await assert.rejects(runScript({
+  bootstrap: 'function __mcUpdate() { while (true) {} }',
+  source: 'await new Promise(() => {});', cpuSliceMs: 50, timeoutMs: 2000,
+  onRequest: async () => null,
+  onUpdates: async send => { await send({ tick: 1 }); },
+}), /interrupt|CPU|execution/i);
+console.log('PASS: event handlers cannot escape the guest CPU limit');
+
+const updateAbort = new AbortController();
+let updateStarted;
+const updateDidStart = new Promise(resolve => { updateStarted = resolve; });
+let feedStopped = false;
+const updateRun = runScript({
+  bootstrap: 'function __mcUpdate() {}', source: 'await new Promise(() => {});',
+  signal: updateAbort.signal, onRequest: async () => null,
+  onUpdates: async (send, signal) => {
+    await send({ tick: 1 });
+    updateStarted();
+    await new Promise(resolve => signal.addEventListener('abort', () => { feedStopped = true; resolve(); }, { once: true }));
+  },
+});
+const updateRejected = assert.rejects(updateRun, /cancelled/i);
+await updateDidStart;
+updateAbort.abort(new Error('User cancelled updates'));
+await updateRejected;
+assert.equal(feedStopped, true);
+console.log('PASS: cancelling the script also stops its state feed');

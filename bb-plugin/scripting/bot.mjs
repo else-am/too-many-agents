@@ -2,6 +2,7 @@ import { Vec3 } from 'vec3';
 import goals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
 import { createBlockClass } from './blocks.mjs';
+import { EventEmitter } from 'events';
 
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
@@ -13,9 +14,12 @@ export function createBot(initial) {
     itemsByName: Object.fromEntries(data.itemsArray.map(item => [item.name, item])),
     blocks: Object.fromEntries(data.blocksArray.map(block => [block.id, block])),
     items: Object.fromEntries(data.itemsArray.map(item => [item.id, item])),
+    entitiesByName: Object.fromEntries(data.entitiesArray.map(entity => [entity.name, entity])),
   };
   const Block = createBlockClass(registry);
   let snapshot;
+  let streamBlocks;
+  let lastPhysicsTick;
   const vector = ({ x, y, z }) => new Vec3(x, y, z);
   const item = entry => {
     if (!entry || entry.count === 0) return null;
@@ -25,8 +29,9 @@ export function createBot(initial) {
     return { type: type.id, name: type.name, displayName: type.displayName, count: entry.count,
       stackSize: type.stackSize, metadata: 0, slot, durabilityUsed: entry.damage ?? 0 };
   };
-  const bot = {
+  const bot = Object.assign(new EventEmitter(), {
     registry, version: '1.21.1',
+    entities: {},
     inventory: { slots: new Array(46).fill(null), items() { return this.slots.slice(9, 45).filter(Boolean); } },
     blockAt(position, extraInfos = true) {
       const p = position.floored();
@@ -101,17 +106,88 @@ export function createBot(initial) {
         if (!goal.isEnd(bot.entity.position.floored())) throw new Error('Native navigation stopped before reaching the goal');
       },
     },
-  };
+  });
   async function request(operation, value) { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
   async function action(args) { const result = await request('action', args); update(result.snapshot); }
-  function update(next) {
+  function update(next, streamed = false) {
+    const current = !snapshot || next.revision > snapshot.revision;
+    const changed = [];
+    const blocks = next.blocks;
+    const trackBlocks = current && snapshot && bot.listenerCount('blockUpdate') > 0;
+    const oldBlock = (position, state) => {
+      const { min, size, states } = snapshot.blocks;
+      const x = position.x - min[0], y = position.y - min[1], z = position.z - min[2];
+      if (x < 0 || y < 0 || z < 0 || x >= size[0] || y >= size[1] || z >= size[2]) return;
+      const oldState = states[(y * size[2] + z) * size[0] + x];
+      if (oldState >= 0 && state >= 0 && oldState !== state) changed.push([bot.blockAt(position), position]);
+    };
+    if (streamed && blocks.changes) {
+      if (!streamBlocks) throw new Error('State stream began with a block delta');
+      const { min, size } = streamBlocks;
+      for (let n = 0; n < blocks.changes.length; n += 4) {
+        const [i, state, biome, light] = blocks.changes.slice(n, n + 4);
+        if (trackBlocks) oldBlock(new Vec3(min[0] + i % size[0], min[1] + Math.floor(i / (size[0] * size[2])), min[2] + Math.floor(i / size[0]) % size[2]), state);
+        streamBlocks.states[i] = state;
+        streamBlocks.biomes[i] = biome;
+        streamBlocks.light[i] = light;
+      }
+      streamBlocks.entities = blocks.entities;
+      next.blocks = streamBlocks;
+    } else {
+      if (trackBlocks) {
+        const { min, size, states } = blocks;
+        for (let i = 0; i < states.length; i++) {
+          const position = new Vec3(min[0] + i % size[0], min[1] + Math.floor(i / (size[0] * size[2])), min[2] + Math.floor(i / size[0]) % size[2]);
+          oldBlock(position, states[i]);
+        }
+      }
+      if (streamed) streamBlocks = blocks;
+    }
+    // The stream is ordered internally, but an action's full snapshot can
+    // overtake it. Keep applying stream deltas while ignoring older state.
+    if (!current) return;
     snapshot = next;
-    bot.entity = { ...next.body, position: vector(next.body.position), yaw: (180 - next.body.yaw) * Math.PI / 180, pitch: -next.body.pitch * Math.PI / 180 };
+    const present = new Set();
+    const entityEvents = [];
+    for (const source of [next.body, ...next.entities]) {
+      present.add(source.id);
+      let entity = bot.entities[source.id];
+      const fresh = !entity || entity.uuid !== source.uuid;
+      if (fresh) entity = bot.entities[source.id] = Object.assign(new EventEmitter(), { position: new Vec3(0, 0, 0), velocity: new Vec3(0, 0, 0) });
+      const moved = !entity.position.equals(source.position);
+      const { position, velocity, yaw, pitch, type, name, ...fields } = source;
+      const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
+      Object.assign(entity, fields, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
+        name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other', isValid: true });
+      if (kind?.name === 'player') entity.username = name;
+      entity.position.update(position);
+      entity.velocity.update(velocity);
+      if (source.id === next.body.id) bot.entity = entity;
+      else if (fresh) entityEvents.push(['entitySpawn', entity]);
+      else if (moved) entityEvents.push(['entityMoved', entity]);
+    }
+    for (const [id, entity] of Object.entries(bot.entities)) {
+      if (!present.has(Number(id))) {
+        entity.isValid = false;
+        delete bot.entities[id];
+        entityEvents.push(['entityGone', entity]);
+      }
+    }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
     bot.inventory.slots.fill(null);
     for (const entry of next.hands.inventory) { const stack = item(entry); bot.inventory.slots[stack.slot] = stack; }
     bot.heldItem = bot.inventory.slots[36 + next.hands.selected];
+    for (const [before, position] of changed) {
+      const after = bot.blockAt(position);
+      bot.emit('blockUpdate', before, after);
+      bot.emit(`blockUpdate:${position}`, before, after);
+    }
+    if (streamed) {
+      for (const event of entityEvents) bot.emit(...event);
+      if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }
+    }
   }
   update(initial);
-  return { bot, Vec3, goals };
+  lastPhysicsTick = initial.tick;
+  return { bot, Vec3, goals, update };
 }

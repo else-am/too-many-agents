@@ -39,6 +39,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
     op: string,
     args: Record<string, unknown>,
     signal?: AbortSignal,
+    onState?: (snapshot: unknown) => Promise<void>,
   ): Promise<unknown> {
     let response: Response;
     try {
@@ -70,6 +71,34 @@ export function minecraftWorlds(bb: BbPluginApi) {
       }
       throw new ApiError("world_unreachable", "Minecraft did not answer; its connection state is unknown.");
     }
+    if (onState && response.ok) {
+      if (!response.body || !response.headers.get('content-type')?.startsWith('application/x-ndjson'))
+        throw new Error('Minecraft did not open a state stream');
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let pending = '';
+      let ended = false;
+      try {
+        while (!ended) {
+          const { value, done } = await reader.read();
+          if (done) throw new Error('Minecraft state stream ended without confirmation');
+          pending += decoder.decode(value, { stream: true });
+          if (pending.length > 8 * 1024 * 1024) throw new Error('Minecraft state frame exceeds 8 MiB');
+          let newline: number;
+          while ((newline = pending.indexOf('\n')) >= 0) {
+            const line = pending.slice(0, newline);
+            pending = pending.slice(newline + 1);
+            if (!line) continue;
+            const frame = object(JSON.parse(line), 'Minecraft state frame');
+            if (frame.type === 'state') await onState(frame.snapshot);
+            else if (frame.type === 'error') throw new Error(String(frame.message));
+            else if (frame.type === 'end') { ended = true; break; }
+            else throw new Error('Unknown Minecraft state frame');
+          }
+        }
+      } finally { await reader.cancel().catch(() => undefined); }
+      return null;
+    }
     const body = object(await response.json(), "Minecraft response");
     if (!response.ok || body.ok !== true) {
       const error = body.error && typeof body.error === "object" ? object(body.error) : undefined;
@@ -89,6 +118,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
     ctx: { threadId: string; signal: AbortSignal },
     op: string,
     args: Record<string, unknown>,
+    onState?: (snapshot: unknown) => Promise<void>,
   ): Promise<unknown> {
     ctx.signal.throwIfAborted();
     const requestId = randomUUID();
@@ -109,6 +139,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
         op,
         { ...args, requestId, threadId: ctx.threadId },
         controller.signal,
+        onState,
       );
     } finally {
       ctx.signal.removeEventListener("abort", abort);
