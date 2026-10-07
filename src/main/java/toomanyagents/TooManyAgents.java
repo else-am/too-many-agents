@@ -99,6 +99,10 @@ public final class TooManyAgents {
             if (game != null && !event.getEntity().level().isClientSide)
                 game.entityEvent("entityHurt", event.getEntity(), event.getSource().getEntity(), null);
         });
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.NORMAL, true,
+            (net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) -> {
+                if (game != null) game.deathEvent(event);
+            });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Post event) -> {
             if (game != null) game.entityEvent("playerCollect", event.getPlayer(), event.getItemEntity(), event.getOriginalStack());
         });

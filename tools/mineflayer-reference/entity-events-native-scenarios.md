@@ -29,3 +29,13 @@ Before the final build, also include the body's native take callback for XP orbs
 and arrows (item stacks already use the post-pickup event). Avoid duplicate item
 notifications. Validate that the callback still maps to the visible collector;
 other mobs' take implementations remain a separate source-coverage task.
+
+## Death event extension (before implementation)
+
+Capture LivingDeathEvent and defer its cancellation check until snapshot delivery,
+after every native listener has finished. One accepted nearby death must emit
+entityDead with the existing victim Entity after authoritative state hydration;
+canceled death must emit nothing. Observe loot/removal independently. A kill and
+removal entirely between frames must still retain the event's typed victim.
+Ordinary later frames and script release must not replay the event. This is a
+nearby entity event, not a fabricated death/respawn cycle for protected bodies.

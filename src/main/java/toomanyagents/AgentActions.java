@@ -30,7 +30,8 @@ final class AgentActions {
     private long suggestionDeadline;
     private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
     private int messageSize;
-    private final ArrayDeque<JsonObject> entityEvents = new ArrayDeque<>();
+    private record PendingEntityEvent(JsonObject data, java.util.function.BooleanSupplier accepted) {}
+    private final ArrayDeque<PendingEntityEvent> entityEvents = new ArrayDeque<>();
     private int entityEventSize;
     private record PendingSound(net.neoforged.neoforge.event.PlayLevelSoundEvent event, Vec3 position, Vec3 listener) {}
     private final ArrayDeque<PendingSound> sounds = new ArrayDeque<>();
@@ -146,13 +147,13 @@ final class AgentActions {
         return result;
     }
 
-    void recordEntityEvent(JsonObject event) {
+    void recordEntityEvent(JsonObject event, java.util.function.BooleanSupplier accepted) {
         if (!scripted()) return;
-        int size = event.toString().length();
+        int size = event.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
         if (entityEvents.size() >= 64 || entityEventSize + size > 1024 * 1024) {
             failObservation("script_entity_event_overflow"); return;
         }
-        entityEvents.addLast(event); entityEventSize += size;
+        entityEvents.addLast(new PendingEntityEvent(event, accepted)); entityEventSize += size;
     }
 
     void failObservation(String reason) {
@@ -165,7 +166,8 @@ final class AgentActions {
     }
 
     JsonArray drainEntityEvents() {
-        var result = new JsonArray(); entityEvents.forEach(result::add);
+        var result = new JsonArray();
+        for (var event : entityEvents) if (event.accepted().getAsBoolean()) result.add(event.data());
         entityEvents.clear(); entityEventSize = 0;
         return result;
     }

@@ -1417,6 +1417,15 @@ final class GameAccess {
     }
 
     void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {
+        entityEvent(kind, subject, cause, originalItem, () -> true);
+    }
+
+    void deathEvent(net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) {
+        entityEvent("entityDead", event.getEntity(), null, null, () -> !event.isCanceled());
+    }
+
+    private void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem,
+                             java.util.function.BooleanSupplier accepted) {
         if (!(subject.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
         if (!level.getServer().isSameThread()) return;
         if (subject instanceof AgentHands hands) subject = hands.visibleBody();
@@ -1439,7 +1448,7 @@ final class GameAccess {
                     entities.add(secondary);
                 }
                 event.add("entities", entities);
-                controller.recordEntityEvent(event);
+                controller.recordEntityEvent(event, accepted);
             } catch (RuntimeException failure) {
                 // Observation errors terminate only this lease, not native gameplay.
                 controller.failObservation("script_entity_event_serialization_failed");
