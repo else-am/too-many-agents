@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -36,6 +36,7 @@ final class AgentActions {
     private record PendingSound(net.neoforged.neoforge.event.PlayLevelSoundEvent event, Vec3 position, Vec3 listener) {}
     private final ArrayDeque<PendingSound> sounds = new ArrayDeque<>();
     private boolean creativeFlying;
+    private boolean ownsElytraFlight;
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
     private float vehicleLeft, vehicleForward;
@@ -95,7 +96,7 @@ final class AgentActions {
         snapshotRevision = 0;
         scriptDeadline = System.nanoTime() + timeoutMs * 1_000_000L;
         scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
     }
 
     void requireScript(String id) {
@@ -118,6 +119,7 @@ final class AgentActions {
     void releaseScript() {
         scriptId = null;
         creativeFlying = false;
+        stopElytraFlight();
         messages.clear(); messageSize = 0;
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
@@ -258,6 +260,8 @@ final class AgentActions {
                 throw error("vehicle_controls_not_implemented_for_body");
             if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
         }
+        if (mob.isFallFlying() && List.of("walk", "route", "creative_fly").contains(type))
+            throw error("land_before_ground_navigation_or_creative_flight");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
         if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly", "set_command_block").contains(type) && !request.has("position")) throw error("position_required");
@@ -295,7 +299,7 @@ final class AgentActions {
             ? mob.level().getBlockState(BlockPos.containing(position(args))) : null;
         mining = false;
         this.approachTargets = approachTargets;
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
         return action.deepCopy();
     }
 
@@ -305,7 +309,7 @@ final class AgentActions {
         // A completed 'use' action can leave a bow or other held item in use.
         hands.cancelUse();
         hands.cancelMine();
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
         return status("");
     }
 
@@ -321,6 +325,7 @@ final class AgentActions {
     void close(String reason) {
         scriptId = null;
         creativeFlying = false;
+        stopElytraFlight();
         clearControls();
         if (stateStream != null) stateStream.fail(error(reason));
         stateStream = null;
@@ -380,7 +385,7 @@ final class AgentActions {
                         if (mining || !approachTargets) throw error("target_out_of_reach");
                         navigate(Vec3.atCenterOf(pos), true); return;
                     }
-                    GameAccess.stopFollowingMotion(mob);
+                    stopMotion();
                     if (!ignoreLook()) face(Vec3.atCenterOf(pos));
                     JsonObject result = mining ? hands.tickMine() : hands.beginMine(pos, face);
                     mining = true;
@@ -474,6 +479,12 @@ final class AgentActions {
                 case "set_command_block" -> finish("completed", "command_block_updated", hands.setCommandBlock(
                     checkedBlockTarget(), integer(args, "expectedStateId", -1), text(args, "command"), integer(args, "mode", 2), booleanOption(args, "trackOutput"),
                     booleanOption(args, "conditional"), booleanOption(args, "alwaysActive"), player.get().hasPermissions(2)));
+                case "elytra_fly" -> {
+                    if (creativeFlying) throw error("stop_creative_flight_before_gliding");
+                    var result = hands.beginElytraFlight();
+                    ownsElytraFlight = true;
+                    finish("completed", "elytra_started", result);
+                }
                 case "creative_slot" -> finish("completed", "creative_slot_set", hands.creativeSlot(
                     integer(args, "menuId", -1), menuGeneration(), integer(args, "slot", -1), text(args, "wire")));
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
@@ -620,6 +631,7 @@ final class AgentActions {
     }
 
     private void requireCreativeFlight() {
+        if (mob.isFallFlying()) throw error("land_before_creative_flight");
         if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).creative)
             throw error("creative_mode_required");
         if (mob.isSleeping() || mob.isPassenger()) throw error("wake_and_dismount_before_flying");
@@ -720,6 +732,19 @@ final class AgentActions {
         // Normal LivingEntity.aiStep owns jump timing, fluid impulses and the
         // repeat delay even for a NoAI body. Post-tick travel still runs once.
         mob.setJumping(heldControls.contains("jump"));
+    }
+
+    private void stopMotion() {
+        var velocity = mob.getDeltaMovement();
+        GameAccess.stopFollowingMotion(mob);
+        // Stopping an action removes AI inputs, not native gliding momentum.
+        if (scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
+            mob.setDeltaMovement(velocity);
+    }
+
+    private void stopElytraFlight() {
+        if (ownsElytraFlight) mob.setSharedFlag(7, false);
+        ownsElytraFlight = false;
     }
 
     private void clearControls() {
@@ -903,7 +928,7 @@ final class AgentActions {
             route = null;
         }
         hands.cancelMine();
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
         action.addProperty("terminal",true); action.addProperty("status",status); action.addProperty("detail",detail == null ? "action_failed" : detail);
         action.addProperty("ticks",ticks);
         completedActionSequence = action.get("sequence").getAsLong();

@@ -356,6 +356,20 @@ final class AgentHands extends FakePlayer {
         return response;
     }
 
+    JsonObject beginElytraFlight() {
+        syncBody();
+        if (body.isFallFlying()) throw error("already_elytra_flying");
+        if (body.onGround() || body.isInWater() || body.isPassenger() || body.isSleeping()
+            || body.hasEffect(net.minecraft.world.effect.MobEffects.LEVITATION)) throw error("cannot_start_elytra_flight");
+        try {
+            if (body.getClass().getMethod("travel", Vec3.class).getDeclaringClass() != LivingEntity.class)
+                throw error("elytra_body_physics_not_supported");
+        } catch (NoSuchMethodException unavailable) { throw error("elytra_body_physics_not_supported"); }
+        if (!body.getItemBySlot(EquipmentSlot.CHEST).canElytraFly(body)) throw error("usable_elytra_required");
+        body.setSharedFlag(7, true);
+        return status("elytra_started");
+    }
+
     JsonObject useHeld() { return useHeld(InteractionHand.MAIN_HAND); }
 
     JsonObject useHeld(InteractionHand hand) {

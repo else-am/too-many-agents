@@ -320,6 +320,7 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return active.done;
   };
   bot.creative.startFlying = () => { control({ type: 'creative_flying', state: true }); };
+  bot.elytraFly = async () => { await perform({ type: 'elytra_fly' }); };
   bot.creative.stopFlying = () => { control({ type: 'creative_flying', state: false }); };
   bot.creative.flyTo = async destination => {
     const position = vector(destination, 'flight destination');

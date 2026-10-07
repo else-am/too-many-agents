@@ -37,8 +37,11 @@ final class Observations {
         result.addProperty("yaw", entity.getYRot());
         result.addProperty("pitch", entity.getXRot());
         result.addProperty("alive", entity.isAlive());
+        result.addProperty("isInWater", entity.isInWater());
+        result.addProperty("isInLava", entity.isInLava());
         result.addProperty("crouching", entity.isShiftKeyDown());
         if (entity instanceof LivingEntity living) {
+            result.addProperty("elytraFlying", living.isFallFlying());
             result.addProperty("health", living.getHealth());
             result.addProperty("isSleeping", living.isSleeping());
             result.addProperty("effectTick", living.tickCount);
