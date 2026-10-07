@@ -21,7 +21,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity");
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -142,19 +142,19 @@ final class AgentActions {
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
-        if (List.of("mine", "place").contains(type) && !request.has("position")) throw error("position_required");
-        if (type.equals("give") && !request.has("entity")) throw error("entity_required");
+        if (List.of("mine", "place", "place_entity").contains(type) && !request.has("position")) throw error("position_required");
+        if (List.of("give", "attack").contains(type) && !request.has("entity")) throw error("entity_required");
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
-            if (List.of("mine", "place", "interact").contains(type)) {
+            if (List.of("mine", "place", "interact", "place_entity").contains(type)) {
                 var level = (ServerLevel) mob.level();
                 if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
                 if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
                 if (args.has("expectedStateId") && Block.getId(level.getBlockState(pos)) != integer(args, "expectedStateId", -1)) throw error("target_changed");
             }
         }
-        if (List.of("place", "interact").contains(type) && args.has("position")) blockFace();
+        if (List.of("place", "interact", "place_entity").contains(type) && args.has("position")) blockFace();
         if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
         if (type.equals("route")) {
             var selected = new ScriptNavigation(mob, hands, box);
@@ -170,7 +170,7 @@ final class AgentActions {
         while (history.size() > 32) history.remove(history.keySet().iterator().next());
         ticks = stillTicks = 0;
         lastPosition = mob.position();
-        original = args.has("position") && List.of("mine", "place", "interact").contains(kind)
+        original = args.has("position") && List.of("mine", "place", "interact", "place_entity").contains(kind)
             ? mob.level().getBlockState(BlockPos.containing(position(args))) : null;
         mining = false;
         this.approachTargets = approachTargets;
@@ -265,7 +265,7 @@ final class AgentActions {
                     action.add("progress", result.deepCopy());
                     if ("completed".equals(text(result, "status"))) finish("completed", "mined", result);
                 }
-                case "place", "interact" -> {
+                case "place", "interact", "place_entity" -> {
                     if (args.has("entity")) {
                         Entity entity = entity();
                         if (!hands.canReach(entity)) {
@@ -279,7 +279,7 @@ final class AgentActions {
                         var pos = checkedBlockTarget();
                         if (!mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
                         Direction face = blockFace();
-                        if (!hands.blockReachable(pos, face)) {
+                        if (!kind.equals("place_entity") && !hands.blockReachable(pos, face)) {
                             if (!approachTargets) throw error("target_out_of_reach");
                             navigate(Vec3.atCenterOf(pos), true); return;
                         }
@@ -293,8 +293,9 @@ final class AgentActions {
                         InteractionHand swingHand = args.has("swingArm") && text(args, "swingArm").equals("left") ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
                         boolean showHand = !args.has("showHand") || args.get("showHand").getAsBoolean();
                         BlockPos destination = args.has("expectedDestination") ? BlockPos.containing(point(args.getAsJsonObject("expectedDestination"))) : null;
-                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor,
-                            hand, destination, swingHand, showHand);
+                        var result = kind.equals("place_entity") ? hands.placeEntity(pos, face, cursor, hand, swingHand, showHand)
+                            : hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor,
+                                hand, destination, swingHand, showHand);
                         finish("completed", "interaction_finished_check_result", result);
                     }
                 }
@@ -329,7 +330,10 @@ final class AgentActions {
                     finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
                 }
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
-                case "use" -> finish("completed", "use_started", hands.useHeld());
+                case "attack" -> finish("completed", "attack_attempted", hands.attackTarget(entity(), !args.has("swing") || args.get("swing").getAsBoolean()));
+                case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
+                    ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "release" -> finish("completed", "released", hands.releaseHeld());
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
                 case "menu_click" -> {

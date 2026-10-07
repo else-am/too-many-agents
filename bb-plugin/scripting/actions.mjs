@@ -22,7 +22,7 @@ function forceValue(force) {
   return force ?? false;
 }
 
-export function installActions(bot, { request, waitForActionState, action, snapshot, drainControls = async () => {}, isKnownActionError = () => false }) {
+export function installActions(bot, { request, waitForActionState, action, snapshot, enqueueControl, drainControls = async () => {}, isKnownActionError = () => false }) {
   const session = snapshot().session;
   let activeDig, targetOwner, poisoned, controlFailure;
   const stops = new Set();
@@ -197,7 +197,7 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     const delta = vector(point, 'look point').minus(eyes());
     await bot.look(Math.atan2(-delta.x, -delta.z), Math.atan2(delta.y, Math.hypot(delta.x, delta.z)), force);
   };
-  async function place(referenceBlock, faceVector, options, verify) {
+  async function place(referenceBlock, faceVector, options, verify, entityPlacement = false) {
     const reference = observed(referenceBlock), index = faceIndex(faceVector), normal = normals[index];
     const force = forceValue(options.forceLook);
     need(options.offhand ? bot.inventory.slots[45] : bot.heldItem, 'EmptyHand', 'Must be holding an item to place');
@@ -209,9 +209,10 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     need(options.swingArm == null || ['left','right'].includes(options.swingArm), 'InvalidPlacement', 'Invalid swing arm');
     const destination = reference.position.plus(normal), before = verify ? bot.blockAt(destination) : null;
     if (verify) need(before, 'BlockUnavailable', 'Placement destination is outside the loaded snapshot');
-    await perform({ type: 'place', ...reference, face: faces[index], cursorPos: cursor, forceLook: force,
+    const result = await perform({ type: entityPlacement ? 'place_entity' : 'place', ...reference, face: faces[index], cursorPos: cursor, forceLook: force,
       offhand: !!options.offhand, ...(options.swingArm ? { swingArm: options.swingArm, showHand: options.showHand ?? true } : {}),
       ...(verify ? { expectedDestination: destination } : {}) });
+    if (entityPlacement) return result.result?.spawnedEntities ?? [];
     if (verify) {
       const after = bot.blockAt(destination);
       need(after && after.stateId !== before.stateId, 'PlacementNotVerified', 'Native placement did not change the requested destination');
@@ -222,6 +223,21 @@ export function installActions(bot, { request, waitForActionState, action, snaps
   bot._genericPlace = (block, face, options = {}) => place(block, face, options, false);
   bot._placeBlockWithOptions = async (block, face, options = {}) => { await place(block, face, options, true); };
   bot.placeBlock = (block, face) => bot._placeBlockWithOptions(block, face, { swingArm: 'right' });
+  bot._placeEntityWithOptions = async (block, face, options = {}) => {
+    const held = options.offhand ? bot.inventory.slots[45] : bot.heldItem;
+    need(held, 'EmptyHand', 'Must be holding an item to place an entity');
+    const name = held.name;
+    const boat = /_(boat|raft)$/.test(name);
+    const egg = name.endsWith('_spawn_egg');
+    need(boat || egg || name === 'armor_stand' || name === 'end_crystal', 'InvalidEntityItem', 'Item does not place a supported entity');
+    const ids = await place(block, face, { ...options, swingArm: options.swingArm ?? (options.offhand ? 'left' : 'right') }, false, true);
+    const matches = Object.values(bot.entities).filter(entity => ids.includes(entity.uuid) &&
+      (boat ? ['boat', 'chest_boat'].includes(entity.name) : egg ? entity.name === held.spawnEggMobName : entity.name === name));
+    need(matches.length === 1, 'EntityPlacementNotVerified', 'Native placement did not expose exactly one matching new entity');
+    bot.emit('entityPlaced', matches[0]);
+    return matches[0];
+  };
+  bot.placeEntity = (block, face) => bot._placeEntityWithOptions(block, face);
   bot.activateBlock = async (block, direction = new Vec3(0,1,0), cursorPos = new Vec3(.5,.5,.5)) => {
     const reference = observed(block), face = faceIndex(direction ?? new Vec3(0,1,0));
     const cursor = vector(cursorPos ?? new Vec3(.5,.5,.5), 'block cursor');
@@ -237,6 +253,14 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     const id = entityId(entity), point = vector(position, 'entity interaction point');
     await perform({ type: 'interact', entity: id, entityAt: point.minus(vector(entity.position, 'entity position')) });
   };
+  function control(args) { ready(); enqueueControl(args); }
+  bot.attack = (entity, swing = true) => { control({ type: 'attack', entity: entityId(entity), swing: !!swing }); };
+  bot.swingArm = (arm = 'right', showHand = true) => {
+    control({ type: 'swing', offhand: arm !== 'right', showHand: !!showHand });
+  };
+  bot.useOn = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
+  bot.activateItem = (offhand = false) => { control({ type: 'use', offhand: !!offhand }); };
+  bot.deactivateItem = () => { control({ type: 'release' }); };
   return { async drainControls() {
     while (stops.size) await Promise.allSettled([...stops]);
     ready();

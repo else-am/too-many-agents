@@ -540,7 +540,19 @@ export function installInventory(bot, { action, snapshot, decodeItem, assertActi
     }
     specialized.syncWindow(window, menu);
   }
-  return { syncWindow, selection: () => pendingSelection?.slot,
+  // Synchronous public controls share the cursor queue so an attack/use cannot
+  // overtake an earlier equip, or be overtaken by the next inventory operation.
+  function enqueueControl(args) {
+    ready();
+    requireValue(controls.size < 256, 'ControlLimit', 'Too many pending synchronous controls');
+    const pending = enqueue(async () => {
+      const result = await send(args);
+      requireValue(result.result?.status !== 'failed', 'NativeInteractionFailed', 'Native interaction explicitly failed');
+    });
+    controls.add(pending);
+    pending.then(() => controls.delete(pending), error => { controlFailure = error; controls.delete(pending); });
+  }
+  return { syncWindow, enqueueControl, selection: () => pendingSelection?.slot,
     async drainControls() {
       while (controls.size) await Promise.allSettled([...controls]);
       if (controlFailure) throw controlFailure;

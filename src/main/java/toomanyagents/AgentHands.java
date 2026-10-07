@@ -31,6 +31,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
@@ -41,6 +43,10 @@ import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.item.BoatItem;
+import net.minecraft.world.item.ArmorStandItem;
+import net.minecraft.world.item.EndCrystalItem;
+import net.minecraft.world.item.SpawnEggItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.component.WritableBookContent;
 import net.minecraft.world.item.component.WrittenBookContent;
@@ -50,6 +56,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.Fluid;
+import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -66,6 +73,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.HashSet;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -81,6 +89,7 @@ final class AgentHands extends FakePlayer {
     private int lastMiningTick = -1;
     private boolean miningNeedsStop;
     private int lastHandsTick = -1;
+    private long nextMeleeAttackTick;
     private int nextMenuId;
     private BlockPos menuOrigin;
     private Entity menuEntity;
@@ -309,17 +318,54 @@ final class AgentHands extends FakePlayer {
         return response;
     }
 
-    JsonObject useHeld() {
+    JsonObject useHeld() { return useHeld(InteractionHand.MAIN_HAND); }
+
+    JsonObject useHeld(InteractionHand hand) {
         syncBody();
         requireIdleHands();
-        if (getMainHandItem().isEmpty()) throw error("mainhand_is_empty");
-        if (!getMainHandItem().isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
-        var result = gameMode.useItem(this, level(), getMainHandItem(), InteractionHand.MAIN_HAND);
-        if (result.shouldSwing()) body.swing(InteractionHand.MAIN_HAND);
+        var held = getItemInHand(hand);
+        if (held.isEmpty()) throw error("hand_is_empty");
+        if (!held.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
+        var result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
+            : gameMode.useItem(this, level(), held, hand);
+        if (result.shouldSwing()) body.swing(hand);
         save();
         var response = interaction(result);
         response.addProperty("usingItem", isUsingItem());
         return response;
+    }
+
+    JsonObject swingBody(InteractionHand hand) {
+        syncBody();
+        body.swing(hand);
+        return status("swung");
+    }
+
+    JsonObject attackTarget(Entity target, boolean swing) {
+        syncBody();
+        requireIdleHands();
+        if (!canReach(target) || (target instanceof LivingEntity living && !body.isWithinMeleeAttackRange(living)))
+            throw error("entity_out_of_reach_or_obstructed");
+        if (!target.isAttackable()) throw error("entity_not_attackable");
+        if (body.getAttribute(Attributes.ATTACK_DAMAGE) == null) throw error("body_melee_attack_unavailable");
+        // Use the actual body as attacker: retaliation, enchantments, health and
+        // species attack effects must not belong to the invisible hands player.
+        long now = level().getGameTime();
+        boolean damaged = false;
+        String outcome = "cooldown";
+        if (now >= nextMeleeAttackTick) {
+            nextMeleeAttackTick = now + 20; // Native ordinary MeleeAttackGoal interval.
+            if (CommonHooks.onPlayerAttackTarget(this, target)) {
+                try { damaged = body.doHurtTarget(target); }
+                finally { save(); }
+                outcome = damaged ? "hit" : "no_damage";
+            } else outcome = "denied";
+        }
+        if (swing) body.swing(InteractionHand.MAIN_HAND);
+        var result = status(outcome);
+        result.addProperty("damaged", damaged);
+        result.addProperty("target", target.getStringUUID());
+        return result;
     }
 
     JsonObject releaseHeld() {
@@ -327,6 +373,62 @@ final class AgentHands extends FakePlayer {
         releaseUsingItem();
         save();
         return status("released");
+    }
+
+    JsonObject placeEntity(BlockPos pos, Direction face, Vec3 cursor, InteractionHand hand,
+                           InteractionHand swingHand, boolean showHand) {
+        syncBody();
+        requireIdleHands();
+        var item = getItemInHand(hand).getItem();
+        if (!(item instanceof BoatItem || item instanceof ArmorStandItem || item instanceof EndCrystalItem || item instanceof SpawnEggItem))
+            throw error("item_does_not_place_supported_entity");
+        checkBlockAccess(pos);
+        if (!canInteractWithBlock(pos, 0)) throw error("block_out_of_reach");
+        var bounds = new AABB(pos).inflate(8);
+        var before = new HashSet<UUID>();
+        for (var entity : serverLevel().getEntities((Entity) null, bounds)) before.add(entity.getUUID());
+        if (before.size() > 1024) throw error("entity_placement_observation_limit");
+        // Boats use their own native fluid ray trace; the other items use the
+        // native block interaction. Both run wholly within this server tick.
+        JsonObject result;
+        if (item instanceof BoatItem boat) {
+            try { result = interaction(useBoat(boat, hand, pos)); }
+            finally { save(); }
+        } else result = useBlock(pos, face, false, cursor, hand, null, swingHand, showHand);
+        var spawned = new JsonArray();
+        for (var entity : serverLevel().getEntities((Entity) null, bounds)) {
+            if (!before.contains(entity.getUUID())) spawned.add(entity.getStringUUID());
+        }
+        result.add("spawnedEntities", spawned);
+        return result;
+    }
+
+    private InteractionResult useBoat(BoatItem item, InteractionHand hand, BlockPos expected) {
+        var stack = getItemInHand(hand);
+        if (!stack.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
+        if (getCooldowns().isOnCooldown(item)) return InteractionResult.PASS;
+        var denied = CommonHooks.onItemRightClick(this, hand);
+        if (denied != null) return denied;
+        var eye = getEyePosition();
+        var hit = level().clip(new ClipContext(eye, eye.add(getViewVector(1).scale(blockInteractionRange())),
+            ClipContext.Block.OUTLINE, ClipContext.Fluid.ANY, body));
+        if (hit.getType() != HitResult.Type.BLOCK) return InteractionResult.PASS;
+        checkBlockAccess(hit.getBlockPos());
+        if (expected != null && !expected.equals(hit.getBlockPos())) throw error("placement_target_changed");
+        // BoatItem's player ray sees our visible body at the same eye position.
+        // Exclude that body, preserving all other native occlusion/collision checks.
+        for (var entity : level().getEntities(body, body.getBoundingBox().expandTowards(getViewVector(1).scale(5)).inflate(1))) {
+            if (!entity.isSpectator() && entity.isPickable() && entity.getBoundingBox().inflate(entity.getPickRadius()).contains(eye))
+                return InteractionResult.PASS;
+        }
+        var boat = item.getBoat(level(), hit, stack, this);
+        boat.setVariant(item.type);
+        boat.setYRot(getYRot());
+        if (!level().noCollision(boat, boat.getBoundingBox())) return InteractionResult.FAIL;
+        if (!serverLevel().addFreshEntity(boat)) return InteractionResult.FAIL;
+        level().gameEvent(body, GameEvent.ENTITY_PLACE, hit.getLocation());
+        stack.consume(1, this);
+        return InteractionResult.CONSUME;
     }
 
     JsonObject interact(Entity target) { return interact(target, null); }

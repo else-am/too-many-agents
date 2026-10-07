@@ -313,12 +313,13 @@ export function createBot(initial) {
   });
   update(initial);
   const actions = installActions(bot, { request, action, waitForActionState, snapshot: () => snapshot,
+    enqueueControl: inventory.enqueueControl,
     drainControls: inventory.drainControls, isKnownActionError: error => error instanceof NativeActionError });
   async function drainControls() { await inventory.drainControls(); await actions.drainControls(); }
   lastPhysicsTick = initial.tick;
   installPathfinder(bot, {
     async request(operation, value) {
-      if (operation === 'action') await drainControls();
+      if (operation === 'action' || operation === 'startAction') await drainControls();
       return request(operation, value);
     },
     waitForActionState, snapshot: () => snapshot,
