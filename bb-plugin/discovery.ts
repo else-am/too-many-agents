@@ -32,7 +32,7 @@ export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds) {
       // Close the attach race before checking sessions, including asynchronous probes.
       preparing = true;
       try {
-        if ((await worlds.activeGames(true)).length) throw new Error("Leave connected Minecraft worlds before replacing the plugin.");
+        if ((await worlds.activeGames(true)).length) throw new Error("Another Minecraft game is connected to this BB. Close that game before replacing the plugin.");
         updatingUntil = Date.now() + 120_000;
       } finally { preparing = false; }
       return ctx.json({ ok: true, ...identity() });

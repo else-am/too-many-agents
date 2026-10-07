@@ -28,6 +28,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private Path records;
     private String loadedSession, loadedWorldId, callbackUrl, callbackToken, connectedInstance = "", error = "";
     private boolean connected, closed;
+    private String connectionId = UUID.randomUUID().toString();
 
     private static final class Agent {
         String id, name, bbInstanceId="", projectId="", threadId="", parentThreadId="", suspendedBody="", startNonce="";
@@ -43,6 +44,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     AgentService(GameAccess game, Supplier<String> worldSession) {
         this.game=game; this.worldSession=worldSession; bb=new BbClient();
+        BbSetup.get().setAgents(this);
         // BB pushes changes; this slower sync re-attaches after a plugin restart and catches anything missed.
         polling.scheduleWithFixedDelay(this::sync,0,5,TimeUnit.SECONDS);
     }
@@ -55,21 +57,22 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var world=game.worldInfo();
         String worldId=text(world,"id");
         if(worldId.isBlank() || flag(world,"needsDecision") || !worldId.equals(game.currentWorldId())) return;
-        String instance = "";
+        String instance = "", attachment;
         try {
             synchronized(this) {
                 if(!session.equals(worldSession.get())) return;
                 if(!session.equals(loadedSession)) loadWorld(world,session);
+                attachment=connectionId;
             }
             instance=BbSetup.get().connection().instanceId();
             synchronized(this) {
                 if(!instance.equals(connectedInstance)) { closeScopes(null,"bb_changed"); projectRows=new JsonArray(); connected=false; connectedInstance=instance; }
             }
-            bb.call(object("op","session.attach","bbInstanceId",instance,"protocol",3,"worldId",worldId,"worldSessionId",session,"callbackUrl",callbackUrl,"callbackToken",callbackToken)).join();
-            synchronized(this) { if(!currentSession(session)) return; }
+            bb.call(object("op","session.attach","connectionId",attachment,"bbInstanceId",instance,"protocol",3,"worldId",worldId,"worldSessionId",session,"callbackUrl",callbackUrl,"callbackToken",callbackToken)).join();
+            synchronized(this) { if(!currentSession(session) || !attachment.equals(connectionId)) return; }
             var state=rpc("world.sync",object("bbInstanceId",instance)).join().getAsJsonObject();
             synchronized(this) {
-                if(!currentSession(session) || !BbSetup.get().isCurrent(instance)) return;
+                if(!currentSession(session) || !attachment.equals(connectionId) || !BbSetup.get().isCurrent(instance)) return;
                 projectRows=array(state,"projects"); connected=true; error="";
                 // Old drafts have no conversation metadata. Their existing project can
                 // identify the BB that owns their saved execution choices.
@@ -162,7 +165,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private synchronized CompletableFuture<JsonElement> rpc(String op,JsonObject arguments) {
         var request=arguments.deepCopy(); request.addProperty("op",op);
         request.addProperty("worldId",loadedWorldId); request.addProperty("worldSessionId",loadedSession);
-        return bb.call(request);
+        String attachment=connectionId;
+        request.addProperty("connectionId",attachment);
+        return bb.call(request).thenApply(reply -> {
+            synchronized(this) { if(!attachment.equals(connectionId)) throw new CompletionException(new IllegalStateException("BB reconnected while the request was running. Its outcome is unknown; inspect it before retrying.")); }
+            return reply;
+        });
     }
     private synchronized CompletableFuture<JsonElement> agentRpc(String op,String id,JsonObject arguments) {
         return guarded(() -> {
@@ -239,7 +247,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }
         }
         var physical=object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,"projectId",agent.projectId,
-            "threadId",agent.threadId,"bbInstanceId",agent.bbInstanceId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
+            "threadId",agent.threadId,"bbInstanceId",agent.bbInstanceId,"connectionId",connectionId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
             "minecraftAccess",agent.minecraftAccess,"currentWorld",game.belongsToCurrentWorld(agent.body),
             "bodyType",text(agent.settings,"body"),"gamePaused",game.isPaused(),"conversationArchived",agent.archived);
         for(var entry:physical.entrySet()) state.add(entry.getKey(),entry.getValue());
@@ -484,6 +492,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(request.get("protocol").getAsInt()!=3) return failed("protocol_mismatch");
             if(session==null || !session.equals(loadedSession) || !session.equals(text(request,"worldSessionId"))
                 || !loadedWorldId.equals(text(request,"worldId"))) return CompletableFuture.failedFuture(new StaleSessionException());
+            if(BbSetup.get().installing() || !connectionId.equals(text(request,"connectionId"))) return CompletableFuture.failedFuture(new StaleSessionException());
             String instance=text(request,"bbInstanceId");
             // Setup may temporarily be unready while probing connected games. Selection,
             // not setup readiness, determines whether this BB still owns the callback.
@@ -635,11 +644,16 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); }
         for(var agent:agents.values()) if(agentId==null || agentId.equals(agent.id)) game.requestActionStop(agent.body,loadedSession);
     }
+    synchronized void disconnectBb() {
+        connectionId=UUID.randomUUID().toString();
+        closeScopes(null,"bb_disconnected");
+        connected=false; connectedInstance=""; projectRows=new JsonArray();
+    }
     synchronized void worldClosed(String session) {
         closeScopes(null,"world_session_changed"); connected=false;
         if(session.equals(loadedSession)) {
             loadedSession=null;
-            bb.call(object("op","session.detach","worldId",loadedWorldId,"worldSessionId",session)).exceptionally(failure -> null);
+            bb.call(object("op","session.detach","connectionId",connectionId,"worldId",loadedWorldId,"worldSessionId",session)).exceptionally(failure -> null);
         }
     }
     private static String message(Throwable error) { while((error instanceof CompletionException || error instanceof ExecutionException) && error.getCause()!=null) error=error.getCause(); return error.getMessage()==null?error.getClass().getSimpleName():error.getMessage(); }

@@ -58,8 +58,8 @@ plugin releases live in `~/.too-many-agents/plugins/`. BB installs them through 
 CLI, preserving plugin settings when moving between local releases.
 Running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR or
 changing physical tools in `surface/`. After editing plugin code or its prompts,
-restart development, or run `tools/build packageBbPlugin`, leave connected worlds,
-and choose **Reload development plugin** under mod settings → Connection details.
+restart development, or run `tools/build packageBbPlugin` and choose **Reload plugin**
+under mod settings → Connection details.
 
 The shared release version is `bb-plugin/package.json`'s `version`; Gradle reads
 it and packages the built plugin and its runtime dependencies with the mod.
@@ -193,8 +193,10 @@ tools/dev                                # personal development game in run/play
 Both build the plugin once through Gradle, then Minecraft uses its normal BB setup
 to install or reload this checkout before connecting. `tools/build runClient` uses
 the same development mode. A same-version plugin is refreshed once per launch;
-connected games block replacement. A blocked development reload waits for **Retry**;
-background connection checks do not keep attempting it. Development does not change your permission
+the current world's BB connection pauses during replacement, then reconnects.
+The world stays open and conversations keep running in BB. Other connected games
+block replacement. A failed reload waits for **Reload plugin**; background
+connection checks do not repeat it. Development does not change your permission
 for automatic updates in packaged games. Newer plugins still require explicit
 confirmation before a downgrade. Packaged-JAR runs do not enable development mode.
 

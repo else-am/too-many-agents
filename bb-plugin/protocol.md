@@ -13,7 +13,7 @@ Records include `instanceId` (SHA-256 of BB's SDK-provided data-directory string
 `pluginVersion`, and a 15-second expiry. Minecraft remembers the chosen identity,
 ignores expired records, and calls its advertised loopback address at
 `POST /api/v1/plugins/minecraft/http/v1/rpc`. BB's default local check refuses
-browser origins. Requests are `{op,modVersion,bbInstanceId,worldId,worldSessionId,...arguments}`;
+browser origins. Requests are `{op,modVersion,bbInstanceId,connectionId,worldId,worldSessionId,...arguments}`;
 responses are `{ok:true,result}` or `{ok:false,error:{code,message}}`.
 Mutations are sent once. A lost response has an unknown outcome; inspect state
 before any retry.
@@ -23,6 +23,11 @@ manifest. `GET /v1/setup` reports identity, version, and connected games.
 `POST /v1/setup/prepare` refuses connected games and closes the attach race while
 the mod replaces the plugin through `bb plugin install path:… --yes --json`.
 The replacement reservation expires after two minutes if installation fails.
+Before replacement, Java cancels its queued physical actions and changes its
+`connectionId`; callbacks from the old connection return `world_session_changed`.
+The prepare probe therefore removes this game's old connection, while other
+connected games still block replacement. The world stays loaded; BB threads are
+not stopped. Java reattaches with its new connection ID after verification.
 Sessions not seen for 30 seconds are probed before they can block replacement.
 Only connection refusal or a structured `world_session_changed` response removes
 a session; timeouts and other uncertain failures still block replacement. Local
@@ -31,10 +36,10 @@ authorization under that lock and holding it through verification. Plugin packag
 versioned release directories under `~/.too-many-agents/plugins/`. Explicit
 reinstallation extracts a fresh copy instead of trusting an existing directory.
 
-- `session.attach`: `{protocol:3,worldId,worldSessionId,callbackUrl,callbackToken}`.
+- `session.attach`: `{protocol:3,connectionId,worldId,worldSessionId,callbackUrl,callbackToken}`.
   Idempotent and repeated periodically to reconnect after plugin reload.
   The callback URL must be literal loopback HTTP. `session.detach` takes the
-  world and session IDs.
+  world, session and connection IDs.
 - `world.sync` reconciles associated BB threads and returns display-ready
   project rows. The plugin creates a world's BB project lazily, using the
   save's workspace folder, and resolves BB environments. Java saves its ID.
@@ -68,9 +73,9 @@ reinstallation extracts a fresh copy instead of trusting an existing directory.
 ## Plugin → Minecraft
 
 `POST callbackUrl` uses `Authorization: Bearer callbackToken`. Body:
-`{protocol:3,bbInstanceId,op,worldId,worldSessionId,requestId,expiresAt,...arguments}`.
+`{protocol:3,bbInstanceId,connectionId,op,worldId,worldSessionId,requestId,expiresAt,...arguments}`.
 Java rejects callbacks from a BB other than the selected instance, rejects stale
-world sessions, and expires physical requests before execution. Saved agents keep
+world sessions and BB connections, and expires physical requests before execution. Saved agents keep
 their owning BB identity; changing instances never changes their thread bindings.
 
 - `agents` returns only the selected BB's saved body associations, physical settings

@@ -66,7 +66,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     private void bbConnection() {
         section("BB connection");
         note(bb.message());
-        String installLabel = setup.development() ? "Reload development plugin…" : "Reinstall bundled plugin…";
+        String installLabel = setup.development() ? "Reload plugin…" : bb.pluginVersion().isBlank() ? "Install plugin…" : "Reinstall plugin…";
         boolean enabled = !bb.busy() && bb.action() != BbSetup.Action.WAIT;
         if (bb.instances().size() > 1) {
             choice("Use BB", bb.instanceId(), bb.instances().stream()
@@ -83,8 +83,6 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
             action("", "Allow plugin installation and updates", () -> setup.automatic(true), enabled);
         } else if (bb.action() == BbSetup.Action.RESTORE && !confirmInstall) {
             action("", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled);
-        } else if (bb.action() == BbSetup.Action.RETRY) {
-            action("", "Retry", setup::retry, enabled);
         }
         action("", details ? "Hide connection details" : "Connection details…", () -> { details = !details; rebuildForm(); }, true);
         if (details) {
@@ -96,11 +94,14 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
             bb.instances().stream().filter(i -> i.id().equals(bb.instanceId())).findFirst()
                 .ifPresent(i -> value("BB data location", i.label()));
             if (!confirmInstall && bb.action() != BbSetup.Action.RESTORE)
-                action("Repair", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled && !bb.cli().isBlank());
+                action("Plugin", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled && !bb.cli().isBlank());
         }
         if (confirmInstall) {
-            note("Install the " + setup.pluginSourceLabel() + " " + BbSetup.version() + "? This replaces BB's Minecraft plugin, even if it is newer. Leave connected worlds first.");
-            actions("", "Install plugin", () -> { confirmInstall = false; setup.install(); rebuildForm(); },
+            note((setup.development() ? "Reload the plugin from this checkout?" : "Install the bundled Minecraft plugin " + BbSetup.version() + "?")
+                + " Agents’ Minecraft actions will stop briefly. Your world stays open.");
+            if (!bb.pluginVersion().isBlank() && !bb.pluginVersion().equals(BbSetup.version()))
+                note("This replaces plugin version " + bb.pluginVersion() + " with " + BbSetup.version() + ".");
+            actions("", setup.development() ? "Reload plugin" : "Install plugin", () -> { confirmInstall = false; setup.install(); rebuildForm(); },
                 "Cancel", () -> { confirmInstall = false; rebuildForm(); }, enabled);
         }
         if (details || bb.needsLocation()) {

@@ -17,7 +17,7 @@ import static toomanyagents.JsonState.*;
 
 /** Installation preferences and the one selected BB. All setup IO runs off the game thread. */
 public final class BbSetup {
-    public enum Action { WAIT, NONE, ALLOW_UPDATES, RESTORE, RETRY }
+    public enum Action { WAIT, NONE, ALLOW_UPDATES, RESTORE }
     public record Instance(String id, String url, String version, String label) {}
     public record Connection(String instanceId, URI address) {}
     public record View(String message, String instanceId, String pluginVersion, boolean ready,
@@ -47,7 +47,11 @@ public final class BbSetup {
     private boolean bbNotFound;
     private Connection connection;
     private String error = "";
-    private String notice = "";
+    private volatile boolean installing;
+    private volatile AgentService agents;
+
+    void setAgents(AgentService agents) { this.agents = agents; }
+    boolean installing() { return installing; }
 
     private BbSetup() {
         try {
@@ -67,14 +71,13 @@ public final class BbSetup {
     public View view() { return view; }
     public String selectedInstance() { return selected; }
     public synchronized Connection connection() {
-        if (connection == null || !connection.instanceId().equals(selected)) throw new IllegalStateException(view.message() + " Open BB connection at the top of mod settings.");
+        if (installing || connection == null || !connection.instanceId().equals(selected)) throw new IllegalStateException(view.message() + " Open BB connection at the top of mod settings.");
         return connection;
     }
-    public synchronized boolean isCurrent(String instanceId) { return connection != null && selected.equals(instanceId) && connection.instanceId().equals(instanceId); }
-    public void retry() { worker.execute(() -> { developmentAttempted = false; if (!settingsUnreadable) error = ""; notice = ""; check(false); }); }
+    public synchronized boolean isCurrent(String instanceId) { return !installing && connection != null && selected.equals(instanceId) && connection.instanceId().equals(instanceId); }
     public void select(String id) { worker.execute(() -> {
         developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
-        selected = id; selectedUrl = ""; automatic = false; installPending = false; settingsUnreadable = false; error = notice = "";
+        selected = id; selectedUrl = ""; automatic = false; installPending = false; settingsUnreadable = false; error = "";
         persist(); check(false);
     }); }
     public void chooseCli(String path) { worker.execute(() -> {
@@ -84,21 +87,21 @@ public final class BbSetup {
             var status = command("", "status", "--json");
             selected = digest(text(status,"dataDir")); selectedUrl = "";
             developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
-            automatic = false; installPending = false; settingsUnreadable = false; error = notice = ""; persist();
-        } catch (Exception failure) { cli = previousCli; error = notice = failure.getMessage(); }
+            automatic = false; installPending = false; settingsUnreadable = false; error = ""; persist();
+        } catch (Exception failure) { cli = previousCli; error = failure.getMessage(); }
         check(false);
     }); }
     public void automatic(boolean enabled) { worker.execute(() -> {
         if (settingsUnreadable) return;
-        automatic = enabled; error = notice = ""; persist(); check(false);
+        automatic = enabled; error = ""; persist(); check(false);
     }); }
     /** Explicit installation also authorizes a downgrade or retry of an uncertain attempt. */
-    public void install() { worker.execute(() -> { if (!settingsUnreadable) error = notice = ""; check(true); }); }
+    public void install() { worker.execute(() -> { if (!settingsUnreadable) error = ""; check(true); }); }
 
     private void persist() {
         try { JsonState.write(settings, object("instanceId",selected,"url",selectedUrl,"cli",cli,"automatic",automatic,"installPending",installPending,
             "expectedPluginRoot",expectedPluginRoot,"previousGeneration",previousGeneration)); }
-        catch (Exception failure) { automatic = false; error = notice = "Could not save BB setup: " + failure.getMessage(); }
+        catch (Exception failure) { automatic = false; error = "Could not save BB setup: " + failure.getMessage(); }
     }
 
     private void check(boolean explicit) {
@@ -109,7 +112,7 @@ public final class BbSetup {
         List<Instance> instances = List.of();
         String installed = "";
         bbNotFound = false;
-        action = Action.RETRY;
+        action = Action.NONE;
         try {
             Path developmentDirectory = development() ? developmentDirectory() : null;
             instances = discover();
@@ -145,14 +148,14 @@ public final class BbSetup {
                     installPending = false; developmentLoaded = development() && installStartedThisLaunch; error = ""; persist();
                 }
                 if (version().equals(installed) && !explicit && !installPending && sourceMatches && (!development() || developmentLoaded)) {
-                    action = notice.isBlank() ? Action.NONE : Action.RETRY;
+                    action = Action.NONE; error = "";
                     synchronized (this) { connection = new Connection(selected, loopback(url)); }
-                    publish(notice.isBlank() ? "Connected to BB" : notice, installed, true, false, instances); return;
+                    publish("Connected to BB", installed, true, false, instances); return;
                 }
             }
             if (development() && developmentAttempted && !developmentLoaded && !explicit) {
-                action = installPending ? Action.RESTORE : Action.RETRY;
-                publish(error.isBlank() ? "Development plugin reload needs a retry." : error, installed, false, false, instances);
+                action = Action.RESTORE;
+                publish(error.isBlank() ? "Development plugin reload did not finish. Reload it when ready." : error, installed, false, false, instances);
                 return;
             }
             if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Minecraft plugin.");
@@ -160,7 +163,7 @@ public final class BbSetup {
                 Files.createDirectories(root.resolve("locks"));
                 try (var channel = FileChannel.open(root.resolve("locks").resolve(selected + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
                      var lock = channel.tryLock()) {
-                    if (lock == null) throw new IOException("Another Minecraft installation is updating this BB. Retry shortly.");
+                    if (lock == null) throw new IOException("Another Minecraft installation is updating this BB. Waiting for it to finish.");
                     // Re-read discovery and authorization once under the selected instance's
                     // lock. Keep it through installation and verification; never reacquire it.
                     check(explicit, true);
@@ -184,7 +187,7 @@ public final class BbSetup {
             if (plugin != null) installed = text(plugin,"version");
             if (installPending && !explicit) {
                 action = Action.RESTORE;
-                throw new IOException("The previous installation was not verified. Check BB before reinstalling the bundled plugin.");
+                throw new IOException("The previous installation was not verified. Check BB before reinstalling the plugin.");
             }
             boolean older = !installed.isBlank() && compareVersions(installed, version()) < 0;
             boolean canAuto = development()
@@ -201,25 +204,31 @@ public final class BbSetup {
             }
             // Background connection checks never repeat a blocked development reload.
             if (development()) developmentAttempted = true;
-            installPlugin(url, plugin, found, developmentDirectory, generation, instances);
-            // Verify rather than repeating a mutation whose outcome may be unknown.
-            for (int attempt=0; attempt<12; attempt++) {
-                Thread.sleep(500);
-                for (var candidate : discover()) if (candidate.id().equals(selected) && candidate.version().equals(version())) {
-                    var verified = request(candidate.url(), "/api/v1/plugins/minecraft/http/v1/setup", null);
-                    if (installationVerified(verified)) {
-                        selectedUrl = candidate.url(); installPending = false; persist();
-                        developmentLoaded = development();
-                        synchronized (this) { connection = new Connection(selected, loopback(candidate.url())); }
-                        action = Action.NONE;
-                        publish("Connected to BB", version(), true, false, discover()); return;
+            installing = true;
+            try {
+                var service = agents;
+                if (service != null) service.disconnectBb();
+                publish(development() ? "Reloading development plugin…" : "Installing Minecraft plugin…", installed, false, true, instances);
+                installPlugin(url, plugin, found, developmentDirectory, generation);
+                // Verify rather than repeating a mutation whose outcome may be unknown.
+                for (int attempt=0; attempt<12; attempt++) {
+                    Thread.sleep(500);
+                    for (var candidate : discover()) if (candidate.id().equals(selected) && candidate.version().equals(version())) {
+                        var verified = request(candidate.url(), "/api/v1/plugins/minecraft/http/v1/setup", null);
+                        if (installationVerified(verified)) {
+                            selectedUrl = candidate.url(); installPending = false; persist();
+                            developmentLoaded = development();
+                            synchronized (this) { connection = new Connection(selected, loopback(candidate.url())); }
+                            action = Action.NONE;
+                            publish("Connected to BB", version(), true, false, discover()); return;
+                        }
                     }
                 }
-            }
-            throw new IOException("Plugin installation could not be verified. Check its status in BB before retrying.");
+                throw new IOException("Plugin installation could not be verified. Check its status in BB before reinstalling.");
+            } finally { installing = false; }
         } catch (Exception failure) {
             error = failure.getMessage() == null ? "Could not connect to BB." : failure.getMessage();
-            if (explicit) notice = error;
+            if (explicit || installPending || development() && developmentAttempted && !developmentLoaded) action = Action.RESTORE;
             publish(error, installed, false, false, instances);
         }
     }
@@ -239,7 +248,7 @@ public final class BbSetup {
         return directory;
     }
 
-    private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation, List<Instance> instances) throws Exception {
+    private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation) throws Exception {
         // check holds the selected instance's lock and has refreshed these inputs.
         if (plugin != null) {
             if (!text(plugin,"source").startsWith("path:"))
@@ -252,12 +261,10 @@ public final class BbSetup {
                 var prepared = request(url, "/api/v1/plugins/minecraft/http/v1/setup/prepare", new JsonObject());
                 if (!flag(prepared,"ok")) throw new IOException(text(prepared,"error"));
                 if (!selected.equals(text(prepared,"instanceId")) || !generation.equals(text(prepared,"generation")))
-                    throw new IOException("BB's Minecraft plugin changed during setup. Retry to check its current version.");
+                    throw new IOException("BB's Minecraft plugin changed during setup. Reload again to use this version.");
                 generation = text(prepared,"generation");
             }
         }
-        // A blocked background retry must not flash the form into an installing state.
-        publish("Installing Minecraft plugin " + version() + "…", plugin == null ? "" : text(plugin,"version"), false, true, instances);
         Path directory = developmentDirectory == null ? extractBundle() : developmentDirectory;
         expectedPluginRoot = directory.toRealPath().toString(); previousGeneration = generation;
         error = ""; installPending = true; persist();

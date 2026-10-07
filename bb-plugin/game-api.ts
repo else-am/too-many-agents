@@ -35,7 +35,7 @@ export function registerGameApi(
     const op = string(data.op, "op");
     const live = () => {
       const session = worlds.session(uuid(data.worldId, "worldId"));
-      if (session.worldSessionId !== data.worldSessionId)
+      if (session.worldSessionId !== data.worldSessionId || session.connectionId !== data.connectionId)
         throw new ApiError("world_session_changed", "Minecraft world session changed");
       return session;
     };
@@ -130,6 +130,7 @@ export function registerGameApi(
         const worldId = uuid(data.worldId, "worldId");
         const joined = worlds.attach({
           worldId,
+          connectionId: uuid(data.connectionId, "connectionId"),
           worldSessionId: uuid(data.worldSessionId, "worldSessionId"),
           callbackUrl: loopbackUrl(data.callbackUrl),
           callbackToken: string(data.callbackToken, "callbackToken"),
@@ -138,7 +139,7 @@ export function registerGameApi(
         return { protocol: PROTOCOL };
       }
       case "session.detach": {
-        worlds.detach(uuid(data.worldId, "worldId"), string(data.worldSessionId, "worldSessionId"));
+        worlds.detach(uuid(data.worldId, "worldId"), string(data.worldSessionId, "worldSessionId"), string(data.connectionId, "connectionId"));
         return {};
       }
       case "agent.markRead": {

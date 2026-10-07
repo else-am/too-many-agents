@@ -57,6 +57,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
           expiresAt: Date.now() + START_EXPIRY_MS,
           ...args,
           bbInstanceId: instanceId,
+          connectionId: live.connectionId,
         }),
         signal: AbortSignal.any([lifetime.signal, signal ?? AbortSignal.timeout(120_000)]),
       });
@@ -138,11 +139,11 @@ export function minecraftWorlds(bb: BbPluginApi) {
     const previous = sessions.get(live.worldId);
     sessions.set(live.worldId, live);
     seen.set(live.worldId, Date.now());
-    return !previous || previous.worldSessionId !== live.worldSessionId;
+    return !previous || previous.worldSessionId !== live.worldSessionId || previous.connectionId !== live.connectionId;
   }
 
-  function detach(worldId: string, worldSessionId: string) {
-    if (sessions.get(worldId)?.worldSessionId === worldSessionId) { sessions.delete(worldId); seen.delete(worldId); }
+  function detach(worldId: string, worldSessionId: string, connectionId: string) {
+    if (sessions.get(worldId)?.worldSessionId === worldSessionId && sessions.get(worldId)?.connectionId === connectionId) { sessions.delete(worldId); seen.delete(worldId); }
   }
 
   function forget(live: Session) {

@@ -86,7 +86,7 @@ def main():
     state = request('/v1/state')
     before = {a['id'] for a in request('/v1/agents')}
     def rejected(label, fields, expected):
-        payload = {'protocol': 3, 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
+        payload = {'protocol': 3, 'connectionId': agent['connectionId'], 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
             'op': 'body.create', 'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10000,
             'agentId': args.agent_id, 'threadId': thread, 'settings': {'name': 'Must not be created'},
             'projectId': agent['projectId'], 'minecraftAccess': True, 'draft': {}, **fields}
@@ -100,7 +100,7 @@ def main():
     rejected('Stale world', {'worldSessionId': str(uuid.uuid4())}, 'world_session_changed')
     rejected('Expired creation', {'expiresAt': 0}, 'expired_before_execution')
     cancelled = str(uuid.uuid4())
-    request('/v1/bb', {'protocol': 3, 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
+    request('/v1/bb', {'protocol': 3, 'connectionId': agent['connectionId'], 'bbInstanceId': agent['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
         'op': 'cancel', 'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10000,
         'cancelRequestId': cancelled})
     rejected('Cancelled creation', {'requestId': cancelled}, 'tool_cancelled')

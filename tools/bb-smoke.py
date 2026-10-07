@@ -147,7 +147,7 @@ def main():
 
     # The plugin callback boundary, exercised directly against the live game.
     def callback(**fields):
-        return send('/v1/bb', {'protocol': 3, 'bbInstanceId': current['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
+        return send('/v1/bb', {'protocol': 3, 'connectionId': current['connectionId'], 'bbInstanceId': current['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
                                'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10_000, **fields})
     observe = {'op': 'tool', 'agentId': agent_id, 'tool': 'minecraft_observe', 'arguments': {}}
     status, reply = callback(**observe, threadId=str(uuid.uuid4()))

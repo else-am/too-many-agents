@@ -7,6 +7,7 @@ export type Args<F extends (...args: never[]) => unknown> = Parameters<F>[0];
 export type SpawnOptions = Args<Sdk["threads"]["spawn"]>;
 export type Thread = Awaited<ReturnType<Sdk["threads"]["get"]>>;
 export interface Session {
+  connectionId: string;
   worldId: string;
   worldSessionId: string;
   callbackUrl: string;
