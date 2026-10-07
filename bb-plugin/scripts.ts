@@ -101,15 +101,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           const status = action.terminal === true ? action : await call('awaitAction', { id: action.id }, requestSignal);
           record.lastObserved = status.status;
           record.detail = status.detail;
-          if (status.status !== 'completed') throw new Error(`Action ${action.id}: ${status.status}: ${status.detail ?? ''}`);
-          return { action: status, snapshot: prepareSnapshot(await call('snapshot', {}, requestSignal)) };
-        }
-        if (operation === 'snapshot') return prepareSnapshot(await call('snapshot', {}, requestSignal));
-        if (operation === 'waitTicks') {
-          if (typeof request.ticks !== 'number' || !Number.isSafeInteger(request.ticks) || request.ticks < 0 || request.ticks > 6000)
-            throw new Error('ticks must be an integer between 0 and 6000');
-          await call('awaitTicks', { ticks: request.ticks }, requestSignal);
-          return prepareSnapshot(await call('snapshot', {}, requestSignal));
+          return status;
         }
         throw new Error(`Unknown script operation: ${operation}`);
       };

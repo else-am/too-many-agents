@@ -692,16 +692,13 @@ final class GameAccess {
 
     private static boolean scriptWait(Operation operation, JsonObject args) {
         return operation == Operation.SCRIPT && args.has("operation")
-            && Set.of("awaitAction", "awaitTicks").contains(args.get("operation").getAsString());
+            && args.get("operation").getAsString().equals("awaitAction");
     }
 
     private CompletableFuture<JsonObject> awaitScript(MinecraftServer current, Body body, JsonObject args) {
         var controller = actions(body, body(current, body));
         controller.requireScript(string(args, "scriptId", 80));
-        if (string(args, "operation", 40).equals("awaitAction")) return controller.awaitAction(string(args, "id", 80));
-        double ticks = number(args.get("ticks"), "ticks");
-        if (ticks != Math.rint(ticks) || ticks < 0 || ticks > 6000) throw error("invalid_tick_wait");
-        return controller.awaitTicks((int) ticks);
+        return controller.awaitAction(string(args, "id", 80));
     }
 
     private CompletableFuture<JsonObject> streamScript(MinecraftServer current, Body body, JsonObject args, ScriptStream stream) {
@@ -721,6 +718,7 @@ final class GameAccess {
         snapshot.addProperty("minY", mob.level().getMinBuildHeight());
         snapshot.addProperty("height", mob.level().getHeight());
         snapshot.addProperty("revision", controller.nextSnapshotRevision());
+        snapshot.addProperty("completedActionSequence", controller.completedActionSequence());
         return snapshot;
     }
 

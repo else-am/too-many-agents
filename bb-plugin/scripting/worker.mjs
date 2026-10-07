@@ -23,10 +23,66 @@ let nextUpdate = 1;
 let ended = false;
 let scheduled = false;
 let outputBytes = 0;
+const timers = new Map();
+let nextTimer = 0;
+
+function clearGuestTimer(id) {
+  const timer = timers.get(id);
+  if (!timer) return;
+  clearTimeout(timer.host);
+  timer.callback.dispose();
+  for (const arg of timer.args) arg.dispose();
+  timers.delete(id);
+}
+
+function fireTimer(id) {
+  const timer = timers.get(id);
+  if (ended || !timer) return;
+  deadline = performance.now() + cpuSliceMs;
+  let failure;
+  // A callback may clear its own timer. Keep its active handles alive until
+  // callFunction returns, independently of the timer's retained handles.
+  const callback = timer.callback.dup();
+  const args = timer.args.map(arg => arg.dup());
+  try {
+    const result = vm.callFunction(callback, vm.undefined, ...args);
+    if (result.error) {
+      failure = guestError(result.error);
+      result.error.dispose();
+    } else result.value.dispose();
+  } catch (error) { failure = String(error.message ?? error); }
+  finally { callback.dispose(); for (const arg of args) arg.dispose(); }
+  if (!timer.repeat || failure) clearGuestTimer(id);
+  else if (timers.has(id)) timer.host = setTimeout(() => fireTimer(id), timer.delay);
+  if (failure) end({ type: 'error', message: failure });
+  else schedulePump();
+}
+
+for (const [name, repeat] of [['setTimeout', false], ['setInterval', true]]) {
+  const fn = vm.newFunction(name, (callback, delay, ...args) => {
+    if (vm.typeof(callback) !== 'function') throw new TypeError('Timer callback must be a function');
+    if (timers.size >= 1024 || nextTimer >= 10_000) throw new Error('Guest timer limit exceeded');
+    const milliseconds = delay ? vm.getNumber(delay) : 0;
+    const id = ++nextTimer;
+    const timer = { callback: callback.dup(), args: args.map(arg => arg.dup()), repeat,
+      delay: Number.isFinite(milliseconds) && milliseconds >= 1 && milliseconds <= 2147483647 ? Math.trunc(milliseconds) : 1 };
+    timers.set(id, timer);
+    timer.host = setTimeout(() => fireTimer(id), timer.delay);
+    return vm.newNumber(id);
+  });
+  vm.setProp(vm.global, name, fn);
+  fn.dispose();
+}
+for (const name of ['clearTimeout', 'clearInterval']) {
+  const fn = vm.newFunction(name, id => { if (id) clearGuestTimer(vm.getNumber(id)); });
+  vm.setProp(vm.global, name, fn);
+  fn.dispose();
+}
 
 function end(message) {
   if (ended) return;
   ended = true;
+  for (const id of timers.keys()) clearGuestTimer(id);
   parentPort.postMessage(message);
   // The parent terminates this worker, including its WASM memory. Dispose the
   // guest handles as well so normal completion checks ownership mistakes.
@@ -120,7 +176,8 @@ parentPort.on('message', message => {
       }
       result.value.dispose();
       parentPort.postMessage({ type: 'updated', id: nextUpdate++ });
-      schedulePump();
+      // Resume awaits resolved by this frame before receiving another frame.
+      pump();
     } catch (error) { end({ type: 'error', message: String(error.message ?? error) }); }
     return;
   }
@@ -140,15 +197,31 @@ parentPort.on('message', message => {
   schedulePump();
 });
 
-deadline = performance.now() + cpuSliceMs;
+// Registry/class initialization is trusted setup, not agent execution. Give
+// this larger fixed bundle its own bounded slice before applying the agent's
+// smaller CPU limit; keep both under the same memory and wall-time limits.
+deadline = performance.now() + 1000;
 try {
-  // Capture serialization before guest code can replace the global function.
-  // The returned promise contains a JSON string, never a host object or handle.
-  const result = vm.evalCode(`
+  const setup = vm.evalCode(`
     const console = Object.freeze({
       log: (...values) => __mcLog(values.map(v => typeof v === 'string' ? v : JSON.stringify(v)).join(' ')),
     });
     ${bootstrap}
+  `, 'minecraft-bootstrap.js');
+  if (setup.error) {
+    const message = guestError(setup.error);
+    setup.error.dispose();
+    throw new Error(message);
+  }
+  setup.value.dispose();
+  if (workerData.updates) {
+    updateHandler = vm.getProp(vm.global, '__mcUpdate');
+    if (vm.typeof(updateHandler) !== 'function') throw new Error('Script bootstrap has no update handler');
+  }
+  // Capture serialization before guest code can replace the global function.
+  // The returned promise contains a JSON string, never a host object or handle.
+  deadline = performance.now() + cpuSliceMs;
+  const result = vm.evalCode(`
     ((serialize) => (async () => serialize(await (async () => {
       ${source}
     })()) ?? 'null')())(JSON.stringify)
@@ -159,10 +232,6 @@ try {
     end({ type: 'error', message });
   } else {
     main = result.value;
-    if (workerData.updates) {
-      updateHandler = vm.getProp(vm.global, '__mcUpdate');
-      if (vm.typeof(updateHandler) !== 'function') throw new Error('Script bootstrap has no update handler');
-    }
     parentPort.postMessage({ type: 'ready' });
     schedulePump();
   }

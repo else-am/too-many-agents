@@ -1,0 +1,17 @@
+let ticks = 0;
+const tick = () => { ticks++; };
+bot.on('physicsTick', tick);
+const before = ticks;
+await bot.waitForTicks(40);
+const waited = ticks - before;
+if (waited !== 40) throw new Error(`Expected 40 physics ticks, observed ${waited}`);
+await bot.waitForTicks(0);
+await bot.waitForTicks(-1);
+const sword = bot.inventory.items().find(item => item.name === 'diamond_sword');
+const pickaxe = bot.inventory.items().find(item => item.name === 'diamond_pickaxe');
+await bot.equip(sword, 'hand');
+if (bot.heldItem?.name !== 'diamond_sword') throw new Error('equip resolved before inventory state');
+await bot.equip(pickaxe, 'hand');
+if (bot.heldItem?.name !== 'diamond_pickaxe') throw new Error('second equip resolved before inventory state');
+bot.removeListener('physicsTick', tick);
+return { waited, held: bot.heldItem.name };

@@ -36,12 +36,10 @@ final class AgentActions {
     private String scriptId, lastScriptId;
     private long scriptDeadline, scriptHeartbeat;
     private CompletableFuture<JsonObject> completion;
-    private long bodyTicks;
-    private record TickWait(long target, CompletableFuture<JsonObject> result) {}
-    private final List<TickWait> tickWaits = new ArrayList<>();
     private ScriptStream stateStream;
     private Supplier<JsonObject> stateSnapshot;
     private long snapshotRevision;
+    private long actionSequence, completedActionSequence;
 
     AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
         this.mob = mob;
@@ -89,13 +87,13 @@ final class AgentActions {
     void releaseScript() {
         scriptId = null;
         cancel("");
-        rejectTickWaits("script_no_longer_controls_body");
         if (stateStream != null) stateStream.finish();
         stateStream = null;
         stateSnapshot = null;
     }
 
     long nextSnapshotRevision() { return ++snapshotRevision; }
+    long completedActionSequence() { return completedActionSequence; }
 
     CompletableFuture<JsonObject> stream(ScriptStream stream, Supplier<JsonObject> snapshot) {
         if (stateStream != null) throw error("script_state_stream_already_open");
@@ -109,21 +107,6 @@ final class AgentActions {
         var state = status(id);
         if (!"running".equals(text(state, "status"))) return CompletableFuture.completedFuture(state);
         return completion.thenApply(JsonObject::deepCopy);
-    }
-
-    CompletableFuture<JsonObject> awaitTicks(int ticks) {
-        if (ticks < 0 || ticks > 6000) throw error("invalid_tick_wait");
-        if (tickWaits.size() >= 32) throw error("too_many_tick_waits");
-        var result = new CompletableFuture<JsonObject>();
-        if (ticks == 0) result.complete(new JsonObject());
-        else tickWaits.add(new TickWait(bodyTicks + ticks, result));
-        return result;
-    }
-
-    private void rejectTickWaits(String reason) {
-        var waits = List.copyOf(tickWaits);
-        tickWaits.clear();
-        for (var wait : waits) wait.result.completeExceptionally(error(reason));
     }
 
     private void expireScript() {
@@ -169,6 +152,7 @@ final class AgentActions {
         kind = type;
         completion = new CompletableFuture<>();
         action = object("id", UUID.randomUUID().toString(), "type", kind, "status", "running", "phase", "starting", "terminal", false, "session", session);
+        action.addProperty("sequence", ++actionSequence);
         history.put(text(action, "id"), action);
         while (history.size() > 32) history.remove(history.keySet().iterator().next());
         ticks = stillTicks = 0;
@@ -197,13 +181,11 @@ final class AgentActions {
         stateStream = null;
         stateSnapshot = null;
         if (busy()) finish("interrupted", reason, null);
-        rejectTickWaits(reason);
         if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
         else hands.closeHands();
     }
 
     void tick(boolean minecraftAccess) {
-        bodyTicks++;
         try {
             expireScript();
             if (!minecraftAccess && scripted()) releaseScript();
@@ -298,7 +280,10 @@ final class AgentActions {
                         finish("completed", "pickup_finished", hands.pickup(2));
                     }
                 }
-                case "equip" -> finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
+                case "equip" -> {
+                    if (!approachTargets && args.has("hotbar")) hands.selectHotbar(integer(args, "hotbar", 0));
+                    finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
+                }
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
                 case "use" -> finish("completed", "use_started", hands.useHeld());
                 case "release" -> finish("completed", "released", hands.releaseHeld());
@@ -310,9 +295,6 @@ final class AgentActions {
             if (busy()) finish("failed", failure.getMessage(), null);
             else throw failure;
         } finally {
-            var ready = tickWaits.stream().filter(wait -> wait.target <= bodyTicks).toList();
-            tickWaits.removeAll(ready);
-            for (var wait : ready) wait.result.complete(new JsonObject());
             if (stateStream != null) {
                 if (stateStream.open()) {
                     try { stateStream.offer(stateSnapshot.get()); }
@@ -463,6 +445,7 @@ final class AgentActions {
         GameAccess.stopFollowingMotion(mob);
         action.addProperty("terminal",true); action.addProperty("status",status); action.addProperty("detail",detail == null ? "action_failed" : detail);
         action.addProperty("ticks",ticks);
+        completedActionSequence = action.get("sequence").getAsLong();
         action.add("position", Observations.position(mob.position()));
         if (result != null) action.add("result",result.deepCopy());
         completion.complete(action.deepCopy());

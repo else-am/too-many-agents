@@ -20,6 +20,7 @@ licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'
 licenses.push(await readFile(new URL('./movements-LICENSE.txt', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
+licenses.push('Mineflayer 4.39.0: adapted waitForTicks implementation\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));

@@ -21,8 +21,9 @@ export function createBot(initial) {
   const Block = createBlockClass(registry);
   const Item = createItemClass(registry);
   let snapshot;
-  let streamBlocks;
   let lastPhysicsTick;
+  let nextQuickBarSlot = 0;
+  const stateWaits = new Set();
   const vector = ({ x, y, z }) => new Vec3(x, y, z);
   const item = entry => {
     if (!entry) return null;
@@ -72,22 +73,46 @@ export function createBot(initial) {
       return found.slice(0, count);
     },
     findBlock(options) { const [position] = bot.findBlocks({ ...options, count: 1 }); return position ? bot.blockAt(position) : null; },
-    async equip(itemOrId, destination) {
+    async equip(itemOrId, destination = 'hand') {
+      if (!destination) destination = 'hand';
       const destinations = { hand: 'mainhand', 'off-hand': 'offhand', head: 'head', torso: 'chest', legs: 'legs', feet: 'feet' };
       if (!destinations[destination]) throw new Error(`Invalid destination ${destination}`);
       const selected = typeof itemOrId === 'number' ? bot.inventory.items().find(item => item.type === itemOrId) : itemOrId;
       if (!selected || !Number.isInteger(selected.slot)) throw new Error('Item is not in the inventory');
       const slot = selected.slot >= 36 && selected.slot <= 44 ? selected.slot - 36 : selected.slot === 45 ? 40 : selected.slot < 9 ? 44 - selected.slot : selected.slot;
-      await action({ type: 'equip', slot, equipment: destinations[destination] });
+      let hotbar;
+      if (destination === 'hand') {
+        if (selected.slot >= 36 && selected.slot <= 44) hotbar = selected.slot - 36;
+        else {
+          hotbar = bot.inventory.slots.slice(36, 45).findIndex(stack => stack === null);
+          if (hotbar === -1) { hotbar = nextQuickBarSlot; nextQuickBarSlot = (nextQuickBarSlot + 1) % 9; }
+        }
+      }
+      await action({ type: 'equip', slot, equipment: destinations[destination], hotbar });
     },
     async dig(block, forceLook = true, digFace = 'auto') {
       if (block == null) throw new Error('dig was called with an undefined or null block');
       if (forceLook !== true || digFace !== 'auto') throw new Error('dig look/face options are pending implementation');
       await action({ type: 'mine', position: block.position });
     },
+    // Adapted from Mineflayer 4.39.0 physics.js; see mineflayer.LICENSE.
     async waitForTicks(ticks) {
-      if (!Number.isInteger(ticks) || ticks < 0) throw new Error('ticks must be a nonnegative integer');
-      update(await request('waitTicks', { ticks }));
+      if (ticks <= 0) return;
+      await new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          bot.removeListener('physicsTick', tickListener);
+          reject(new Error(`Timeout waiting for ${ticks} ticks after ${(ticks * 50 + 5000)}ms`));
+        }, ticks * 50 + 5000);
+        const tickListener = () => {
+          ticks--;
+          if (ticks === 0) {
+            clearTimeout(timeout);
+            bot.removeListener('physicsTick', tickListener);
+            resolve();
+          }
+        };
+        bot.on('physicsTick', tickListener);
+      });
     },
     pathfinder: {
       async goto(goal) {
@@ -113,12 +138,18 @@ export function createBot(initial) {
     },
   });
   async function request(operation, value) { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
-  async function action(args) { const result = await request('action', args); update(result.snapshot); }
+  async function action(args) {
+    const result = await request('action', args);
+    if (snapshot.completedActionSequence < result.sequence)
+      await new Promise(resolve => { stateWaits.add({ sequence: result.sequence, resolve }); });
+    if (result.status !== 'completed') throw new Error(`Action ${result.id}: ${result.status}: ${result.detail ?? ''}`);
+    return result;
+  }
   function update(next, streamed = false) {
-    const current = !snapshot || next.revision > snapshot.revision;
+    if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
     const changed = [];
     const blocks = next.blocks;
-    const trackBlocks = current && snapshot && bot.listenerCount('blockUpdate') > 0;
+    const trackBlocks = snapshot && bot.eventNames().some(name => typeof name === 'string' && name.startsWith('blockUpdate'));
     const oldBlock = (position, state) => {
       const { min, size, states } = snapshot.blocks;
       const x = position.x - min[0], y = position.y - min[1], z = position.z - min[2];
@@ -127,17 +158,18 @@ export function createBot(initial) {
       if (oldState >= 0 && state >= 0 && oldState !== state) changed.push([bot.blockAt(position), position]);
     };
     if (streamed && blocks.changes) {
-      if (!streamBlocks) throw new Error('State stream began with a block delta');
-      const { min, size } = streamBlocks;
+      if (!snapshot) throw new Error('State stream began with a block delta');
+      const cached = snapshot.blocks;
+      const { min, size } = cached;
       for (let n = 0; n < blocks.changes.length; n += 4) {
         const [i, state, biome, light] = blocks.changes.slice(n, n + 4);
         if (trackBlocks) oldBlock(new Vec3(min[0] + i % size[0], min[1] + Math.floor(i / (size[0] * size[2])), min[2] + Math.floor(i / size[0]) % size[2]), state);
-        streamBlocks.states[i] = state;
-        streamBlocks.biomes[i] = biome;
-        streamBlocks.light[i] = light;
+        cached.states[i] = state;
+        cached.biomes[i] = biome;
+        cached.light[i] = light;
       }
-      streamBlocks.entities = blocks.entities;
-      next.blocks = streamBlocks;
+      cached.entities = blocks.entities;
+      next.blocks = cached;
     } else {
       if (trackBlocks) {
         const { min, size, states } = blocks;
@@ -146,11 +178,7 @@ export function createBot(initial) {
           oldBlock(position, states[i]);
         }
       }
-      if (streamed) streamBlocks = blocks;
     }
-    // The stream is ordered internally, but an action's full snapshot can
-    // overtake it. Keep applying stream deltas while ignoring older state.
-    if (!current) return;
     snapshot = next;
     const present = new Set();
     const entityEvents = [];
@@ -182,6 +210,7 @@ export function createBot(initial) {
     bot.inventory.slots.fill(null);
     for (const entry of next.hands.inventory) { const stack = item(entry); bot.inventory.slots[stack.slot] = stack; }
     bot.heldItem = bot.inventory.slots[36 + next.hands.selected];
+    bot.quickBarSlot = next.hands.selected;
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.emit('blockUpdate', before, after);
@@ -190,6 +219,9 @@ export function createBot(initial) {
     if (streamed) {
       for (const event of entityEvents) bot.emit(...event);
       if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }
+    }
+    for (const wait of stateWaits) {
+      if (next.completedActionSequence >= wait.sequence) { stateWaits.delete(wait); wait.resolve(); }
     }
   }
   update(initial);

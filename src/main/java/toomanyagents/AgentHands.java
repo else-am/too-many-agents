@@ -297,6 +297,14 @@ final class AgentHands extends FakePlayer {
         return response;
     }
 
+    void selectHotbar(int slot) {
+        syncBody();
+        if (slot < 0 || slot > 8) throw error("invalid_hotbar_slot");
+        if (getInventory().selected != slot && getUsedItemHand() == InteractionHand.MAIN_HAND) stopUsingItem();
+        getInventory().selected = slot;
+        save();
+    }
+
     JsonObject equip(int inventorySlot, String equipmentSlot) {
         syncBody();
         requireIdleHands();

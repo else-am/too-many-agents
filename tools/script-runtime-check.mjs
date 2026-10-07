@@ -116,3 +116,32 @@ updateAbort.abort(new Error('User cancelled updates'));
 await updateRejected;
 assert.equal(feedStopped, true);
 console.log('PASS: cancelling the script also stops its state feed');
+
+const timers = await runScript({
+  source: `
+    const seen = [];
+    const cancelled = setTimeout(() => seen.push('cancelled'), 10);
+    clearTimeout(cancelled);
+    await new Promise(resolve => setTimeout((a, b) => { seen.push(a + b); resolve(); }, 20, 2, 3));
+    await new Promise(resolve => { const id = setInterval(() => {
+      seen.push('interval'); if (seen.length === 3) { clearInterval(id); resolve(); }
+    }, 2); });
+    return seen;
+  `,
+  onRequest: async () => { throw new Error('Timers must not become bridge requests'); },
+});
+assert.deepEqual(timers.value, [5, 'interval', 'interval']);
+assert.equal(timers.requests, 0);
+console.log('PASS: guest timers preserve arguments, cancellation and repeated callbacks without bridge requests');
+
+await assert.rejects(runScript({
+  source: 'await new Promise(resolve => setTimeout(() => { while (true) {} }, 0));',
+  cpuSliceMs: 50, timeoutMs: 2000, onRequest: async () => null,
+}), /interrupt|CPU|execution/i);
+console.log('PASS: timer callbacks cannot escape the guest CPU limit');
+
+await assert.rejects(runScript({
+  source: 'for (let i = 0; i < 2000; i++) setTimeout(() => {}, 100000); await new Promise(() => {});',
+  onRequest: async () => null,
+}), /timer.*limit/i);
+console.log('PASS: pending guest timers are bounded');
