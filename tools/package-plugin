@@ -68,6 +68,10 @@ def main():
     subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], env=env, check=True)
     subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'build:scripting'], env=env, check=True)
     subprocess.run([*bb, 'plugin', 'build', str(PLUGIN)], env=bb_env, check=True)
+    # Frontend installation scans the package. Avoid shipping accidentally
+    # expanded multi-version data as an enormous JavaScript source file.
+    if (PLUGIN / 'dist/server.js').stat().st_size > 32 * 1024 * 1024:
+        raise RuntimeError('Plugin server bundle exceeds 32 MiB; inspect bundled data/dependencies.')
     # The diagram worker runs independently of BB's server bundle. Include its
     # pure-JavaScript dependencies and WASM; installation needs neither npm nor a compiler.
     packages = subprocess.check_output([npm, 'ls', '--omit=dev', '--all', '--parseable'], cwd=PLUGIN, env=env, text=True).splitlines()

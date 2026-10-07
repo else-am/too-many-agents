@@ -32,6 +32,20 @@ for (const f of types.ItemBlockProperty[1].find(f => f.name === 'value').type[1]
 const { ProtoDefCompiler } = require('protodef').Compiler;
 const compiler = new ProtoDefCompiler();
 compiler.addTypes(require('minecraft-protocol/src/datatypes/compiler-minecraft'));
+// minecraft-protocol 1.68.0 skips inline holder zeros, leaving allocUnsafe bytes uninitialized.
+compiler.writeCompiler.addTypes({
+  registryEntryHolder: ['parametrizable', (compiler, opts) => compiler.wrapCode(`
+    if (value.${opts.baseName} != null) {
+      offset = ${compiler.callType(`value.${opts.baseName} + 1`, 'varint')}
+    } else if (value.${opts.otherwise.name}) {
+      buffer[offset++] = 0
+      offset = ${compiler.callType(`value.${opts.otherwise.name}`, opts.otherwise.type)}
+    } else {
+      throw new Error('registryEntryHolder requires ${opts.baseName} or ${opts.otherwise.name}')
+    }
+    return offset
+  `)],
+});
 compiler.addTypesToCompile(types);
 require('prismarine-nbt').addTypesToCompiler('big', compiler);
 const corrected = compiler.compileProtoDefSync();

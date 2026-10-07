@@ -3,13 +3,14 @@
  * (MIT, Copyright (c) 2018 ProtoDef-io), prismarine-nbt 2.8.0 (MIT), and
  * minecraft-protocol 1.68.0 (BSD-3-Clause). See item-wire.LICENSE.
  */
-import minecraftData from 'minecraft-data';
+import items from 'minecraft-data/minecraft-data/data/pc/1.21.1/items.json' with { type: 'json' };
+import protocol from 'minecraft-data/minecraft-data/data/pc/1.21.1/protocol.json' with { type: 'json' };
 import protodef from 'protodef';
 import nbt from 'prismarine-nbt';
 import minecraftTypes from 'minecraft-protocol/src/datatypes/compiler-minecraft.js';
 
-const data = minecraftData('1.21.1');
-const guestItemIds = new Map(data.itemsArray.map(item => [`minecraft:${item.name}`, item.id]));
+// Only the pinned game's wire schema and item IDs belong in the host bundle.
+const guestItemIds = new Map(items.map(item => [`minecraft:${item.name}`, item.id]));
 const decoders = new Map();
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ENTRIES = 65536;
@@ -198,7 +199,7 @@ function registryEntries (mapping, label) {
 }
 
 function correctedTypes () {
-  const types = structuredClone(data.protocol.types);
+  const types = structuredClone(protocol.types);
   const fields = types.SlotComponent[1][1].type[1].fields;
   // PotionContents.STREAM_CODEC: no customName until after PC1.21.1.
   fields.potion_contents[1] = fields.potion_contents[1].filter(field => field.name !== 'customName');
