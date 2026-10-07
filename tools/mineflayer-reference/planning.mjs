@@ -332,8 +332,9 @@ const evaluated = vm.evalCode(guestBundle.outputFiles[0].text + `
   PlanningModule.installPlanning(bot, bot.pathfinder);
   const neighbors = []; movement.getMoveForward({x: 0, y: 0, z: 0, remainingBlocks: 0}, {x: 1, z: 0}, neighbors);
   const start = neighbors[0];
-  const result = bot.pathfinder.getPathFromTo(movement, null,
-    {heuristic: p => Math.abs(5-p.x), isEnd: p => p.x === 5}, {startMove: start}).next().value.result;
+  let result;
+  for (const step of bot.pathfinder.getPathFromTo(movement, null,
+    {heuristic: p => Math.abs(5-p.x), isEnd: p => p.x === 5}, {startMove: start})) result = step.result;
   JSON.stringify({status: result.status, endX: result.path.at(-1).x, resumption: typeof result.context.compute, nodeGlobals: typeof process});
 `);
 try {

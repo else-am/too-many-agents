@@ -102,6 +102,11 @@ final class ScriptNavigation {
         if (raw == null || raw.size() > MAX_NODES) throw error("route_node_limit");
         int changes = 0;
         BlockPos previous = BlockPos.containing(start);
+        // The planner represents fractional supports (slabs/carpet) by the
+        // cell above their occupied cell. Validate that offset against this body.
+        if (mob.onGround() && start.y - previous.getY() > 0.001
+            && !level.getBlockState(previous).getCollisionShape(level, previous, CollisionContext.of(mob)).isEmpty())
+            previous = previous.above();
         for (JsonElement element : raw) {
             JsonObject node = element.getAsJsonObject().deepCopy();
             BlockPos pos = integerPosition(node);

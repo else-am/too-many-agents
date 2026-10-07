@@ -28,13 +28,14 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   pathfinder.setGoal = (next, isDynamic = false) => {
     goal = next;
     dynamic = isDynamic;
-    reset('goal_updated');
+    const version = ++epoch;
     bot.emit('goal_updated', next, isDynamic);
+    if (epoch === version) reset('goal_updated');
   };
   pathfinder.setMovements = next => { movements = next; reset('movements_updated'); };
   pathfinder.isMoving = () => path.length > 0;
-  pathfinder.isMining = () => route != null && snapshot().action.id === route.id && snapshot().action.progress?.isMining === true;
-  pathfinder.isBuilding = () => route != null && snapshot().action.id === route.id && snapshot().action.progress?.isBuilding === true;
+  pathfinder.isMining = () => route != null && !route.terminal && snapshot().action.id === route.id && snapshot().action.progress?.isMining === true;
+  pathfinder.isBuilding = () => route != null && !route.terminal && snapshot().action.id === route.id && snapshot().action.progress?.isBuilding === true;
   pathfinder.stop = () => { stopRequested = true; };
   pathfinder.goto = wanted => new Promise((resolve, reject) => {
     let settled = false;
@@ -66,19 +67,23 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   });
 
   function cancelRoute() {
-    if (!route || route.cancelled) return;
+    if (!route || route.cancelled || route.terminal) return;
     route.cancelled = true;
-    if (route.id) route.control = request('cancelAction', { id: route.id });
+    if (route.id) control(route, 'cancelAction');
+  }
+  function control(active, operation) {
+    active.control = Promise.all([active.control, request(operation, { id: active.id })]);
   }
   function reset(reason) {
     epoch++;
     search = undefined;
     planned = false;
     lastFailure = undefined;
-    if (path.length && !stopRequested) bot.emit('path_reset', reason);
+    const wasMoving = path.length > 0;
     path = [];
     movements.clearCollisionIndex();
     cancelRoute();
+    if (wasMoving && !stopRequested) bot.emit('path_reset', reason);
   }
   function stop(failure) {
     goal = null;
@@ -104,11 +109,18 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   }
 
   function runRoute(nodes) {
-    const active = { epoch, id: null, cancelled: false, stopSent: false, control: null };
+    let count = 0, edits = 0;
+    while (count < Math.min(nodes.length, 128)) {
+      const next = nodes[count].toBreak.length + nodes[count].toPlace.length;
+      if (edits + next > 128) break;
+      edits += next; count++;
+    }
+    if (!count) { stop(error('NoPath', 'A single route edge exceeds the native edit limit')); return; }
+    const active = { epoch, id: null, cancelled: false, terminal: false, stopSent: false, control: null };
     route = active;
     const { blocks } = snapshot();
     const scaffold = movements.getScaffoldingItem();
-    const selected = nodes.slice(0, 128).map(node => ({
+    const selected = nodes.slice(0, count).map(node => ({
       ...node,
       toBreak: node.toBreak.map(position => {
         const block = bot.blockAt(new Vec3(position.x, position.y, position.z));
@@ -125,12 +137,13 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
           ...(scaffold ? { scaffoldingSlot: nativeSlot(scaffold.slot) } : {}),
         });
         active.id = started.id;
-        if (active.cancelled) active.control = request('cancelAction', { id: active.id });
+        if (active.cancelled) control(active, 'cancelAction');
         else if (stopRequested) {
           active.stopSent = true;
-          active.control = request('stopRoute', { id: active.id });
+          control(active, 'stopRoute');
         }
         const result = await request('awaitAction', { id: active.id });
+        active.terminal = true;
         await active.control;
         await waitForActionState(result);
         if (active.cancelled || active.epoch !== epoch) return;
@@ -146,10 +159,11 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         search = undefined;
         if (goal && atGoal()) reachedGoal();
       } catch (failure) {
+        active.terminal = true;
         if (!active.cancelled && active.epoch === epoch) {
           path = [];
           bot.emit('path_reset', 'execution_error');
-          stop(failure);
+          if (active.epoch === epoch) stop(failure);
         }
       } finally { if (route === active) route = undefined; }
     })();
@@ -165,9 +179,9 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
     if (goal?.hasChanged()) reset('goal_moved');
     if (stopRequested) {
       if (!route) { stop(); return; }
-      if (route.id && !route.stopSent && !route.cancelled) {
+      if (route.id && !route.stopSent && !route.cancelled && !route.terminal) {
         route.stopSent = true;
-        route.control = request('stopRoute', { id: route.id });
+        control(route, 'stopRoute');
       }
     }
     if (route || !goal || !movements || planned) return;

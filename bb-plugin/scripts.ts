@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { BbPluginApi, PluginAgentToolResult } from '@get-bb/plugin-sdk';
 import type { MinecraftWorlds } from './minecraft.js';
-import { object, describe, type Session } from './protocol.js';
+import { ApiError, object, describe, type Session } from './protocol.js';
 import { runScript } from './scripting/runner.mjs';
 import { createItemDecoder, encodeItemTransport } from './scripting/item-wire.mjs';
 
@@ -104,17 +104,36 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         } catch (error) { if (!signal.aborted) controller.abort(error); }
       })();
       const startAction = async (request: Record<string, unknown>, requestSignal: AbortSignal) => {
-        const action = await call('action', { action: request }, requestSignal);
-        actions.push({ id: action.id, type: request.type, lastObserved: action.status });
-        if (actions.length > 32) actions.shift();
-        return action;
+        try {
+          const action = await call('action', { action: request }, requestSignal);
+          if (typeof action.id !== 'string' || action.status !== 'running' || !Number.isInteger(action.sequence))
+            throw new Error('Invalid native action acknowledgement; outcome is unknown');
+          actions.push({ id: action.id, type: request.type, lastObserved: action.status });
+          if (actions.length > 32) actions.shift();
+          return action;
+        } catch (error) {
+          // Native pre-start rejection is known. A lost/malformed reply may
+          // hide an accepted action: stop the whole script and release its lease.
+          if (!(error instanceof ApiError && error.code === 'minecraft_action_failed')) controller.abort(error);
+          throw error;
+        }
       };
       const awaitAction = async (id: unknown, requestSignal: AbortSignal) => {
         const record = actions.find(action => action.id === id);
         if (!record) throw new Error('Action does not belong to this execution');
-        const status = await call('awaitAction', { id }, requestSignal);
-        observeAction(status);
-        return status;
+        try {
+          const status = await call('awaitAction', { id }, requestSignal);
+          if (status.id !== id || !Number.isInteger(status.sequence)
+              || !['completed', 'failed', 'interrupted', 'timeout'].includes(String(status.status)))
+            throw new Error('Invalid native terminal acknowledgement; outcome is unknown');
+          observeAction(status);
+          return status;
+        } catch (error) {
+          // Without the terminal barrier, catching goto must not allow the
+          // body to keep working unobserved under a renewed lease.
+          controller.abort(error);
+          throw error;
+        }
       };
       const onRequest = async (operation: string, value: unknown, requestSignal: AbortSignal) => {
         const request = object(value);
@@ -135,7 +154,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Recipe, RecipeItem, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
         timeoutMs, signal, onRequest,

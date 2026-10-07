@@ -12,7 +12,7 @@ const data = JSON.stringify({
   blockCollisionShapes: registry.blockCollisionShapes,
   materials: registry.materials, effectsByName: registry.effectsByName,
   enchantmentsByName: registry.enchantmentsByName, language: registry.language,
-  entitiesArray: registry.entitiesArray,
+  entitiesArray: registry.entitiesArray, recipes: registry.recipes,
 });
 const licenses = [];
 licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
@@ -22,6 +22,7 @@ licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'ut
 licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
 licenses.push('Mineflayer 4.39.0: adapted waitForTicks implementation\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);

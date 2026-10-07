@@ -9,6 +9,7 @@ import { decodeItemTransport } from 'minecraft-item-transport';
 import { EventEmitter } from 'events';
 import { Movements } from './movements.mjs';
 import { installPathfinder } from './pathfinder.mjs';
+import { createRecipeFactory, installRecipeQueries } from './recipes.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -32,6 +33,7 @@ export function createBot(initial) {
   };
   const Block = createBlockClass(registry);
   const Item = createItemClass(registry);
+  const recipeFactory = createRecipeFactory(registry);
   const { createWindow } = createWindowFactory(Item);
   const windowKeys = new WeakMap();
   let snapshot;
@@ -270,5 +272,6 @@ export function createBot(initial) {
   update(initial);
   lastPhysicsTick = initial.tick;
   installPathfinder(bot, { request, waitForActionState, snapshot: () => snapshot });
-  return { bot, Vec3, goals, Movements, update };
+  installRecipeQueries(bot, recipeFactory);
+  return { bot, Vec3, goals, Movements, ...recipeFactory, update };
 }
