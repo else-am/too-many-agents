@@ -30,7 +30,7 @@ slots, passenger/vehicle object links, and stable Entity/Vec3/equipment Item
 references over three snapshots. Native enchantment IDs are world registry IDs;
 the script does not assume the pinned language registry's enchantment ID order.
 
-After the first pass, clear the stand's name, clear its offhand and dismount the
+After the first pass, clear the stand's name through a native setter, clear its offhand and dismount the
 passenger on the owning server thread. On a new snapshot check getCustomName()
 returns null, offhand is null, passenger.vehicle is null and stand.passengers is
 empty, without replacing still-observed Entity/Vec3 objects. In a separate phase
@@ -80,3 +80,10 @@ Locally generated NeoForge 21.1.251 / Minecraft 1.21.1 sources:
 `ChatTypeDecoration.translationKey/parameters`, `Parameter.getSerializedName`.
 The component stream codec uses the same CODEC with registry-aware NbtOps; no
 custom-name flattening or hand-built component translation is required.
+
+Fixture correction from live execution: vanilla `data remove ... CustomName`
+removes the saved tag but Entity.load leaves the existing name unchanged when
+the tag is absent. It does not exercise setCustomName(null). Use a native setter
+for the clearing case; command-driven name updates can verify replacement, but
+must not be reported as clearing. Offhand clearing, dismounting, and dropped-item
+damage changes were independently observed in the first command-driven phase.
