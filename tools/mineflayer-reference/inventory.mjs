@@ -73,7 +73,7 @@ const bundle = await build({ stdin: { contents: `
   alias: { vec3: plugin.resolve('vec3'), events: plugin.resolve('events/') },
   nodePaths: [resolve(pluginRoot, 'node_modules'), resolve(referenceRoot, 'node_modules')] });
 const quickjs = await getQuickJS();
-const data = JSON.stringify({ itemsArray: registry.itemsArray, enchantmentsByName: registry.enchantmentsByName });
+const data = JSON.stringify({ itemsArray: registry.itemsArray, enchantmentsByName: registry.enchantmentsByName, entitiesByName:registry.entitiesByName });
 
 // Authoritative callback fixture uses pinned Window click semantics independently
 // of the guest adapter. Native permissions/components/races are controlled inputs,
@@ -109,8 +109,9 @@ function authority(spec = {}) {
   }
   function state() {
     mirror();
-    return { active, hands: { selected, inventory: inventory.slots.map(encode), menu: {
+    return { active, hands: { selected, experience:spec.experience??{level:0,progress:0,total:0,seed:0}, inventory: inventory.slots.map(encode), menu: {
       id: window.id, type: window.type, generation, title: window.title, carried: { ...encode(window.selectedItem), maxStackSize: window.selectedItem?.stackSize ?? 64 },
+      ...(spec.observation?.({window,inventory})??{}),
       slots: window.slots.map((item, slot) => {
         const playerSlot = window === inventory ? slot : slot >= window.inventoryStart && slot < window.inventoryEnd ? slot - window.inventoryStart + 9 : null;
         const rules = slotRules[slot] ?? {};
@@ -164,6 +165,8 @@ function authority(spec = {}) {
         window = inventory; generation++;
       } else if (args.type === 'interact') {
         if (!spec.noOpen) replace(spec.openType);
+      } else if (['menu_button','anvil_name','select_trade'].includes(args.type)) {
+        // Specialized scenarios supply explicit authoritative responses below.
       } else throw new Error(`Unexpected action ${args.type}`);
     }
     updateResult();
@@ -192,6 +195,7 @@ const bootstrap = `
   };
   function apply(next) {
     snapshot = next;
+    bot.experience = {level:next.hands.experience.level,points:next.hands.experience.total,progress:next.hands.experience.progress};
     const old = bot.currentWindow, menu = next.hands.menu, changed = [];
     const hydrate = (window, slots) => {
       for (let slot = 0; slot < slots.length; slot++) {
@@ -216,6 +220,7 @@ const bootstrap = `
     if (bot.currentWindow && old !== bot.currentWindow) bot.emit('windowOpen', bot.currentWindow);
   }
   api = installInventory(bot, {
+    decodeItem:item,
     snapshot: () => snapshot, assertActive() { if (!snapshot.active) throw new Error('fixture canceled'); },
     isKnownActionError: error => error instanceof KnownError,
     async action(args) {
@@ -565,6 +570,8 @@ test('craft cancellation and queue',async()=>{
   assert.equal(queued.native.crafts,2); assert.equal(queued.native.calls.at(-1).slot,40);
 });
 
+export { guest, pinned, authority, registry, reference, plugin, make, encode, Item, windows, EventEmitter };
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
 const results=[];
 for(const [name,check] of checks) {
   try { await check(); passed++; results.push({name,status:'passed'}); console.log(`PASS ${name}`); }
@@ -574,3 +581,4 @@ console.log(JSON.stringify({passed,failed:checks.length-passed,preauthored:scena
   quickjs:{memory:64*1024*1024,stack:512*1024,browserBundleBytes:bundle.outputFiles[0].contents.length},
   evidence:'Actual pinned plugins/Window source oracle and bundled guest orchestration only; no native/server/live execution.'},null,2));
 process.exitCode=checks.length===passed?0:1;
+}

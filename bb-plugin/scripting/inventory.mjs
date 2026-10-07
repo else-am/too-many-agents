@@ -2,6 +2,7 @@
 // simple_inventory, chest and craft plugins (MIT). See inventory.LICENSE.
 // Every mutation is native and authoritative; never call Window.acceptClick.
 import { Vec3 } from 'vec3';
+import { installSpecializedWindows } from './specialized-windows.mjs';
 
 const CLICK_TYPES = ['PICKUP', 'QUICK_MOVE', 'SWAP', 'CLONE', 'THROW'];
 const STORAGE = ['generic', 'chest', 'dispenser', 'ender_chest', 'shulker_box', 'hopper', 'container', 'dropper',
@@ -24,7 +25,7 @@ const sameStack = (a, b) => a && b && a.type === b.type && a.metadata === b.meta
 const matches = (item, type, metadata, nbt) => item && item.type === type &&
   (metadata == null || item.metadata === metadata) && (nbt == null || sameData(item.nbt, nbt));
 
-export function installInventory(bot, { action, snapshot, assertActive = () => {}, isKnownActionError = () => false }) {
+export function installInventory(bot, { action, snapshot, decodeItem, assertActive = () => {}, isKnownActionError = () => false }) {
   const menus = new WeakMap(), closed = new WeakSet();
   let tail = Promise.resolve(), poisoned, controlFailure, order = 0, pendingSelection, nextQuickBarSlot = 0;
   const controls = new Set();
@@ -517,16 +518,25 @@ export function installInventory(bot, { action, snapshot, assertActive = () => {
   bot.on('windowClose', window => {
     if (window && !closed.has(window)) { closed.add(window); window.emit('close'); }
   });
+  // Shared internal operations stay unqueued; public adapters own one queue turn.
+  const io = {
+    queueWindow, check, send, pickup, storeCursor, reserveCursor, transfer, move, sourceSlot, recover,
+    requireValue, sameStack, sameData, isKnownActionError, decodeItem, assertReady: ready,
+    capture, current, close, select, snapshot,
+  };
+  const specialized = installSpecializedWindows(bot, io);
   function syncWindow(window, menu) {
     requireValue(integer(menu.id) && integer(menu.generation), 'MissingMenuGeneration', 'Native menu id/generation is required');
     const decorated = menus.has(window);
     menus.set(window, { id: menu.id, generation: menu.generation });
-    if (decorated) return;
-    window.close = () => bot.closeWindow(window);
-    window.deposit = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
-      sourceStart: window.inventoryStart, sourceEnd: window.inventoryEnd, destStart: 0, destEnd: window.inventoryStart });
-    window.withdraw = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
-      sourceStart: 0, sourceEnd: window.inventoryStart, destStart: window.inventoryStart, destEnd: window.inventoryEnd });
+    if (!decorated) {
+      window.close = () => bot.closeWindow(window);
+      window.deposit = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
+        sourceStart: window.inventoryStart, sourceEnd: window.inventoryEnd, destStart: 0, destEnd: window.inventoryStart });
+      window.withdraw = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
+        sourceStart: 0, sourceEnd: window.inventoryStart, destStart: window.inventoryStart, destEnd: window.inventoryEnd });
+    }
+    specialized.syncWindow(window, menu);
   }
   return { syncWindow, selection: () => pendingSelection?.slot,
     async drainControls() {
