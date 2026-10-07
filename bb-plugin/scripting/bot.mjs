@@ -1,3 +1,4 @@
+import { installScoreboards } from './scoreboard.mjs';
 import { Vec3 } from 'vec3';
 import upstreamGoals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
@@ -111,6 +112,7 @@ export function createBot(initial) {
   installEntityQueries(bot);
   bot._playerFromUUID = uuid => Object.values(bot.players).find(player => player.uuid === uuid);
   const updateState = installState(bot, data.featureTable);
+  const scoreboards = installScoreboards(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
   installWorldQueries(bot, { getLoadedBounds() {
@@ -331,6 +333,7 @@ export function createBot(initial) {
       bot.inventory.slots[7], bot.inventory.slots[6], bot.inventory.slots[5]];
     bot.usingHeldItem = next.hands.usingItem;
     const stateEvents = updateState(next);
+    const scoreEvents = scoreboards.update(next.scoreboard, streamed);
     inventory.syncWindow(bot.currentWindow ?? bot.inventory, menu);
     // A native frame changes all slots/cursor together. Listeners must see the
     // complete inventory and container state, including held equipment.
@@ -343,6 +346,7 @@ export function createBot(initial) {
     if (heldBefore !== bot.heldItem) bot.emit('heldItemChanged', bot.heldItem);
     if (experienceChanged) bot.emit('experience');
     for (const event of stateEvents) bot.emit(...event);
+    for (const event of scoreEvents) bot.emit(...event);
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.emit('blockUpdate', before, after);

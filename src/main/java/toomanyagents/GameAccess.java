@@ -70,6 +70,7 @@ final class GameAccess {
     private Map<String, AgentState> agentStates = Map.of();
     private final ConcurrentHashMap<Body, JsonObject> bodySnapshots = new ConcurrentHashMap<>();
     private String actionSession;
+    private ScriptScoreboard scriptScoreboard;
     private Set<UUID> failedBodyCleanup;
     private String cleanupSession;
     private PovCapture pov;
@@ -491,6 +492,7 @@ final class GameAccess {
         actionStops.clear();
         actions.values().forEach(a -> a.close("world_closed"));
         actions.clear(); bodySnapshots.clear(); actionSession = null;
+        scriptScoreboard = null;
     }
 
     CompletableFuture<JsonObject> development(JsonObject request) {
@@ -738,6 +740,9 @@ final class GameAccess {
         worldState.addProperty("serverViewDistance", current.getPlayerList().getViewDistance());
         snapshot.add("worldState", worldState);
         snapshot.add("players", ScriptEntities.players(level));
+        if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
+            scriptScoreboard = new ScriptScoreboard(current.getScoreboard());
+        snapshot.add("scoreboard", scriptScoreboard.snapshot(level));
         var items = new ScriptItems(level);
         snapshot.add("hands", controller.hands.scriptSnapshot(items));
         snapshot.add("messages", controller.drainMessages());
