@@ -142,11 +142,21 @@ export function createBot(initial) {
   });
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
-  async function request(operation, value) { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
+  class NativeActionError extends Error {}
+  async function request(operation, value) {
+    try { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }
+    catch (failure) {
+      if (failure.code === 'minecraft_action_rejected_before_start')
+        throw Object.assign(new NativeActionError(failure.message), { phase: 'before_start', detail: failure.message });
+      throw failure;
+    }
+  }
   async function action(args) {
     const result = await request('action', args);
     await waitForActionState(result);
-    if (result.status !== 'completed') throw new Error(`Action ${result.id}: ${result.status}: ${result.detail ?? ''}`);
+    if (result.status !== 'completed') throw Object.assign(
+      new NativeActionError(`Action ${result.id}: ${result.status}: ${result.detail ?? ''}`),
+      { phase: 'terminal', status: result.status, detail: result.detail });
     return result;
   }
   async function waitForActionState(result) {
@@ -236,6 +246,11 @@ export function createBot(initial) {
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
+    if (next.hands.experience) {
+      bot.experience ??= {};
+      Object.assign(bot.experience, { level: next.hands.experience.level,
+        progress: next.hands.experience.progress, points: next.hands.experience.total });
+    }
     const heldBefore = bot.heldItem;
     bot.quickBarSlot = next.hands.selected;
     const menu = next.hands.menu;
@@ -247,21 +262,28 @@ export function createBot(initial) {
     if (menu.type === 'minecraft:inventory') {
       for (const entry of menu.slots) inventorySlots[entry.slot] = entry;
     }
-    hydrateWindow(bot.inventory, inventorySlots, menu.carried);
+    const windowEvents = hydrateWindow(bot.inventory, inventorySlots, menu.carried, menu.generation);
     let opened;
     const previousWindow = bot.currentWindow;
     if (menu.type === 'minecraft:inventory') bot.currentWindow = null;
     else {
-      if (!previousWindow || previousWindow.id !== menu.id || previousWindow.type !== menu.type) {
-        opened = createWindow(menu.id, menu.type, menu.title ?? '', menu.slots.length - 36);
+      if (!previousWindow || previousWindow.id !== menu.id || previousWindow.type !== menu.type
+          || windowKeys.get(previousWindow)?.generation !== menu.generation) {
+        opened = createWindow(menu.id, menu.type, menu.titleNbt ?? menu.title ?? '', menu.slots.length - 36);
         if (!opened) throw new Error(`Unknown native window type ${menu.type}`);
         bot.currentWindow = opened;
       }
-      hydrateWindow(bot.currentWindow, menu.slots, menu.carried);
+      windowEvents.push(...hydrateWindow(bot.currentWindow, menu.slots, menu.carried, menu.generation));
     }
     bot.entity.equipment = [bot.heldItem, bot.inventory.slots[45], bot.inventory.slots[8],
       bot.inventory.slots[7], bot.inventory.slots[6], bot.inventory.slots[5]];
     bot.usingHeldItem = next.hands.usingItem;
+    // A native frame changes all slots/cursor together. Listeners must see the
+    // complete inventory and container state, including held equipment.
+    for (const [window, slot, before, after] of windowEvents) {
+      window.emit('updateSlot', slot, before, after);
+      window.emit(`updateSlot:${slot}`, before, after);
+    }
     if (previousWindow && previousWindow !== bot.currentWindow) bot.emit('windowClose', previousWindow);
     if (opened) bot.emit('windowOpen', opened);
     if (heldBefore !== bot.heldItem) bot.emit('heldItemChanged', bot.heldItem);
@@ -278,22 +300,27 @@ export function createBot(initial) {
       if (next.completedActionSequence >= wait.sequence) { stateWaits.delete(wait); wait.resolve(); }
     }
   }
-  function hydrateWindow(window, entries, carried) {
+  function hydrateWindow(window, entries, carried, generation) {
+    const events = [];
     let keys = windowKeys.get(window);
     if (!keys) { keys = []; windowKeys.set(window, keys); }
+    keys.generation = generation;
     for (let slot = 0; slot < window.slots.length; slot++) {
       const entry = entries[slot];
       const key = entry && entry.count > 0 ? entry.itemKey : null;
       if (keys[slot] !== key) {
         keys[slot] = key;
-        // updateSlot assigns this window's slot index, including craft slots.
-        window.updateSlot(slot, entry ? item(entry) : null);
+        const before = window.slots[slot], after = entry ? item(entry) : null;
+        if (after) after.slot = slot;
+        window.slots[slot] = after;
+        events.push([window, slot, before, after]);
       }
     }
     if (keys.carried !== carried.itemKey) {
       keys.carried = carried.itemKey;
       window.selectedItem = item(carried);
     }
+    return events;
   }
   update(initial);
   lastPhysicsTick = initial.tick;

@@ -111,7 +111,8 @@ export async function runScript({
             }).catch(error => {
               if (finished) return;
               pending.delete(id);
-              worker.postMessage({ type: 'response', id, error: String(error?.message ?? error).slice(0, 4096) });
+              worker.postMessage({ type: 'response', id, error: String(error?.message ?? error).slice(0, 4096),
+                code: typeof error?.code === 'string' ? error.code.slice(0, 80) : undefined });
             });
           } else if (message.type === 'log') {
             if (typeof message.text !== 'string') throw new Error('Invalid script log');

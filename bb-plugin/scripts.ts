@@ -69,6 +69,12 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         const hands = object(snapshot.hands), menu = object(hands.menu);
         const entries = [...hands.inventory as unknown[], ...Object.values(object(hands.equipment)),
           ...menu.slots as unknown[], menu.carried];
+        if (menu.merchant) {
+          for (const value of object(menu.merchant).offers as unknown[]) {
+            const offer = object(value);
+            entries.push(offer.baseCostA, offer.costA, offer.costB, offer.result);
+          }
+        }
         for (const value of [snapshot.body, ...snapshot.entities as unknown[]]) {
           const entity = object(value);
           if (entity.equipment) entries.push(...entity.equipment as unknown[]);
@@ -119,7 +125,9 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         } catch (error) {
           // Native pre-start rejection is known. A lost/malformed reply may
           // hide an accepted action: stop the whole script and release its lease.
-          if (!(error instanceof ApiError && error.code === 'minecraft_action_failed')) controller.abort(error);
+          if (error instanceof ApiError && error.code === 'minecraft_action_failed')
+            throw Object.assign(new Error(error.message), { code: 'minecraft_action_rejected_before_start' });
+          controller.abort(error);
           throw error;
         }
       };
@@ -159,8 +167,9 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, Recipe, RecipeItem, update } = MinecraftBot.createBot(JSON.parse(__mcInitial));
-          function __mcUpdate(payload) { update(JSON.parse(payload), true); }`,
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+          function __mcUpdate(payload) { update(JSON.parse(payload), true); }
+          async function __mcFinish() { await drainControls?.(); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
         timeoutMs, signal, onRequest,
         onUpdates: async (send, streamSignal) => {

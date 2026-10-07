@@ -248,9 +248,21 @@ final class AgentHands extends FakePlayer {
     }
 
     JsonObject useBlock(BlockPos pos, Direction face, boolean secondaryUse) {
+        return useBlock(pos, face, secondaryUse, null);
+    }
+
+    JsonObject useBlock(BlockPos pos, Direction face, boolean secondaryUse, Vec3 cursorPos) {
         syncBody();
         requireIdleHands();
         var hit = checkedHit(pos, face);
+        if (cursorPos != null) {
+            if (!Double.isFinite(cursorPos.x) || !Double.isFinite(cursorPos.y) || !Double.isFinite(cursorPos.z)
+                || cursorPos.x < 0 || cursorPos.x > 1 || cursorPos.y < 0 || cursorPos.y > 1
+                || cursorPos.z < 0 || cursorPos.z > 1) throw error("invalid_block_cursor_position");
+            // Preserve the supplied block-local click point after native reach,
+            // loaded-line and visible-face checks, including partial block shapes.
+            hit = new BlockHitResult(Vec3.atLowerCornerOf(pos).add(cursorPos), hit.getDirection(), pos, false);
+        }
         if (!getMainHandItem().isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
         if (getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem) {
             var placement = new BlockPlaceContext(this, InteractionHand.MAIN_HAND, getMainHandItem(), hit);

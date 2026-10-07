@@ -18,6 +18,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade");
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -135,7 +136,7 @@ final class AgentActions {
     private JsonObject start(JsonObject request, boolean approachTargets) {
         if (busy()) throw error("action_already_running_cancel_or_wait");
         String type = text(request, "type");
-        if (!TYPES.contains(type) && !(type.equals("route") && !approachTargets)) throw error("unknown_action_type");
+        if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity")) throw error("position_or_entity_required");
         if (List.of("mine", "place").contains(type) && !request.has("position")) throw error("position_required");
@@ -277,7 +278,12 @@ final class AgentActions {
                             navigate(Vec3.atCenterOf(pos), true); return;
                         }
                         face(Vec3.atCenterOf(pos));
-                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean());
+                        Vec3 cursor = null;
+                        if (args.has("cursorPos")) {
+                            var point = args.getAsJsonObject("cursorPos");
+                            cursor = new Vec3(number(point, "x"), number(point, "y"), number(point, "z"));
+                        }
+                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean(), cursor);
                         finish("completed", "interaction_finished_check_result", result);
                     }
                 }
@@ -315,8 +321,21 @@ final class AgentActions {
                 case "use" -> finish("completed", "use_started", hands.useHeld());
                 case "release" -> finish("completed", "released", hands.releaseHeld());
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
-                case "menu_click" -> finish("completed", "menu_clicked", hands.clickMenu(integer(args,"menuId",-1), integer(args,"slot",-1), integer(args,"button",0), ClickType.valueOf(text(args,"clickType").toUpperCase(Locale.ROOT))));
-                case "menu_close" -> finish("completed", "menu_closed", hands.closeMenu());
+                case "menu_click" -> {
+                    int menuId = integer(args, "menuId", -1), slot = integer(args, "slot", -1), button = integer(args, "button", 0);
+                    var click = ClickType.valueOf(text(args, "clickType").toUpperCase(Locale.ROOT));
+                    finish("completed", "menu_clicked", approachTargets ? hands.clickMenu(menuId, slot, button, click)
+                        : hands.clickMenu(menuId, menuGeneration(), slot, button, click));
+                }
+                case "menu_close" -> finish("completed", "menu_closed", approachTargets ? hands.closeMenu()
+                    : hands.closeMenu(integer(args, "menuId", -1), menuGeneration()));
+                case "select_hotbar" -> {
+                    hands.selectHotbar(integer(args, "slot", -1));
+                    finish("completed", "hotbar_selected", null);
+                }
+                case "menu_button" -> finish("completed", "menu_button", hands.menuButton(integer(args, "menuId", -1), menuGeneration(), integer(args, "button", -1)));
+                case "anvil_name" -> finish("completed", "anvil_named", hands.renameAnvil(integer(args, "menuId", -1), menuGeneration(), text(args, "name")));
+                case "select_trade" -> finish("completed", "trade_selected", hands.selectTrade(integer(args, "menuId", -1), menuGeneration(), integer(args, "index", -1)));
             }
         } catch (RuntimeException failure) {
             if (busy()) finish("failed", failure.getMessage(), null);
@@ -490,6 +509,15 @@ final class AgentActions {
         if (result != null) action.add("result",result.deepCopy());
         completion.complete(action.deepCopy());
     }
+    private long menuGeneration() {
+        if (!args.has("generation") || !args.get("generation").isJsonPrimitive()
+            || !args.getAsJsonPrimitive("generation").isNumber()) throw error("menu_generation_required");
+        double value = args.get("generation").getAsDouble();
+        if (!Double.isFinite(value) || value < 0 || value > 9_007_199_254_740_991L || value != Math.rint(value))
+            throw error("invalid_menu_generation");
+        return (long) value;
+    }
+
     static Vec3 position(JsonObject args) {
         if (!args.has("position") || !args.get("position").isJsonObject()) throw error("position_must_be_xyz_object");
         var p = args.getAsJsonObject("position");

@@ -187,6 +187,11 @@ parentPort.on('message', message => {
   deadline = performance.now() + cpuSliceMs;
   const value = message.error === undefined ? vm.newString(message.payload) : vm.newError(message.error);
   try {
+    if (message.error !== undefined && typeof message.code === 'string') {
+      const code = vm.newString(message.code);
+      vm.setProp(value, 'code', code);
+      code.dispose();
+    }
     if (message.error === undefined) deferred.resolve(value);
     else deferred.reject(value);
   } finally {
@@ -222,9 +227,11 @@ try {
   // The returned promise contains a JSON string, never a host object or handle.
   deadline = performance.now() + cpuSliceMs;
   const result = vm.evalCode(`
-    ((serialize) => (async () => serialize(await (async () => {
-      ${source}
-    })()) ?? 'null')())(JSON.stringify)
+    ((serialize, finish) => (async () => {
+      const value = await (async () => { ${source} })();
+      if (finish) await finish();
+      return serialize(value) ?? 'null';
+    })())(JSON.stringify, typeof __mcFinish === 'function' ? __mcFinish : null)
   `, 'minecraft-script.js');
   if (result.error) {
     const message = guestError(result.error);
