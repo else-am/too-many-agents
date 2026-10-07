@@ -319,6 +319,12 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     })();
     return active.done;
   };
+  bot.creative.startFlying = () => { control({ type: 'creative_flying', state: true }); };
+  bot.creative.stopFlying = () => { control({ type: 'creative_flying', state: false }); };
+  bot.creative.flyTo = async destination => {
+    const position = vector(destination, 'flight destination');
+    await perform({ type: 'creative_fly', position });
+  };
   bot.tabComplete = async (text, assumeCommand = false, sendBlockInSight = true, timeout = 5000) => {
     need(typeof text === 'string' && text.length <= 4096, 'InvalidCompletionText', 'Completion text must be a string of at most 4096 characters');
     need(Number.isInteger(timeout) && timeout > 0 && timeout <= 300000, 'InvalidTimeout', 'Completion timeout must be 1..300000ms');

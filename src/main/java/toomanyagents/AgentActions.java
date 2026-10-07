@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -30,6 +30,7 @@ final class AgentActions {
     private long suggestionDeadline;
     private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
     private int messageSize;
+    private boolean creativeFlying;
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
     private float vehicleLeft, vehicleForward;
@@ -109,6 +110,7 @@ final class AgentActions {
 
     void releaseScript() {
         scriptId = null;
+        creativeFlying = false;
         messages.clear(); messageSize = 0;
         clearControls();
         cancel("");
@@ -178,6 +180,11 @@ final class AgentActions {
         if (busy()) throw error("action_already_running_cancel_or_wait");
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
+        if ((type.equals("route") || type.equals("walk")) && creativeFlying) throw error("stop_creative_flight_before_navigation");
+        if (type.equals("creative_flying") && (!request.has("state") || !request.get("state").isJsonPrimitive()
+            || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_flight_state");
+        if (type.equals("creative_fly") || type.equals("creative_flying") && request.get("state").getAsBoolean()) requireCreativeFlight();
+        if (type.equals("creative_fly") && !heldControls.isEmpty()) throw error("release_manual_controls_before_fly_to");
         if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw error("release_manual_controls_before_navigation");
         if (mob.isSleeping() && (type.equals("route") || type.equals("walk")
             || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw error("wake_before_movement");
@@ -191,7 +198,7 @@ final class AgentActions {
         }
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
-        if (List.of("mine", "place", "place_entity", "update_sign").contains(type) && !request.has("position")) throw error("position_required");
+        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly").contains(type) && !request.has("position")) throw error("position_required");
         if (List.of("give", "attack").contains(type) && !request.has("entity")) throw error("entity_required");
         args = request.deepCopy();
         if (args.has("position")) {
@@ -248,6 +255,7 @@ final class AgentActions {
 
     void close(String reason) {
         scriptId = null;
+        creativeFlying = false;
         clearControls();
         if (stateStream != null) stateStream.fail(error(reason));
         stateStream = null;
@@ -380,6 +388,24 @@ final class AgentActions {
                     if (!approachTargets && args.has("hotbar")) hands.selectHotbar(integer(args, "hotbar", 0));
                     finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
                 }
+                case "creative_flying" -> {
+                    creativeFlying = args.get("state").getAsBoolean();
+                    if (creativeFlying) { requireCreativeFlight(); mob.setJumping(false); mob.setDeltaMovement(Vec3.ZERO); }
+                    finish("completed", creativeFlying ? "flying" : "flight_stopped", null);
+                }
+                case "creative_fly" -> {
+                    requireCreativeFlight();
+                    creativeFlying = true;
+                    var destination = position(args);
+                    flightBounds(destination, mob.getBoundingBox().move(destination.subtract(mob.position())));
+                    var delta = destination.subtract(mob.position());
+                    if (delta.lengthSqr() > 0.25) delta = delta.normalize().scale(0.5);
+                    travelled = true;
+                    flyStep(delta);
+                    if (mob.position().distanceToSqr(destination) <= 0.0025) finish("completed", "flight_arrived", null);
+                    else if (mob.position().distanceToSqr(lastPosition) < 0.000001) throw error("creative_flight_obstructed");
+                    lastPosition = mob.position();
+                }
                 case "creative_slot" -> finish("completed", "creative_slot_set", hands.creativeSlot(
                     integer(args, "menuId", -1), menuGeneration(), integer(args, "slot", -1), text(args, "wire")));
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
@@ -501,10 +527,19 @@ final class AgentActions {
             else throw failure;
         } finally {
             if (scripted() && !travelled) {
-                if (mob.isSleeping()) clearControls();
-                else if (!heldControls.isEmpty()) applyControls();
-                tickVehicleControls();
-                GameAccess.travelFollowingBody(mob, box.get());
+                if (creativeFlying) {
+                    try { tickCreativeFlight(); }
+                    catch (RuntimeException failure) {
+                        creativeFlying = false;
+                        clearControls();
+                        if (stateStream != null) stateStream.fail(failure);
+                    }
+                } else {
+                    if (mob.isSleeping()) clearControls();
+                    else if (!heldControls.isEmpty()) applyControls();
+                    tickVehicleControls();
+                    GameAccess.travelFollowingBody(mob, box.get());
+                }
             }
             if (stateStream != null) {
                 if (stateStream.open()) {
@@ -514,6 +549,46 @@ final class AgentActions {
                 if (!stateStream.open()) releaseScript();
             }
         }
+    }
+
+    private void requireCreativeFlight() {
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).creative)
+            throw error("creative_mode_required");
+        if (mob.isSleeping() || mob.isPassenger()) throw error("wake_and_dismount_before_flying");
+    }
+
+    private void flightBounds(Vec3 feet, net.minecraft.world.phys.AABB swept) {
+        var level = (ServerLevel) mob.level();
+        var limit = box.get();
+        if (swept.minY < level.getMinBuildHeight() || swept.maxY > level.getMaxBuildHeight()
+            || !level.getWorldBorder().isWithinBounds(swept)
+            || !level.hasChunksAt(BlockPos.containing(swept.minX, swept.minY, swept.minZ),
+                BlockPos.containing(swept.maxX, swept.maxY, swept.maxZ))
+            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(feet)))
+            throw error("creative_flight_execution_boundary");
+    }
+
+    private void flyStep(Vec3 delta) {
+        requireCreativeFlight();
+        flightBounds(mob.position().add(delta), mob.getBoundingBox().expandTowards(delta));
+        // Ordinary Entity.move owns collision and block callbacks. No persistent
+        // NoGravity flag is changed; only this lease omits ground travel/gravity.
+        mob.setJumping(false);
+        mob.setDeltaMovement(Vec3.ZERO);
+        mob.move(net.minecraft.world.entity.MoverType.SELF, delta);
+        mob.fallDistance = 0;
+    }
+
+    private void tickCreativeFlight() {
+        int forward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+        int left = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+        int up = (heldControls.contains("jump") ? 1 : 0) - (heldControls.contains("sneak") ? 1 : 0);
+        var input = new Vec3(left, up, forward);
+        if (input.lengthSqr() > 1) input = input.normalize();
+        double yaw = mob.getYRot() * Math.PI / 180;
+        var delta = new Vec3(input.x * Math.cos(yaw) - input.z * Math.sin(yaw), input.y,
+            input.z * Math.cos(yaw) + input.x * Math.sin(yaw)).scale(heldControls.contains("sprint") ? 0.2 : 0.1);
+        flyStep(delta);
     }
 
     private void tickVehicleControls() {
@@ -748,6 +823,7 @@ final class AgentActions {
     }
 
     private void finish(String status, String detail, JsonObject result) {
+        if ("creative_fly".equals(kind) && !"completed".equals(status)) creativeFlying = false;
         if (suggestions != null) { suggestions.cancel(false); suggestions = null; }
         if ("fish".equals(kind)) hands.cancelFishing();
         if (route != null) {

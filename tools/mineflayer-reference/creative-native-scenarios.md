@@ -39,3 +39,22 @@ still waits for authoritative native state. Equality does not skip writes just
 because upstream Item.equal ignores components. clearInventory is serialized
 with other inventory operations and reports completedSlots after partial failure.
 Native creative block-entity copying observes the body's region bounds.
+
+## Flight contract (before implementation)
+
+startFlying/stopFlying return void and participate in the existing ordered control
+drain. flyTo awaits real body arrival and leaves flight enabled until stop/release.
+Use native collision movement in bounded steps, never assign a guest position or
+teleport through obstacles. Hover/control state belongs to the script lease;
+release/world change/mode loss restores ordinary gravity without persisting a
+NoGravity edit to the body. Manual jump/sneak move vertically while flying.
+
+Focused native checks: reject survival activation before displacement; creative
+flyTo reaches a clear elevated destination, ticks keep advancing and hover holds;
+stopFlying permits falling/landing; script release also restores ordinary travel.
+A solid wall, unloaded destination, world border and body region reject without
+crossing them. Cancellation during flight leaves actual partial position and no
+lingering flight lease. Do not run an exhaustive trajectory matrix. start/stop
+controls during another active body action retain the existing busy fence.
+
+Flight Java/plugin/package build passed. No native flight test has run. Hover is lease-local and preserves the body's stored gravity setting. Ground navigation requires stopping flight first.
