@@ -22,9 +22,11 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
+    private net.minecraft.world.entity.vehicle.Boat controlledBoat;
+    private float vehicleLeft, vehicleForward;
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -148,6 +150,11 @@ final class AgentActions {
         if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw error("dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
+        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()) {
+            if (!(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat))
+                throw error("vehicle_controls_not_implemented_for_body");
+            if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+        }
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
         if (List.of("mine", "place", "place_entity", "update_sign").contains(type) && !request.has("position")) throw error("position_required");
@@ -382,6 +389,17 @@ final class AgentActions {
                     hands.selectHotbar(integer(args, "slot", -1));
                     finish("completed", "hotbar_selected", null);
                 }
+                case "vehicle_control" -> {
+                    if (!(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat))
+                        throw error(mob.isPassenger() ? "vehicle_controls_not_implemented_for_body" : "body_not_mounted");
+                    if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+                    float left = (float) Math.clamp(number(args, "left"), -1, 1);
+                    float forward = (float) Math.clamp(number(args, "forward"), -1, 1);
+                    controlledBoat = boat;
+                    vehicleLeft = left;
+                    vehicleForward = forward;
+                    finish("completed", "vehicle_controls_updated", null);
+                }
                 case "control" -> {
                     String control = text(args, "control");
                     if (args.get("state").getAsBoolean()) heldControls.add(control);
@@ -416,6 +434,7 @@ final class AgentActions {
         } finally {
             if (scripted() && !travelled) {
                 if (!heldControls.isEmpty()) applyControls();
+                tickVehicleControls();
                 GameAccess.travelFollowingBody(mob, box.get());
             }
             if (stateStream != null) {
@@ -428,7 +447,53 @@ final class AgentActions {
         }
     }
 
+    private void tickVehicleControls() {
+        var boat = controlledBoat;
+        if (boat == null) return;
+        if (boat.isRemoved() || mob.getVehicle() != boat || boat.getControllingPassenger() != mob) {
+            clearVehicleControls();
+            return;
+        }
+        boat.setInput(vehicleLeft > 0, vehicleLeft < 0, vehicleForward > 0, vehicleForward < 0);
+        // Vanilla performs this in the controlling player's client tick. Our
+        // native rider has no client, so apply input once before the next move.
+        boat.controlBoat();
+        var projected = boat.getBoundingBox().expandTowards(boat.getDeltaMovement()).inflate(0.1);
+        var level = (ServerLevel) mob.level();
+        var limit = box.get();
+        var nextFeet = mob.position().add(boat.getDeltaMovement());
+        if (!level.hasChunksAt(BlockPos.containing(projected.minX, projected.minY, projected.minZ),
+                BlockPos.containing(projected.maxX, projected.maxY, projected.maxZ))
+            || !level.getWorldBorder().isWithinBounds(projected)
+            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(nextFeet))) {
+            // Stop at the execution boundary without moving or snapping position.
+            boat.setDeltaMovement(0, boat.getDeltaMovement().y, 0);
+            clearVehicleControls();
+            if (stateStream != null) stateStream.fail(error("vehicle_execution_boundary"));
+        }
+    }
+
+    private void clearVehicleControls() {
+        if (controlledBoat != null && controlledBoat.getControllingPassenger() == mob) {
+            controlledBoat.setInput(false, false, false, false);
+            controlledBoat.setPaddleState(false, false);
+        }
+        controlledBoat = null;
+        vehicleLeft = vehicleForward = 0;
+    }
+
     private void applyControls() {
+        if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat && boat.getControllingPassenger() == mob) {
+            controlledBoat = boat;
+            vehicleLeft = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+            vehicleForward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+            return;
+        }
+        if (mob.isPassenger()) {
+            clearControls();
+            if (stateStream != null) stateStream.fail(error("vehicle_control_ownership_changed"));
+            return;
+        }
         mob.setSprinting(heldControls.contains("sprint"));
         mob.setShiftKeyDown(heldControls.contains("sneak"));
         float speed = (float) mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
@@ -446,6 +511,7 @@ final class AgentActions {
     }
 
     private void clearControls() {
+        clearVehicleControls();
         heldControls.clear();
         mob.setSprinting(false);
         mob.setShiftKeyDown(false);

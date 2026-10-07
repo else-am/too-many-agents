@@ -268,6 +268,10 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     control({ type: 'update_sign', ...observed(block), lines, front: !back });
   };
   bot.mount = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
+  bot.moveVehicle = (left, forward) => {
+    need(Number.isFinite(left) && Number.isFinite(forward), 'InvalidVehicleInput', 'Vehicle inputs must be finite numbers');
+    control({ type: 'vehicle_control', left: Math.max(-1, Math.min(1, left)), forward: Math.max(-1, Math.min(1, forward)) });
+  };
   bot.dismount = () => {
     if (!bot.vehicle) { bot.emit('error', new Error('dismount: not mounted')); return; }
     control({ type: 'dismount' });
