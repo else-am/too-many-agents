@@ -193,7 +193,8 @@ tools/dev                                # personal development game in run/play
 Both build the plugin once through Gradle, then Minecraft uses its normal BB setup
 to install or reload this checkout before connecting. `tools/build runClient` uses
 the same development mode. A same-version plugin is refreshed once per launch;
-connected games block replacement. Development does not change your permission
+connected games block replacement. A blocked development reload waits for **Retry**;
+background connection checks do not keep attempting it. Development does not change your permission
 for automatic updates in packaged games. Newer plugins still require explicit
 confirmation before a downgrade. Packaged-JAR runs do not enable development mode.
 

@@ -30,7 +30,6 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         super(Component.literal("Too Many Agents settings"));
         this.parent = parent;
         this.access = access;
-        setup.retry();
     }
 
     /** In a world, the mod settings open beside the agent sidebar instead of on their own. */

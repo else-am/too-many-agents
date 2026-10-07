@@ -32,6 +32,7 @@ public final class BbSetup {
     private final Path settings = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-bb.json");
     private final String developmentSource = System.getProperty("too_many_agents.devPlugin", "");
     private boolean developmentLoaded;
+    private boolean developmentAttempted;
     private boolean installStartedThisLaunch;
     public boolean development() { return !developmentSource.isBlank(); }
     public String pluginSourceLabel() { return development() ? "development plugin" : "bundled plugin"; }
@@ -70,9 +71,9 @@ public final class BbSetup {
         return connection;
     }
     public synchronized boolean isCurrent(String instanceId) { return connection != null && selected.equals(instanceId) && connection.instanceId().equals(instanceId); }
-    public void retry() { worker.execute(() -> { if (!settingsUnreadable) error = ""; notice = ""; check(false); }); }
+    public void retry() { worker.execute(() -> { developmentAttempted = false; if (!settingsUnreadable) error = ""; notice = ""; check(false); }); }
     public void select(String id) { worker.execute(() -> {
-        developmentLoaded = false; installStartedThisLaunch = false;
+        developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
         selected = id; selectedUrl = ""; automatic = false; installPending = false; settingsUnreadable = false; error = notice = "";
         persist(); check(false);
     }); }
@@ -82,7 +83,7 @@ public final class BbSetup {
             cli = resolveCli(path).toString();
             var status = command("", "status", "--json");
             selected = digest(text(status,"dataDir")); selectedUrl = "";
-            developmentLoaded = false; installStartedThisLaunch = false;
+            developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
             automatic = false; installPending = false; settingsUnreadable = false; error = notice = ""; persist();
         } catch (Exception failure) { cli = previousCli; error = notice = failure.getMessage(); }
         check(false);
@@ -149,6 +150,11 @@ public final class BbSetup {
                     publish(notice.isBlank() ? "Connected to BB" : notice, installed, true, false, instances); return;
                 }
             }
+            if (development() && developmentAttempted && !developmentLoaded && !explicit) {
+                action = installPending ? Action.RESTORE : Action.RETRY;
+                publish(error.isBlank() ? "Development plugin reload needs a retry." : error, installed, false, false, instances);
+                return;
+            }
             if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Minecraft plugin.");
             if (!locked) {
                 Files.createDirectories(root.resolve("locks"));
@@ -193,8 +199,9 @@ public final class BbSetup {
                     : "BB's Minecraft plugin is newer or from a different release. Update this mod, or explicitly restore its bundled plugin.";
                 publish(message, installed, false, false, instances); return;
             }
-            publish("Installing Minecraft plugin " + version() + "…", installed, false, true, instances);
-            installPlugin(url, plugin, found, developmentDirectory, generation);
+            // Background connection checks never repeat a blocked development reload.
+            if (development()) developmentAttempted = true;
+            installPlugin(url, plugin, found, developmentDirectory, generation, instances);
             // Verify rather than repeating a mutation whose outcome may be unknown.
             for (int attempt=0; attempt<12; attempt++) {
                 Thread.sleep(500);
@@ -232,7 +239,7 @@ public final class BbSetup {
         return directory;
     }
 
-    private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation) throws Exception {
+    private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation, List<Instance> instances) throws Exception {
         // check holds the selected instance's lock and has refreshed these inputs.
         if (plugin != null) {
             if (!text(plugin,"source").startsWith("path:"))
@@ -249,6 +256,8 @@ public final class BbSetup {
                 generation = text(prepared,"generation");
             }
         }
+        // A blocked background retry must not flash the form into an installing state.
+        publish("Installing Minecraft plugin " + version() + "…", plugin == null ? "" : text(plugin,"version"), false, true, instances);
         Path directory = developmentDirectory == null ? extractBundle() : developmentDirectory;
         expectedPluginRoot = directory.toRealPath().toString(); previousGeneration = generation;
         error = ""; installPending = true; persist();
