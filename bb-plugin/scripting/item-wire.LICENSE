@@ -1,0 +1,120 @@
+Attribution for item-wire.mjs
+============================
+
+The bounded array reader and SignedBigInt methods adapt protodef 1.19.0
+src/datatypes/compiler-structures.js and src/datatypes/numeric.js.
+The bounded holder-set reader adapts minecraft-protocol 1.68.0
+src/datatypes/compiler-minecraft.js. The NBT compound reader adapts
+prismarine-nbt 2.8.0 compiler-compound.js, requiring a terminator and preserving
+prototype-like keys as own properties. Bounds and registry ID mapping are local
+changes. Modified UTF-8 decoding is implemented locally for Java NBT strings.
+
+The PC1.21.1 type descriptions are loaded from minecraft-data 3.117.0, cloned,
+and corrected privately. The tests use independent byte fixtures based on the
+generated Minecraft 1.21.1 stream-codec layouts. No Minecraft source is copied.
+
+Runtime packages retain their own license obligations when distributed. The
+licenses of copied/adapted portions follow verbatim. The prismarine-nbt npm
+package has no LICENSE; its original MIT declaration/authorship metadata is
+retained verbatim instead of inventing copyright attribution.
+
+
+----- protodef/LICENSE -----
+
+MIT License
+
+Copyright (c) 2018 ProtoDef-io
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+
+----- minecraft-protocol/LICENSE -----
+
+BSD 3-Clause License
+
+Copyright (c) 2020, PrismarineJS
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+----- prismarine-nbt/package.json -----
+
+{
+  "name": "prismarine-nbt",
+  "version": "2.8.0",
+  "description": "A parser and serializer for NBT archives",
+  "keywords": [
+    "nbt",
+    "minecraft"
+  ],
+  "homepage": "https://github.com/prismarinejs/prismarine-nbt",
+  "author": "roblabla <robinlambertz+dev@gmail.com>",
+  "maintainers": [
+    "roblabla <robinlambertz+dev@gmail.com",
+    "Will Franzen <wtfranzen@gmail.com> (http://will.xyz/)",
+    "Dennis Bartlett <bartlett.dc.1@gmail.com>",
+    "Romain Beaumont <romain.rom1@gmail.com>"
+  ],
+  "main": "nbt",
+  "types": "./typings/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prismarinejs/prismarine-nbt.git"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "chai": "^6.2.1",
+    "mocha": "^11.0.1",
+    "standard": "^17.0.0"
+  },
+  "scripts": {
+    "test": "mocha --reporter spec",
+    "pretest": "npm run lint",
+    "lint": "standard",
+    "fix": "standard --fix"
+  },
+  "dependencies": {
+    "protodef": "^1.18.0"
+  },
+  "license": "MIT"
+}
