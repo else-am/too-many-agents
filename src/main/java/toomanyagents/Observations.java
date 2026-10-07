@@ -39,6 +39,7 @@ final class Observations {
         result.addProperty("alive", entity.isAlive());
         if (entity instanceof LivingEntity living) {
             result.addProperty("health", living.getHealth());
+            result.addProperty("isSleeping", living.isSleeping());
             result.addProperty("airSupply", living.getAirSupply());
             result.addProperty("maxAirSupply", living.getMaxAirSupply());
             var attributes = new JsonObject();

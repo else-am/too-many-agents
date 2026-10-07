@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.mojang.authlib.GameProfile;
+import com.mojang.datafixers.util.Either;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
@@ -24,6 +25,7 @@ import net.minecraft.server.network.Filterable;
 import net.minecraft.server.network.TextFilter;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.StringUtil;
+import net.minecraft.util.Unit;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
@@ -31,6 +33,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ExperienceOrb;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.player.Player.BedSleepingProblem;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
@@ -56,6 +60,7 @@ import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.phys.AABB;
@@ -66,6 +71,7 @@ import net.neoforged.neoforge.common.CommonHooks;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.common.util.FakePlayer;
 import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
+import net.neoforged.neoforge.event.EventHooks;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 
 import java.nio.charset.StandardCharsets;
@@ -78,10 +84,12 @@ import java.util.HashSet;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Native player interactions for one visible body. Never added to the world or player list. */
 final class AgentHands extends FakePlayer {
     private final Mob body;
+    private final Supplier<BodyBox> bodyBox;
     private final EnumMap<EquipmentSlot, ItemStack> previousEquipment = new EnumMap<>(EquipmentSlot.class);
     private BlockPos miningPos;
     private BlockState miningState;
@@ -108,10 +116,13 @@ final class AgentHands extends FakePlayer {
     private int selectedTrade;
     private boolean closed;
 
-    AgentHands(Mob body) {
+    AgentHands(Mob body) { this(body, () -> null); }
+
+    AgentHands(Mob body, Supplier<BodyBox> bodyBox) {
         super((ServerLevel) body.level(), new GameProfile(UUID.nameUUIDFromBytes(
             ("too_many_agents-hands:" + body.getUUID()).getBytes(StandardCharsets.UTF_8)), "[TooManyAgents]"));
         this.body = body;
+        this.bodyBox = bodyBox;
         requireThread();
         syncBody();
         restore();
@@ -152,6 +163,7 @@ final class AgentHands extends FakePlayer {
         if (tick == lastHandsTick) return;
         lastHandsTick = tick;
         tickCount++;
+        if (body.isSleeping() && level().isDay()) wakeBody();
         if (takeXpDelay > 0) takeXpDelay--;
         getCooldowns().tick();
         tickEffects();
@@ -371,6 +383,65 @@ final class AgentHands extends FakePlayer {
             net.minecraft.sounds.SoundSource.NEUTRAL, 0.5F, 1.0F);
         body.gameEvent(GameEvent.ITEM_INTERACT_START);
         return InteractionResult.CONSUME;
+    }
+
+    @Override
+    public Either<BedSleepingProblem, Unit> startSleepInBed(BlockPos pos) {
+        syncBody();
+        requireIdleHands();
+        var state = level().getBlockState(pos);
+        var problem = sleepProblem(pos, state);
+        var result = problem == null
+            ? Either.<BedSleepingProblem, Unit>right(Unit.INSTANCE)
+            : Either.<BedSleepingProblem, Unit>left(problem);
+        result = EventHooks.canPlayerStartSleeping(this, pos, result);
+        if (result.left().isPresent()) return result;
+        // A mod's sleep event cannot bypass the body ownership/movement boundary.
+        requireSleepBounds(new Vec3(pos.getX() + 0.5, pos.getY() + 0.6875, pos.getZ() + 0.5));
+        body.startSleeping(pos);
+        return result;
+    }
+
+    private BedSleepingProblem sleepProblem(BlockPos pos, BlockState state) {
+        if (body.isSleeping() || !body.isAlive() || !state.isBed(level(), pos, body)) return BedSleepingProblem.OTHER_PROBLEM;
+        if (!level().dimensionType().natural()) return BedSleepingProblem.NOT_POSSIBLE_HERE;
+        var direction = state.getBedDirection(level(), pos);
+        var foot = pos.relative(direction.getOpposite());
+        boolean inRange = false;
+        for (var part : List.of(pos, foot)) {
+            var delta = body.position().subtract(Vec3.atBottomCenterOf(part));
+            if (Math.abs(delta.x) <= 3 && Math.abs(delta.y) <= 2 && Math.abs(delta.z) <= 3) inRange = true;
+        }
+        if (!inRange) return BedSleepingProblem.TOO_FAR_AWAY;
+        if (!freeAt(pos.above()) || !freeAt(foot.above())) return BedSleepingProblem.OBSTRUCTED;
+        if (level().isDay()) return BedSleepingProblem.NOT_POSSIBLE_NOW;
+        if (!isCreative() && !level().getEntitiesOfClass(Monster.class,
+                new AABB(Vec3.atBottomCenterOf(pos), Vec3.atBottomCenterOf(pos)).inflate(8, 5, 8),
+                monster -> monster != body && monster.isPreventingPlayerRest(this)).isEmpty())
+            return BedSleepingProblem.NOT_SAFE;
+        return null;
+    }
+
+    private void requireSleepBounds(Vec3 position) {
+        var bounds = bodyBox.get();
+        if (!serverLevel().hasChunkAt(BlockPos.containing(position))
+            || !serverLevel().getWorldBorder().isWithinBounds(BlockPos.containing(position))
+            || bounds != null && (!bounds.dimension().equals(level().dimension().location().toString()) || !bounds.holds(position)))
+            throw error("sleep_position_outside_body_boundary");
+    }
+
+    JsonObject wakeBody() {
+        syncBody();
+        if (!body.isSleeping()) throw error("already_awake");
+        var pos = body.getSleepingPos().orElseThrow();
+        var state = level().getBlockState(pos);
+        if (state.isBed(level(), pos, body)) {
+            var stand = BedBlock.findStandUpPosition(body.getType(), level(), pos,
+                state.getBedDirection(level(), pos), body.getYRot()).orElse(Vec3.atBottomCenterOf(pos.above()).add(0, 0.1, 0));
+            requireSleepBounds(stand);
+        }
+        body.stopSleeping();
+        return status("awake");
     }
 
     void beginFishing() {

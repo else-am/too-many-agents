@@ -180,6 +180,7 @@ export function createBot(initial) {
       const fresh = !entity || entity.uuid !== source.uuid;
       if (fresh) entity = bot.entities[source.id] = new Entity(source.id);
       const moved = !entity.position.equals(source.position);
+      const slept = !!entity.isSleeping;
       const attributesChanged = !fresh && JSON.stringify(entity.attributes) !== JSON.stringify(source.attributes);
       let equipmentChanged = false;
       const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, ...fields } = source;
@@ -206,6 +207,10 @@ export function createBot(initial) {
       if (source.id === next.body.id) bot.entity = entity;
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
+      if (!fresh && slept !== !!entity.isSleeping) {
+        entityEvents.push([entity.isSleeping ? 'entitySleep' : 'entityWake', entity]);
+        if (source.id === next.body.id) entityEvents.push([entity.isSleeping ? 'sleep' : 'wake']);
+      }
       if (attributesChanged) entityEvents.push(['entityAttributes', entity]);
       if (!fresh && equipmentChanged) entityEvents.push(['entityEquip', entity]);
     }
@@ -223,6 +228,7 @@ export function createBot(initial) {
       entity.passengers = (source.passengers ?? []).map(id => bot.entities[id]);
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
+    bot.isSleeping = !!bot.entity.isSleeping;
     const previousVehicle = bot.vehicle;
     bot.vehicle = bot.entity.vehicle;
     if (streamed && previousVehicle !== bot.vehicle) {

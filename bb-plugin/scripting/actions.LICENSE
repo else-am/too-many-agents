@@ -1,5 +1,5 @@
 Public orchestration adapted from mineflayer 4.39.0:
-lib/plugins/digging.js, generic_place.js, place_block.js, place_entity.js, inventory.js, entities.js and physics.js.
+lib/plugins/digging.js, generic_place.js, place_block.js, place_entity.js, inventory.js, entities.js, physics.js and bed.js.
 Native body geometry, authoritative action/state and scoped cancellation are local.
 
 The MIT License (MIT)

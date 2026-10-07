@@ -6,11 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Last built and live-validated implementation: **`880c87b`**.
+- Latest focused live-validated implementation: **`8bfa67e`** (fishing and boat controls); earlier broad workflows passed on `880c87b`.
 - Built artifact: `build/libs/too-many-agents-0.9.0.jar`.
-- Validated JAR SHA-256: `b0448ff51ff20ac5e360ab1aa7e17c8b87cdfa65ed1a7b779ef33587a7f56614`.
-- **Fishing implementation `fc483c4` passes the full Java/plugin/package build; its first native run verified replacement cleanup, but stopped on an incorrect test assertion before a catch.** The build output may be newer than the last validated JAR hash above; do not confuse the two. See the fishing handoff below.
-- Latest test JVM `39428` was stopped after a server iterator stall. **Saving this run was not confirmed**; re-observe fixtures after restart. Root owns lifecycle while rebuilding. Earlier `880c87b` persistence evidence remains valid.
+- Latest validated JAR SHA-256: `8cf9ecdba7664b0d364eeef73f6c1a86ade502b7c567508ddd3d43c2e35f6430`.
+- Test JVM `45456` saved/disconnected successfully and was stopped. Root owns lifecycle. New sleep/wake source passes the full build; native verification is pending.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -65,7 +64,8 @@ These are focused results, not proof of the whole API.
 - [x] Fishing action and body-aware hook adapter compile with Java 21; JavaScript syntax passes.
 - [x] Fishing replacement interruption and script cleanup: the native hooks were removed and the rod remained unchanged (`fc483c4`).
 - [x] Fishing corrected replacement sequence: distinct hooks, at most one active, predecessor rejected with the cancellation code; second attempt retrieved naturally. Bobber/line framebuffer inspected.
-- [ ] Fishing post-retrieval progress, loot/XP/durability and cleanup on the rebuilt iterator fix. The prior run stalled after retrieval; it is not a full pass.
+- [x] Rebuilt fishing check: salmon +1, rod damage 0→1, XP 1516→1517, hook removed and 20 further world/physics ticks advanced; independently verified native inventory/XP.
+- [x] Boat forward/turn/zero-input coasting/manual controls and dismount verified. Native mobs may reboard a nearby boat after the ordinary 60-tick cooldown; move clear to remain dismounted.
 - [ ] Exhaustive native conformance, all body species, all lifecycle combinations and paired live Mineflayer-server comparisons.
 
 Key evidence (local BB thread storage):
@@ -74,18 +74,21 @@ Key evidence (local BB thread storage):
 - [Persistence, combat and entity placement](</Users/scott/.bb/thread-storage/thr_xykqkgui57/combat-focused-summary.json>)
 - [Movement, jump, eating and shield use](</Users/scott/.bb/thread-storage/thr_xykqkgui57/eede028-focused-summary.json>)
 - [Final fixes, signs and player/game state](</Users/scott/.bb/thread-storage/thr_xykqkgui57/880c87b-final-focused-summary.json>)
-- [Fishing replacement/retrieval/rendering and iterator stall](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-fishing-summary.json>)
+- [Fishing replacement/retrieval/rendering and historical iterator stall](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-fishing-summary.json>)
+
+[Fishing fix and boat steering evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/8bfa67e-fishing-boat-summary.json>).
 
 Earlier failed mount/potion checks are superseded by the final successful build. Post-script shield release was expected cleanup, not a production defect. Several test failures were fixture mistakes; do not treat every historical failure as an unresolved product bug.
 
 ## Still to implement or finish
 
 - [x] **Fishing implementation:** scoped action, native bite/retrieval/loot, cancellation and a body-aware hook with native renderer.
-- [ ] **Fishing verification:** actual catch, loot/XP/durability, rendering and scoped cancellation.
+- [x] **Fishing focused verification:** actual catch, loot/XP/durability, rendering and scoped cancellation; iterator stall fixed and retested.
 - [x] **Boat steering implementation:** `moveVehicle` and manual inputs use the native boat controller, enforce controlling-seat ownership and clear inputs on release. Java/plugin/package build passed.
-- [ ] **Vehicle steering verification and other mounts:** boat movement/turning/release await the focused live check. Horses, pigs, striders and minecarts remain implementation work.
+- [ ] **Vehicle steering verification and other mounts:** basic boat movement/turning/release passed; boundary and passenger-ownership edge cases remain unverified. Horses, pigs, striders and minecarts remain implementation work.
 - [ ] **Creative gameplay API:** arbitrary item/component setters and remaining creative movement APIs. Existing physical `creative_item` is not the full Mineflayer creative API.
-- [ ] **Bed/sleep/wake and remaining body-specific gameplay:** determine truthful native-body behavior without inventing player hunger or other unavailable state.
+- [x] **Bed/sleep/wake implementation:** actual body sleep, native bed occupancy, wake, parsed bed metadata and sleep/wake events; full build passed.
+- [ ] **Bed/sleep/wake verification:** native body pose/occupancy, event-state ordering and wake remain unverified. Native Mob sleep does not add a player or establish player respawn/night-skipping. Remaining body-specific gameplay stays pending.
 - [ ] **Chat gameplay API:** sending/receiving, patterns and related events. Ported ChatMessage formatting is not the chat transport/API.
 - [ ] **World/chunk API:** remaining applicable world/chunk methods and load events. Current synchronous observations cover a bounded **33×17×33** region; missing/unloaded cells are not known air.
 - [ ] **Events and observations:** remaining entity/effect/damage/animation/collection, sound/particle/explosion, spawn, scoreboard/team/boss-bar/title/tab-list and other public events/data. Audit applicability; do not silently exclude them.
@@ -101,7 +104,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 
 Connection/account setup and Mineflayer's internal packet client are the agreed inapplicable pieces. Multiplayer and arbitrary third-party plugin compatibility are not promised. Other unclear APIs remain pending review rather than automatically excluded. Use [the catalog guide](tools/mineflayer-reference/README.md) and pinned source to find omissions; this grouped checklist is not the complete declaration inventory.
 
-## Fishing: resume here
+## Fishing implementation and resolved stall
 
 Implementation files:
 
@@ -115,15 +118,15 @@ Implementation files:
 
 The player-owner constraint now has an implementation: the server keeps the existing body-owned interaction proxy, while a client-only, unregistered render adapter follows the actual body. No network player or account is created. The hook excludes the visible body/vehicle from its own collision and retains native fishing timing, loot, XP and rod damage. Its launch uses Minecraft's projectile helper rather than copying exact player casting coordinates.
 
-**Current:** the corrected `fc483c4` test passed cancellation/replacement and natural retrieval, then the server stopped advancing during pickup. Cancellation errors use `error.code === "FishingAborted"`, with `name === "ActionError"`; upstream itself uses a plain Error. The first test incorrectly asserted the name and stopped before a catch. [First-run evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-fishing-summary.json>).
+**Earlier failure:** the corrected `fc483c4` test passed cancellation/replacement and natural retrieval, then the server stopped advancing during pickup. Cancellation errors use `error.code === "FishingAborted"`, with `name === "ActionError"`; upstream itself uses a plain Error. The first test incorrectly asserted the name and stopped before a catch. [First-run evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-fishing-summary.json>).
 
-**Known blocker, fix committed as `6e293c7` (build passed; live verification pending):** the server thread spins in `GameAccess.tick` while iterating the live entity collection. Fishing changes that collection by removing hooks and adding loot. The fix collects bodies before executing their actions, so world mutations cannot invalidate the active iterator. [Thread dump](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-thread-dump.txt>).
+**Resolved blocker, fix committed as `6e293c7` (build and live catch/pickup passed):** the server thread spun in `GameAccess.tick` while iterating the live entity collection. Fishing changes that collection by removing hooks and adding loot. The fix collects bodies before executing their actions, so world mutations cannot invalidate the active iterator. [Thread dump](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-thread-dump.txt>).
 
-**Next:** use the newly built package to verify post-retrieval progress and actual loot/XP/durability once. Confirm the bobber and line render, native loot/XP and durability change, and cancellation removes only this body's hook. Compilation alone does not establish those outcomes. Access-transformed artifacts have been regenerated successfully.
+**Verified:** `8bfa67e` completed a natural catch and continued ticking after pickup. No fishing rerun is needed unless its implementation changes. Rendering/replacement evidence comes from the earlier focused run; loot/XP/durability and the stall fix from the rebuilt run.
 
 ## Additional work in progress
 
-Boat steering source was added after the fishing build: `actions.mjs`, `AgentActions.java`, a `Boat.controlBoat()` access transformer, and [prewritten scenarios](tools/mineflayer-reference/vehicle-native-scenarios.md). It uses native steering/physics, requires the actual body to control the boat, clears inputs on release, and enforces loaded/world/body-box boundaries. **Java/plugin/package build passed; live steering remains unverified.** The next focused test uses both this adapter and the fishing iterator fix. Other mount types remain pending.
+Boat steering source was added after the fishing build: `actions.mjs`, `AgentActions.java`, a `Boat.controlBoat()` access transformer, and [prewritten scenarios](tools/mineflayer-reference/vehicle-native-scenarios.md). It uses native steering/physics, requires the actual body to control the boat, clears inputs on release, and enforces loaded/world/body-box boundaries. **Java/plugin/package build and basic live steering passed.** Other mount types and the listed boundary/ownership cases remain pending. Sleep/wake is built but not yet live-verified; see [its scenarios](tools/mineflayer-reference/beds-native-scenarios.md).
 
 ## Working approach and logistics
 

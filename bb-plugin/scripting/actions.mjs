@@ -319,6 +319,31 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     })();
     return active.done;
   };
+  bot.isABed = block => !!block && /^(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_bed$/.test(block.name);
+  bot.parseBedMetadata = block => {
+    need(bot.isABed(block), 'InvalidBed', 'wrong block : not a bed block');
+    const properties = block.getProperties();
+    const facing = ['south', 'west', 'north', 'east'].indexOf(properties.facing);
+    need(facing >= 0, 'InvalidBed', 'Unknown bed orientation');
+    return { part: properties.part === 'head', occupied: properties.occupied,
+      facing, headOffset: [new Vec3(0,0,1), new Vec3(-1,0,0), new Vec3(0,0,-1), new Vec3(1,0,0)][facing] };
+  };
+  bot.sleep = async block => {
+    need(!bot.isSleeping, 'AlreadySleeping', 'already sleeping');
+    const metadata = bot.parseBedMetadata(block);
+    need(!metadata.occupied, 'BedOccupied', 'the bed is occupied');
+    const storm = bot.isRaining && bot.thunderState > 0;
+    need(storm || bot.time.timeOfDay >= 12541 && bot.time.timeOfDay <= 23458, 'SleepTime', "it's not night and it's not a thunderstorm");
+    const target = observed(block);
+    bot.clearControlStates();
+    await perform({ type: 'interact', ...target });
+    need(bot.isSleeping, 'SleepRejected', 'Native body did not enter sleep');
+  };
+  bot.wake = async () => {
+    need(bot.isSleeping, 'AlreadyAwake', 'already awake');
+    await perform({ type: 'wake' });
+    need(!bot.isSleeping, 'WakeRejected', 'Native body remained asleep');
+  };
   bot.fish = () => {
     const previous = activeFishing;
     cancel(previous);

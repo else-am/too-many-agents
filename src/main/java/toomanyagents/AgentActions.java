@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
@@ -57,7 +57,7 @@ final class AgentActions {
         this.session = session;
         this.box = box;
         this.player = player;
-        hands = new AgentHands(mob);
+        hands = new AgentHands(mob, box);
         ambient = new AmbientBehavior(mob);
     }
 
@@ -147,6 +147,8 @@ final class AgentActions {
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
         if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw error("release_manual_controls_before_navigation");
+        if (mob.isSleeping() && (type.equals("route") || type.equals("walk")
+            || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw error("wake_before_movement");
         if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw error("dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
@@ -351,6 +353,7 @@ final class AgentActions {
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
                     ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "wake" -> finish("completed", "awake", hands.wakeBody());
                 case "fish" -> {
                     if (ticks == 1) hands.beginFishing();
                     action.addProperty("phase", "waiting_for_bite");
@@ -433,7 +436,8 @@ final class AgentActions {
             else throw failure;
         } finally {
             if (scripted() && !travelled) {
-                if (!heldControls.isEmpty()) applyControls();
+                if (mob.isSleeping()) clearControls();
+                else if (!heldControls.isEmpty()) applyControls();
                 tickVehicleControls();
                 GameAccess.travelFollowingBody(mob, box.get());
             }
