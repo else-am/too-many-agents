@@ -1438,17 +1438,6 @@ public final class AgentChatScreen extends Screen {
 
     private void rebuildTranscript() {
         if(font==null)return;
-        // Existing screens do not run field initializers when classes are hot reloaded.
-        if (questionDrafts == null) questionDrafts = new java.util.HashMap<>();
-        if (respondingRequests == null) respondingRequests = new java.util.HashSet<>();
-        if (requestErrors == null) requestErrors = new java.util.HashMap<>();
-        if (questionFields == null) questionFields = new java.util.HashMap<>();
-        if (focusedQuestion == null) focusedQuestion = "";
-        if(messageBubbles==null) {
-            messageBubbles=new ArrayList<>();
-            transcriptKey="";
-        }
-        if(queueControls==null) { queueControls=new ArrayList<>(); transcriptKey=""; }
         String key=loadedSequence+":"+queryVersion+":"+contentWidth+":"+maxImageHeight()+":"+chatImages.layoutVersion()+":"+working()+":"+AgentModels.queuedMessages(state)+":"+AgentModels.text(state,"canSteer")+":"+images()+":"+pointing+":"+composerFeedback()+":"+requestKey+":"+respondingRequests+":"+requestErrors;
         if(key.equals(transcriptKey))return;
         if(selectingText)return;
@@ -1996,8 +1985,6 @@ public final class AgentChatScreen extends Screen {
             closePicker();
             if (onAnchor) return true;
         }
-        // Rebind existing widgets after HotSwap, which can invalidate old lambda methods.
-        composer.setValueListener(this::draftChanged);
         if(button==0 && mouseX>=left+4 && mouseX<left+contentWidth-8 && mouseY>=transcriptTop+4 && mouseY<transcriptBottom-4 && !lines.isEmpty()) {
             pressedMedia=mediaAt(mouseX,mouseY);
             if(pressedMedia!=null){clearSelection();return true;}
@@ -2126,7 +2113,6 @@ public final class AgentChatScreen extends Screen {
             && key != GLFW.GLFW_KEY_TAB && key != GLFW.GLFW_KEY_ESCAPE) {
             return field.keyPressed(key, scanCode, modifiers);
         }
-        composer.setValueListener(this::draftChanged);
         if(key == GLFW.GLFW_KEY_V && ChatInput.shortcut(modifiers)) {
             selectingText=false;
             selectionAnchor=selectionEnd=null;

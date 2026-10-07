@@ -10,6 +10,7 @@ base.archivesName = 'too-many-agents'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
+def clientGameDirectory = file(providers.gradleProperty('personalDev').isPresent() ? 'run/play' : 'run')
 repositories { mavenCentral() }
 def imageLibraries = ['com.twelvemonkeys.imageio:imageio-webp', 'com.twelvemonkeys.imageio:imageio-core',
     'com.twelvemonkeys.imageio:imageio-metadata', 'com.twelvemonkeys.common:common-lang',
@@ -30,7 +31,7 @@ dependencies {
     }
 }
 def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
-    delete fileTree('run/mods') { include 'too-many-agents*.jar' }
+    delete fileTree(new File(clientGameDirectory, 'mods')) { include 'too-many-agents*.jar' }
 }
 // A fresh test run starts muted, without the narrator prompt or tutorial toasts.
 // Existing options are left alone.
@@ -63,11 +64,7 @@ neoForge {
             client()
             systemProperty 'too_many_agents.devPlugin', project.file('bb-plugin').absolutePath
             taskBefore cleanStagedTooManyAgents
-            if (providers.gradleProperty('hotReload').isPresent()) {
-                gameDirectory = project.file(providers.gradleProperty('hotReloadTest').isPresent() ? 'run' : 'run/play')
-                jvmArgument '-XX:+AllowEnhancedClassRedefinition'
-                jvmArgument '-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:0'
-            }
+            gameDirectory = clientGameDirectory
             if (providers.gradleProperty('devWorld').isPresent()) {
                 taskBefore quietTestOptions
                 systemProperty 'too_many_agents.devWorld', 'true'
@@ -96,26 +93,6 @@ if (!packagedJarRun) {
             additionalRuntimeClasspath "org.commonmark:${artifact}:0.30.0"
         }
         additionalRuntimeClasspath 'org.nibor.autolink:autolink:0.12.0'
-    }
-}
-
-// Prepare NeoForge's normal launch, then let tools/dev own the JVM so Gradle is
-// free to compile changes while Minecraft stays open.
-if (providers.gradleProperty('hotReload').isPresent()) {
-    tasks.named('runClient') {
-        doFirst {
-            classpath(classpathProvider)
-            def launchCommand = [javaLauncher.get().executablePath.asFile.absolutePath] + allJvmArgs +
-                jvmArgumentProviders.collectMany { it.asArguments().toList() } +
-                ['-cp', classpath.asPath, mainClass.get()] + args +
-                argumentProviders.collectMany { it.asArguments().toList() }
-            def launch = [command: launchCommand, environment: environmentProperty.get(),
-                          directory: gameDirectory.get().asFile.absolutePath]
-            def output = layout.buildDirectory.file('hot-reload/launch.json').get().asFile
-            output.parentFile.mkdirs()
-            output.text = groovy.json.JsonOutput.toJson(launch)
-            throw new StopExecutionException('Launch prepared for tools/dev')
-        }
     }
 }
 

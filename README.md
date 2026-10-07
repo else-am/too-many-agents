@@ -186,7 +186,7 @@ See [AGENTS.md](AGENTS.md) for development rules and packaged-JAR verification,
 and [TODO.md](TODO.md) for outstanding work.
 
 ```sh
-tools/dev --test                         # hot reload in the guarded run/ test world
+tools/dev --test                         # build and launch the guarded run/ test world
 tools/dev                                # personal development game in run/play/
 ```
 
@@ -198,10 +198,10 @@ background connection checks do not keep attempting it. Development does not cha
 for automatic updates in packaged games. Newer plugins still require explicit
 confirmation before a downgrade. Packaged-JAR runs do not enable development mode.
 
-`tools/dev` needs a JetBrains Runtime 21 with enhanced HotSwap; it finds Android
-Studio or IntelliJ's bundled runtime, or uses `TMA_DEV_JAVA_HOME`. Saving supported
-Java edits compiles and reloads them. Resources, surface prompts, mixins, build
-files, BB plugin changes and live callback owners require a restart; the terminal reports this.
+`tools/dev` uses Java 21 through `tools/build`; no special JetBrains runtime is
+needed. After changing Java, resources, or the BB plugin, close Minecraft normally
+and rerun `tools/dev` (or `tools/dev --test`). Each launch builds the current code;
+there is no file watcher, debugger, or live class replacement.
 `tools/Play.command` opens the personal development game on macOS.
 
 ```sh
