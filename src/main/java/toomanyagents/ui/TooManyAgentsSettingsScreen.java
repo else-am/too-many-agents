@@ -21,6 +21,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     private final BbSetup setup = BbSetup.get();
     private BbSetup.View bb = setup.view();
     private String bbPath = BbSetup.locationLabel(bb.cli());
+    private long bbPathApplyAt;
     private boolean details, choosing, confirmInstall;
 
     public TooManyAgentsSettingsScreen(Screen parent) { this(parent, null); }
@@ -105,9 +106,17 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         }
         if (details || bb.needsLocation()) {
             note("If detection fails, select your BB app or executable. You can also paste or drop its path here.");
-            input("BB app location", bbPath, 4096, value -> bbPath = value, enabled && !choosing);
-            actions("", "Browse…", this::browseBb, "Use this BB", () -> setup.chooseCli(bbPath), enabled && !choosing);
+            input("BB app location", bbPath, 4096, value -> {
+                bbPath = value;
+                bbPathApplyAt = System.currentTimeMillis() + 700;
+            }, enabled && !choosing);
+            action("", "Browse…", this::browseBb, enabled && !choosing);
         }
+    }
+
+    private void useBbPath() {
+        bbPathApplyAt = 0;
+        if (!bbPath.equals(BbSetup.locationLabel(setup.view().cli()))) setup.chooseCli(bbPath);
     }
 
     private void browseBb() {
@@ -115,7 +124,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         CompletableFuture.supplyAsync(() -> TinyFileDialogs.tinyfd_openFileDialog("Choose BB app or executable", bbPath, null, null, false))
             .whenComplete((chosen, failure) -> minecraft.execute(() -> {
                 choosing = false;
-                if (chosen != null) { bbPath = chosen; setup.chooseCli(bbPath); }
+                if (chosen != null) { bbPath = chosen; useBbPath(); }
                 if (failure != null) feedback = "Could not open the file picker. Paste the BB path instead.";
                 rebuildForm();
             }));
@@ -123,12 +132,13 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
 
     @Override public void onFilesDrop(List<Path> files) {
         if ((details || bb.needsLocation()) && files.size() == 1 && !bb.busy()) {
-            bbPath = files.getFirst().toString(); setup.chooseCli(bbPath); rebuildForm();
+            bbPath = files.getFirst().toString(); useBbPath(); rebuildForm();
         }
     }
 
     @Override public void tick() {
         super.tick();
+        if (bbPathApplyAt != 0 && System.currentTimeMillis() >= bbPathApplyAt && !choosing && !setup.view().busy()) useBbPath();
         var latest = setup.view();
         if (!latest.equals(bb)) {
             boolean unchanged = bbPath.equals(BbSetup.locationLabel(bb.cli()));
@@ -143,5 +153,8 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     // Linked screens return to whatever holds this form.
     private Screen back() { return docked() ? minecraft.screen : this; }
 
-    @Override public void onClose() { leave(parent); }
+    @Override public void onClose() {
+        if (bbPathApplyAt != 0) useBbPath();
+        leave(parent);
+    }
 }
