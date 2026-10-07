@@ -12,6 +12,7 @@ import { installPathfinder } from './pathfinder.mjs';
 import { createRecipeFactory, installRecipeQueries } from './recipes.mjs';
 import { createChatMessageClass } from './chat.mjs';
 import { createEntityClass } from './entities.mjs';
+import { installInventory } from './inventory.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -44,7 +45,6 @@ export function createBot(initial) {
   const equipmentKeys = new WeakMap();
   let snapshot;
   let lastPhysicsTick;
-  let nextQuickBarSlot = 0;
   const stateWaits = new Set();
   const vector = ({ x, y, z }) => new Vec3(x, y, z);
   const item = entry => {
@@ -98,26 +98,10 @@ export function createBot(initial) {
       return found.slice(0, count);
     },
     findBlock(options) { const [position] = bot.findBlocks({ ...options, count: 1 }); return position ? bot.blockAt(position) : null; },
-    async equip(itemOrId, destination = 'hand') {
-      if (!destination) destination = 'hand';
-      const destinations = { hand: 'mainhand', 'off-hand': 'offhand', head: 'head', torso: 'chest', legs: 'legs', feet: 'feet' };
-      if (!destinations[destination]) throw new Error(`Invalid destination ${destination}`);
-      const selected = typeof itemOrId === 'number' ? bot.inventory.items().find(item => item.type === itemOrId) : itemOrId;
-      if (!selected || !Number.isInteger(selected.slot)) throw new Error('Item is not in the inventory');
-      const slot = selected.slot >= 36 && selected.slot <= 44 ? selected.slot - 36 : selected.slot === 45 ? 40 : selected.slot < 9 ? 44 - selected.slot : selected.slot;
-      let hotbar;
-      if (destination === 'hand') {
-        if (selected.slot >= 36 && selected.slot <= 44) hotbar = selected.slot - 36;
-        else {
-          hotbar = bot.inventory.slots.slice(36, 45).findIndex(stack => stack === null);
-          if (hotbar === -1) { hotbar = nextQuickBarSlot; nextQuickBarSlot = (nextQuickBarSlot + 1) % 9; }
-        }
-      }
-      await action({ type: 'equip', slot, equipment: destinations[destination], hotbar });
-    },
     async dig(block, forceLook = true, digFace = 'auto') {
       if (block == null) throw new Error('dig was called with an undefined or null block');
       if (forceLook !== true || digFace !== 'auto') throw new Error('dig look/face options are pending implementation');
+      await inventory.drainControls();
       await action({ type: 'mine', position: block.position });
     },
     // Adapted from Mineflayer 4.39.0 physics.js; see mineflayer.LICENSE.
@@ -252,7 +236,7 @@ export function createBot(initial) {
         progress: next.hands.experience.progress, points: next.hands.experience.total });
     }
     const heldBefore = bot.heldItem;
-    bot.quickBarSlot = next.hands.selected;
+    bot.quickBarSlot = inventory.selection() ?? next.hands.selected;
     const menu = next.hands.menu;
     const inventorySlots = Array.from({ length: 46 }, () => null);
     for (const entry of next.hands.inventory) {
@@ -278,6 +262,7 @@ export function createBot(initial) {
     bot.entity.equipment = [bot.heldItem, bot.inventory.slots[45], bot.inventory.slots[8],
       bot.inventory.slots[7], bot.inventory.slots[6], bot.inventory.slots[5]];
     bot.usingHeldItem = next.hands.usingItem;
+    inventory.syncWindow(bot.currentWindow ?? bot.inventory, menu);
     // A native frame changes all slots/cursor together. Listeners must see the
     // complete inventory and container state, including held equipment.
     for (const [window, slot, before, after] of windowEvents) {
@@ -322,10 +307,23 @@ export function createBot(initial) {
     }
     return events;
   }
+  const inventory = installInventory(bot, { action, snapshot: () => snapshot,
+    isKnownActionError: error => error instanceof NativeActionError,
+    assertActive() {
+      if (snapshot.session !== initial.session || snapshot.body.uuid !== initial.body.uuid || !bot.entity.isValid)
+        throw new Error('Script body or world session changed');
+    },
+  });
   update(initial);
   lastPhysicsTick = initial.tick;
-  installPathfinder(bot, { request, waitForActionState, snapshot: () => snapshot });
+  installPathfinder(bot, {
+    async request(operation, value) {
+      if (operation === 'action') await inventory.drainControls();
+      return request(operation, value);
+    },
+    waitForActionState, snapshot: () => snapshot,
+  });
   installRecipeQueries(bot, recipeFactory);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
-    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update };
+    MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls: inventory.drainControls };
 }

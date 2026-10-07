@@ -25,6 +25,7 @@ licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), '
 licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chat.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
 licenses.push('Mineflayer 4.39.0: adapted waitForTicks implementation\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
