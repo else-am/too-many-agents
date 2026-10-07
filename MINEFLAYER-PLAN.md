@@ -75,6 +75,8 @@ This is a feasibility question, not a predetermined rewrite. Explain the finding
 
 The source-only feasibility review supports reusing upstream AStar, heap, Move, goals, and movement-policy logic in QuickJS. Adapt movement generation to actual body dimensions and use bounded native execution of the selected route edges; unrestricted native waypoint navigation cannot enforce Pathfinder's route policies. Continuous ordered state updates and stable entity objects are prerequisites for dynamic goals and events. Preserve documented behavior over reproduced upstream defects, recording explicit differential exceptions: pinned `goto` can resolve an empty `noPath` result, and `GoalBreakBlock.isEnd` omits the node argument. Neither defect justifies dropping an API.
 
+Live water checks also exposed upstream planning gaps: its landing scan skips an immediately adjacent water cell, and it omits vertical swimming edges. Correct these explicitly, retaining native swimming capabilities, collision clearance, movement policies, and ordinary physics. Native completion must satisfy the selected logical cell; completing a full route elsewhere must fail instead of repeating the route indefinitely.
+
 ### 4. Expand in coherent, verified groups
 
 Work through observations and API objects; basic physical actions; navigation; containers and crafting; then remaining applicable gameplay features and events. Reorder groups when dependencies or evidence justify it, keeping the compatibility target unchanged.
