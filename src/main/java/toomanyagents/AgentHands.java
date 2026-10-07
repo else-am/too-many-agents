@@ -7,6 +7,7 @@ import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -19,6 +20,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.network.Filterable;
+import net.minecraft.server.network.TextFilter;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.StringUtil;
 import net.minecraft.world.InteractionHand;
@@ -36,7 +39,10 @@ import net.minecraft.world.inventory.CraftingMenu;
 import net.minecraft.world.inventory.MerchantMenu;
 import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.world.item.context.BlockPlaceContext;
+import net.minecraft.world.item.component.WritableBookContent;
+import net.minecraft.world.item.component.WrittenBookContent;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.ClipContext;
@@ -54,7 +60,11 @@ import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerContainerEvent;
 
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.EnumMap;
+import java.util.HexFormat;
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -617,6 +627,71 @@ final class AgentHands extends FakePlayer {
         selectedTrade = index;
         merchant.tryMoveItems(index);
         containerMenu.broadcastChanges();
+        save();
+        return menuSnapshot();
+    }
+
+    /** Null title writes; a nonnull title signs with this native player's identity. */
+    JsonObject editBook(int expectedMenuId, long expectedGeneration, int inventorySlot,
+                        String expectedItemKey, List<String> pages, String title) {
+        checkMenuAction(expectedMenuId, expectedGeneration);
+        if ((inventorySlot < 0 || inventorySlot > 8) && inventorySlot != 40)
+            throw error("invalid_book_slot");
+        if (inventorySlot != 40 && getInventory().selected != inventorySlot)
+            throw error("book_slot_not_selected");
+        if (expectedItemKey == null || !expectedItemKey.matches("[0-9a-f]{64}"))
+            throw error("invalid_book_item_key");
+        if (pages == null || pages.size() > WritableBookContent.MAX_PAGES)
+            throw error("invalid_book_pages");
+        int pageLimit = title == null ? WritableBookContent.PAGE_EDIT_LENGTH : 8192;
+        for (var page : pages) {
+            if (page == null || page.length() > pageLimit) throw error("invalid_book_page_length");
+        }
+        if (title != null && title.length() > WrittenBookContent.TITLE_MAX_LENGTH)
+            throw error("invalid_book_title_length");
+
+        var book = getInventory().getItem(inventorySlot);
+        if (!book.is(Items.WRITABLE_BOOK)) throw error("not_a_writable_book");
+        if (!book.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
+        // Singleplayer uses this exact pass-through filter. Do not bypass a custom
+        // filter or start an asynchronous edit that escapes the action barrier.
+        if (getTextFilter() != TextFilter.DUMMY) throw error("book_text_filter_requires_async_support");
+        var items = new ScriptItems(serverLevel());
+        String actualKey;
+        try {
+            actualKey = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(items.wire(book).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException unavailable) {
+            throw new IllegalStateException("book_item_hash_unavailable", unavailable);
+        }
+        if (!actualKey.equals(expectedItemKey)) throw error("book_item_changed");
+
+        // Prepare and validate on a copy: packet limits are looser than native
+        // component/save codecs. No rejection below may leave a half-edited book.
+        var updated = title == null ? book.copy() : book.transmuteCopy(Items.WRITTEN_BOOK);
+        if (title == null) {
+            updated.set(DataComponents.WRITABLE_BOOK_CONTENT,
+                new WritableBookContent(pages.stream().map(Filterable::passThrough).toList()));
+        } else {
+            updated.remove(DataComponents.WRITABLE_BOOK_CONTENT);
+            var content = pages.stream().map(page -> Filterable.<Component>passThrough(Component.literal(page))).toList();
+            updated.set(DataComponents.WRITTEN_BOOK_CONTENT,
+                new WrittenBookContent(Filterable.passThrough(title), getName().getString(), 0, content, true));
+        }
+        try {
+            // Use the save codec directly; the convenience save() wrapper logs
+            // complete component data on failure, which could include book text.
+            ItemStack.CODEC.encodeStart(registryAccess().createSerializationContext(NbtOps.INSTANCE), updated)
+                .getOrThrow(message -> error("invalid_book_components"));
+            items.wire(updated);
+        } catch (RuntimeException invalid) {
+            throw error("invalid_book_components");
+        }
+        if (title == null) book.set(DataComponents.WRITABLE_BOOK_CONTENT, updated.get(DataComponents.WRITABLE_BOOK_CONTENT));
+        else getInventory().setItem(inventorySlot, updated);
+        getInventory().setChanged();
+        inventoryMenu.broadcastChanges();
+        if (containerMenu != inventoryMenu) containerMenu.broadcastChanges();
         save();
         return menuSnapshot();
     }
