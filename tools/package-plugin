@@ -4,31 +4,67 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import plistlib
 import shutil
 import subprocess
+import sys
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / 'bb-plugin'
 
 
+def build_environment():
+    env = dict(os.environ)
+    # Finder does not inherit the terminal's Homebrew/user PATH.
+    if sys.platform == 'darwin':
+        env['PATH'] = os.pathsep.join([env.get('PATH', ''), '/opt/homebrew/bin',
+                                     '/usr/local/bin', str(Path.home() / '.local/bin')])
+    return env
+
+
+def bb_command(env):
+    executable = env.get('BB_CLI') or shutil.which('bb', path=env.get('PATH'))
+    candidates = [Path(executable)] if executable else []
+    if not executable and sys.platform == 'darwin':
+        candidates += [Path('/Applications/BB.app'), Path.home() / 'Applications/BB.app']
+    for candidate in candidates:
+        path = candidate.resolve()
+        app = next((parent for parent in [path, *path.parents] if parent.suffix == '.app'), None)
+        if app and (app / 'Contents/Info.plist').is_file():
+            script = app / 'Contents/Resources/app.asar.unpacked/node_modules/bb-app/host-daemon/dist/bb'
+            with (app / 'Contents/Info.plist').open('rb') as source:
+                binary = plistlib.load(source)['CFBundleExecutable']
+            runtime = app / 'Contents/MacOS' / binary
+            if script.is_file() and runtime.is_file():
+                # Use BB's bundled runtime without opening another desktop app.
+                env.pop('BB_CLI', None)
+                env['ELECTRON_RUN_AS_NODE'] = '1'
+                return [str(runtime), str(script)]
+        elif path.is_file():
+            return [str(path)]
+    raise RuntimeError('Could not find the installed BB CLI. Install BB in Applications, add bb to PATH, or set BB_CLI.')
+
+
 def main():
-    npm = os.environ.get('TOO_MANY_AGENTS_NPM', 'npm')
-    bb = os.environ.get('BB_CLI') or shutil.which('bb')
-    if not bb:
-        raise RuntimeError('Building the bundled plugin requires the installed BB CLI on PATH.')
+    env = build_environment()
+    bb_env = dict(env)
+    bb = bb_command(bb_env)
+    npm = env.get('TOO_MANY_AGENTS_NPM') or shutil.which('npm', path=env.get('PATH'))
+    if not npm:
+        raise RuntimeError('Building the plugin requires Node.js and npm. Add npm to PATH or set TOO_MANY_AGENTS_NPM.')
     # Source edits need a build, not a fresh dependency installation.
     dependencies = hashlib.sha256((PLUGIN / 'package.json').read_bytes() + (PLUGIN / 'package-lock.json').read_bytes()).hexdigest()
     installed = PLUGIN / 'node_modules/.too-many-agents-dependencies'
     if not installed.is_file() or installed.read_text() != dependencies or not (PLUGIN / 'node_modules/.package-lock.json').is_file():
-        subprocess.run([npm, 'ci', '--prefix', str(PLUGIN), '--ignore-scripts', '--no-audit', '--no-fund'], check=True)
+        subprocess.run([npm, 'ci', '--prefix', str(PLUGIN), '--ignore-scripts', '--no-audit', '--no-fund'], env=env, check=True)
         installed.write_text(dependencies)
     shutil.copyfile(ROOT / 'surface/tools.json', PLUGIN / 'surface/tools.json')
-    subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], check=True)
-    subprocess.run([bb, 'plugin', 'build', str(PLUGIN)], check=True)
+    subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], env=env, check=True)
+    subprocess.run([*bb, 'plugin', 'build', str(PLUGIN)], env=bb_env, check=True)
     # The diagram worker runs independently of BB's server bundle. Include its
     # pure-JavaScript dependencies and WASM; installation needs neither npm nor a compiler.
-    packages = subprocess.check_output([npm, 'ls', '--omit=dev', '--all', '--parseable'], cwd=PLUGIN, text=True).splitlines()
+    packages = subprocess.check_output([npm, 'ls', '--omit=dev', '--all', '--parseable'], cwd=PLUGIN, env=env, text=True).splitlines()
     manifest = json.loads((PLUGIN / 'package.json').read_text())
     manifest['bb']['server'] = './server.js'
     manifest.pop('devDependencies', None)
