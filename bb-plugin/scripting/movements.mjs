@@ -533,6 +533,10 @@ export class Movements {
   }
 
   getLandingBlock (node, dir) {
+    // 2.4.5 starts at -2, skipping water immediately below the entry edge.
+    // Keep its dry support scan, but enter the first liquid cell encountered.
+    const below = this.getBlock(node, dir.x, -1, dir.z)
+    if (below.liquid) return below.safe && this._capabilities().canSwim ? below : null
     let blockLand = this.getBlock(node, dir.x, -2, dir.z)
     while (blockLand.position && blockLand.position.y > this.bot.game.minY) {
       if (blockLand.liquid && blockLand.safe) return this._capabilities().canSwim ? blockLand : null
@@ -574,6 +578,10 @@ export class Movements {
   }
 
   getMoveDown (node, neighbors) {
+    if (this.getBlock(node, 0, 0, 0).liquid) {
+      this._getMoveSwim(node, -1, neighbors)
+      return
+    }
     const block0 = this.getBlock(node, 0, -1, 0)
 
     let cost = 1 // move cost
@@ -589,8 +597,6 @@ export class Movements {
     if (this._volumeCost(node.x, node.z, this._feetY(blockLand.position),
       this._feetY(node) + this._geometry().height, [], false, toBreak) >= 100) return
 
-    if (this.getBlock(node, 0, 0, 0).liquid) return // dont go underwater
-
     cost += this.getNumEntitiesAt(blockLand.position, 0, 0, 0) * this.entityCost // add cost for entities
 
     neighbors.push(new Move(blockLand.position.x, blockLand.position.y, blockLand.position.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
@@ -598,7 +604,10 @@ export class Movements {
 
   getMoveUp (node, neighbors) {
     const block1 = this.getBlock(node, 0, 0, 0)
-    if (block1.liquid) return
+    if (block1.liquid) {
+      this._getMoveSwim(node, 1, neighbors)
+      return
+    }
     if (this.getNumEntitiesAt(node, 0, 0, 0) > 0) return // an entity (besides the player) is blocking the building area
 
     let cost = 1 // move cost
@@ -628,6 +637,19 @@ export class Movements {
     if (cost > 100) return
 
     neighbors.push(new Move(node.x, node.y + 1, node.z, node.remainingBlocks - toPlace.length, cost, toBreak, toPlace))
+  }
+
+  // Deliberate 2.4.5 correction: its liquid guards omit vertical swim edges.
+  // Both endpoints must be liquid; this grants neither flight nor a dry jump.
+  _getMoveSwim (node, dy, neighbors) {
+    const from = this.getBlock(node, 0, 0, 0)
+    const to = this.getBlock(node, 0, dy, 0)
+    if (!this._capabilities().canSwim || !from.liquid || !from.safe || !to.liquid || !to.safe) return
+    const toBreak = []
+    const cost = 1 + this.liquidCost + this._volumeCost(node.x, node.z,
+      Math.min(node.y, to.position.y), Math.max(node.y, to.position.y) + this._geometry().height, toBreak)
+    if (cost > 100) return
+    neighbors.push(new Move(node.x, to.position.y, node.z, node.remainingBlocks, cost, toBreak))
   }
 
   // Jump up, down or forward over a 1 block gap

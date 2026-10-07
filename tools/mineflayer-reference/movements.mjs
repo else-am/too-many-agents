@@ -21,6 +21,16 @@ const origin = () => new Move(0, 0, 0, 16, 0);
 const east = { x: 1, z: 0 };
 const state = (name, properties = {}) => Block.fromProperties(name, properties, 0).stateId;
 
+// Water cases authored before correcting the pinned graph. These are deliberate
+// source differences from 2.4.5, not a claim that upstream produces these routes.
+const waterContracts = [
+  ['pure-water entry and bank exit', 'Real two-deep channel, no inventory/dig/parkour/towers: enter the immediately lower surface cell, traverse, then exit onto the opposite bank. Pinned upstream misses the entry goal.'],
+  ['adjacent vertical swimming', 'Ascend and descend between existing liquid cells with no placed support. Pinned upstream emits neither vertical edge; native canSwim must authorize both.'],
+  ['water permissions and costs', 'Missing/false canSwim, avoided water, exclusions and avoided entities forbid the new edges; liquidCost and entityCost affect them. Drop policy still limits dry water entry.'],
+  ['water body clearance', 'Short bodies fit a low water tunnel; tall/wide bodies reject intersecting roof/side shapes, including swept ascent headroom and unknown blocks. No unlisted digs or blocks.'],
+  ['water surface is not free flight', 'Vertical swimming requires liquid at both endpoints. An unsupported air cell above the surface is not an ascent edge, even with towers enabled and zero materials.'],
+];
+
 function fixture({ width = 0.6, height = 1.8, nativeBody, floor = -1 } = {}) {
   const blocks = new Map();
   const bot = {
@@ -237,6 +247,113 @@ const scenarios = [
   }],
 ];
 
+// Same channel as navigate-water.js, translated by (-9,+60,0) into the fixture.
+function waterFixture(Adapter, options = {}) {
+  const f = fixture({ nativeBody: normal, ...options, floor: -3 });
+  f.bot.inventory.items = () => [];
+  f.wall(1, 5, -2, -1, 0, 0, 'water');
+  for (const x of [0, 6]) f.wall(x, x, -2, -1, 0, 0);
+  for (const z of [-1, 1]) f.wall(0, 6, -2, 3, z, z);
+  const m = new Adapter(f.bot);
+  m.canDig = m.allowParkour = m.allow1by1towers = false;
+  m.exclusionAreasStep.push(b => b.position && (b.position.z !== 0 || b.position.x < 0 || b.position.x > 6) ? 100 : 0);
+  return { ...f, m };
+}
+const swimNode = (y = -2) => new Move(3, y, 0, 0, 0);
+function route(m, start, end) {
+  return new AStar(start, m, new GoalBlock(...end), 1000, 1000).compute();
+}
+function unedited(result) {
+  assert.equal(result.status, 'success');
+  assert(result.path.every(n => n.remainingBlocks === 0 && n.toBreak.length === 0 && n.toPlace.length === 0 && !n.parkour));
+}
+const waterEvidence = [];
+const waterChecks = [
+  Adapter => {
+    const upstream = waterFixture(Upstream), actual = waterFixture(Adapter);
+    const start = new Move(0, 0, 0, 0, 0);
+    const pinned = route(upstream.m, start, [1, -1, 0]);
+    const entry = route(actual.m, start, [1, -1, 0]);
+    const sourceLanding = upstream.m.getLandingBlock(start, east).position;
+    waterEvidence.push({ scenario: 'pure-water entry', upstream: pinned.status, adapter: entry.status,
+      upstreamLanding: [sourceLanding.x, sourceLanding.y, sourceLanding.z], adapterPath: normalize(entry.path) });
+    console.log(JSON.stringify(waterEvidence.at(-1)));
+    assert.equal(pinned.status, 'noPath'); assert.equal(sourceLanding.y, -2);
+    unedited(entry); assert.deepEqual(entry.path.map(n => [n.x, n.y, n.z]), [[1, -1, 0]]);
+    const across = route(actual.m, new Move(1, -1, 0, 0, 0), [5, -1, 0]); unedited(across);
+    const exit = route(actual.m, new Move(5, -1, 0, 0, 0), [6, 0, 0]); unedited(exit);
+    // Pinned jump-up measures from the empty-shape water block below the feet.
+    // The existing body adapter's _feetY already uses the actual fluid node Y.
+    const upstreamExit = route(upstream.m, new Move(5, -1, 0, 0, 0), [6, 0, 0]);
+    assert.equal(upstreamExit.status, 'noPath');
+    unedited(route(actual.m, start, [6, 0, 0]));
+    waterEvidence.push({ scenario: 'unedited traversal and existing adapter bank exit', upstreamExit: upstreamExit.status,
+      across: normalize(across.path), exit: normalize(exit.path) });
+    // Ordinary Mineflayer defaults get the same documented graph correction.
+    unedited(route(waterFixture(Adapter, { nativeBody: undefined }).m, start, [1, -1, 0]));
+  },
+  Adapter => {
+    for (const [method, y, targetY] of [['getMoveUp', -2, -1], ['getMoveDown', -1, -2]]) {
+      const upstream = waterFixture(Upstream), actual = waterFixture(Adapter);
+      const start = swimNode(y);
+      assert.equal(generate(upstream.m, method, start).length, 0);
+      const pinned = route(upstream.m, start, [3, targetY, 0]);
+      const result = route(actual.m, start, [3, targetY, 0]);
+      waterEvidence.push({ scenario: method, upstream: pinned.status, adapter: result.status, adapterPath: normalize(result.path) });
+      console.log(JSON.stringify(waterEvidence.at(-1)));
+      assert.equal(pinned.status, 'noPath'); unedited(result);
+      assert.deepEqual(result.path.map(n => [n.x, n.y, n.z]), [[3, targetY, 0]]);
+      const swimmer = waterFixture(Adapter, { nativeBody: { ...normal, canJump: false, jumpHeight: 0, stepHeight: 0 } });
+      unedited(route(swimmer.m, start, [3, targetY, 0])); // swimming does not grant dry jumping
+      assert.equal(generate(swimmer.m, 'getMoveJumpUp', new Move(5, -1, 0, 0, 0)).length, 0);
+    }
+  },
+  Adapter => {
+    for (const nativeBody of [{}, { ...normal, canSwim: false }]) {
+      const { m } = waterFixture(Adapter, { nativeBody });
+      assert.equal(generate(m, 'getMoveUp', swimNode()).length, 0);
+      assert.equal(generate(m, 'getMoveDown', swimNode(-1)).length, 0);
+      assert.equal(generate(m, 'getMoveDropDown', new Move(0, 0, 0, 0, 0)).length, 0);
+    }
+    for (const method of ['getMoveUp', 'getMoveDown']) {
+      const start = swimNode(method === 'getMoveUp' ? -2 : -1);
+      const { m, bot } = waterFixture(Adapter);
+      const original = generate(m, method, start)[0]; assert(original);
+      m.liquidCost += 3; assert.equal(generate(m, method, start)[0].cost, original.cost + 3);
+      m.entityIntersections['3,-1,0'] = 1;
+      m.entityCost = 4; assert(generate(m, method, start)[0].cost >= original.cost + 7);
+      m.clearCollisionIndex(); m.exclusionAreasStep.push(b => b.position?.x === 3 ? 100 : 0);
+      assert.equal(generate(m, method, start).length, 0);
+      m.exclusionAreasStep.pop(); m.blocksToAvoid.add(registry.blocksByName.water.id);
+      assert.equal(generate(m, method, start).length, 0);
+      m.blocksToAvoid.delete(registry.blocksByName.water.id);
+      bot.entities.other = { name: 'cow', position: new Vec3(3.5, -1, .5), width: .6, height: 1.8 };
+      m.entitiesToAvoid.add('cow'); m.updateCollisionIndex();
+      assert.equal(generate(m, method, start).length, 0);
+    }
+    const { m } = waterFixture(Adapter); m.maxDropDown = 0; m.infiniteLiquidDropdownDistance = false;
+    assert.equal(generate(m, 'getMoveDropDown', new Move(0, 0, 0, 0, 0)).length, 0);
+    m.infiniteLiquidDropdownDistance = true;
+    assert(moveAt(generate(m, 'getMoveDropDown', new Move(0, 0, 0, 0, 0)), 1, -1, 0));
+  },
+  Adapter => {
+    const f = waterFixture(Adapter, { height: .8 }); f.set(3, 0, 0, 'bedrock');
+    assert(moveAt(generate(f.m, 'getMoveUp', swimNode()), 3, -1, 0));
+    f.bot.entity.height = 1.8; assert.equal(generate(f.m, 'getMoveUp', swimNode()).length, 0);
+    f.set(3, 0, 0, 'air'); f.bot.entity.height = 2.8; f.set(3, 1, 0, 'bedrock');
+    assert.equal(generate(f.m, 'getMoveUp', swimNode()).length, 0);
+    f.set(3, 1, 0, 'air'); f.bot.entity.height = 1.8; f.bot.entity.width = 1.4;
+    assert.equal(generate(f.m, 'getMoveUp', swimNode()).length, 0);
+    f.bot.entity.width = .6; const blockAt = f.bot.blockAt; f.bot.blockAt = p => p.y === 0 ? null : blockAt(p);
+    assert.equal(generate(f.m, 'getMoveUp', swimNode()).length, 0);
+  },
+  Adapter => {
+    const { m } = waterFixture(Adapter); m.allow1by1towers = true;
+    assert.equal(generate(m, 'getMoveUp', swimNode(-1)).length, 0);
+    assert.equal(generate(m, 'getMoveDown', swimNode(-2)).length, 0); // solid pool floor
+  },
+];
+
 // Bundle exactly as a guest module: this rejects accidental Node built-ins in the implementation.
 const pluginDependencies = createRequire(pathToFileURL(resolve(dependencies, '../../../bb-plugin/package.json')));
 let build;
@@ -260,6 +377,11 @@ for (const [name, setup, configure = () => {}] of comparisons) {
   }
 }
 for (const [name, check] of scenarios) { check(Adapter); passed++; }
+const waterFailures = [];
+for (const [i, [name]] of waterContracts.entries()) {
+  try { waterChecks[i](Adapter); passed++; }
+  catch (error) { waterFailures.push({ name, error: error.message }); }
+}
 // Execute the same browser bundle in the actual guest engine, without Node globals.
 const guestBundle = await build({ entryPoints: [fileURLToPath(new URL('../../bb-plugin/scripting/movements.mjs', import.meta.url))],
   bundle: true, platform: 'browser', format: 'iife', globalName: 'MovementModule', target: 'es2022', write: false, nodePaths: [dependencies] });
@@ -268,15 +390,35 @@ const runtime = (await getQuickJS()).newRuntime(); runtime.setMemoryLimit(64 * 1
 const vm = runtime.newContext();
 const guestRegistry = JSON.stringify({ blocksArray: registry.blocksArray, blocksByName: registry.blocksByName,
   itemsByName: registry.itemsByName, blockCollisionShapes: registry.blockCollisionShapes });
+// Real Block observations are transferred into QuickJS; these no-dig probes need
+// no substitute dig-time implementation. All movement generation remains bundled code.
+const waterBlocks = {}, water = waterFixture(Adapter);
+for (let x = -1; x <= 7; x++) for (let y = -4; y <= 4; y++) for (let z = -2; z <= 2; z++) {
+  const b = water.bot.blockAt(new Vec3(x, y, z));
+  waterBlocks[`${x},${y},${z}`] = { type: b.type, name: b.name, boundingBox: b.boundingBox, shapes: b.shapes };
+}
 const result = vm.evalCode(guestBundle.outputFiles[0].text + `
-  const movement = new MovementModule.Movements({ registry: ${guestRegistry},
-    entity: {width: 0.6, height: 1.8}, inventory: {items: () => []} });
-  JSON.stringify({ scaffolds: movement.countScaffoldingItems(), dig: movement.canDig, nodeGlobals: typeof process });
+  const blocks = ${JSON.stringify(waterBlocks)};
+  const movement = new MovementModule.Movements({ registry: ${guestRegistry}, nativeBody: ${JSON.stringify(normal)},
+    entity: {width: 0.6, height: 1.8}, inventory: {items: () => []}, game: {minY: -16},
+    blockAt(p) { const b = blocks[p.x + ',' + p.y + ',' + p.z]; return b ? {...b, position: p} : null; } });
+  const defaults = { scaffolds: movement.countScaffoldingItems(), dig: movement.canDig, nodeGlobals: typeof process };
+  movement.canDig = movement.allowParkour = movement.allow1by1towers = false;
+  const entry = [], up = [], down = [];
+  movement.getMoveDropDown({x: 0, y: 0, z: 0, remainingBlocks: 0}, {x: 1, z: 0}, entry);
+  movement.getMoveUp({x: 3, y: -2, z: 0, remainingBlocks: 0}, up);
+  movement.getMoveDown({x: 3, y: -1, z: 0, remainingBlocks: 0}, down);
+  const summarize = list => list.map(n => [n.x, n.y, n.z, n.remainingBlocks, n.toBreak.length, n.toPlace.length]);
+  JSON.stringify({ ...defaults, entry: summarize(entry), up: summarize(up), down: summarize(down) });
 `);
 try {
   if (result.error) throw new Error(JSON.stringify(vm.dump(result.error)));
-  assert.deepEqual(JSON.parse(vm.getString(result.value)), { scaffolds: 0, dig: true, nodeGlobals: 'undefined' });
+  assert.deepEqual(JSON.parse(vm.getString(result.value)), { scaffolds: 0, dig: true, nodeGlobals: 'undefined',
+    entry: [[1, -1, 0, 0, 0, 0]], up: [[3, -1, 0, 0, 0, 0]], down: [[3, -2, 0, 0, 0, 0]] });
 } finally { result.error?.dispose(); result.value?.dispose(); vm.dispose(); runtime.dispose(); }
-console.log(JSON.stringify({ status: 'passed', scenarios: passed, differentialWorlds: comparisons.length,
+console.log(JSON.stringify({ status: waterFailures.length ? 'failed' : 'passed', scenarios: passed, differentialWorlds: comparisons.length,
   bodyScenarios: scenarios.length, quickjsInitialization: 'passed', browserBundleBytes: bundled.outputFiles[0].contents.length,
+  quickjsWaterNeighbors: 'passed',
+  waterCorrections: waterContracts, waterEvidence, waterFailures,
   limitation: 'Planner/source checks only; no native physics, execution, server or live conformance tested.' }, null, 2));
+if (waterFailures.length) process.exitCode = 1;
