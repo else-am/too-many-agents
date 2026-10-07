@@ -21,7 +21,11 @@ final class AgentInteractions {
         result.addProperty("decision", decision);
         if (!decision.equals("deny")) {
             var subject = AgentModels.object(AgentModels.object(interaction, "payload"), "subject");
-            var grant = subject.get(AgentModels.text(subject,"kind").equals("permission_grant") ? "permissions" : "sessionGrant");
+            String kind = AgentModels.text(subject, "kind");
+            // Command and file-change permissions apply only to session approvals.
+            var grant = kind.equals("permission_grant") ? subject.get("permissions")
+                : decision.equals("allow_for_session") && (kind.equals("command") || kind.equals("file_change"))
+                    ? subject.get("sessionGrant") : null;
             result.add("grantedPermissions", grant == null ? com.google.gson.JsonNull.INSTANCE : grant.deepCopy());
         }
         return result;

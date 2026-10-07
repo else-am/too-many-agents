@@ -78,6 +78,9 @@ public final class AgentChatScreen extends Screen {
     private RichMedia pressedMedia;
     private String pressedLink;
     private boolean developmentTranscript;
+    private boolean developmentInteractions;
+    private JsonObject developmentResolution = new JsonObject();
+    private CompletableFuture<Void> developmentResponse;
     private java.util.function.BiFunction<String,String,CompletableFuture<JsonObject>> developmentAssets;
     private java.util.function.Function<String,CompletableFuture<Void>> developmentLinks;
 
@@ -95,6 +98,24 @@ public final class AgentChatScreen extends Screen {
     public JsonObject developmentTranscript(JsonObject request) {
         if (!Boolean.getBoolean("too_many_agents.devWorld")) throw new IllegalStateException("Development only");
         developmentTranscript=true;
+        if (request.has("interactions")) {
+            if (!draft()) throw new IllegalStateException("Interaction fixtures require a draft chat");
+            developmentInteractions = true;
+            state.add("interactions", request.getAsJsonArray("interactions").deepCopy());
+            readRequest();
+            transcriptKey = "";
+            rebuildTranscript();
+        }
+        if (request.has("completeResponse") && developmentResponse != null) {
+            String error = AgentModels.text(request, "completeResponse");
+            if (error.isBlank()) {
+                for (var item : AgentModels.interactions(state))
+                    if (AgentModels.text(item.getAsJsonObject(), "id").equals(AgentModels.text(developmentResolution, "interactionId")))
+                        item.getAsJsonObject().addProperty("status", "resolved");
+                developmentResponse.complete(null);
+            } else developmentResponse.completeExceptionally(new IllegalStateException(error));
+            developmentResponse = null;
+        }
         if (request.has("rows")) {
             transcript=new JsonObject();
             transcript.add("rows",request.getAsJsonArray("rows").deepCopy());
@@ -104,6 +125,7 @@ public final class AgentChatScreen extends Screen {
         }
         if (request.has("scroll")) scroll=Math.clamp(request.get("scroll").getAsInt(),0,maxScroll);
         var result=new JsonObject();
+        result.add("submitted", developmentResolution.deepCopy());
         if(request.has("clipboardEquals")) result.addProperty("clipboardMatches",
             minecraft.keyboardHandler.getClipboard().equals(request.get("clipboardEquals").getAsString()));
         result.addProperty("scroll",scroll); result.addProperty("maxScroll",maxScroll);
@@ -156,11 +178,14 @@ public final class AgentChatScreen extends Screen {
         return left + 8 + line.inset() - (line.rich() != null && line.rich().panel() != null ? line.rich().panel().scroll : 0);
     }
     private record Disclosure(AbstractWidget button, int line) {}
-    private java.util.Map<String, String> questionDrafts = new java.util.HashMap<>();
+    private static final class QuestionAnswer {
+        final Set<String> selected = new java.util.LinkedHashSet<>();
+        EditBox field;
+        boolean other;
+    }
+    private final java.util.Map<String, java.util.Map<String, QuestionAnswer>> questionDrafts = new java.util.HashMap<>();
     private java.util.Set<String> respondingRequests = new java.util.HashSet<>();
     private java.util.Map<String, String> requestErrors = new java.util.HashMap<>();
-    private String focusedQuestion = "";
-    private java.util.Map<String, EditBox> questionFields = new java.util.HashMap<>();
     private record MessageBubble(int firstLine, int endLine, int inset, int width) {}
     private List<MessageBubble> messageBubbles = new ArrayList<>();
     private final List<Disclosure> disclosures = new ArrayList<>();
@@ -169,6 +194,7 @@ public final class AgentChatScreen extends Screen {
     private boolean detailsLoading;
     private long markedReply;
     private String before = "", expandedGroup = "", expandedRow = "";
+    private final Set<String> expandedContexts = new java.util.HashSet<>();
     private int groupOffset, textOffset, queryVersion;
     private int thinkingLine = -1;
     private List<Button> queueControls = new ArrayList<>();
@@ -964,14 +990,17 @@ public final class AgentChatScreen extends Screen {
     private void readRequest() {
         request = new JsonObject();
         question = new JsonObject();
+        var pendingIds = new java.util.HashSet<String>();
         for (var item : AgentModels.interactions(state)) {
             var pending = item.getAsJsonObject();
             if (!Set.of("pending", "resolving").contains(AgentModels.text(pending,"status"))) continue;
+            pendingIds.add(AgentModels.text(pending, "id"));
             if (AgentModels.text(AgentModels.object(pending, "payload"), "kind").equals("approval")) {
                 if (request.isEmpty()) request = pending;
             } else if (question.isEmpty()) question = pending;
         }
         requestKey = AgentModels.interactions(state).toString();
+        questionDrafts.keySet().retainAll(pendingIds);
     }
 
     private boolean approval() { return !request.isEmpty(); }
@@ -1380,16 +1409,42 @@ public final class AgentChatScreen extends Screen {
             return;
         }
         String error=AgentModels.text(AgentModels.object(row,"turnRequest"),"status").equals("rejected")?"Not sent: "+AgentModels.text(row,"detail"):"";
+        // The plugin appends this block to the message sent to BB. Fold only that trailing block.
+        String context = "";
+        String contextStart = "\n\n[minecraft user context]\n", contextEnd = "\n[/minecraft user context]";
+        String trimmed = text.stripTrailing();
+        int contextOffset = trimmed.lastIndexOf(contextStart);
+        if (contextOffset >= 0 && trimmed.endsWith(contextEnd)) {
+            context = trimmed.substring(contextOffset + contextStart.length(), trimmed.length() - contextEnd.length());
+            text = text.substring(0, contextOffset);
+        }
+        String id = AgentModels.text(row, "id");
+        boolean contextExpanded = expandedContexts.contains(id);
+        String contextLabel = (contextExpanded ? "▾ " : "▸ ") + "Minecraft context";
         int attachments=attachmentCount(row);
         int maxWidth=Math.max(40,(contentWidth-40)*3/4);
         int textWidth=Math.min(maxWidth,100);
         for(var line:font.split(Component.literal(text),maxWidth))textWidth=Math.max(textWidth,font.width(line));
+        if (!context.isEmpty()) {
+            textWidth = Math.min(maxWidth, Math.max(textWidth, font.width(contextLabel)));
+            if (contextExpanded)
+                for (var line : font.split(Component.literal(context), maxWidth)) textWidth = Math.max(textWidth, font.width(line));
+        }
         if(!error.isEmpty() || attachments>0)textWidth=maxWidth;
         int bubbleWidth=textWidth+16,inset=contentWidth-24-bubbleWidth;
-        if(!text.isBlank() || !error.isEmpty() || attachments>0) {
+        if(!text.isBlank() || !context.isEmpty() || !error.isEmpty() || attachments>0) {
             int firstLine=lines.size();
             lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
             markdown(text,0xEEEEEE,0,inset+8,textWidth);
+            if (!context.isEmpty()) {
+                disclosure(contextLabel, () -> {
+                    if (!expandedContexts.add(id)) expandedContexts.remove(id);
+                    preserveScroll = true;
+                    transcriptKey = "";
+                    rebuildTranscript();
+                }, inset + 8);
+                if (contextExpanded) paragraph(context, 0xAAAAAA, 0, inset + 8, textWidth);
+            }
             if(!error.isEmpty())paragraph(error,0xFFAAAA,0,inset+8,textWidth);
             if(attachments>0)attachments(row,inset+8,textWidth);
             lines.add(new Line(Component.empty().getVisualOrderText(),0,0));
@@ -1442,6 +1497,10 @@ public final class AgentChatScreen extends Screen {
         if(key.equals(transcriptKey))return;
         if(selectingText)return;
         var previousLines=new ArrayList<>(lines);
+        var previousFocus = getFocused();
+        int focusedDisclosure = -1;
+        for (int i = 0; i < disclosures.size(); i++)
+            if (disclosures.get(i).button() == previousFocus) focusedDisclosure = i;
         boolean follow=!hasSelection() && !preserveScroll && scroll>=maxScroll-4;
         preserveScroll=false;transcriptKey=key;
         for(var entry:disclosures)removeWidget(entry.button());
@@ -1505,6 +1564,9 @@ public final class AgentChatScreen extends Screen {
             }
         }
         positionDisclosures();
+        if (focusedDisclosure >= 0 && !children().contains(previousFocus)) {
+            setFocused(focusedDisclosure < disclosures.size() ? disclosures.get(focusedDisclosure).button() : composer);
+        }
     }
 
     private void requestTurnDetails(JsonObject row, String cursor) {
@@ -1540,13 +1602,10 @@ public final class AgentChatScreen extends Screen {
                     String decision=value.getAsString();
                     var button=Button.builder(Component.literal(AgentInteractions.decisionLabel(decision)),unused->respondInline(id,AgentInteractions.approvalResolution(pending,decision)))
                         .bounds(left+8,0,contentWidth-24,20).build();
-                    button.active=!busy&&activeAgent()&&backendAvailable();inlineWidget(button,24);
+                    button.active=!busy&&activeAgent()&&(backendAvailable()||developmentInteractions);inlineWidget(button,24);
                 }
             } else if(AgentModels.text(payload,"kind").equals("user_question")) {
-                for(var value:AgentModels.array(payload,"questions"))paragraph(AgentModels.text(value.getAsJsonObject(),"prompt"),0xEEEEEE,0,0);
-                var button=Button.builder(Component.literal("Answer questions…"),unused->minecraft.setScreen(new AgentQuestionScreen(access,minecraft.screen,agentId,pending)))
-                    .bounds(left+8,0,contentWidth-24,20).build();
-                button.active=!busy&&activeAgent()&&backendAvailable();inlineWidget(button,24);
+                inlineQuestions(pending, busy);
             } else {
                 paragraph(AgentModels.text(payload,"title"),0xEEEEEE,0,0);
                 paragraph("Open this interaction in BB.",0xBBBBBB,0,0);
@@ -1557,6 +1616,157 @@ public final class AgentChatScreen extends Screen {
         }
     }
 
+    private void inlineQuestions(JsonObject pending, boolean busy) {
+        String id = AgentModels.text(pending, "id");
+        var questions = AgentModels.array(AgentModels.object(pending, "payload"), "questions");
+        var answers = questionDrafts.computeIfAbsent(id, unused -> new java.util.HashMap<>());
+        boolean editable = !busy && activeAgent() && (backendAvailable() || developmentInteractions);
+        var submit = Button.builder(Component.literal(questions.size() == 1 ? "Submit answer" : "Submit answers"),
+            unused -> respondInline(id, questionResolution(pending)))
+            .bounds(left + contentWidth - 120, 0, 104, 20).build();
+        for (var value : questions) {
+            var question = value.getAsJsonObject();
+            String questionId = AgentModels.text(question, "id");
+            var answer = answers.computeIfAbsent(questionId, unused -> new QuestionAnswer());
+            var options = AgentModels.array(question, "options");
+            boolean multi = question.has("multiSelect") && question.get("multiSelect").getAsBoolean();
+            boolean allowsText = question.has("allowFreeText") && question.get("allowFreeText").getAsBoolean();
+            paragraph(AgentModels.text(question, "prompt"), 0xEEEEEE, 0, 0);
+            if (multi) paragraph("Select all that apply", 0xAAAAAA, 0, 0);
+            var available = new java.util.HashSet<String>();
+            for (var item : options) available.add(AgentModels.text(item.getAsJsonObject(), "value"));
+            answer.selected.retainAll(available);
+            for (var item : options) {
+                var option = item.getAsJsonObject();
+                String optionValue = AgentModels.text(option, "value");
+                String label = AgentModels.text(option, "label");
+                String description = AgentModels.text(option, "description");
+                questionChoice(label, description.equals(label) ? "" : description,
+                    () -> answer.selected.contains(optionValue), editable, multi, () -> {
+                        if (answer.selected.contains(optionValue)) answer.selected.remove(optionValue);
+                        else {
+                            if (!multi) { answer.selected.clear(); answer.other = false; }
+                            answer.selected.add(optionValue);
+                        }
+                        submit.active = editable && !questionResolution(pending).isEmpty();
+                        refreshQuestionLayout();
+                    });
+            }
+            if (allowsText) {
+                if (!options.isEmpty()) questionChoice("Other…", "", () -> answer.other, editable, multi, () -> {
+                    answer.other = !answer.other;
+                    if (answer.other && !multi) answer.selected.clear();
+                    refreshQuestionLayout();
+                    if (answer.other && answer.field != null) {
+                        int bottom = answer.field.getY() + answer.field.getHeight();
+                        if (bottom > transcriptBottom - 4) scroll = Math.min(maxScroll, scroll + bottom - transcriptBottom + 4);
+                        positionDisclosures();
+                        setFocused(answer.field);
+                    }
+                });
+                if (answer.other || options.isEmpty()) {
+                    // Reuse the field so polling and resizing preserve the cursor and draft.
+                    if (answer.field == null) {
+                        answer.field = new EditBox(font, left + 8, 0, contentWidth - 24, 20, Component.literal("Your answer")) {
+                            @Override public boolean keyPressed(int key, int scanCode, int modifiers) {
+                                if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
+                                    if (active) respondInline(id, questionResolution(pending));
+                                    return true;
+                                }
+                                return super.keyPressed(key, scanCode, modifiers);
+                            }
+                        };
+                        answer.field.setMaxLength(16384);
+                        answer.field.setHint(Component.literal("Write an answer…"));
+                    }
+                    answer.field.setX(left + 8);
+                    answer.field.setWidth(contentWidth - 24);
+                    answer.field.active = editable;
+                    answer.field.setEditable(editable);
+                    answer.field.setResponder(text -> submit.active = editable && !questionResolution(pending).isEmpty());
+                    inlineWidget(answer.field, 24);
+                }
+            }
+            lines.add(new Line(Component.empty().getVisualOrderText(), 0, 0));
+        }
+        submit.active = editable && !questionResolution(pending).isEmpty();
+        inlineWidget(submit, 24);
+    }
+
+    private void refreshQuestionLayout() {
+        preserveScroll = true;
+        transcriptKey = "";
+        rebuildTranscript();
+    }
+
+    private JsonObject questionResolution(JsonObject pending) {
+        var questions = AgentModels.array(AgentModels.object(pending, "payload"), "questions");
+        var drafts = questionDrafts.getOrDefault(AgentModels.text(pending, "id"), java.util.Map.of());
+        var answers = new JsonObject();
+        for (var value : questions) {
+            var question = value.getAsJsonObject();
+            String id = AgentModels.text(question, "id");
+            var draft = drafts.get(id);
+            if (draft == null) return new JsonObject();
+            boolean allowsText = question.has("allowFreeText") && question.get("allowFreeText").getAsBoolean();
+            String text = allowsText && (draft.other || AgentModels.array(question, "options").isEmpty()) && draft.field != null
+                ? draft.field.getValue().strip() : "";
+            if (draft.selected.isEmpty() && text.isBlank()) return new JsonObject();
+            if (draft.other && text.isBlank()) return new JsonObject();
+            var answer = new JsonObject();
+            var selected = new com.google.gson.JsonArray();
+            for (String option : draft.selected) selected.add(option);
+            answer.add("selected", selected);
+            if (!text.isBlank()) answer.addProperty("freeText", text);
+            answers.add(id, answer);
+        }
+        if (answers.isEmpty()) return new JsonObject();
+        var result = new JsonObject();
+        result.addProperty("kind", "user_answer");
+        result.add("answers", answers);
+        return result;
+    }
+
+    private void questionChoice(String label, String description, java.util.function.BooleanSupplier selected,
+                                boolean editable, boolean multi, Runnable choose) {
+        var title = font.split(Component.literal(label), contentWidth - 52);
+        var detail = description.isBlank() ? List.<FormattedCharSequence>of()
+            : font.split(Component.literal(description), contentWidth - 52);
+        int height = (title.size() + detail.size() + 1) * LINE_HEIGHT;
+        var button = new QuestionChoice(left + 8, contentWidth - 24, height - 2,
+            Component.literal(label + (description.isBlank() ? "" : ": " + description)), choose) {
+            @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+                boolean checked = selected.getAsBoolean();
+                if (checked || isHoveredOrFocused()) graphics.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(),
+                    checked ? 0xB0403D34 : 0x80333333);
+                int color = active ? 0xEEEEEE : 0x888888;
+                graphics.renderOutline(getX() + 5, getY() + 7, 8, 8, checked ? 0xFFE3CAA0 : 0xFF888888);
+                if (checked) {
+                    if (multi) graphics.drawString(font, "✓", getX() + 5, getY() + 6, 0xE3CAA0);
+                    else graphics.fill(getX() + 7, getY() + 9, getX() + 11, getY() + 13, 0xFFE3CAA0);
+                }
+                int y = getY() + 6;
+                for (var line : title) { graphics.drawString(font, line, getX() + 22, y, color); y += LINE_HEIGHT; }
+                for (var line : detail) { graphics.drawString(font, line, getX() + 22, y, active ? 0xAAAAAA : 0x777777); y += LINE_HEIGHT; }
+            }
+        };
+        button.active = editable;
+        inlineWidget(button, height);
+    }
+
+    /** Choice rows may wrap beyond the viewport; drawing and clicks share the transcript clip. */
+    private class QuestionChoice extends Button {
+        QuestionChoice(int x, int width, int height, Component label, Runnable choose) {
+            super(x, 0, width, height, label, unused -> choose.run(), narration -> narration.get());
+        }
+        @Override public boolean isMouseOver(double x, double y) {
+            return y >= transcriptTop + 4 && y < transcriptBottom - 4 && super.isMouseOver(x, y);
+        }
+        @Override public boolean mouseClicked(double x, double y, int button) {
+            return isMouseOver(x, y) && super.mouseClicked(x, y, button);
+        }
+    }
+
     private void inlineWidget(AbstractWidget widget, int height) {
         disclosures.add(new Disclosure(addWidget(widget), lines.size()));
         for (int i = 0; i < height / LINE_HEIGHT; i++)
@@ -1564,12 +1774,19 @@ public final class AgentChatScreen extends Screen {
     }
 
     private void respondInline(String id, JsonObject resolution) {
-        if (resolution.isEmpty() || !activeAgent() || !respondingRequests.add(id)) return;
+        if (resolution.isEmpty() || !activeAgent() || !(backendAvailable() || developmentInteractions) || !respondingRequests.add(id)) return;
         requestErrors.remove(id);
         // Disable every choice immediately, before the next render can rebuild the card.
         rebuildTranscript();
         CompletableFuture<Void> operation;
-        try { operation = access.respond(agentId, id, resolution); }
+        try {
+            if (developmentInteractions) {
+                developmentResolution = new JsonObject();
+                developmentResolution.addProperty("interactionId", id);
+                developmentResolution.add("resolution", resolution.deepCopy());
+                operation = developmentResponse = new CompletableFuture<>();
+            } else operation = access.respond(agentId, id, resolution);
+        }
         catch (RuntimeException failure) { inlineResponseCompleted(id, failure); return; }
         operation.whenComplete((unused, failure) -> executeUi(() -> inlineResponseCompleted(id, failure)));
     }
@@ -1578,7 +1795,7 @@ public final class AgentChatScreen extends Screen {
         respondingRequests.remove(id);
         if (failure == null) questionDrafts.remove(id);
         else requestErrors.put(id, AgentModels.error(failure));
-        state = access.snapshot(agentId);
+        if (!developmentInteractions) state = access.snapshot(agentId);
         readRequest();
         rebuildTranscript();
     }
@@ -1714,7 +1931,9 @@ public final class AgentChatScreen extends Screen {
         for(var entry:disclosures) {
             int y=transcriptTop+6+entry.line()*LINE_HEIGHT-scroll;
             entry.button().setY(y);
-            entry.button().visible=!settingsCovering&&y>=transcriptTop+4&&y+entry.button().getHeight()<=transcriptBottom-4;
+            entry.button().visible = !settingsCovering && (entry.button() instanceof QuestionChoice
+                ? y < transcriptBottom - 4 && y + entry.button().getHeight() > transcriptTop + 4
+                : y >= transcriptTop + 4 && y + entry.button().getHeight() <= transcriptBottom - 4);
         }
     }
 
@@ -1999,9 +2218,15 @@ public final class AgentChatScreen extends Screen {
                     return true;
                 }
             }
-            for(var entry:disclosures)if(entry.button().isMouseOver(mouseX,mouseY)) {
+            for(var entry:List.copyOf(disclosures))if(entry.button().isMouseOver(mouseX,mouseY)) {
                 clearSelection();
-                return super.mouseClicked(mouseX,mouseY,button);
+                // A choice can rebuild the card; don't refocus its removed button afterwards.
+                if (entry.button().active) {
+                    setFocused(entry.button());
+                    entry.button().mouseClicked(mouseX,mouseY,button);
+                    setDragging(true);
+                }
+                return true;
             }
             long now=net.minecraft.Util.getMillis();
             textClickCount=now-lastTextClick<=350 && Math.abs(mouseX-lastTextClickX)<=4 && Math.abs(mouseY-lastTextClickY)<=4

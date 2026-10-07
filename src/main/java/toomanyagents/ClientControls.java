@@ -3,7 +3,6 @@ package toomanyagents;
 import toomanyagents.ui.AgentChatScreen;
 import toomanyagents.ui.AgentSettingsScreen;
 import toomanyagents.ui.AgentApprovalScreen;
-import toomanyagents.ui.AgentQuestionScreen;
 import toomanyagents.ui.AgentQueueScreen;
 import toomanyagents.ui.AgentInventoryScreen;
 import toomanyagents.ui.TooManyAgentsSettingsScreen;
@@ -535,7 +534,7 @@ public final class ClientControls {
         return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
             || screen instanceof toomanyagents.ui.SurveyScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
-            || screen instanceof AgentApprovalScreen || screen instanceof AgentQuestionScreen || screen instanceof AgentQueueScreen
+            || screen instanceof AgentApprovalScreen || screen instanceof AgentQueueScreen
             || screen instanceof AgentInventoryScreen || screen instanceof TooManyAgentsSettingsScreen || screen instanceof ChatScreen || screen instanceof KeyBindsScreen;
     }
 
@@ -557,7 +556,6 @@ public final class ClientControls {
         if (screen instanceof AgentChatScreen chat) reply.add("pointing", chat.pointingContext());
         if (screen instanceof AgentInventoryScreen inventory) reply.add("inventory", inventory.inventoryState());
         if (screen instanceof AgentApprovalScreen approval) reply.add("approval", approval.diagnostics());
-        if (screen instanceof AgentQuestionScreen question) reply.add("question", question.diagnostics());
         if (screen instanceof TooManyAgentsSettingsScreen || screen instanceof toomanyagents.ui.AgentWorkspaceScreen) reply.add("bbSetup", JsonState.object("state", BbSetup.get().view()).get("state"));
         if (inventoryAgents.supports(screen)) reply.add("inventoryAgents", inventoryAgents.diagnostics());
         reply.addProperty("width", client.getWindow().getGuiScaledWidth());
