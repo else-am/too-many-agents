@@ -6,10 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest focused live-validated implementation: **`8bfa67e`** (fishing and boat controls); earlier broad workflows passed on `880c87b`.
+- Latest focused live-validated implementation: **`6ee4bb3`** (sleep/wake); fishing/boat controls passed on `8bfa67e`, earlier broad workflows on `880c87b`.
 - Built artifact: `build/libs/too-many-agents-0.9.0.jar`.
-- Latest validated JAR SHA-256: `8cf9ecdba7664b0d364eeef73f6c1a86ade502b7c567508ddd3d43c2e35f6430`.
-- Test JVM `45456` saved/disconnected successfully and was stopped. Root owns lifecycle. New sleep/wake source passes the full build; native verification is pending.
+- Latest validated JAR SHA-256: `a8f8a149a9b740dab0b8263293fecd986dba46e65e01b14f2a318d492c54f4c3`.
+- Test JVM `56375` saved/disconnected successfully and was stopped. Root owns lifecycle. Sleep/wake passed its focused native check on `6ee4bb3`; newer observed entity events pass the full build but are not yet live-verified.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -76,7 +76,7 @@ Key evidence (local BB thread storage):
 - [Final fixes, signs and player/game state](</Users/scott/.bb/thread-storage/thr_xykqkgui57/880c87b-final-focused-summary.json>)
 - [Fishing replacement/retrieval/rendering and historical iterator stall](</Users/scott/.bb/thread-storage/thr_xykqkgui57/fc483c4-corrected-fishing-summary.json>)
 
-[Fishing fix and boat steering evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/8bfa67e-fishing-boat-summary.json>).
+[Fishing fix and boat steering evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/8bfa67e-fishing-boat-summary.json>). [Sleep evidence](</Users/scott/.bb/thread-storage/bed-sleep-corrected-evidence-99c6c629.json>), [wake evidence](</Users/scott/.bb/thread-storage/bed-wake-evidence-74c649ec.json>). [Independent bed evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/6ee4bb3-bed-summary.json>).
 
 Earlier failed mount/potion checks are superseded by the final successful build. Post-script shield release was expected cleanup, not a production defect. Several test failures were fixture mistakes; do not treat every historical failure as an unresolved product bug.
 
@@ -88,10 +88,12 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [ ] **Vehicle steering verification and other mounts:** basic boat movement/turning/release passed; boundary and passenger-ownership edge cases remain unverified. Horses, pigs, striders and minecarts remain implementation work.
 - [ ] **Creative gameplay API:** arbitrary item/component setters and remaining creative movement APIs. Existing physical `creative_item` is not the full Mineflayer creative API.
 - [x] **Bed/sleep/wake implementation:** actual body sleep, native bed occupancy, wake, parsed bed metadata and sleep/wake events; full build passed.
-- [ ] **Bed/sleep/wake verification:** native body pose/occupancy, event-state ordering and wake remain unverified. Native Mob sleep does not add a player or establish player respawn/night-skipping. Remaining body-specific gameplay stays pending.
+- [x] **Bed/sleep/wake focused verification:** actual sleeping body and occupied halves persisted after script release; sleep/wake handlers saw updated state; wake cleared occupancy, ticks continued, inventory stayed unchanged, already-awake rejected. Wider permissions/lifecycle cases remain pending. Native Mob sleep does not add a player or establish player respawn/night-skipping. Remaining body-specific gameplay stays pending.
 - [ ] **Chat gameplay API:** sending/receiving, patterns and related events. Ported ChatMessage formatting is not the chat transport/API.
 - [ ] **World/chunk API:** remaining applicable world/chunk methods and load events. Current synchronous observations cover a bounded **33×17×33** region; missing/unloaded cells are not known air.
-- [ ] **Events and observations:** remaining entity/effect/damage/animation/collection, sound/particle/explosion, spawn, scoreboard/team/boss-bar/title/tab-list and other public events/data. Audit applicability; do not silently exclude them.
+- [x] **Observed entity state event implementation:** emits effect additions/changes/removals (excluding normal countdown), crouch transitions, self move and rotation-only entityMoved; stable effects map. Full Java/plugin/package build passed.
+- [ ] **Observed entity event verification:** focused native additions/removals, countdown, crouch and movement checks remain pending. Changes entirely between observations are not reconstructed.
+- [ ] **Events and observations:** remaining native damage/animation/collection, sound/particle/explosion, spawn, scoreboard/team/boss-bar/title/tab-list and other public events/data. Audit applicability; do not silently exclude them.
 - [ ] **Special menus/actions:** horse inventory, beacon-specific operations and other applicable menu hooks; broader native verification of already implemented specialized menus.
 - [ ] **Inventory click modes 5/6:** drag/double-click remain explicitly unsupported, as in pinned upstream; make the compatibility decision explicit.
 - [ ] **Pathfinder completion:** shortcut/free-motion behavior, wider dynamic/custom-goal coverage, species-specific physics and remaining route-policy/geometry combinations.
@@ -126,7 +128,7 @@ The player-owner constraint now has an implementation: the server keeps the exis
 
 ## Additional work in progress
 
-Boat steering source was added after the fishing build: `actions.mjs`, `AgentActions.java`, a `Boat.controlBoat()` access transformer, and [prewritten scenarios](tools/mineflayer-reference/vehicle-native-scenarios.md). It uses native steering/physics, requires the actual body to control the boat, clears inputs on release, and enforces loaded/world/body-box boundaries. **Java/plugin/package build and basic live steering passed.** Other mount types and the listed boundary/ownership cases remain pending. Sleep/wake is built but not yet live-verified; see [its scenarios](tools/mineflayer-reference/beds-native-scenarios.md).
+Boat steering source was added after the fishing build: `actions.mjs`, `AgentActions.java`, a `Boat.controlBoat()` access transformer, and [prewritten scenarios](tools/mineflayer-reference/vehicle-native-scenarios.md). It uses native steering/physics, requires the actual body to control the boat, clears inputs on release, and enforces loaded/world/body-box boundaries. **Java/plugin/package build and basic live steering passed.** Other mount types and the listed boundary/ownership cases remain pending. Sleep/wake passed its focused live check; see [its scenarios](tools/mineflayer-reference/beds-native-scenarios.md).
 
 ## Working approach and logistics
 

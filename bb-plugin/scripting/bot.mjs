@@ -47,6 +47,7 @@ export function createBot(initial) {
   const { createWindow } = createWindowFactory(Item);
   const windowKeys = new WeakMap();
   const equipmentKeys = new WeakMap();
+  const effectTicks = new WeakMap();
   const playerKeys = new Map();
   let snapshot;
   let lastPhysicsTick;
@@ -179,11 +180,33 @@ export function createBot(initial) {
       let entity = bot.entities[source.id];
       const fresh = !entity || entity.uuid !== source.uuid;
       if (fresh) entity = bot.entities[source.id] = new Entity(source.id);
-      const moved = !entity.position.equals(source.position);
+      const moved = !entity.position.equals(source.position)
+        || entity.yaw !== (180 - source.yaw) * Math.PI / 180 || entity.pitch !== -source.pitch * Math.PI / 180;
+      const oldPosition = source.id === next.body.id && !fresh && moved ? entity.position.clone() : null;
       const slept = !!entity.isSleeping;
+      const crouched = !!entity.crouching;
+      const effectEvents = [];
+      const elapsed = source.effectTick - effectTicks.get(entity);
+      effectTicks.set(entity, source.effectTick);
+      for (const [id, effect] of Object.entries(source.effects ?? {})) {
+        const previous = entity.effects[id];
+        const expectedDuration = previous?.duration === -1 ? -1 : previous?.duration - elapsed;
+        const changed = !previous || previous.amplifier !== effect.amplifier || expectedDuration !== effect.duration;
+        if (changed) {
+          entity.effects[id] = { ...effect };
+          effectEvents.push(['entityEffect', entity, entity.effects[id]]);
+        } else previous.duration = effect.duration;
+      }
+      for (const id of Object.keys(entity.effects)) {
+        if (!Object.hasOwn(source.effects ?? {}, id)) {
+          const previous = entity.effects[id];
+          delete entity.effects[id];
+          effectEvents.push(['entityEffectEnd', entity, previous]);
+        }
+      }
       const attributesChanged = !fresh && JSON.stringify(entity.attributes) !== JSON.stringify(source.attributes);
       let equipmentChanged = false;
-      const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, ...fields } = source;
+      const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, effects, effectTick, ...fields } = source;
       const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
       Object.assign(entity, fields, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
         name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other',
@@ -204,9 +227,15 @@ export function createBot(initial) {
           }
         }
       }
-      if (source.id === next.body.id) bot.entity = entity;
+      if (source.id === next.body.id) {
+        bot.entity = entity;
+        if (oldPosition) entityEvents.push(['move', oldPosition]);
+      }
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
+      entityEvents.push(...effectEvents);
+      if ((!fresh && crouched !== !!entity.crouching) || fresh && entity.crouching)
+        entityEvents.push([entity.crouching ? 'entityCrouch' : 'entityUncrouch', entity]);
       if (!fresh && slept !== !!entity.isSleeping) {
         entityEvents.push([entity.isSleeping ? 'entitySleep' : 'entityWake', entity]);
         if (source.id === next.body.id) entityEvents.push([entity.isSleeping ? 'sleep' : 'wake']);

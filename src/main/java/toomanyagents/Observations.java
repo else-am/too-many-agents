@@ -37,9 +37,11 @@ final class Observations {
         result.addProperty("yaw", entity.getYRot());
         result.addProperty("pitch", entity.getXRot());
         result.addProperty("alive", entity.isAlive());
+        result.addProperty("crouching", entity.isShiftKeyDown());
         if (entity instanceof LivingEntity living) {
             result.addProperty("health", living.getHealth());
             result.addProperty("isSleeping", living.isSleeping());
+            result.addProperty("effectTick", living.tickCount);
             result.addProperty("airSupply", living.getAirSupply());
             result.addProperty("maxAirSupply", living.getMaxAirSupply());
             var attributes = new JsonObject();
