@@ -1071,8 +1071,8 @@ public final class AgentChatScreen extends Screen {
         inventoryButton.active = !draft() && (inventoryOpen || active && inventoryButton.visible);
         inventoryButton.setMessage(Component.literal(inventoryOpen ? "Inventory ✓" : "Inventory"));
         archiveButton.visible = true;
-        archiveButton.active = !draft() && active && backendAvailable() && !working() && !sending;
-        archiveButton.setTooltip(Tooltip.create(Component.literal(draft() ? "Available after creating the agent" : working() ? "Stop the agent's work to archive it" : "Archive conversation. Restore it from Mod settings → Archive.")));
+        archiveButton.active = !draft() && active && (!backendAvailable() || !working()) && !sending;
+        archiveButton.setTooltip(Tooltip.create(Component.literal(draft() ? "Available after creating the agent" : "Archive this agent in Minecraft. Restore it from Mod settings → Archive.")));
         settingsButton.setMessage(Component.literal(settingsPanel == null ? "Settings…" : settingsCovering ? "Back" : "Settings ✓"));
         if (worktreeBox != null) worktreeBox.active = !sending;
         if (draft()) {

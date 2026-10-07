@@ -9,12 +9,15 @@ import { ApiError, describe, type ObjectValue } from "./protocol.js";
 import manifest from "./package.json" with { type: "json" };
 
 export const MOD_VERSION = manifest.version;
+export function bbInstanceId(bb: BbPluginApi) {
+  return createHash("sha256").update(bb.server.experimental_dataDir).digest("hex");
+}
 
 /** A mod-owned rendezvous, independent of BB's installation and data directories. */
 export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds) {
   // This identity survives restarts and plugin replacement. BB provides its
   // configured directory; we never inspect or write its internal files.
-  const instanceId = createHash("sha256").update(bb.server.experimental_dataDir).digest("hex");
+  const instanceId = bbInstanceId(bb);
   let updatingUntil = 0;
   let preparing = false;
   const generation = randomUUID();
@@ -62,6 +65,8 @@ export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds) {
   return {
     check(data: ObjectValue) {
       if (data.op === "hello") return;
+      if (data.bbInstanceId !== instanceId)
+        throw new ApiError("bb_instance_changed", "This request belongs to a different BB instance.");
       if (data.modVersion !== MOD_VERSION)
         throw new ApiError("version_mismatch", `Minecraft mod ${String(data.modVersion ?? "unknown")} and plugin ${MOD_VERSION} must match. Open BB connection in mod settings.`);
       if ((preparing || updatingUntil > Date.now()) && data.op !== "session.detach")

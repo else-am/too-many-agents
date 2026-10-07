@@ -71,10 +71,11 @@ with its token; never share it.
 ## Using it
 
 Create a body in Minecraft and choose a native BB project, provider and model.
-Each body belongs to its world's stable ID and one BB thread. Conversations,
-queued messages, provider settings and archives live in BB. Minecraft saves
-agents, their BB thread links, body settings, inventories, project bounds and
-stations with the world.
+Each body belongs to its world's stable ID, one BB instance and one BB thread.
+Conversations, queued messages and provider settings live in BB. Minecraft saves
+agents, their BB ownership and thread links, body settings, inventories, project
+bounds and stations with the world. Only the selected BB is connected. Switching
+BB leaves the other instance's agents disconnected; switching back reconnects them.
 
 New agents belong to **This world** unless you choose another project. Each world
 gets a BB project ("Minecraft: <save name>") the first time it is used, and its
@@ -154,8 +155,10 @@ communication** is enabled and both bodies are present. BB owns message queues
 and communication permissions. Stopping a thread cancels its physical actions;
 archiving drops its inventory, saves and despawns its body, and frees its station.
 Unarchiving restores the saved body with an empty inventory when the world is
-open. Deleting a thread removes its body association. These changes also
-reconcile after reconnecting.
+open. A missing or deleted conversation leaves the agent disconnected and retains
+its binding. **Archive** in Minecraft hides the agent locally and works while BB
+is unavailable. It keeps the binding and saved body; restore it from mod settings
+→ Archive. Reconnecting does not undo a local archive or restore choice.
 
 Chat renders Markdown natively, including tables, lists, quotes, inline code and
 code blocks. Drag to select text; code blocks and diagrams have Copy controls.

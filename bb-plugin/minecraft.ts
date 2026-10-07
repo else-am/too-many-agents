@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { ApiError, PROTOCOL, object, type Session, type Identity, type Agent } from "./protocol.js";
+import { bbInstanceId } from "./discovery.js";
 
 const START_EXPIRY_MS = 10_000;
 
@@ -11,6 +12,7 @@ function connectionRefused(error: unknown): boolean {
 }
 
 export function minecraftWorlds(bb: BbPluginApi) {
+  const instanceId = bbInstanceId(bb);
   const lifetime = new AbortController();
   const sessions = new Map<string, Session>();
   const seen = new Map<string, number>();
@@ -54,6 +56,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
           requestId: randomUUID(),
           expiresAt: Date.now() + START_EXPIRY_MS,
           ...args,
+          bbInstanceId: instanceId,
         }),
         signal: AbortSignal.any([lifetime.signal, signal ?? AbortSignal.timeout(120_000)]),
       });

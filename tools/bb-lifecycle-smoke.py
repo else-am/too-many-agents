@@ -137,13 +137,19 @@ def main():
     print('PASS: offline archive reconciles and does not restore dropped inventory', flush=True)
 
     bb('thread', 'delete', receiver_thread, '--yes')
-    wait(lambda: all(a['id'] != receiver_id for a in request('/v1/agents')), 'Deleted association cleanup')
-    wait(lambda: all(e.get('agent', {}).get('id') != receiver_id for e in request('/v1/state')['server']['entities']), 'Deleted body cleanup')
-    print('PASS: native BB delete clears the association and physical body', flush=True)
+    wait(lambda: get(receiver_id).get('status') == 'disconnected', 'Deleted conversation disconnects')
+    assert get(receiver_id)['threadId'] == receiver_thread and not get(receiver_id)['bodyRemoved']
+    request(path + '/conversation-archive', {})
+    wait(lambda: get(receiver_id).get('conversationArchived') and not get(receiver_id).get('bodyLoaded'), 'Local archive of disconnected agent')
+    request(path + '/conversation-restore', {})
+    wait(lambda: get(receiver_id).get('bodyLoaded') and not get(receiver_id).get('conversationArchived'), 'Local restore of disconnected agent')
+    assert get(receiver_id)['threadId'] == receiver_thread
+    request(path + '/conversation-archive', {})
+    print('PASS: BB deletion preserves the binding; disconnected agents archive and restore locally', flush=True)
     bb('thread', 'archive', root['threadId'])
     wait(lambda: not get(root_id)['bodyLoaded'], 'Sender archive')
     result = ROOT / 'run/too-many-agents/bb-lifecycle-result.json'
-    result.write_text(json.dumps({'sender': root_id, 'threadId': root['threadId'], 'deletedReceiver': receiver_id, 'marker': marker}, indent=2) + '\n')
+    result.write_text(json.dumps({'sender': root_id, 'threadId': root['threadId'], 'disconnectedReceiver': receiver_id, 'marker': marker}, indent=2) + '\n')
     print('PASS: BB lifecycle checks complete; archived sender retained in', result, flush=True)
 
 

@@ -26,11 +26,11 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     private JsonArray projectRows = new JsonArray();
     private Path records;
-    private String loadedSession, loadedWorldId, callbackUrl, callbackToken, error = "";
+    private String loadedSession, loadedWorldId, callbackUrl, callbackToken, connectedInstance = "", error = "";
     private boolean connected, closed;
 
     private static final class Agent {
-        String id, name, projectId="", threadId="", parentThreadId="", suspendedBody="", startNonce="";
+        String id, name, bbInstanceId="", projectId="", threadId="", parentThreadId="", suspendedBody="", startNonce="";
         GameAccess.Body body;
         JsonObject settings=new JsonObject();
         // Opaque plugin-owned draft, retained with an unstarted body.
@@ -38,6 +38,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         // The plugin's latest UI view; Java does not derive conversation state.
         JsonObject remote=new JsonObject();
         boolean minecraftAccess=true, removed, lost, archived, deleted, suspended;
+        Boolean localArchive;
     }
 
     AgentService(GameAccess game, Supplier<String> worldSession) {
@@ -54,15 +55,31 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var world=game.worldInfo();
         String worldId=text(world,"id");
         if(worldId.isBlank() || flag(world,"needsDecision") || !worldId.equals(game.currentWorldId())) return;
+        String instance = "";
         try {
             synchronized(this) {
                 if(!session.equals(worldSession.get())) return;
                 if(!session.equals(loadedSession)) loadWorld(world,session);
             }
-            bb.call(object("op","session.attach","protocol",3,"worldId",worldId,"worldSessionId",session,"callbackUrl",callbackUrl,"callbackToken",callbackToken)).join();
+            instance=BbSetup.get().connection().instanceId();
+            synchronized(this) {
+                if(!instance.equals(connectedInstance)) { closeScopes(null,"bb_changed"); projectRows=new JsonArray(); connected=false; connectedInstance=instance; }
+            }
+            bb.call(object("op","session.attach","bbInstanceId",instance,"protocol",3,"worldId",worldId,"worldSessionId",session,"callbackUrl",callbackUrl,"callbackToken",callbackToken)).join();
             synchronized(this) { if(!currentSession(session)) return; }
-            var state=rpc("world.sync",new JsonObject()).join().getAsJsonObject();
-            synchronized(this) { if(!currentSession(session)) return; projectRows=array(state,"projects"); connected=true; error=""; }
+            var state=rpc("world.sync",object("bbInstanceId",instance)).join().getAsJsonObject();
+            synchronized(this) {
+                if(!currentSession(session) || !BbSetup.get().isCurrent(instance)) return;
+                projectRows=array(state,"projects"); connected=true; error="";
+                // Old drafts have no conversation metadata. Their existing project can
+                // identify the BB that owns their saved execution choices.
+                var projects=new HashSet<String>();
+                for(var row:projectRows) projects.add(text(row.getAsJsonObject(),"id"));
+                boolean adopted=false;
+                for(var agent:agents.values()) if(agent.bbInstanceId.isBlank() && agent.threadId.isBlank() && agent.startNonce.isBlank()
+                    && !agent.deleted && projects.contains(agent.projectId)) { agent.bbInstanceId=instance; adopted=true; }
+                if(adopted) save();
+            }
 
         } catch(Exception failure) {
             synchronized(this) { if(currentSession(session)) { connected=false; error=message(failure); } }
@@ -73,16 +90,15 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private CompletableFuture<Void> applyBodyState(Agent agent,String state,boolean running,String session) {
         synchronized(this) {
             requireCurrent(agent,session);
-            if(state.equals("deleted")) {
-                closeScopes(agent.id,"thread_deleted");
-                agent.removed=true; agent.deleted=true; agent.threadId=""; agent.spawn=new JsonObject();
-                agent.suspendedBody="";
-                return save().thenCompose(done -> game.worldCommand(object("operation","station-release","agentId",agent.id),session)).thenApply(done -> null);
+            if(state.equals("deleted") || state.equals("disconnected")) {
+                closeScopes(agent.id,"conversation_unavailable");
+                if(text(agent.remote,"error").isBlank()) agent.remote.addProperty("error","This conversation is unavailable in BB.");
+                return CompletableFuture.completedFuture(null);
             }
             if(state.isBlank()) return CompletableFuture.completedFuture(null);
             if(!Set.of("present","suspended").contains(state)) return failed("unknown_body_state");
             if(!running) closeScopes(agent.id,"thread_not_active");
-            boolean archived=state.equals("suspended");
+            boolean archived=agent.localArchive!=null ? agent.localArchive : state.equals("suspended");
             agent.archived=archived;
             if(agent.removed) return CompletableFuture.completedFuture(null);
             if(archived) {
@@ -108,7 +124,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
 
     private void loadWorld(JsonObject world,String session) throws Exception {
         closeScopes(null,"world_session_changed");
-        agents.clear(); cancelled.clear(); connected=false;
+        agents.clear(); cancelled.clear(); connected=false; connectedInstance=""; projectRows=new JsonArray();
         String worldId=text(world,"id");
         records=Path.of(text(world,"directory")).resolve("too-many-agents/bb-bodies.json");
         if(Files.exists(records)) {
@@ -126,6 +142,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(agent.body!=null) agent.body=new GameAccess.Body(agent.body.entityUuid(),worldId,agent.body.dimension());
         agent.settings=BodySettings.copy(obj(row,"settings")); agent.minecraftAccess=flag(row,"minecraftAccess");
         agent.projectId=text(row,"projectId"); agent.threadId=text(row,"threadId"); agent.suspendedBody=text(row,"suspendedBody"); agent.deleted=flag(row,"deleted");
+        agent.bbInstanceId=text(row,"bbInstanceId");
+        agent.localArchive=row.has("localArchive") && !row.get("localArchive").isJsonNull() ? row.get("localArchive").getAsBoolean() : null;
         agent.startNonce=text(row,"startNonce");
         agent.spawn=obj(row,"spawn").deepCopy(); agent.archived=flag(row,"archived");
         agent.removed=flag(row,"bodyRemoved"); agent.lost=flag(row,"bodyLost");
@@ -136,6 +154,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var rows=new JsonArray();
         for(var agent:agents.values()) rows.add(object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,
             "minecraftAccess",agent.minecraftAccess,"projectId",agent.projectId,"threadId",agent.threadId,"suspendedBody",agent.suspendedBody,"deleted",agent.deleted,
+            "bbInstanceId",agent.bbInstanceId,"localArchive",agent.localArchive,
             "startNonce",agent.startNonce,"spawn",agent.spawn,"archived",agent.archived,"bodyRemoved",agent.removed,"bodyLost",agent.lost));
         var data=object("worldId",loadedWorldId,"agents",rows); var file=records;
         return CompletableFuture.runAsync(() -> { try { JsonState.write(file,data); } catch(Exception failure) { throw new CompletionException(failure); } },disk);
@@ -145,9 +164,20 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         request.addProperty("worldId",loadedWorldId); request.addProperty("worldSessionId",loadedSession);
         return bb.call(request);
     }
-    private CompletableFuture<JsonElement> agentRpc(String op,String id,JsonObject arguments) {
-        var request=arguments.deepCopy(); request.addProperty("agentId",id);
-        return rpc(op,request);
+    private synchronized CompletableFuture<JsonElement> agentRpc(String op,String id,JsonObject arguments) {
+        return guarded(() -> {
+            var agent=require(id);
+            if(!ownsConnection(agent)) return failed("This agent is disconnected. Select its BB to reconnect.");
+            var request=arguments.deepCopy(); request.addProperty("agentId",id); request.addProperty("bbInstanceId",agent.bbInstanceId);
+            return rpc(op,request);
+        });
+    }
+    private boolean ownsConnection(Agent agent) { return !agent.bbInstanceId.isBlank() && BbSetup.get().isCurrent(agent.bbInstanceId); }
+    private JsonObject worldView() {
+        var world=game.worldInfo();
+        world.addProperty("legacyWorldProjectId",text(world,"worldProjectId"));
+        world.addProperty("worldProjectId",text(obj(world,"bbProjects"),BbSetup.get().selectedInstance()));
+        return world;
     }
     private synchronized Agent require(String id) {
         if(!currentSession(loadedSession)) throw new IllegalStateException("world_session_changed");
@@ -160,7 +190,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     /** Null until this world's records load; an empty registry then really means no bodies belong here. */
     synchronized Set<String> retainedBodies() {
         if(!currentSession(loadedSession)) return null;
-        // Keep drafts and pending starts, too. Only BB can confirm a bound thread's deletion.
+        // Connection failures never remove bodies or their saved bindings.
         return agents.values().stream().filter(a -> !a.removed).map(a -> a.id).collect(Collectors.toSet());
     }
 
@@ -183,6 +213,9 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         game.forgetDimension(previous);
     }
     synchronized Map<String,GameAccess.AgentState> agentStates() {
+        if(!connectedInstance.isBlank() && !BbSetup.get().isCurrent(connectedInstance)) {
+            closeScopes(null,"bb_disconnected"); connected=false; connectedInstance=""; projectRows=new JsonArray();
+        }
         var result=new HashMap<String,GameAccess.AgentState>();
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed && !agent.archived) {
@@ -197,7 +230,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         var agent=agents.get(id); if(agent==null || !currentSession(loadedSession)) return object("id",id,"status","unavailable");
         String agentError=text(agent.remote,"error");
         var state=agent.remote.deepCopy();
-        for(var row:projectRows) {
+        for(var row:ownsConnection(agent)?projectRows:new JsonArray()) {
             var project=row.getAsJsonObject();
             if(agent.projectId.equals(text(project,"id"))) {
                 state.addProperty("projectColor",ProjectColor.of(project));
@@ -206,20 +239,23 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             }
         }
         var physical=object("id",agent.id,"name",agent.name,"body",agent.body,"settings",agent.settings,"projectId",agent.projectId,
-            "threadId",agent.threadId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
+            "threadId",agent.threadId,"bbInstanceId",agent.bbInstanceId,"lifecycle",agent.removed?"removed":"active","bodyRemoved",agent.removed,"bodyLost",agent.lost,
             "minecraftAccess",agent.minecraftAccess,"currentWorld",game.belongsToCurrentWorld(agent.body),
             "bodyType",text(agent.settings,"body"),"gamePaused",game.isPaused(),"conversationArchived",agent.archived);
         for(var entry:physical.entrySet()) state.add(entry.getKey(),entry.getValue());
         if(agent.threadId.isBlank()) { state.add("executionOptions",agent.spawn); state.addProperty("providerId",text(agent.spawn,"providerId")); }
         if(!state.has("status")) state.addProperty("status","idle");
         if(!state.has("activity")) state.addProperty("activity","idle");
-        if(!connected || !agentError.isBlank()) { state.addProperty("status","disconnected"); state.addProperty("canSteer",false); }
+        if(!connected || !ownsConnection(agent) || !agentError.isBlank()) {
+            state.addProperty("status","disconnected"); state.addProperty("activity","idle"); state.addProperty("canSteer",false); state.add("speech",JsonNull.INSTANCE);
+        }
         var live=agent.body==null?new JsonObject():game.cached(agent.body);
         state.addProperty("bodyLoaded",!live.isEmpty());
         if(live.has("action")) state.add("action",live.get("action"));
         int pending=scopes.entrySet().stream().filter(e -> agent.id.equals(scopeAgents.get(e.getKey()))).mapToInt(e -> e.getValue().pendingCount()).sum();
         state.addProperty("pendingWorldTools",pending); state.addProperty("waitingForGame",game.isPaused() && pending>0);
-        if(!agentError.isBlank()) state.addProperty("error",agentError);
+        if(!ownsConnection(agent)) state.addProperty("error","Select this agent's BB to reconnect. Its conversation binding is saved.");
+        else if(!agentError.isBlank()) state.addProperty("error",agentError);
         else if(!error.isBlank()) state.addProperty("error",error);
         return state;
     }
@@ -241,7 +277,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public CompletableFuture<JsonObject> projectCreationOptions(String projectId) {
         return rpc("project.creationOptions",object("projectId",projectId)).thenApply(JsonElement::getAsJsonObject);
     }
-    @Override public synchronized JsonObject projects() { return object("projects",projectRows,"world",game.worldInfo()); }
+    @Override public synchronized JsonObject projects() { return object("projects",projectRows,"world",worldView()); }
     @Override public CompletableFuture<JsonObject> projectCommand(JsonObject request) { return guarded(() -> {
         String operation=text(request,"operation");
         if(operation.equals("world-resolve") || operation.startsWith("bounds-") || operation.startsWith("station-")) {
@@ -312,10 +348,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(!settings.has("mode")) settings.addProperty("mode","survival");
         validateRoleBody(BodySettings.profile(settings));
         String name=text(settings,"name");
-        var agent=new Agent(); agent.id=id; agent.name=name; agent.projectId=projectId;
+        var agent=new Agent(); agent.id=id; agent.name=name; agent.projectId=projectId; agent.bbInstanceId=text(request,"bbInstanceId");
         // World drafts always have access; delegated bodies still inherit their caller's access.
         agent.minecraftAccess=caller==null
-            ? projectId.equals(text(game.worldInfo(),"worldProjectId")) || flag(request,"minecraftAccess")
+            ? projectId.equals(text(worldView(),"worldProjectId")) || flag(request,"minecraftAccess")
             : caller.minecraftAccess && (!requested.has("minecraftAccess") || flag(requested,"minecraftAccess"));
         settings.addProperty("minecraftAccess", agent.minecraftAccess);
         agent.settings=settings; agent.spawn=obj(request,"draft").deepCopy();
@@ -345,10 +381,16 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             });
         });
     }
-    private CompletableFuture<Void> bind(String id,String threadId,String nonce,String session) {
+    private CompletableFuture<Void> bind(String id,String threadId,String nonce,String session,String instance) {
         var agent=agents.get(id);
+        if(!currentSession(session) || agent==null || !agent.bbInstanceId.isBlank() && !agent.bbInstanceId.equals(instance)) return CompletableFuture.completedFuture(null);
+        // Reconnect has checked this thread's BB metadata against the world and agent.
+        // This safely identifies records written before BB ownership was recorded.
+        if(agent.bbInstanceId.isBlank() && !threadId.isBlank() && agent.threadId.equals(threadId)) {
+            agent.bbInstanceId=instance; return save();
+        }
         if(!currentSession(session) || agent==null || !agent.threadId.isBlank() || nonce.isBlank() || !agent.startNonce.equals(nonce)) return CompletableFuture.completedFuture(null);
-        agent.threadId=threadId; agent.startNonce=""; agent.spawn=new JsonObject();
+        agent.bbInstanceId=instance; agent.threadId=threadId; agent.startNonce=""; agent.spawn=new JsonObject();
         return save();
     }
     private JsonObject bodyRecord(Agent agent) {
@@ -407,9 +449,14 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         closeScopes(id,"interrupted");
         return agent.threadId.isBlank()?CompletableFuture.completedFuture(null):agentRpc("agent.stop",id,new JsonObject()).thenApply(done -> null);
     }); }
-    @Override public CompletableFuture<Void> archiveConversation(String id,boolean archive) {
-        return agentRpc("agent.archive",id,object("archived",archive)).thenApply(done -> null);
-    }
+    @Override public synchronized CompletableFuture<Void> archiveConversation(String id,boolean archive) { return guarded(() -> {
+        var agent=require(id); String session=loadedSession;
+        agent.localArchive=archive;
+        closeScopes(id,archive?"agent_archived":"agent_restored");
+        boolean remoteRestore=!archive && ownsConnection(agent) && flag(agent.remote,"conversationArchived") && text(agent.remote,"error").isBlank();
+        return save().thenCompose(done -> remoteRestore ? agentRpc("agent.archive",id,object("archived",false)).thenApply(ignored -> null) : CompletableFuture.completedFuture(null))
+            .thenCompose(done -> applyBodyState(agent,archive?"suspended":"present",false,session)).thenCompose(done -> save());
+    }); }
     @Override public synchronized CompletableFuture<Void> remove(String id,boolean archive) { return guarded(() -> {
         var agent=require(id); String session=loadedSession;
         if(archive) return archiveConversation(id,true);
@@ -437,6 +484,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(request.get("protocol").getAsInt()!=3) return failed("protocol_mismatch");
             if(session==null || !session.equals(loadedSession) || !session.equals(text(request,"worldSessionId"))
                 || !loadedWorldId.equals(text(request,"worldId"))) return CompletableFuture.failedFuture(new StaleSessionException());
+            String instance=text(request,"bbInstanceId");
+            // Setup may temporarily be unready while probing connected games. Selection,
+            // not setup readiness, determines whether this BB still owns the callback.
+            if(instance.isBlank() || !instance.equals(BbSetup.get().selectedInstance())) return CompletableFuture.failedFuture(new StaleSessionException());
+            var targetAgent=agents.get(text(request,"agentId"));
+            if(targetAgent!=null && !op.equals("body.bind") && !targetAgent.bbInstanceId.equals(instance)) return failed("This agent belongs to another BB.");
             long expiresAt=request.get("expiresAt").getAsLong();
             switch(op) {
                 case "body.validate": {
@@ -456,10 +509,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 }
                 case "agents": {
                     var rows=new JsonArray();
-                    for(var a:agents.values()) if(!a.deleted) rows.add(bodyRecord(a));
+                    for(var a:agents.values()) if(!a.deleted && a.bbInstanceId.equals(instance)) rows.add(bodyRecord(a));
                     return CompletableFuture.completedFuture(object("agents",rows));
                 }
-                case "body.bind": return bind(text(request,"agentId"),text(request,"threadId"),text(request,"nonce"),session).thenApply(done -> new JsonObject());
+                case "body.bind": return bind(text(request,"agentId"),text(request,"threadId"),text(request,"nonce"),session,instance).thenApply(done -> new JsonObject());
                 case "body.begin": {
                     var agent=require(text(request,"agentId"));
                     if(agent.removed || agent.archived || !agent.threadId.isBlank()) return failed("This body cannot start a new conversation.");
@@ -489,11 +542,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     Path path=Path.of(text(game.worldInfo(),"directory")).resolve("too-many-agents/workspace");
                     return CompletableFuture.supplyAsync(() -> { try { return object("path",Files.createDirectories(path).toString()); } catch(Exception failure) { throw new CompletionException(failure); } },disk);
                 }
-                case "world.project": return game.worldCommand(object("operation","world-project","projectId",text(request,"projectId")),session).thenApply(done -> new JsonObject());
+                case "world.project": return game.worldCommand(object("operation","world-project","bbInstanceId",instance,"projectId",text(request,"projectId")),session).thenApply(done -> new JsonObject());
                 case "communication": {
                     var sender=agents.get(text(request,"senderAgentId"));
                     var recipient=agents.get(text(request,"recipientAgentId"));
                     if(sender==null || recipient==null || sender.removed || recipient.removed || sender.archived || recipient.archived
+                        || !sender.bbInstanceId.equals(instance) || !recipient.bbInstanceId.equals(instance)
                         || !sender.threadId.equals(text(request,"senderThreadId")) || !recipient.threadId.equals(text(request,"recipientThreadId")))
                         return CompletableFuture.completedFuture(new JsonObject());
                     String preview=text(request,"message");
@@ -506,7 +560,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     if(scope!=null) { scope.close("tool_cancelled"); var agent=agents.get(scopeAgents.remove(target)); if(agent!=null) game.requestActionStop(agent.body,session); }
                     return CompletableFuture.completedFuture(new JsonObject());
                 }
-                case "world_metadata": return CompletableFuture.completedFuture(game.worldInfo());
+                case "world_metadata": return CompletableFuture.completedFuture(worldView());
             }
             if(expiresAt<System.currentTimeMillis()) return failed("expired_before_execution");
             String actor=text(request,"agentId");

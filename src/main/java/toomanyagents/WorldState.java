@@ -17,9 +17,11 @@ final class WorldState {
     private boolean needsDecision;
 
     /** The BB project whose folder is this save's workspace. A copy starts without one. */
-    JsonObject project(String projectId) throws IOException {
+    JsonObject project(String instanceId,String projectId) throws IOException {
         if (needsDecision) throw new IllegalStateException("Resolve the relocated world before creating its project.");
-        data.addProperty("worldProjectId",projectId);
+        if(instanceId.isBlank()) throw new IllegalArgumentException("A BB instance is required.");
+        var projects=JsonState.obj(data,"bbProjects");
+        projects.addProperty(instanceId,projectId); data.add("bbProjects",projects);
         JsonState.write(file,data);
         return snapshot();
     }
@@ -112,7 +114,8 @@ final class WorldState {
                 for (var value : JsonState.array(bodies,"agents")) {
                     var agent = value.getAsJsonObject();
                     // The copy's world project is its own; it is created on first use.
-                    String worldProject = JsonState.text(data,"worldProjectId");
+                    String worldProject = JsonState.text(JsonState.obj(data,"bbProjects"),JsonState.text(agent,"bbInstanceId"));
+                    if(worldProject.isBlank()) worldProject=JsonState.text(data,"worldProjectId");
                     if (!worldProject.isBlank() && JsonState.text(agent,"projectId").equals(worldProject)) agent.addProperty("projectId","minecraft");
                     if (!worldProject.isBlank() && JsonState.text(JsonState.obj(agent,"spawn"),"projectId").equals(worldProject)) JsonState.obj(agent,"spawn").addProperty("projectId","minecraft");
                     if (JsonState.text(agent,"threadId").isBlank()) continue;

@@ -49,6 +49,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
         throw new ApiError("host_unavailable", "BB local host daemon is unavailable");
       // A project created before a lost mapping response can be found by its owned folder.
       const existing = (await bb.sdk.projects.list()).find((project) =>
+        project.id === world.legacyWorldProjectId ||
         project.sources.some((source) => source.path === path && source.hostId === primaryHostId),
       );
       const project =
@@ -127,11 +128,14 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
   async function list(live: Session) {
     const world = await metadata(live);
     const projects = await bb.sdk.projects.list({ includePersonal: true });
-    const own = projects.find((project) => project.id === world.worldProjectId);
+    const folder = object(await worlds.callback(live, "world.workspace", {}));
+    const path = string(folder.path, "workspace path");
+    const own = projects.find((project) => project.id === world.worldProjectId)
+      ?? projects.find((project) => project.id === world.legacyWorldProjectId)
+      ?? projects.find((project) => project.sources.some((source) => source.path === path));
     if (own) {
+      if (world.worldProjectId !== own.id) await worlds.callback(live, "world.project", { projectId: own.id });
       const source = own.sources.find((row) => row.isDefault);
-      const folder = object(await worlds.callback(live, "world.workspace", {}));
-      const path = string(folder.path, "workspace path");
       if (source && source.path !== path)
         await bb.sdk.projects.sources.update({
           projectId: own.id,

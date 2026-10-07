@@ -13,13 +13,17 @@ final class BbClient implements AutoCloseable {
 
     CompletableFuture<JsonElement> call(JsonObject request) {
         try {
-            var base=BbSetup.get().address();
+            var connection=BbSetup.get().connection();
+            String expected=JsonState.text(request,"bbInstanceId");
+            if(!expected.isBlank() && !expected.equals(connection.instanceId())) throw new IllegalStateException("The selected BB changed. Reconnect before trying again.");
             request = request.deepCopy();
             request.addProperty("modVersion", BbSetup.version());
-            var message=HttpRequest.newBuilder(base.resolve("/api/v1/plugins/minecraft/http/v1/rpc"))
+            request.addProperty("bbInstanceId",connection.instanceId());
+            var message=HttpRequest.newBuilder(connection.address().resolve("/api/v1/plugins/minecraft/http/v1/rpc"))
                 .timeout(Duration.ofSeconds(QUICK.contains(JsonState.text(request,"op"))?5:110)).header("Content-Type","application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(request.toString())).build();
             return http.sendAsync(message,HttpResponse.BodyHandlers.ofString()).thenApply(reply -> {
+                if(!BbSetup.get().isCurrent(connection.instanceId())) throw new CompletionException(new IllegalStateException("BB changed while the request was running. Its outcome is unknown; inspect it before retrying."));
                 JsonObject body;
                 try { body=JsonParser.parseString(reply.body()).getAsJsonObject(); }
                 catch(RuntimeException malformed) { throw new CompletionException(new IllegalStateException("BB returned an unreadable response (HTTP "+reply.statusCode()+"). The outcome is unknown; inspect its state before retrying.")); }

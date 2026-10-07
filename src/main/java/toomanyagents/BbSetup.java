@@ -19,6 +19,7 @@ import static toomanyagents.JsonState.*;
 public final class BbSetup {
     public enum Action { WAIT, NONE, ALLOW_UPDATES, RESTORE, RETRY }
     public record Instance(String id, String url, String version, String label) {}
+    public record Connection(String instanceId, URI address) {}
     public record View(String message, String instanceId, String pluginVersion, boolean ready,
                        boolean automatic, boolean busy, String cli, List<Instance> instances, boolean bbNotFound,
                        Action action, boolean needsLocation) {}
@@ -38,11 +39,12 @@ public final class BbSetup {
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(3)).build();
     private volatile View view = new View("Checking BB…", "", "", false, false, false, "", List.of(), false, Action.WAIT, false);
     private Action action = Action.WAIT;
-    private String selected = "", cli = "", selectedUrl = "";
+    private volatile String selected = "";
+    private String cli = "", selectedUrl = "";
     private String expectedPluginRoot = "", previousGeneration = "";
     private boolean automatic, installPending, settingsUnreadable;
     private boolean bbNotFound;
-    private URI readyUrl;
+    private Connection connection;
     private String error = "";
     private String notice = "";
 
@@ -62,10 +64,12 @@ public final class BbSetup {
     }
 
     public View view() { return view; }
-    public synchronized URI address() {
-        if (readyUrl == null) throw new IllegalStateException(view.message() + " Open BB connection at the top of mod settings.");
-        return readyUrl;
+    public String selectedInstance() { return selected; }
+    public synchronized Connection connection() {
+        if (connection == null || !connection.instanceId().equals(selected)) throw new IllegalStateException(view.message() + " Open BB connection at the top of mod settings.");
+        return connection;
     }
+    public synchronized boolean isCurrent(String instanceId) { return connection != null && selected.equals(instanceId) && connection.instanceId().equals(instanceId); }
     public void retry() { worker.execute(() -> { if (!settingsUnreadable) error = ""; notice = ""; check(false); }); }
     public void select(String id) { worker.execute(() -> {
         developmentLoaded = false; installStartedThisLaunch = false;
@@ -141,7 +145,7 @@ public final class BbSetup {
                 }
                 if (version().equals(installed) && !explicit && !installPending && sourceMatches && (!development() || developmentLoaded)) {
                     action = notice.isBlank() ? Action.NONE : Action.RETRY;
-                    synchronized (this) { readyUrl = loopback(url); }
+                    synchronized (this) { connection = new Connection(selected, loopback(url)); }
                     publish(notice.isBlank() ? "Connected to BB" : notice, installed, true, false, instances); return;
                 }
             }
@@ -199,7 +203,7 @@ public final class BbSetup {
                     if (installationVerified(verified)) {
                         selectedUrl = candidate.url(); installPending = false; persist();
                         developmentLoaded = development();
-                        synchronized (this) { readyUrl = loopback(candidate.url()); }
+                        synchronized (this) { connection = new Connection(selected, loopback(candidate.url())); }
                         action = Action.NONE;
                         publish("Connected to BB", version(), true, false, discover()); return;
                     }
@@ -287,7 +291,7 @@ public final class BbSetup {
     }
 
     private void publish(String message, String installed, boolean ready, boolean busy, List<Instance> instances) {
-        if (!ready) synchronized (this) { readyUrl = null; }
+        if (!ready) synchronized (this) { connection = null; }
         view = new View(message, selected, installed, ready, automatic, busy, cli, List.copyOf(instances), bbNotFound && !ready,
             busy ? Action.WAIT : action, !ready && (settingsUnreadable || cli.isBlank() && !bbNotFound));
     }

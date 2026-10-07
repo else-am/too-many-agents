@@ -22,7 +22,7 @@ def main():
     parser.add_argument('--timeout', type=float, default=120, help='HTTP timeout in seconds; timed out mutations must not be retried blindly')
     commands = parser.add_subparsers(dest='action', required=True)
     listing = commands.add_parser('list')
-    listing.add_argument('--archived', action='store_true', help='Show only conversations archived in BB')
+    listing.add_argument('--archived', action='store_true', help='Show only archived agents')
     commands.add_parser('catalog').add_argument('--provider', help='Native BB provider ID, such as codex or claude-code')
     commands.add_parser('stations', help="List the current world's stations and occupants")
     settings = commands.add_parser('settings')
@@ -60,9 +60,9 @@ def main():
     cancel.add_argument('message_id')
     for action, help_text in (
         ('remove', 'Remove the NPC body; keep the conversation'),
-        ('archive', 'Archive the BB thread and suspend its body with inventory'),
-        ('conversation-archive', 'Archive the BB thread and suspend its body; keep readable history'),
-        ('conversation-restore', 'Restore an archived BB thread to the active list'),
+        ('archive', 'Archive the agent locally; keep its saved BB binding'),
+        ('conversation-archive', 'Archive the agent locally, including while disconnected'),
+        ('conversation-restore', 'Restore an archived agent to the active list'),
         ('inventory', 'Inspect body inventory'),
     ):
         commands.add_parser(action, help=help_text).add_argument('id')

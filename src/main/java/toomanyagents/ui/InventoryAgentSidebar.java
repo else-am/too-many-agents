@@ -375,7 +375,7 @@ public final class InventoryAgentSidebar extends Screen {
     private String projectName(String id, List<JsonObject> agents) {
         String name = projects.containsKey(id) ? text(projects.get(id), "name")
             : agents.isEmpty() ? "" : text(agents.getFirst(), "projectName");
-        return name.isBlank() ? (id.isBlank() || id.equals("proj_personal") ? "No project" : "Missing project") : name;
+        return name.isBlank() ? (id.isBlank() || id.equals("proj_personal") ? "No project" : "Disconnected project") : name;
     }
 
     private String projectTooltip(Entry entry) {
@@ -622,7 +622,7 @@ public final class InventoryAgentSidebar extends Screen {
             setY(visibleTop);
             setHeight(Math.max(0, visibleBottom - visibleTop));
             visible = visibleBottom > visibleTop;
-            active = visible && (!edit || projects.containsKey(projectId()));
+            active = visible && projects.containsKey(projectId());
             var label = Component.literal((edit ? "Edit project " : "New agent in ") + row.entry.name);
             setMessage(label);
         }
