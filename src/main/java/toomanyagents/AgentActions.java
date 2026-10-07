@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
     final Mob mob;
@@ -145,6 +145,7 @@ final class AgentActions {
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
         if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw error("release_manual_controls_before_navigation");
+        if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw error("dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
         if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
@@ -291,12 +292,13 @@ final class AgentActions {
                             if (!approachTargets) throw error("target_out_of_reach");
                             navigate(Vec3.atCenterOf(pos), true); return;
                         }
-                        if (!ignoreLook()) face(Vec3.atCenterOf(pos));
                         Vec3 cursor = null;
                         if (args.has("cursorPos")) {
                             var point = args.getAsJsonObject("cursorPos");
                             cursor = new Vec3(number(point, "x"), number(point, "y"), number(point, "z"));
                         }
+                        if (!ignoreLook()) face(Vec3.atLowerCornerOf(pos).add(cursor != null ? cursor
+                            : new Vec3(.5 + face.getStepX() * .5, .5 + face.getStepY() * .5, .5 + face.getStepZ() * .5)));
                         InteractionHand hand = args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
                         InteractionHand swingHand = args.has("swingArm") && text(args, "swingArm").equals("left") ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
                         boolean showHand = !args.has("showHand") || args.get("showHand").getAsBoolean();
@@ -349,6 +351,7 @@ final class AgentActions {
                     if (!state.equals("using")) finish(state.equals("completed") ? "completed" : "failed", "consumption_" + state, null);
                 }
                 case "release" -> finish("completed", "released", hands.releaseHeld());
+                case "dismount" -> finish("completed", "dismounted", hands.dismountBody());
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
                 case "menu_click" -> {
                     int menuId = integer(args, "menuId", -1), slot = integer(args, "slot", -1), button = integer(args, "button", 0);

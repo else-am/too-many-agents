@@ -55,3 +55,9 @@ actual effects and return a bucket; food consumes without inventing a player
 hunger field on mobs. Creative bodies retain the original stack. Interrupted
 consumption rejects, and script cleanup stops use without releasing a projectile.
 Inventory must adopt the native resulting hand stack before the promise resolves.
+
+Mounting (before implementation): native entity interaction must put the visible
+body, not its invisible hands, on the vehicle. mount/dismount return void; vehicle
+and mount/dismount events come from observed native relationships. Check a boat,
+occupied/rejected ride, dismount and reopening; riding must not also run standalone
+body travel. Vehicle steering remains separate pending work.

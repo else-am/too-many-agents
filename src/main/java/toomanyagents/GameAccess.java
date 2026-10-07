@@ -1007,6 +1007,7 @@ final class GameAccess {
 
     /** Move a body one physics step. The step is undone if it would leave its box, or move further out of it. */
     static void travelFollowingBody(Mob mob, BodyBox box) {
+        if (mob.isPassenger()) return; // Native vehicle/rider ticks own its position.
         var before = mob.position();
         // NoAI disables physics as well as goals. Enable only travel(), never a mob/brain AI tick.
         mob.setNoAi(false);

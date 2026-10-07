@@ -220,6 +220,12 @@ export function createBot(initial) {
       entity.passengers = (source.passengers ?? []).map(id => bot.entities[id]);
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
+    const previousVehicle = bot.vehicle;
+    bot.vehicle = bot.entity.vehicle;
+    if (streamed && previousVehicle !== bot.vehicle) {
+      if (bot.vehicle) entityEvents.push(['mount']);
+      else if (bot.vehicle === null && previousVehicle) entityEvents.push(['dismount', previousVehicle]);
+    }
     bot.game = { minY: next.minY, height: next.height, dimension: next.dimension, gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
     let experienceChanged = false;
     if (next.hands.experience) {

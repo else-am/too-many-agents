@@ -357,6 +357,7 @@ final class AgentHands extends FakePlayer {
         syncBody();
         var animation = getMainHandItem().getUseAnimation();
         if (animation != UseAnim.EAT && animation != UseAnim.DRINK) throw error("held_item_not_consumable");
+        nativeUseOutcome = "idle";
         useHeld(InteractionHand.MAIN_HAND);
         if (!body.isUsingItem() && !nativeUseOutcome.equals("completed")) throw error("native_consumption_not_started");
     }
@@ -510,6 +511,11 @@ final class AgentHands extends FakePlayer {
                 result = CommonHooks.onInteractEntityAt(this, target, localHit, InteractionHand.MAIN_HAND);
                 if (result == null) result = target.interactAt(this, localHit, InteractionHand.MAIN_HAND);
             }
+            if (isPassenger()) {
+                var vehicle = getVehicle();
+                stopRiding();
+                if (!body.startRiding(vehicle)) throw error("body_mount_rejected");
+            }
         }
         finally {
             if (containerMenu == oldMenu) { menuOrigin = oldOrigin; menuEntity = oldEntity; }
@@ -519,6 +525,13 @@ final class AgentHands extends FakePlayer {
         var response = interaction(result);
         response.add("menu", menuSnapshot());
         return response;
+    }
+
+    JsonObject dismountBody() {
+        syncBody();
+        if (!body.isPassenger()) throw error("body_not_mounted");
+        body.stopRiding();
+        return status("dismounted");
     }
 
     void selectHotbar(int slot) {

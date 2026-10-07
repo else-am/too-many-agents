@@ -259,6 +259,11 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     control({ type: 'swing', offhand: arm !== 'right', showHand: !!showHand });
   };
   bot.useOn = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
+  bot.mount = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
+  bot.dismount = () => {
+    if (!bot.vehicle) { bot.emit('error', new Error('dismount: not mounted')); return; }
+    control({ type: 'dismount' });
+  };
   bot.activateItem = (offhand = false) => { control({ type: 'use', offhand: !!offhand }); };
   bot.deactivateItem = () => {
     if (!activeConsume || activeConsume.terminal) { control({ type: 'release' }); return; }
