@@ -715,7 +715,7 @@ final class GameAccess {
 
     private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
         var snapshot = observe(current, mob, new JsonObject());
-        snapshot.add("hands", controller.hands.snapshot());
+        snapshot.add("hands", controller.hands.scriptSnapshot());
         snapshot.add("action", controller.status(""));
         snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
         snapshot.addProperty("minY", mob.level().getMinBuildHeight());
@@ -759,7 +759,11 @@ final class GameAccess {
             controller.claimScript(id, timeout);
         } else controller.requireScript(id);
         return switch (operation) {
-            case "begin", "snapshot" -> scriptSnapshot(current, mob, controller);
+            case "begin", "snapshot" -> {
+                var snapshot = scriptSnapshot(current, mob, controller);
+                if (operation.equals("begin")) snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
+                yield snapshot;
+            }
             case "heartbeat" -> new JsonObject();
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
             case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");

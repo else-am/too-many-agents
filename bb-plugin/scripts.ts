@@ -7,6 +7,7 @@ import type { BbPluginApi, PluginAgentToolResult } from '@get-bb/plugin-sdk';
 import type { MinecraftWorlds } from './minecraft.js';
 import { object, describe, type Session } from './protocol.js';
 import { runScript } from './scripting/runner.mjs';
+import { createItemDecoder, encodeItemTransport } from './scripting/item-wire.mjs';
 
 export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const running = new Map<string, AbortController>();
@@ -48,6 +49,40 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       // If begin loses its reply, release is still attempted once for this ID.
       began = true;
       const initial = await call('begin', { timeoutMs });
+      const decodeItem = createItemDecoder(initial.itemRegistries);
+      // Repeated equipment/menu/stream copies usually contain identical bytes.
+      // Bound both entry count and retained bytes for large books or nested items.
+      const itemCache = new Map<string, { value: ReturnType<typeof encodeItemTransport>; bytes: number }>();
+      let itemCacheBytes = 0;
+      const prepareSnapshot = (snapshot: Record<string, unknown>) => {
+        const hands = object(snapshot.hands), menu = object(hands.menu);
+        const entries = [...hands.inventory as unknown[], ...Object.values(object(hands.equipment)),
+          ...menu.slots as unknown[], menu.carried];
+        for (const value of entries) {
+          const entry = object(value);
+          if (typeof entry.wire !== 'string') throw new Error('Native item wire is missing');
+          const wire = entry.wire;
+          let cached = itemCache.get(wire);
+          if (!cached) {
+            const value = encodeItemTransport(decodeItem(wire));
+            const bytes = Buffer.byteLength(wire) + Buffer.byteLength(JSON.stringify(value));
+            cached = { value, bytes };
+            if (bytes <= 8 * 1024 * 1024) {
+              while (itemCache.size >= 128 || itemCacheBytes + bytes > 8 * 1024 * 1024) {
+                const oldest = itemCache.keys().next().value!;
+                itemCacheBytes -= itemCache.get(oldest)!.bytes;
+                itemCache.delete(oldest);
+              }
+              itemCache.set(wire, cached);
+              itemCacheBytes += bytes;
+            }
+          }
+          entry.item = cached.value;
+          delete entry.wire;
+        }
+        return snapshot;
+      };
+      prepareSnapshot(initial);
       heartbeat = (async () => {
         try {
           while (!signal.aborted) {
@@ -67,14 +102,14 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           record.lastObserved = status.status;
           record.detail = status.detail;
           if (status.status !== 'completed') throw new Error(`Action ${action.id}: ${status.status}: ${status.detail ?? ''}`);
-          return { action: status, snapshot: await call('snapshot', {}, requestSignal) };
+          return { action: status, snapshot: prepareSnapshot(await call('snapshot', {}, requestSignal)) };
         }
-        if (operation === 'snapshot') return call('snapshot', {}, requestSignal);
+        if (operation === 'snapshot') return prepareSnapshot(await call('snapshot', {}, requestSignal));
         if (operation === 'waitTicks') {
           if (typeof request.ticks !== 'number' || !Number.isSafeInteger(request.ticks) || request.ticks < 0 || request.ticks > 6000)
             throw new Error('ticks must be an integer between 0 and 6000');
           await call('awaitTicks', { ticks: request.ticks }, requestSignal);
-          return call('snapshot', {}, requestSignal);
+          return prepareSnapshot(await call('snapshot', {}, requestSignal));
         }
         throw new Error(`Unknown script operation: ${operation}`);
       };
@@ -88,7 +123,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           bridgeOperations++;
           await worlds.toolCallback(live, { threadId: ctx.threadId, signal: streamSignal }, 'script', {
             agentId, arguments: { operation: 'stream', scriptId },
-          }, send);
+          }, value => send(prepareSnapshot(object(value))));
           if (!streamSignal.aborted) throw new Error('Minecraft state stream closed while the script was running');
         },
       });

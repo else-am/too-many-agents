@@ -2,6 +2,8 @@ import { Vec3 } from 'vec3';
 import goals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
 import { createBlockClass } from './blocks.mjs';
+import { createItemClass } from './items.mjs';
+import { decodeItemTransport } from 'minecraft-item-transport';
 import { EventEmitter } from 'events';
 
 // This first slice is intentionally not marked conformant in coverage.json.
@@ -17,20 +19,23 @@ export function createBot(initial) {
     entitiesByName: Object.fromEntries(data.entitiesArray.map(entity => [entity.name, entity])),
   };
   const Block = createBlockClass(registry);
+  const Item = createItemClass(registry);
   let snapshot;
   let streamBlocks;
   let lastPhysicsTick;
   const vector = ({ x, y, z }) => new Vec3(x, y, z);
   const item = entry => {
-    if (!entry || entry.count === 0) return null;
-    const type = registry.itemsByName[entry.id.replace(/^minecraft:/, '')];
-    if (!type) throw new Error(`Unknown item registry entry ${entry.id}`);
-    const slot = entry.slot === undefined ? undefined : entry.slot < 9 ? entry.slot + 36 : entry.slot === 40 ? 45 : entry.slot < 36 ? entry.slot : 44 - entry.slot;
-    return { type: type.id, name: type.name, displayName: type.displayName, count: entry.count,
-      stackSize: type.stackSize, metadata: 0, slot, durabilityUsed: entry.damage ?? 0 };
+    if (!entry) return null;
+    const stack = Item.fromNotch(decodeItemTransport(entry.item));
+    if (stack && entry.slot !== undefined)
+      stack.slot = entry.slot < 9 ? entry.slot + 36 : entry.slot === 40 ? 45 : entry.slot < 36 ? entry.slot : 44 - entry.slot;
+    return stack;
   };
   const bot = Object.assign(new EventEmitter(), {
     registry, version: '1.21.1',
+    // Component holder IDs belong to this world's registries. Item IDs alone
+    // are translated to the pinned Mineflayer registry by the trusted decoder.
+    nativeRegistries: initial.itemRegistries.references,
     entities: {},
     inventory: { slots: new Array(46).fill(null), items() { return this.slots.slice(9, 45).filter(Boolean); } },
     blockAt(position, extraInfos = true) {

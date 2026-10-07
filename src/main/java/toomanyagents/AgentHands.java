@@ -529,6 +529,28 @@ final class AgentHands extends FakePlayer {
         return result;
     }
 
+    JsonObject scriptSnapshot() {
+        var result = snapshot();
+        var items = new ScriptItems(serverLevel());
+        for (var entry : result.getAsJsonArray("inventory")) {
+            var item = entry.getAsJsonObject();
+            item.addProperty("wire", items.wire(getInventory().getItem(item.get("slot").getAsInt())));
+        }
+        var equipment = result.getAsJsonObject("equipment");
+        for (var slot : EquipmentSlot.values()) {
+            if (equipment.has(slot.getName()))
+                equipment.getAsJsonObject(slot.getName()).addProperty("wire", items.wire(getItemBySlot(slot)));
+        }
+        var menu = menuSnapshot();
+        menu.getAsJsonObject("carried").addProperty("wire", items.wire(containerMenu.getCarried()));
+        for (var entry : menu.getAsJsonArray("slots")) {
+            var item = entry.getAsJsonObject();
+            item.addProperty("wire", items.wire(containerMenu.getSlot(item.get("slot").getAsInt()).getItem()));
+        }
+        result.add("menu", menu);
+        return result;
+    }
+
     void save() {
         requireThread();
         syncEquipment();

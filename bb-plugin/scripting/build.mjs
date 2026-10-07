@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import minecraftData from 'minecraft-data';
 import { fileURLToPath } from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
+import { decodeItemTransport } from './item-wire.mjs';
 
 const registry = minecraftData('1.21.1');
 // Only this game's data belongs in the guest. Do not ship every historical
@@ -17,6 +18,8 @@ const licenses = [];
 licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./movements-LICENSE.txt', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
@@ -37,6 +40,8 @@ await build({
   bundle: true, platform: 'browser', format: 'iife', globalName: 'MinecraftBot', target: 'es2022',
   legalComments: 'eof',
   plugins: [{ name: 'minecraft-version-data', setup(build) {
+    build.onResolve({ filter: /^minecraft-item-transport$/ }, () => ({ path: 'revive', namespace: 'minecraft-item-transport' }));
+    build.onLoad({ filter: /.*/, namespace: 'minecraft-item-transport' }, () => ({ contents: `export const decodeItemTransport = ${decodeItemTransport.toString()};`, loader: 'js' }));
     build.onResolve({ filter: /^(node:)?perf_hooks$/ }, () => ({ path: 'clock', namespace: 'minecraft-clock' }));
     build.onLoad({ filter: /.*/, namespace: 'minecraft-clock' }, () => ({ contents: 'const now = __mcNow; export const performance = { now };', loader: 'js' }));
     build.onResolve({ filter: /^minecraft-version-data$/ }, () => ({ path: '1.21.1', namespace: 'minecraft-version-data' }));
