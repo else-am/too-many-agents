@@ -68,7 +68,7 @@ final class ScriptNavigation {
     private AABB relevant;
     private BlockPos mining;
     private int miningBefore;
-    private boolean active, completed, stopRequested, stopped, sprintAllowed, edgeStarted, tower;
+    private boolean active, completed, stopRequested, stopped, sprintAllowed, edgeStarted, tower, waterTravel;
     private String phase = "idle";
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint) {}
@@ -187,8 +187,11 @@ final class ScriptNavigation {
                     place(node.getAsJsonArray("toPlace").get(placeIndex).getAsJsonObject());
                 } else {
                     target = destination(integerPosition(node));
+                    waterTravel |= mob.isInWater() || level.getFluidState(mob.blockPosition()).is(FluidTags.WATER);
                     if (arrivedAtNode(target)) { clearControls(); checkArrival = true; }
-                    else if (mob.isInWater() || mob.onClimbable() || waterOrClimb(integerPosition(node))) {
+                    else if (waterTravel || mob.onClimbable() || waterOrClimb(integerPosition(node))) {
+                        // A swim exit can briefly leave and re-enter water before
+                        // landing. Keep native controls for the entire selected edge.
                         specialTravel(target);
                         // A ladder descent can move .15 in one tick. Accept its
                         // first post-travel arrival, not two ticks in a .12 band.
@@ -224,7 +227,7 @@ final class ScriptNavigation {
 
     private void beginEdge() {
         edgeStarted = true; edgeTicks = breakIndex = placeIndex = frameIndex = 0;
-        trajectory.clear(); tower = false; returnTo = null;
+        trajectory.clear(); tower = waterTravel = false; returnTo = null;
         edgeStart = mob.position();
         Vec3 raw = Vec3.atBottomCenterOf(integerPosition(nodes.get(index)));
         double rise = Math.min(4, jumpRise(mob));
