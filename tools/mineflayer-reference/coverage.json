@@ -1,5 +1,5 @@
 {
-  "description": "Declared upstream API coverage. Pending entries remain required unless explicitly reviewed as inapplicable. The catalog also lists documentation headings for declaration gaps.",
+  "description": "Public gameplay inventory decisions. Pending means unfinished, not excluded. Related executable scenarios are evidence candidates, not member-level conformance claims. Pure library checks cannot establish native gameplay support.",
   "entries": {
     "mineflayer.createBot": {
       "status": "inapplicable",
@@ -13,5 +13,286 @@
       "status": "inapplicable",
       "reason": "Mineflayer's internal packet client is outside the agreed public gameplay compatibility boundary."
     }
+  },
+  "schemaVersion": 2,
+  "evidencePolicy": {
+    "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
+    "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
+    "supported": "Requires verified passing native-integration and live-reference evidence. All current native requirements remain pending.",
+    "referenceServer": "No live reference run is recorded; Minecraft EULA acceptance remains unanswered.",
+    "nativeRuns": "Five supplied reports prove only their scripted slices. Integration was uncommitted; these reports do not identify a build/JAR hash. Only route-policy-native includes a separate independent observation section."
+  },
+  "evidence": {
+    "block-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/blocks.mjs",
+      "subjects": [
+        "prismarine-block.Block",
+        "prismarine-biome.Biome"
+      ],
+      "scope": "Pinned Block/state/harvest/dig/sign scenarios in QuickJS; does not verify native observations.",
+      "result": "not-recorded"
+    },
+    "item-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/items.mjs",
+      "subjects": [
+        "prismarine-item.Item"
+      ],
+      "scope": "Pinned Item registry/component/NBT/anvil scenarios in QuickJS; no native inventory claim.",
+      "result": "not-recorded"
+    },
+    "item-wire": {
+      "kind": "serialization",
+      "path": "tools/mineflayer-reference/item-wire.mjs",
+      "subjects": [
+        "prismarine-item.Item"
+      ],
+      "scope": "Source-derived wire fixtures and transport checks. Native Java byte probes are separate evidence; do not infer a live reference comparison.",
+      "result": "not-recorded"
+    },
+    "window-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/windows.mjs",
+      "subjects": [
+        "prismarine-windows.Window",
+        "prismarine-windows.WindowsExports",
+        "events.EventEmitter"
+      ],
+      "scope": "Window layouts/queries/clicks/events in QuickJS; named upstream corrections checked separately. No authoritative native click proof.",
+      "result": "not-recorded"
+    },
+    "raycast-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/world-view.mjs",
+      "subjects": [
+        "prismarine-world.WorldSync",
+        "prismarine-world.RaycastIterator",
+        "mineflayer-pathfinder.goals.GoalLookAtBlock",
+        "mineflayer-pathfinder.goals.GoalPlaceBlock"
+      ],
+      "scope": "Synthetic typed Block lookup with actual goals, clipping corrections and bounds in QuickJS; not native visibility.",
+      "result": "not-recorded"
+    },
+    "movements-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/movements.mjs",
+      "subjects": [
+        "mineflayer-pathfinder.Movements",
+        "mineflayer-pathfinder.Move"
+      ],
+      "scope": "Deterministic movement/planner fixtures against upstream; no native movement execution proof.",
+      "result": "not-recorded"
+    },
+    "planning-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/planning.mjs",
+      "subjects": [
+        "mineflayer-pathfinder.Pathfinder",
+        "mineflayer-pathfinder.goals.Goal"
+      ],
+      "scope": "Source/library planning and goal scenarios; no claim that every goal or option is exercised.",
+      "result": "not-recorded"
+    },
+    "runtime-boundary": {
+      "kind": "runtime-boundary",
+      "path": "tools/script-runtime-check.mjs",
+      "subjects": [
+        "mineflayer.Bot"
+      ],
+      "scope": "Worker isolation, awaited bridge operations, cancellation and execution/output bounds; not gameplay conformance.",
+      "result": "not-recorded"
+    },
+    "native-block-observations": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-blocks.js",
+      "subjects": [
+        "mineflayer.Bot.blockAt",
+        "prismarine-block.Block"
+      ],
+      "scope": "Requires known slab/sign/ore fixture and independent native world observations. Availability is not a passing run.",
+      "result": "not-recorded"
+    },
+    "native-item-observations": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-items.js",
+      "subjects": [
+        "mineflayer.Bot.inventory",
+        "prismarine-item.Item"
+      ],
+      "scope": "Requires actual native damaged/component stacks and independently decoded native bytes. Availability is not a passing run.",
+      "result": "not-recorded"
+    },
+    "native-window-observations": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-window.js",
+      "subjects": [
+        "mineflayer.Bot.inventory",
+        "prismarine-windows.Window"
+      ],
+      "scope": "Window/item identity, slot queries and equipment; does not exercise container mutations.",
+      "result": "passed",
+      "sourceSha256": "a00a60aebe0b5997912f67e2a210a447366311f836005982119750df6f1167ae",
+      "report": {
+        "path": "run/mineflayer-reference/window-native.json",
+        "sha256": "2609750f68fc27837443f3bc2d254d1f5af8b4235bb89db11184f634d989ff07",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Native scripted assertions only; no paired live-reference run or full surface conformance.",
+      "independentObservation": "No separate independent observation section in this report; do not infer one."
+    },
+    "native-raycast-observations": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-raycast.js",
+      "subjects": [
+        "prismarine-world.WorldSync",
+        "mineflayer-pathfinder.goals.GoalLookAtBlock",
+        "mineflayer-pathfinder.goals.GoalBreakBlock"
+      ],
+      "scope": "Slab hit and goal visibility against native cache; requires fixture.",
+      "result": "passed",
+      "sourceSha256": "836948880c06ff4bd1182bbc7e8a5ae3fd920e5ce142f3e07c939ecec841ce2e",
+      "report": {
+        "path": "run/mineflayer-reference/raycast-native.json",
+        "sha256": "3940ab8ee5c6a959c8bafe5bd90b1f8d2825684a223ca7a21e8aeea8b3eece3b",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Native scripted assertions only; no paired live-reference run or full surface conformance.",
+      "independentObservation": "No separate independent observation section in this report; do not infer one."
+    },
+    "native-event-observations": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-events.js",
+      "subjects": [
+        "mineflayer.BotEvents",
+        "events.EventEmitter"
+      ],
+      "scope": "Independent fixture mutation, blockUpdate, physicsTick and stable entity identity. Availability is not a passing run.",
+      "result": "not-recorded"
+    },
+    "native-tick-order": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-tick-order.js",
+      "subjects": [
+        "mineflayer.Bot.waitForTicks",
+        "mineflayer.Bot.equip"
+      ],
+      "scope": "Tick count and state visible before action completion. Availability is not a passing run.",
+      "result": "not-recorded"
+    },
+    "native-navigation-policy": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/navigate-policy.js",
+      "subjects": [
+        "mineflayer-pathfinder.Pathfinder",
+        "mineflayer-pathfinder.Movements"
+      ],
+      "scope": "Requires wall/body fixture; checks planned policy and native arrival.",
+      "result": "passed",
+      "sourceSha256": "a2d40842a0887e26ba6c3b2d877bd9a8a7ec56e23b2052cfdebcad49982d9ad7",
+      "report": {
+        "path": "run/mineflayer-reference/route-policy-native.json",
+        "sha256": "6e5e48dbc4ca5a23038224165967110125b50c563cd534d355236e13db4e66d6",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Narrow native slice only; no paired live-reference run. Shortcut/free motion/partial execution/custom physics/large loaded caches and other API conditions remain pending.",
+      "independentObservation": "report.independent includes final native route state"
+    },
+    "native-navigation-lifecycle": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/navigate-lifecycle.js",
+      "subjects": [
+        "mineflayer-pathfinder.Pathfinder"
+      ],
+      "scope": "No-path, changed goal and stopping scenario; execution integration remains pending.",
+      "result": "passed",
+      "sourceSha256": "73e8626894bf75cf046ec55f7ffa0ced6c8668f0a4f6b8e355c9ec9fd23f5b85",
+      "report": {
+        "path": "run/mineflayer-reference/route-lifecycle-native.json",
+        "sha256": "4efeed2a4ac5643919db44b8263b1b5e30dcfc9b59284e06eaf3a2054bb6a562",
+        "codePath": [
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Narrow native slice only; no paired live-reference run. Shortcut/free motion/partial execution/custom physics/large loaded caches and other API conditions remain pending.",
+      "independentObservation": "No separate independent observation section in this report; do not infer one."
+    },
+    "native-gather": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/gather.js",
+      "subjects": [
+        "mineflayer.Bot.findBlock",
+        "mineflayer.Bot.equip",
+        "mineflayer.Bot.dig",
+        "mineflayer-pathfinder.Pathfinder"
+      ],
+      "scope": "Shared gather procedure; needs a native fixture/harness and independent ore/inventory checks. Availability is not a passing run.",
+      "result": "not-recorded"
+    },
+    "reference-gather": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/scenarios.mjs",
+      "subjects": [
+        "mineflayer.Bot.findBlock",
+        "mineflayer.Bot.equip",
+        "mineflayer.Bot.dig",
+        "mineflayer-pathfinder.Pathfinder"
+      ],
+      "scope": "Server harness for gather.js with independent server checks. Not run; requires explicit EULA acceptance. Catalog generation never invokes it.",
+      "result": "not-recorded"
+    },
+    "native-navigation-shapes": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/navigate-shapes.js",
+      "subjects": [
+        "mineflayer-pathfinder.Pathfinder",
+        "mineflayer-pathfinder.Movements"
+      ],
+      "scope": "Native slab/full-block step, jump and drop assertions. Does not cover shortcut/free motion/partial execution/custom physics/large loaded caches.",
+      "result": "passed",
+      "sourceSha256": "ef5bd6269797f9e1995b1f8dd8ef7e2c82c48c0ff56fc3a56b5d8519d98bb9dc",
+      "report": {
+        "path": "run/mineflayer-reference/route-shapes-native.json",
+        "sha256": "9cdfb68bb14959f25ec1ec30e72e8cfaa74ea5874d15e34f5bd3add1b86e445b",
+        "codePath": [
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Narrow native slice only; no paired live-reference run. Shortcut/free motion/partial execution/custom physics/large loaded caches and other API conditions remain pending.",
+      "independentObservation": "No separate independent observation section in this report; do not infer one."
+    }
+  },
+  "reviewNotes": {
+    "prismarine-item.Item": "Components/componentMap/removedComponents are source-visible but omitted from declarations; Item.equal ignores components in the pin.",
+    "prismarine-windows.Window": "Declarations/docs/runtime disagree on some signatures, layouts and events; windows.mjs separates intended corrections from parity. Drag/double-click throw upstream.",
+    "prismarine-world.WorldSync": "Only synchronous getBlock/raycast view has library evidence. Other world/chunk APIs remain pending. Raycast returns annotated Block despite the flat result declaration.",
+    "mineflayer-pathfinder.Pathfinder": "Undeclared source settings include searchRadius, enablePathShortcut and LOSWhenPlacingBlocks. Selected-route native slices passed; shortcut/free motion/partial execution/custom physics/large loaded cache and other behavior remain pending.",
+    "events.EventEmitter": "Inherited instance surface comes from pinned events 3.3.0, not current Node type declarations. Event payloads/ordering need independent native evidence.",
+    "prismarine-registry.loader.RegistryPc": "Registry tables and codecs, chunk access/storage, Bedrock-labelled data and source-only helpers require applicability review; none are silently excluded.",
+    "mineflayer-pathfinder.goals.GoalBreakBlock": "Pinned declarations extend GoalLookAtBlock, but source extends Goal and wraps this.goal; source isEnd drops its node argument. Inherited declaration promises require review."
   }
 }

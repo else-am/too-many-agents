@@ -9,5 +9,55 @@
     "version": "2.4.5",
     "commit": "ca35a00ec18e7d3095280ffe2dc194e7c81b55eb",
     "repository": "https://github.com/PrismarineJS/mineflayer-pathfinder"
+  },
+  "dependencies": {
+    "prismarine-block": {
+      "version": "1.23.0"
+    },
+    "prismarine-item": {
+      "version": "1.18.0"
+    },
+    "prismarine-windows": {
+      "version": "2.10.0"
+    },
+    "prismarine-entity": {
+      "version": "2.6.0"
+    },
+    "prismarine-recipe": {
+      "version": "1.5.0"
+    },
+    "prismarine-world": {
+      "version": "3.7.0"
+    },
+    "prismarine-biome": {
+      "version": "1.4.0"
+    },
+    "prismarine-chat": {
+      "version": "1.13.0"
+    },
+    "prismarine-registry": {
+      "version": "1.12.0"
+    },
+    "prismarine-chunk": {
+      "version": "1.41.0"
+    },
+    "prismarine-nbt": {
+      "version": "2.8.0"
+    },
+    "minecraft-data": {
+      "version": "3.117.0"
+    },
+    "vec3": {
+      "version": "0.1.10"
+    },
+    "events": {
+      "version": "3.3.0"
+    },
+    "typed-emitter": {
+      "version": "1.4.0"
+    },
+    "typescript": {
+      "version": "5.9.3"
+    }
   }
 }
