@@ -1,0 +1,13 @@
+{
+  "minecraft": "1.21.1",
+  "mineflayer": {
+    "version": "4.39.0",
+    "commit": "c168635cf2f6602069fc5e408bec864702335581",
+    "repository": "https://github.com/PrismarineJS/mineflayer"
+  },
+  "pathfinder": {
+    "version": "2.4.5",
+    "commit": "ca35a00ec18e7d3095280ffe2dc194e7c81b55eb",
+    "repository": "https://github.com/PrismarineJS/mineflayer-pathfinder"
+  }
+}

@@ -31,6 +31,9 @@ final class AgentActions {
     private Vec3 lastPosition;
     private BlockState original;
     private boolean mining;
+    private boolean approachTargets;
+    private String scriptId;
+    private long scriptDeadline, scriptHeartbeat;
 
     AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
         this.mob = mob;
@@ -42,6 +45,44 @@ final class AgentActions {
     }
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
+    boolean scripted() { return scriptId != null; }
+
+    void claimScript(String id, int timeoutMs) {
+        expireScript();
+        if (scripted() || busy()) throw error("body_already_busy");
+        UUID.fromString(id);
+        if (timeoutMs < 1 || timeoutMs > 300_000) throw error("invalid_script_deadline");
+        scriptId = id;
+        scriptDeadline = System.nanoTime() + timeoutMs * 1_000_000L;
+        scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
+        GameAccess.stopFollowingMotion(mob);
+    }
+
+    void requireScript(String id) {
+        expireScript();
+        if (scriptId == null || !scriptId.equals(id)) throw error("script_no_longer_controls_body");
+        scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
+    }
+
+    void requireUnscripted() {
+        expireScript();
+        if (scripted()) throw error("body_controlled_by_script");
+    }
+
+    void releaseScript() {
+        scriptId = null;
+        cancel("");
+    }
+
+    private void expireScript() {
+        long now = System.nanoTime();
+        if (scripted() && (now >= scriptDeadline || now >= scriptHeartbeat)) {
+            if (busy()) finish("interrupted", "script_expired", null);
+            releaseScript();
+        }
+    }
+
+    JsonObject startScriptAction(JsonObject request) { return start(request, false); }
     JsonObject status(String id) {
         if (id == null || id.isBlank()) return action == null ? object("status", "idle") : action.deepCopy();
         var found = history.get(id);
@@ -50,6 +91,11 @@ final class AgentActions {
     }
 
     JsonObject start(JsonObject request) {
+        requireUnscripted();
+        return start(request, true);
+    }
+
+    private JsonObject start(JsonObject request, boolean approachTargets) {
         if (busy()) throw error("action_already_running_cancel_or_wait");
         String type = text(request, "type");
         if (!TYPES.contains(type)) throw error("unknown_action_type");
@@ -77,6 +123,7 @@ final class AgentActions {
         original = args.has("position") && List.of("mine", "place", "interact").contains(kind)
             ? mob.level().getBlockState(BlockPos.containing(position(args))) : null;
         mining = false;
+        this.approachTargets = approachTargets;
         GameAccess.stopFollowingMotion(mob);
         return action.deepCopy();
     }
@@ -92,6 +139,7 @@ final class AgentActions {
     }
 
     void close(String reason) {
+        scriptId = null;
         if (busy()) finish("interrupted", reason, null);
         if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
         else hands.closeHands();
@@ -99,6 +147,8 @@ final class AgentActions {
 
     void tick(boolean minecraftAccess) {
         try {
+            expireScript();
+            if (!minecraftAccess && scripted()) releaseScript();
             hands.tickHands();
             // Explicit pickup must collect and report its own target before it disappears.
             if (minecraftAccess && (!busy() || !kind.equals("pickup"))) hands.pickupNearby();
@@ -110,7 +160,10 @@ final class AgentActions {
                     var confined = box.get();
                     var target = GameAccess.inside(mob, confined, wanted);
                     double distance = args.has("entity") ? 2.0 : 0.9;
-                    if (mob.position().distanceTo(wanted) <= distance) finish("completed", "arrived", null);
+                    // The direct tool's tolerance can stop in a neighboring tile.
+                    // A script's goal must reach the requested tile as well.
+                    boolean tileReached = approachTargets || BlockPos.containing(wanted).equals(mob.blockPosition());
+                    if (tileReached && mob.position().distanceTo(wanted) <= distance) finish("completed", "arrived", null);
                     else if (target != wanted && mob.position().distanceTo(target) <= 0.9) {
                         // The body stops at its box's edge; say so rather than claiming arrival.
                         var result = new JsonObject();
@@ -128,7 +181,7 @@ final class AgentActions {
                     var pos = checkedBlockTarget();
                     if (!mining && !mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
                     if (!hands.blockReachable(pos)) {
-                        if (mining) throw error("target_out_of_reach");
+                        if (mining || !approachTargets) throw error("target_out_of_reach");
                         navigate(Vec3.atCenterOf(pos), true); return;
                     }
                     GameAccess.stopFollowingMotion(mob);
@@ -142,14 +195,20 @@ final class AgentActions {
                 case "place", "interact" -> {
                     if (args.has("entity")) {
                         Entity entity = entity();
-                        if (!hands.canReach(entity)) { navigate(entity.getBoundingBox().getCenter(), true); return; }
+                        if (!hands.canReach(entity)) {
+                            if (!approachTargets) throw error("target_out_of_reach");
+                            navigate(entity.getBoundingBox().getCenter(), true); return;
+                        }
                         face(entity.getEyePosition());
                         finish("completed", "interacted", hands.interact(entity));
                     } else {
                         var pos = checkedBlockTarget();
                         if (!mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
                         Direction face = blockFace();
-                        if (!hands.blockReachable(pos, face)) { navigate(Vec3.atCenterOf(pos), true); return; }
+                        if (!hands.blockReachable(pos, face)) {
+                            if (!approachTargets) throw error("target_out_of_reach");
+                            navigate(Vec3.atCenterOf(pos), true); return;
+                        }
                         face(Vec3.atCenterOf(pos));
                         var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean());
                         finish("completed", "interaction_finished_check_result", result);

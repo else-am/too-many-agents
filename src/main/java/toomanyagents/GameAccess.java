@@ -50,7 +50,7 @@ import java.util.function.Supplier;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND }
+    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -242,7 +242,7 @@ final class GameAccess {
             if (!actionStops.remove(entry.getKey(), entry.getValue())) continue;
             if (!entry.getValue().equals(worldSession.get())) continue;
             var controller = actions.get(entry.getKey());
-            if (controller != null) controller.cancel("");
+            if (controller != null) controller.releaseScript();
         }
     }
 
@@ -668,10 +668,41 @@ final class GameAccess {
             }
             case ACTION -> controller.start(arguments);
             case ACTION_STATUS -> controller.status(arguments.has("id") ? string(arguments,"id",80) : "");
-            case CANCEL -> controller.cancel(arguments.has("id") ? string(arguments,"id",80) : "");
+            case CANCEL -> {
+                var result = controller.cancel(arguments.has("id") ? string(arguments,"id",80) : "");
+                if (!arguments.has("id") || !controller.busy()) controller.releaseScript();
+                yield result;
+            }
             case BLOCKS -> blocks((ServerLevel) mob.level(), arguments);
-            case COMMAND -> command(current, mob, arguments);
+            case COMMAND -> { controller.requireUnscripted(); yield command(current, mob, arguments); }
+            case SCRIPT -> script(current, body, mob, controller, arguments);
             case POV -> throw error("pov_requires_client_renderer");
+        };
+    }
+
+    private JsonObject script(MinecraftServer current, Body body, Mob mob, AgentActions controller, JsonObject args) {
+        String id = string(args, "scriptId", 80);
+        String operation = string(args, "operation", 40);
+        if (operation.equals("begin")) {
+            int timeout = args.get("timeoutMs").getAsInt();
+            controller.claimScript(id, timeout);
+        } else controller.requireScript(id);
+        return switch (operation) {
+            case "begin", "snapshot" -> {
+                var snapshot = observe(current, mob, new JsonObject());
+                snapshot.add("hands", controller.hands.snapshot());
+                snapshot.add("action", controller.status(""));
+                snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
+                snapshot.addProperty("minY", mob.level().getMinBuildHeight());
+                snapshot.addProperty("height", mob.level().getHeight());
+                yield snapshot;
+            }
+            case "heartbeat" -> new JsonObject();
+            case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
+            case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
+            case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
+            case "end" -> { controller.releaseScript(); yield new JsonObject(); }
+            default -> throw error("unknown_script_operation");
         };
     }
 
@@ -761,7 +792,7 @@ final class GameAccess {
                         drainActionStops();
                         boolean wasBusy = controller.busy();
                         controller.tick(agentState(mob).minecraftAccess());
-                        if (!wasBusy) idle(current,mob,controller);
+                        if (!wasBusy && !controller.scripted()) idle(current,mob,controller);
                         cacheBody(body,mob);
                     }
                 } catch (RuntimeException | LinkageError failure) {

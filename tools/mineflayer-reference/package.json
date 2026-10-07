@@ -1,0 +1,19 @@
+{
+  "name": "too-many-agents-mineflayer-reference",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "catalog": "node catalog.mjs",
+    "prepare": "node server.mjs prepare",
+    "server": "node server.mjs start",
+    "check": "node scenarios.mjs"
+  },
+  "dependencies": {
+    "mineflayer": "4.39.0",
+    "mineflayer-pathfinder": "2.4.5"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

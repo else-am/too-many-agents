@@ -10,9 +10,11 @@ import { minecraftProjects } from "./projects.js";
 import { describe } from "./protocol.js";
 import { savePovSnapshot } from "./images.js";
 import { publishDiscovery } from "./discovery.js";
+import { minecraftScripts } from "./scripts.js";
 
 export default async function minecraft(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
+  const scripts = minecraftScripts(bb, worlds);
   const threads = minecraftThreads(bb, worlds);
   const projects = minecraftProjects(bb, worlds);
   const agents = minecraftAgents(bb, worlds, threads, projects);
@@ -34,6 +36,7 @@ export default async function minecraft(bb: BbPluginApi) {
     "utf8",
   );
   const instructions = await readFile(new URL("./surface/agents.md", import.meta.url), "utf8");
+  const scriptingInstructions = await readFile(new URL("./surface/scripting.md", import.meta.url), "utf8");
   const physicalTools = tools.filter((tool) => tool.minecraft);
 
   for (const tool of physicalTools) {
@@ -43,10 +46,11 @@ export default async function minecraft(bb: BbPluginApi) {
       parameters: tool.inputSchema,
       ...(tool.name === "minecraft_observe"
         ? { instructions: physicalInstructions.slice(0, 4096) }
-        : {}),
+        : tool.name === "minecraft_run" ? { instructions: scriptingInstructions } : {}),
       async execute(args, ctx): Promise<PluginAgentToolResult> {
         try {
           const { live, agent } = await worlds.caller(ctx.threadId);
+          if (tool.name === "minecraft_run") return await scripts(args, ctx, live, agent.agentId);
           const result = (await worlds.toolCallback(live, ctx, "tool", {
             agentId: agent.agentId,
             tool: tool.name,

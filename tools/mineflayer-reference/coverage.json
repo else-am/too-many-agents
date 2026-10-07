@@ -1,0 +1,17 @@
+{
+  "description": "Declared upstream API coverage. Pending entries remain required unless explicitly reviewed as inapplicable. The catalog also lists documentation headings for declaration gaps.",
+  "entries": {
+    "mineflayer.createBot": {
+      "status": "inapplicable",
+      "reason": "The BB thread is already attached to a native body; server connections and account authentication are outside the agreed scope."
+    },
+    "mineflayer.Bot.connect": {
+      "status": "inapplicable",
+      "reason": "Network connection setup is outside the agreed native-body API scope."
+    },
+    "mineflayer.Bot._client": {
+      "status": "inapplicable",
+      "reason": "Mineflayer's internal packet client is outside the agreed public gameplay compatibility boundary."
+    }
+  }
+}

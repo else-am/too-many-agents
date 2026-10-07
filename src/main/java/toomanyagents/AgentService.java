@@ -608,6 +608,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             CompletableFuture<JsonObject> work=switch(op) {
                 case "station.edit" -> editStation(agent,obj(request,"request"),session,scope,expiresAt);
                 case "tool" -> game.callInTurn(scope,agent.body,AgentSurface.operation(agent.minecraftAccess,text(request,"tool")),obj(request,"arguments"),expiresAt).thenApply(AgentService::toolResult);
+                case "script" -> game.callInTurn(scope,agent.body,AgentSurface.operation(agent.minecraftAccess,"minecraft_run"),obj(request,"arguments"),expiresAt);
                 case "body.create" -> createBody(request,agent,session,scope,expiresAt).thenApply(created -> { synchronized(this) { return bodyRecord(created); } });
                 default -> failed("unknown_callback_operation");
             };
