@@ -47,3 +47,11 @@ acceleration/jumping; no player-trajectory equality or player-only ledge hold is
 promised. End/cancel/world departure clears held inputs. Do not silently blend
 manual controls with a Pathfinder route: require releasing held inputs before
 starting navigation, and report a known busy failure if a route is already active.
+
+Consumption (before implementation): use actual LivingEntity eating/drinking
+and shield use on the visible body, with native finish events establishing
+completion. A potion must apply its effect to that body; milk must clear its
+actual effects and return a bucket; food consumes without inventing a player
+hunger field on mobs. Creative bodies retain the original stack. Interrupted
+consumption rejects, and script cleanup stops use without releasing a projectile.
+Inventory must adopt the native resulting hand stack before the promise resolves.

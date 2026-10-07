@@ -614,6 +614,14 @@ final class GameAccess {
         return mob;
     }
 
+    /** Native item effects have completed; the next frame carries the resulting hand stack. */
+    void nativeUseFinished(net.minecraft.world.entity.LivingEntity entity, net.minecraft.world.InteractionHand hand) {
+        if (!(entity.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
+        for (var controller : actions.values()) {
+            if (controller.mob == entity) { controller.hands.nativeUseFinished(hand); return; }
+        }
+    }
+
     /** Only destructive removal proves loss; chunk unloading and dimension changes do not. */
     Body destroyedBody(Entity entity) {
         if (!(entity instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)

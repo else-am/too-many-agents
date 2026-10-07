@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final Set<String> heldControls = new HashSet<>();
     final Mob mob;
@@ -189,7 +189,7 @@ final class AgentActions {
         if (id != null && !id.isBlank() && (action == null || !id.equals(text(action, "id")))) return status(id);
         if (busy()) finish("interrupted", "cancelled", null);
         // A completed 'use' action can leave a bow or other held item in use.
-        hands.stopUsingItem();
+        hands.cancelUse();
         hands.cancelMine();
         GameAccess.stopFollowingMotion(mob);
         return status("");
@@ -342,6 +342,12 @@ final class AgentActions {
                 case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
                     ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
                 case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "consume" -> {
+                    if (ticks == 1) hands.beginConsume();
+                    String state = hands.consumptionStatus();
+                    action.addProperty("phase", "consuming");
+                    if (!state.equals("using")) finish(state.equals("completed") ? "completed" : "failed", "consumption_" + state, null);
+                }
                 case "release" -> finish("completed", "released", hands.releaseHeld());
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
                 case "menu_click" -> {

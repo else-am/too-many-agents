@@ -47,6 +47,7 @@ import net.minecraft.world.item.BoatItem;
 import net.minecraft.world.item.ArmorStandItem;
 import net.minecraft.world.item.EndCrystalItem;
 import net.minecraft.world.item.SpawnEggItem;
+import net.minecraft.world.item.UseAnim;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.component.WritableBookContent;
 import net.minecraft.world.item.component.WrittenBookContent;
@@ -90,6 +91,9 @@ final class AgentHands extends FakePlayer {
     private boolean miningNeedsStop;
     private int lastHandsTick = -1;
     private long nextMeleeAttackTick;
+    private InteractionHand nativeUseHand;
+    private ItemStack creativeUseStack = ItemStack.EMPTY;
+    private String nativeUseOutcome = "idle";
     private int nextMenuId;
     private BlockPos menuOrigin;
     private Entity menuEntity;
@@ -122,6 +126,7 @@ final class AgentHands extends FakePlayer {
         requireThread();
         if (closed || body.isRemoved() || !body.isAlive()) throw error("body_missing_or_unloaded");
         if (body.level() != level()) throw error("body_dimension_changed");
+        reconcileNativeUse();
         // Vanilla reach/mining/projectiles use player eyes. Match the actual NPC viewpoint.
         setPos(body.getX(), body.getEyeY() - getEyeHeight(), body.getZ());
         setYRot(body.getViewYRot(1));
@@ -327,13 +332,62 @@ final class AgentHands extends FakePlayer {
         var held = getItemInHand(hand);
         if (held.isEmpty()) throw error("hand_is_empty");
         if (!held.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
-        var result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
+        var animation = held.getUseAnimation();
+        InteractionResult result;
+        if (animation == UseAnim.EAT || animation == UseAnim.DRINK || animation == UseAnim.BLOCK) {
+            if (getCooldowns().isOnCooldown(held.getItem())) return interaction(InteractionResult.PASS);
+            var denied = CommonHooks.onItemRightClick(this, hand);
+            if (denied != null) return interaction(denied);
+            nativeUseHand = hand;
+            nativeUseOutcome = "using";
+            creativeUseStack = getAbilities().instabuild ? held.copy() : ItemStack.EMPTY;
+            body.startUsingItem(hand);
+            if (!body.isUsingItem()) { reconcileNativeUse(); throw error("native_item_use_rejected"); }
+            result = InteractionResult.CONSUME;
+        } else result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
             : gameMode.useItem(this, level(), held, hand);
         if (result.shouldSwing()) body.swing(hand);
         save();
         var response = interaction(result);
-        response.addProperty("usingItem", isUsingItem());
+        response.addProperty("usingItem", isUsingItem() || body.isUsingItem());
         return response;
+    }
+
+    void beginConsume() {
+        syncBody();
+        var animation = getMainHandItem().getUseAnimation();
+        if (animation != UseAnim.EAT && animation != UseAnim.DRINK) throw error("held_item_not_consumable");
+        useHeld(InteractionHand.MAIN_HAND);
+        if (!body.isUsingItem() && !nativeUseOutcome.equals("completed")) throw error("native_consumption_not_started");
+    }
+
+    String consumptionStatus() { reconcileNativeUse(); return nativeUseOutcome; }
+
+    void nativeUseFinished(InteractionHand hand) {
+        requireThread();
+        if (nativeUseHand == hand) nativeUseOutcome = "completed";
+    }
+
+    private void reconcileNativeUse() {
+        if (nativeUseHand == null) return;
+        var stack = body.getItemInHand(nativeUseHand);
+        if (!body.isUsingItem() && nativeUseOutcome.equals("completed") && !creativeUseStack.isEmpty()) {
+            stack = creativeUseStack.copy();
+            body.setItemInHand(nativeUseHand, stack);
+        }
+        setItemInHand(nativeUseHand, stack.copy());
+        if (!body.isUsingItem()) {
+            if (!nativeUseOutcome.equals("completed")) nativeUseOutcome = "interrupted";
+            nativeUseHand = null;
+            creativeUseStack = ItemStack.EMPTY;
+        }
+    }
+
+    void cancelUse() {
+        requireThread();
+        if (nativeUseHand != null) body.stopUsingItem();
+        reconcileNativeUse();
+        stopUsingItem();
     }
 
     JsonObject swingBody(InteractionHand hand) {
@@ -371,7 +425,8 @@ final class AgentHands extends FakePlayer {
 
     JsonObject releaseHeld() {
         syncBody();
-        releaseUsingItem();
+        if (nativeUseHand != null) { body.releaseUsingItem(); reconcileNativeUse(); }
+        else releaseUsingItem();
         save();
         return status("released");
     }
@@ -469,7 +524,7 @@ final class AgentHands extends FakePlayer {
     void selectHotbar(int slot) {
         syncBody();
         if (slot < 0 || slot > 8) throw error("invalid_hotbar_slot");
-        if (getInventory().selected != slot && getUsedItemHand() == InteractionHand.MAIN_HAND) stopUsingItem();
+        if (getInventory().selected != slot && (getUsedItemHand() == InteractionHand.MAIN_HAND || nativeUseHand == InteractionHand.MAIN_HAND)) cancelUse();
         getInventory().selected = slot;
         save();
     }
@@ -889,7 +944,7 @@ final class AgentHands extends FakePlayer {
         var result = new JsonObject();
         result.addProperty("mode", BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).id);
         result.addProperty("selected", getInventory().selected);
-        result.addProperty("usingItem", isUsingItem());
+        result.addProperty("usingItem", isUsingItem() || body.isUsingItem());
         var experience = new JsonObject();
         experience.addProperty("level", experienceLevel);
         experience.addProperty("progress", experienceProgress);
@@ -1033,7 +1088,7 @@ final class AgentHands extends FakePlayer {
         requireThread();
         if (closed) return;
         cancelMine();
-        stopUsingItem();
+        cancelUse();
         if (containerMenu != inventoryMenu) closeContainer();
         inventoryMenu.removed(this);
         save();
@@ -1145,7 +1200,7 @@ final class AgentHands extends FakePlayer {
 
     private void requireIdleHands() {
         if (miningPos != null) throw error("hands_busy_mining");
-        if (isUsingItem()) throw error("hands_busy_using_item");
+        if (isUsingItem() || body.isUsingItem()) throw error("hands_busy_using_item");
     }
 
     private void requireThread() {
