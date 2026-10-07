@@ -159,7 +159,7 @@ final class ScriptNavigation {
         clearInputs();
         if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
         Frame predicted = null;
-        boolean edgeArrived = false;
+        boolean checkArrival = false;
         try {
             if (index == nodes.size()) {
                 if (settled()) complete();
@@ -187,9 +187,12 @@ final class ScriptNavigation {
                     place(node.getAsJsonArray("toPlace").get(placeIndex).getAsJsonObject());
                 } else {
                     target = destination(integerPosition(node));
-                    if (arrivedAtNode(target)) { clearControls(); edgeArrived = true; }
+                    if (arrivedAtNode(target)) { clearControls(); checkArrival = true; }
                     else if (mob.isInWater() || mob.onClimbable() || waterOrClimb(integerPosition(node))) {
                         specialTravel(target);
+                        // A ladder descent can move .15 in one tick. Accept its
+                        // first post-travel arrival, not two ticks in a .12 band.
+                        checkArrival = true;
                     } else {
                         phase = flag(node, "parkour") ? "parkour" : "moving";
                         plan(target, flag(node, "parkour"));
@@ -202,7 +205,7 @@ final class ScriptNavigation {
             if (predicted != null && mob.position().distanceTo(predicted.after) > 0.075)
                 throw error("route_trajectory_changed");
             if (predicted != null) frameIndex++;
-            if (edgeArrived && arrivedAtNode(target)) finishEdge();
+            if (checkArrival && arrivedAtNode(target)) finishEdge();
             return progress();
         } catch (RuntimeException failure) {
             stop();
@@ -608,9 +611,9 @@ final class ScriptNavigation {
         BlockPos node = integerPosition(nodes.get(index));
         if (!settled() || !logicalPosition(mob.position()).equals(node)
             || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
-        // Fluid/climb nodes denote a cell, not a floor at its bottom plane.
-        // Dry landings still require the resolved collision-shape height.
-        return waterOrClimb(node) || Math.abs(goal.y - mob.getY()) < 0.12;
+        // Only water accepts the whole cell. A ladder may otherwise finish
+        // almost a block above its target while still sliding down toward it.
+        return level.getFluidState(node).is(FluidTags.WATER) || Math.abs(goal.y - mob.getY()) < 0.12;
     }
 
     private Vec3 destination(BlockPos node) {
