@@ -1,5 +1,6 @@
 package toomanyagents.ui;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.ResourceLocation;
 
@@ -8,6 +9,12 @@ final class ProviderIcon {
     static final int SIZE = 9;
     private static final ResourceLocation CLAUDE = texture("claude");
     private static final ResourceLocation OPENAI = texture("openai");
+    private static final ResourceLocation HERMES = texture("hermes");
+    private static final ResourceLocation CURSOR = texture("cursor");
+    private static final ResourceLocation PI = texture("pi");
+    private static final ResourceLocation OPENCODE = texture("opencode");
+    private static final ResourceLocation OMP = texture("omp");
+    private static final ResourceLocation GROK = texture("grok");
 
     private ProviderIcon() {}
 
@@ -15,14 +22,27 @@ final class ProviderIcon {
     static int render(GuiGraphics g, String providerId, int x, int textY) {
         ResourceLocation icon = textureFor(providerId);
         if (icon == null) return 0;
-        g.blit(icon, x, textY - 1, 0, 0, SIZE, SIZE, SIZE, SIZE);
+        draw(g, icon, x, textY - 1);
         return SIZE;
+    }
+
+    static void draw(GuiGraphics g, ResourceLocation icon, int x, int y) {
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        g.blit(icon, x, y, 0, 0, SIZE, SIZE, SIZE, SIZE);
+        RenderSystem.disableBlend();
     }
 
     static ResourceLocation textureFor(String providerId) {
         return switch (providerId) {
             case "claude-code" -> CLAUDE;
             case "codex" -> OPENAI;
+            case "acp-hermes-agent" -> HERMES;
+            case "acp-cursor" -> CURSOR;
+            case "pi" -> PI;
+            case "acp-opencode" -> OPENCODE;
+            case "acp-omp" -> OMP;
+            case "acp-grok" -> GROK;
             default -> null;
         };
     }

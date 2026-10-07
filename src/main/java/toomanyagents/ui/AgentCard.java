@@ -66,7 +66,7 @@ final class AgentCard {
             graphics.fill(0, 0, 1, 1, color);
             graphics.pose().popPose();
         }
-        void icon(ResourceLocation texture, int x, int y) { graphics.blit(texture, x, y, 0, 0, 9, 9, 9, 9); }
+        void icon(ResourceLocation texture, int x, int y) { ProviderIcon.draw(graphics, texture, x, y); }
     }
 
     // Measure the untruncated rows, including the space reserved for age and status.
