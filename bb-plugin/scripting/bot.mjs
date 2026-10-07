@@ -64,7 +64,7 @@ export function createBot(initial) {
     return stack;
   };
   const bot = Object.assign(new EventEmitter(), {
-    registry, version: '1.21.1',
+    registry, version: '1.21.1', protocolVersion: data.protocolVersion, majorVersion: data.majorVersion,
     // Component holder IDs belong to this world's registries. Item IDs alone
     // are translated to the pinned Mineflayer registry by the trusted decoder.
     nativeRegistries: initial.itemRegistries.references,
@@ -113,6 +113,22 @@ export function createBot(initial) {
   installEntityQueries(bot);
   bot._playerFromUUID = uuid => Object.values(bot.players).find(player => player.uuid === uuid);
   const updateState = installState(bot, data.featureTable);
+  registry.supportFeature = bot.supportFeature;
+  // This bot is already initialized; script-local plugins run immediately in
+  // the same bounded guest realm. No package or host module loading is implied.
+  const loadedPlugins = new Set(), pluginOptions = { version: bot.version };
+  bot.hasPlugin = plugin => loadedPlugins.has(plugin);
+  bot.loadPlugin = plugin => {
+    if (typeof plugin !== 'function') throw new TypeError('plugin needs to be a function');
+    if (loadedPlugins.has(plugin)) return;
+    loadedPlugins.add(plugin);
+    plugin(bot, pluginOptions);
+  };
+  bot.loadPlugins = plugins => {
+    if (!Array.isArray(plugins) || plugins.filter(plugin => typeof plugin === 'function').length !== plugins.length)
+      throw new TypeError('plugins need to be an array of functions');
+    plugins.forEach(bot.loadPlugin);
+  };
   const scoreboards = installScoreboards(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
@@ -145,7 +161,8 @@ export function createBot(initial) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
     const changed = [];
     const blocks = next.blocks;
-    const trackBlocks = snapshot && bot.eventNames().some(name => typeof name === 'string' && name.startsWith('blockUpdate'));
+    const trackBlocks = snapshot && [bot, bot.world].some(emitter => emitter.eventNames()
+      .some(name => typeof name === 'string' && name.startsWith('blockUpdate')));
     const oldBlock = (position, state) => {
       const { min, size, states } = snapshot.blocks;
       const x = position.x - min[0], y = position.y - min[1], z = position.z - min[2];
@@ -301,7 +318,13 @@ export function createBot(initial) {
       gameMode: next.hands.mode === 'survival' ? 'survival' : 'creative' };
     for (const key of ['difficulty', 'hardcore', 'levelType', 'maxPlayers', 'serverViewDistance'])
       if (next.worldState?.[key] !== undefined) game[key] = next.worldState[key];
-    const gameChanged = bot.game && Object.keys(game).some(key => bot.game[key] !== game[key]);
+    const spawn = next.worldState?.spawnPoint;
+    const spawnChanged = spawn && (!bot.spawnPoint || !bot.spawnPoint.equals(vector(spawn)));
+    if (spawn) {
+      if (bot.spawnPoint) bot.spawnPoint.set(spawn.x, spawn.y, spawn.z);
+      else bot.spawnPoint = vector(spawn);
+    }
+    const gameChanged = bot.game && (Object.keys(game).some(key => bot.game[key] !== game[key]) || spawnChanged);
     Object.assign(bot.game ??= {}, game);
     if (streamed && gameChanged) entityEvents.push(['game']);
     let experienceChanged = false;
@@ -356,6 +379,8 @@ export function createBot(initial) {
     for (const event of scoreEvents) bot.emit(...event);
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
+      bot.world.emit('blockUpdate', before, after);
+      bot.world.emit(`blockUpdate:${position}`, before, after);
       bot.emit('blockUpdate', before, after);
       bot.emit(`blockUpdate:${position}`, before, after);
     }

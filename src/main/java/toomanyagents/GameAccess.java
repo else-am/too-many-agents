@@ -743,6 +743,8 @@ final class GameAccess {
         worldState.addProperty("levelType", level.isFlat() ? "flat" : "default");
         worldState.addProperty("maxPlayers", current.getPlayerList().getMaxPlayers());
         worldState.addProperty("serverViewDistance", current.getPlayerList().getViewDistance());
+        var spawn = level.getSharedSpawnPos();
+        worldState.add("spawnPoint", JsonState.object("x", spawn.getX(), "y", spawn.getY(), "z", spawn.getZ()));
         snapshot.add("worldState", worldState);
         snapshot.add("players", ScriptEntities.players(level));
         if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
