@@ -3,7 +3,6 @@ package toomanyagents.ui;
 import java.util.ArrayList;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
@@ -11,7 +10,6 @@ import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import toomanyagents.TooManyAgentsClientSettings;
 import toomanyagents.BbSetup;
-import org.lwjgl.util.tinyfd.TinyFileDialogs;
 
 /** Installation-wide preferences; each change saves immediately. */
 public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
@@ -22,7 +20,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     private BbSetup.View bb = setup.view();
     private String bbPath = BbSetup.locationLabel(bb.cli());
     private long bbPathApplyAt;
-    private boolean details, choosing, confirmInstall;
+    private boolean details, confirmInstall;
 
     public TooManyAgentsSettingsScreen(Screen parent) { this(parent, null); }
     /** With access (from inside a world), the screen also links to this world's archive. */
@@ -105,29 +103,17 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
                 "Cancel", () -> { confirmInstall = false; rebuildForm(); }, enabled);
         }
         if (details || bb.needsLocation()) {
-            note("If detection fails, select your BB app or executable. You can also paste or drop its path here.");
+            note("If detection fails, paste the path to your BB app or executable.");
             input("BB app location", bbPath, 4096, value -> {
                 bbPath = value;
                 bbPathApplyAt = System.currentTimeMillis() + 700;
-            }, enabled && !choosing);
-            action("", "Browse…", this::browseBb, enabled && !choosing);
+            }, enabled);
         }
     }
 
     private void useBbPath() {
         bbPathApplyAt = 0;
         if (!bbPath.equals(BbSetup.locationLabel(setup.view().cli()))) setup.chooseCli(bbPath);
-    }
-
-    private void browseBb() {
-        choosing = true; rebuildForm();
-        CompletableFuture.supplyAsync(() -> TinyFileDialogs.tinyfd_openFileDialog("Choose BB app or executable", bbPath, null, null, false))
-            .whenComplete((chosen, failure) -> minecraft.execute(() -> {
-                choosing = false;
-                if (chosen != null) { bbPath = chosen; useBbPath(); }
-                if (failure != null) feedback = "Could not open the file picker. Paste the BB path instead.";
-                rebuildForm();
-            }));
     }
 
     @Override public void onFilesDrop(List<Path> files) {
@@ -138,7 +124,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
 
     @Override public void tick() {
         super.tick();
-        if (bbPathApplyAt != 0 && System.currentTimeMillis() >= bbPathApplyAt && !choosing && !setup.view().busy()) useBbPath();
+        if (bbPathApplyAt != 0 && System.currentTimeMillis() >= bbPathApplyAt && !setup.view().busy()) useBbPath();
         var latest = setup.view();
         if (!latest.equals(bb)) {
             boolean unchanged = bbPath.equals(BbSetup.locationLabel(bb.cli()));
