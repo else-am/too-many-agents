@@ -47,6 +47,11 @@ def bb_command(env):
 
 
 def main():
+    # BB validates tool instructions when loading, after its bundle has built.
+    # Catch this limit here so a valid build cannot ship an unloadable plugin.
+    instructions = (PLUGIN / 'surface/scripting.md').read_text()
+    if len(instructions.encode('utf-16-le')) // 2 > 4096:
+        raise RuntimeError("Minecraft scripting instructions exceed BB's 4096-character limit.")
     env = build_environment()
     bb_env = dict(env)
     bb = bb_command(bb_env)
