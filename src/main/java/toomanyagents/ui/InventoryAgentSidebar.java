@@ -26,6 +26,16 @@ public final class InventoryAgentSidebar extends Screen {
     static final int DEFAULT_WIDTH = 260, CARD_MARGINS = 31;
     private static final int LIST_TOP = 39;
     private static final int ROW_HEIGHT = AgentCard.HEIGHT + 11;
+    private static final List<String> BUG_ICON = List.of(
+        "...###...",
+        "#..#.#..#",
+        ".#.###.#.",
+        "..#...#..",
+        "###...###",
+        "..#.#.#..",
+        "..#.#.#..",
+        ".#.###.#.",
+        "#.......#");
     private final AgentUiAccess access;
     private final Screen parent;
     private final Consumer<String> select;
@@ -210,26 +220,19 @@ public final class InventoryAgentSidebar extends Screen {
         }));
         var bugReport = addRenderableWidget(new Button(width - 32, footerY, 22, 22,
             Component.literal("Report a bug"), button -> net.minecraft.Util.getPlatform().openUri(
-                java.net.URI.create("https://github.com/else-am/too-many-agents")), message -> message.get()) {
+                java.net.URI.create("https://github.com/else-am/too-many-agents/issues")), message -> message.get()) {
             @Override protected void renderWidget(GuiGraphics g, int mx, int my, float delta) {
                 if (isHoveredOrFocused()) g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), 0xFF363636);
-                int color = isHoveredOrFocused() ? 0xFFEEEEEE : 0xFFB5B5B5;
-                int x = getX() + 5, y = getY() + 5;
-                // Antennae, head, split shell, and three pairs of legs.
-                g.fill(x + 3, y, x + 4, y + 2, color);
-                g.fill(x + 8, y, x + 9, y + 2, color);
-                g.fill(x + 4, y + 2, x + 8, y + 4, color);
-                g.fill(x + 3, y + 4, x + 9, y + 5, color);
-                g.fill(x + 3, y + 5, x + 5, y + 10, color);
-                g.fill(x + 6, y + 5, x + 9, y + 10, color);
-                g.fill(x + 4, y + 10, x + 8, y + 11, color);
-                for (int leg = 0; leg < 3; leg++) {
-                    g.fill(x, y + 4 + leg * 3, x + 3, y + 5 + leg * 3, color);
-                    g.fill(x + 9, y + 4 + leg * 3, x + 12, y + 5 + leg * 3, color);
+                int x = getX() + 7, y = getY() + 7;
+                for (int row = 0; row < BUG_ICON.size(); row++) {
+                    for (int col = 0; col < BUG_ICON.get(row).length(); col++) {
+                        if (BUG_ICON.get(row).charAt(col) == '#')
+                            g.fill(x + col, y + row, x + col + 1, y + row + 1, 0xFFFFFFFF);
+                    }
                 }
             }
         });
-        bugReport.setTooltip(Tooltip.create(Component.literal("Report a bug on GitHub")));
+        bugReport.setTooltip(Tooltip.create(Component.literal("report a bug")));
         layout();
     }
 
