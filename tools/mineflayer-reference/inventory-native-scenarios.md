@@ -242,6 +242,35 @@ native slices and source/library comparisons separately.
 | R03 event ordering | Handlers on bot.windowOpen/windowClose, w.updateSlot/updateSlot:N, heldItemChanged read current slots/cursor and enqueue another action. | Complete state visible inside callbacks; no queue deadlock, duplicate optimistic updates or resolving before native state; unchanged slots retain Items. |
 | R04 specialized/adjacent | Write/sign real book with pages; creative full-component set/clear guarded by mode; interrupted consume and offhand use; explicit cursorPos/entityAt hit. | Real components, selection restored, permission/length errors bounded; use-start is not consume completion. Body reach never broadened by adapter. |
 
+Native foundation cases fixed before implementation (all unrun):
+
+- N01: record generation at inventory, named chest A, replacement chest B, invalid
+  B/automatic close, explicit inventory close, and hands reconstruction. Require
+  strictly increasing generations at these boundaries; ordinary snapshots/ticks
+  keep the generation. Replay each old id/generation against all five native
+  hooks and require rejection before mutation, including after ID wrap.
+- N02: open an unused furnace and enchanting table. Compare every initial data
+  integer including zeros to the actual menu DataSlots. Change fuel/cost then
+  return to zero; snapshot must follow. Check translated/styled custom provider
+  titles against typed component data. No synchronizer on a real player changes.
+- N03: map all armor, offhand, hotbar and main slots through both Inventory and
+  InventoryMenu coordinates, also while a container is open. For each cursor
+  item check native mayPlace, item-sensitive stack limit, component equality and
+  mayPickup; repeat empty cursor, result slot, binding armor and component stack
+  limits. Empty cursor has no merge/place claim.
+- N04: reject stonecutter choice equal to recipe count (native method otherwise
+  returns true), bad enchant/loom choice, wrong menu, null click mode, invalid
+  outside mode/button, stale close/name/trade. Repeated valid anvil name is a
+  successful no-op; empty name clears it; native filtered length >50 rejects.
+- N05: inspect real merchant level/progress/restock flags, adjusted and base costs,
+  two-input/result component wires, uses/XP before/after a real trade. Select
+  with full inventory and existing inputs: report actual partial/no movement,
+  never manufacture filled inputs. Empty offers must not invent merchant flags.
+- N06: give this body's hands XP independently of the user, enchant/rename, then
+  reconstruct/save-load hands. Level/progress/total/seed must survive exactly;
+  a new body's XP starts independently. User XP/seed must be unchanged. No
+  claim is made here about world XP-orb pickup routing.
+
 ## Local source references and evidence boundary
 
 Paths below are relative to the pinned reference node_modules (or project root).
@@ -275,3 +304,64 @@ Line anchors identify the inspected versions, not a promise of future offsets.
 Validation performed for this handoff: read pinned code/declarations/docs and
 native generated source. No simulation, native fixture, reference client, game,
 server, installation or lifecycle operation ran. All scenario rows remain unrun.
+
+## Native foundation integration
+
+The subsequent AgentHands implementation retains `scriptSnapshot(ScriptItems)`
+and adds these package-visible hooks, all returning JsonObject menu snapshots:
+
+```java
+clickMenu(int id, long generation, int slot, int button, ClickType click)
+closeMenu(int id, long generation)
+menuButton(int id, long generation, int button)
+renameAnvil(int id, long generation, String name)
+selectTrade(int id, long generation, int index)
+```
+
+Old physical click/close signatures delegate with the current generation. Bind
+script actions to the observed generation, never substitute the latest one.
+Generation is persisted in body hands state and advanced on reconstruction,
+open, close (including inventory close), and detected menu replacement. Menu
+snapshots add `generation`, plain `title`, typed anonymous `titleNbt`, and complete
+`properties` integer arrays. An unobserved provider has null title fields; no
+type-derived title is invented. `titleNbt` feeds ChatMessage.fromNotch.
+
+`inventorySlot` retains native Inventory indices: hotbar0..8, main9..35,
+feet36/legs37/chest38/head39/offhand40. `inventoryWindowSlot` adds player-window
+coordinates: hotbar36..44, main9..35, armor8/7/6/5, offhand45. Slot
+`mayPlaceCarried`/`componentMerge` are false for an empty cursor; with a cursor,
+`maxStackSize` is its native slot capacity, otherwise the slot's generic limit.
+`componentMerge` means nonempty stacks have identical item/components, not that
+placement has permission or remaining capacity. `mayPickup` remains native.
+Carried/item summaries also include their native `maxStackSize`.
+
+`hands.experience` has `level`, `progress`, `total`, `seed`. These persist in the
+body's existing hands tag; new hands initialize their own random enchantment
+seed. No player XP is consulted. XP-orb pickup routing is separate pending work.
+
+`menu.merchant` exists only in script snapshots of MerchantMenu: `xp`, `futureXp`,
+`selectedTrade` (native selection hint, not a promise that inputs filled), and
+`offers`. `level`, `canRestock`, `showProgressBar` appear only after native
+sendMerchantOffers supplies them; empty offers can leave them unavailable.
+Each offer has `baseCostA`, adjusted `costA`, `costB`, `result` item summaries with
+wire from the shared encoder, plus `uses`, `maxUses`, `demand`, `specialPrice`,
+`priceMultiplier`, `xp`, `outOfStock`, `rewardExp`. Missing second cost is the
+actual empty stack. Cost components represent native ItemCost display stacks;
+the native cost predicate permits extra components, so do not substitute full
+Item equality for native trade eligibility. Taking the native result remains
+authoritative. Repeated/empty valid rename succeeds; `nameChanged` reports
+whether AnvilMenu changed it. Raw names have the native packet's 32767-unit
+bound and filtered names the native 50-unit bound; the guest's public 35-character
+contract belongs in guest orchestration.
+
+Native-source verification covered every vanilla clickMenuButton override
+(enchanting, stonecutter, loom, lectern); invalid stonecutter indices explicitly
+reject despite its unconditional true return. Beacon effects need a separate
+updateEffects hook; FakePlayer.openHorseInventory is still a no-op requiring a
+dedicated native open path. Books/creative components/offhand use, modes5/6 and
+guest specialized orchestration remain pending as described above, not excluded.
+
+Validation for this implementation: Java 21 javac succeeded against the lead's
+existing generated NeoForge 21.1.251 artifacts and project classes, with shared
+ScriptItems/ScriptNbt sources. No game, server, BB lifecycle, or live scenarios
+ran. N01–N06 and the full matrix above remain lead-owned native validation.

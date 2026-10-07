@@ -1,20 +1,26 @@
 package toomanyagents;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.NonNullList;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.protocol.game.ServerboundPlayerActionPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.StringUtil;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
@@ -22,11 +28,17 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.ClickType;
+import net.minecraft.world.inventory.ContainerSynchronizer;
 import net.minecraft.world.inventory.CraftingMenu;
+import net.minecraft.world.inventory.MerchantMenu;
+import net.minecraft.world.inventory.StonecutterMenu;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
+import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.state.BlockState;
@@ -61,6 +73,12 @@ final class AgentHands extends FakePlayer {
     private int nextMenuId;
     private BlockPos menuOrigin;
     private Entity menuEntity;
+    private AbstractContainerMenu observedMenu;
+    private long menuGeneration;
+    private Component menuTitle;
+    private int[] menuProperties = new int[0];
+    private boolean merchantMetadataKnown;
+    private int selectedTrade;
     private boolean closed;
 
     AgentHands(Mob body) {
@@ -70,6 +88,7 @@ final class AgentHands extends FakePlayer {
         requireThread();
         syncBody();
         restore();
+        observeMenu(getInventory().getDisplayName());
         save();
     }
 
@@ -437,21 +456,96 @@ final class AgentHands extends FakePlayer {
     @Override public OptionalInt openMenu(MenuProvider provider, Consumer<RegistryFriendlyByteBuf> ignoredClientData) {
         requireThread();
         if (provider == null) return OptionalInt.empty();
+        // useBlock/interact already recorded the new provider's reach origin.
+        var origin = menuOrigin;
+        var entity = menuEntity;
         if (containerMenu != inventoryMenu) closeContainer();
         nextMenuId = nextMenuId % 100 + 1;
         var menu = provider.createMenu(nextMenuId, getInventory(), this);
         if (menu == null) return OptionalInt.empty();
         containerMenu = menu;
+        menuOrigin = origin;
+        menuEntity = entity;
+        observeMenu(provider.getDisplayName());
         NeoForge.EVENT_BUS.post(new PlayerContainerEvent.Open(this, menu));
         return OptionalInt.of(nextMenuId);
     }
 
-    JsonObject clickMenu(int expectedMenuId, int slot, int button, ClickType click) {
+    @Override public void doCloseContainer() {
+        requireThread();
+        super.doCloseContainer();
+        menuOrigin = null;
+        menuEntity = null;
+        // Closing inventory is also a boundary: removed() returns its cursor/grid.
+        observeMenu(getInventory().getDisplayName());
+    }
+
+    @Override public void sendMerchantOffers(int id, MerchantOffers offers, int level, int xp,
+                                             boolean showProgressBar, boolean canRestock) {
+        requireThread();
+        if (containerMenu.containerId != id || !(containerMenu instanceof MerchantMenu merchant)) return;
+        ensureObservedMenu();
+        // Vanilla only sends these fields to the client; this FakePlayer has none.
+        merchant.setMerchantLevel(level);
+        merchant.setShowProgressBar(showProgressBar);
+        merchant.setCanRestock(canRestock);
+        merchantMetadataKnown = true;
+    }
+
+    private void observeMenu(Component title) {
+        requireThread();
+        observedMenu = containerMenu;
+        menuGeneration = Math.incrementExact(menuGeneration);
+        menuTitle = title == null ? null : title.copy();
+        merchantMetadataKnown = false;
+        selectedTrade = 0; // MerchantContainer's initial selection hint.
+        menuProperties = new int[0];
+        // Only menus belonging to this FakePlayer reach here. Initial data includes zeros.
+        containerMenu.setSynchronizer(new ContainerSynchronizer() {
+            @Override public void sendInitialData(AbstractContainerMenu menu, NonNullList<ItemStack> slots,
+                                                  ItemStack carried, int[] data) {
+                requireThread();
+                if (menu == observedMenu) menuProperties = data.clone();
+            }
+            @Override public void sendSlotChange(AbstractContainerMenu menu, int slot, ItemStack stack) {}
+            @Override public void sendCarriedChange(AbstractContainerMenu menu, ItemStack stack) {}
+            @Override public void sendDataChange(AbstractContainerMenu menu, int index, int value) {
+                requireThread();
+                if (menu == observedMenu) menuProperties[index] = value;
+            }
+        });
+    }
+
+    private void ensureObservedMenu() {
+        requireThread();
+        if (observedMenu != containerMenu)
+            observeMenu(containerMenu == inventoryMenu ? getInventory().getDisplayName() : null);
+    }
+
+    private void checkMenu(int expectedMenuId, long expectedGeneration) {
         syncBody();
+        ensureObservedMenu();
+        if (containerMenu.containerId != expectedMenuId || menuGeneration != expectedGeneration)
+            throw error("menu_changed");
+    }
+
+    private void checkMenuAction(int expectedMenuId, long expectedGeneration) {
+        checkMenu(expectedMenuId, expectedGeneration);
         requireIdleHands();
-        if (containerMenu.containerId != expectedMenuId) throw error("menu_changed");
+        if (isSpectator()) throw error("menu_action_not_permitted");
         if (!validMenu()) { closeContainer(); save(); throw error("menu_no_longer_valid"); }
-        if (slot < 0 || slot >= containerMenu.slots.size()) throw error("invalid_menu_slot");
+    }
+
+    JsonObject clickMenu(int expectedMenuId, int slot, int button, ClickType click) {
+        ensureObservedMenu();
+        return clickMenu(expectedMenuId, menuGeneration, slot, button, click);
+    }
+
+    JsonObject clickMenu(int expectedMenuId, long expectedGeneration, int slot, int button, ClickType click) {
+        checkMenuAction(expectedMenuId, expectedGeneration);
+        if (click == null) throw error("unsupported_menu_click");
+        boolean outside = slot == -999 && click == ClickType.PICKUP && (button == 0 || button == 1);
+        if (!outside && (slot < 0 || slot >= containerMenu.slots.size())) throw error("invalid_menu_slot");
         boolean valid = switch (click) {
             case PICKUP, QUICK_MOVE, THROW -> button == 0 || button == 1;
             case SWAP -> button >= 0 && button < 9 || button == 40;
@@ -466,22 +560,80 @@ final class AgentHands extends FakePlayer {
     }
 
     JsonObject closeMenu() {
-        syncBody();
+        ensureObservedMenu();
+        return closeMenu(containerMenu.containerId, menuGeneration);
+    }
+
+    JsonObject closeMenu(int expectedMenuId, long expectedGeneration) {
+        checkMenu(expectedMenuId, expectedGeneration);
         closeContainer();
-        menuOrigin = null;
-        menuEntity = null;
+        containerMenu.broadcastChanges();
+        save();
+        return menuSnapshot();
+    }
+
+    JsonObject menuButton(int expectedMenuId, long expectedGeneration, int button) {
+        checkMenuAction(expectedMenuId, expectedGeneration);
+        if (button < 0 || containerMenu instanceof StonecutterMenu stonecutter && button >= stonecutter.getNumRecipes())
+            throw error("invalid_menu_button");
+        boolean accepted = containerMenu.clickMenuButton(this, button);
+        containerMenu.broadcastChanges();
+        save();
+        if (!accepted) throw error("menu_button_rejected");
+        return menuSnapshot();
+    }
+
+    JsonObject renameAnvil(int expectedMenuId, long expectedGeneration, String name) {
+        checkMenuAction(expectedMenuId, expectedGeneration);
+        if (!(containerMenu instanceof AnvilMenu anvil)) throw error("not_an_anvil_menu");
+        if (name == null || name.length() > 32767 || StringUtil.filterText(name).length() > 50)
+            throw error("invalid_anvil_name");
+        // false also means an unchanged valid name, which is a successful no-op.
+        boolean changed = anvil.setItemName(name);
+        containerMenu.broadcastChanges();
+        save();
+        var result = menuSnapshot();
+        result.addProperty("nameChanged", changed);
+        return result;
+    }
+
+    JsonObject selectTrade(int expectedMenuId, long expectedGeneration, int index) {
+        checkMenuAction(expectedMenuId, expectedGeneration);
+        if (!(containerMenu instanceof MerchantMenu merchant)) throw error("not_a_merchant_menu");
+        if (index < 0 || index >= merchant.getOffers().size()) throw error("invalid_trade_index");
+        merchant.setSelectionHint(index);
+        selectedTrade = index;
+        merchant.tryMoveItems(index);
+        containerMenu.broadcastChanges();
         save();
         return menuSnapshot();
     }
 
     JsonObject menuSnapshot() {
         requireThread();
+        ensureObservedMenu();
+        containerMenu.broadcastChanges();
         var result = new JsonObject();
         result.addProperty("id", containerMenu.containerId);
+        result.addProperty("generation", menuGeneration);
+        if (menuTitle == null) {
+            result.add("title", JsonNull.INSTANCE);
+            result.add("titleNbt", JsonNull.INSTANCE);
+        } else {
+            result.addProperty("title", menuTitle.getString());
+            var ops = registryAccess().createSerializationContext(NbtOps.INSTANCE);
+            var tag = ComponentSerialization.CODEC.encodeStart(ops, menuTitle)
+                .getOrThrow(message -> error("menu_title_encode_failed: " + message));
+            result.add("titleNbt", ScriptNbt.typed(tag));
+        }
+        var properties = new JsonArray();
+        for (int value : menuProperties) properties.add(value);
+        result.add("properties", properties);
         result.addProperty("type", containerMenu == inventoryMenu ? "minecraft:inventory"
             : BuiltInRegistries.MENU.getKey(containerMenu.getType()).toString());
         result.addProperty("valid", validMenu());
         result.add("carried", item(containerMenu.getCarried()));
+        var carried = containerMenu.getCarried();
         var slots = new JsonArray();
         for (int index = 0; index < containerMenu.slots.size(); index++) {
             var slot = containerMenu.getSlot(index);
@@ -489,6 +641,7 @@ final class AgentHands extends FakePlayer {
             entry.addProperty("slot", index);
             if (slot.container == getInventory()) {
                 entry.addProperty("inventorySlot", slot.getContainerSlot());
+                entry.addProperty("inventoryWindowSlot", inventoryMenuSlot(slot.getContainerSlot()));
                 entry.addProperty("role", "inventory");
             } else if (slot instanceof net.minecraft.world.inventory.ResultSlot) {
                 entry.addProperty("role", "crafting_result");
@@ -499,6 +652,10 @@ final class AgentHands extends FakePlayer {
                 entry.addProperty("craftingHeight", crafting.getHeight());
             } else entry.addProperty("role", "container");
             entry.addProperty("mayPickup", slot.mayPickup(this));
+            entry.addProperty("mayPlaceCarried", !carried.isEmpty() && slot.mayPlace(carried));
+            entry.addProperty("maxStackSize", carried.isEmpty() ? slot.getMaxStackSize() : slot.getMaxStackSize(carried));
+            entry.addProperty("componentMerge", !carried.isEmpty() && !slot.getItem().isEmpty()
+                && ItemStack.isSameItemSameComponents(slot.getItem(), carried));
             slots.add(entry);
         }
         result.add("slots", slots);
@@ -507,10 +664,17 @@ final class AgentHands extends FakePlayer {
 
     JsonObject snapshot() {
         syncBody();
+        ensureObservedMenu();
         var result = new JsonObject();
         result.addProperty("mode", BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).id);
         result.addProperty("selected", getInventory().selected);
         result.addProperty("usingItem", isUsingItem());
+        var experience = new JsonObject();
+        experience.addProperty("level", experienceLevel);
+        experience.addProperty("progress", experienceProgress);
+        experience.addProperty("total", totalExperience);
+        experience.addProperty("seed", getEnchantmentSeed());
+        result.add("experience", experience);
         var inventory = new JsonArray();
         result.addProperty("inventorySize", getInventory().getContainerSize());
         for (int slot = 0; slot < getInventory().getContainerSize(); slot++) {
@@ -528,6 +692,7 @@ final class AgentHands extends FakePlayer {
         if (miningPos != null) result.add("mining", miningResult("mining"));
         var menu = new JsonObject();
         menu.addProperty("id", containerMenu.containerId);
+        menu.addProperty("generation", menuGeneration);
         menu.addProperty("type", containerMenu == inventoryMenu ? "minecraft:inventory"
             : BuiltInRegistries.MENU.getKey(containerMenu.getType()).toString());
         menu.addProperty("valid", validMenu());
@@ -554,7 +719,46 @@ final class AgentHands extends FakePlayer {
             var item = entry.getAsJsonObject();
             item.addProperty("wire", items.wire(containerMenu.getSlot(item.get("slot").getAsInt()).getItem()));
         }
+        if (containerMenu instanceof MerchantMenu merchant) menu.add("merchant", merchantSnapshot(merchant, items));
         result.add("menu", menu);
+        return result;
+    }
+
+    private JsonObject merchantSnapshot(MerchantMenu merchant, ScriptItems items) {
+        var result = new JsonObject();
+        result.addProperty("xp", merchant.getTraderXp());
+        result.addProperty("futureXp", merchant.getFutureTraderXp());
+        // These fields have no server-side value until sendMerchantOffers supplies them.
+        if (merchantMetadataKnown) {
+            result.addProperty("level", merchant.getTraderLevel());
+            result.addProperty("canRestock", merchant.canRestock());
+            result.addProperty("showProgressBar", merchant.showProgressBar());
+        }
+        result.addProperty("selectedTrade", selectedTrade);
+        var offers = new JsonArray();
+        for (var offer : merchant.getOffers()) {
+            var entry = new JsonObject();
+            entry.add("baseCostA", scriptItem(offer.getBaseCostA(), items));
+            entry.add("costA", scriptItem(offer.getCostA(), items));
+            entry.add("costB", scriptItem(offer.getCostB(), items));
+            entry.add("result", scriptItem(offer.getResult(), items));
+            entry.addProperty("uses", offer.getUses());
+            entry.addProperty("maxUses", offer.getMaxUses());
+            entry.addProperty("demand", offer.getDemand());
+            entry.addProperty("specialPrice", offer.getSpecialPriceDiff());
+            entry.addProperty("priceMultiplier", offer.getPriceMultiplier());
+            entry.addProperty("xp", offer.getXp());
+            entry.addProperty("outOfStock", offer.isOutOfStock());
+            entry.addProperty("rewardExp", offer.shouldRewardExp());
+            offers.add(entry);
+        }
+        result.add("offers", offers);
+        return result;
+    }
+
+    private static JsonObject scriptItem(ItemStack stack, ScriptItems items) {
+        var result = item(stack);
+        result.addProperty("wire", items.wire(stack));
         return result;
     }
 
@@ -564,6 +768,11 @@ final class AgentHands extends FakePlayer {
         var saved = new CompoundTag();
         saved.put("inventory", getInventory().save(new ListTag()));
         saved.putInt("selected", getInventory().selected);
+        saved.putLong("menuGeneration", menuGeneration);
+        saved.putFloat("XpP", experienceProgress);
+        saved.putInt("XpLevel", experienceLevel);
+        saved.putInt("XpTotal", totalExperience);
+        saved.putInt("XpSeed", getEnchantmentSeed());
         if (!containerMenu.getCarried().isEmpty()) saved.put("cursor", containerMenu.getCarried().save(registryAccess()));
         var crafting = new ListTag();
         for (int slot = 1; slot <= 4; slot++) {
@@ -613,6 +822,11 @@ final class AgentHands extends FakePlayer {
         var saved = body.getPersistentData().getCompound("too_many_agents_hands");
         getInventory().load(saved.getList("inventory", 10));
         getInventory().selected = Math.clamp(saved.getInt("selected"), 0, 8);
+        menuGeneration = saved.getLong("menuGeneration");
+        experienceProgress = saved.getFloat("XpP");
+        experienceLevel = saved.getInt("XpLevel");
+        totalExperience = saved.getInt("XpTotal");
+        enchantmentSeed = saved.contains("XpSeed", 3) ? saved.getInt("XpSeed") : getRandom().nextInt();
         if (saved.contains("cursor", 10)) inventoryMenu.setCarried(ItemStack.parseOptional(registryAccess(), saved.getCompound("cursor")));
         for (var tag : saved.getList("crafting", 10)) {
             var entry = (CompoundTag) tag;
@@ -735,6 +949,7 @@ final class AgentHands extends FakePlayer {
         var result = new JsonObject();
         result.addProperty("id", BuiltInRegistries.ITEM.getKey(stack.getItem()).toString());
         result.addProperty("count", stack.getCount());
+        result.addProperty("maxStackSize", stack.getMaxStackSize());
         if (!stack.isEmpty()) {
             result.addProperty("name", stack.getHoverName().getString());
             result.addProperty("damage", stack.getDamageValue());
