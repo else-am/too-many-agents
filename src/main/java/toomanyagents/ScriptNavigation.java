@@ -23,6 +23,7 @@ import net.minecraft.world.entity.animal.Salmon;
 import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.monster.Drowned;
 import net.minecraft.world.entity.monster.Slime;
+import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.ClipContext;
@@ -50,15 +51,17 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH, SLIME }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH, SLIME, MAGMA }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
+    // Native MagmaCube waits up to 116 grounded command ticks per hop.
+    private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
     private static final double EPS = 1e-6;
     // Method ownership is immutable for a loaded class; body state is not.
     private static final ClassValue<Boolean> GROUND_METHODS = new ClassValue<>() {
         @Override protected Boolean computeValue(Class<?> type) {
             try {
                 return type.getMethod("travel", Vec3.class).getDeclaringClass() == (type == Drowned.class ? Drowned.class : LivingEntity.class)
-                    && type.getMethod("jumpFromGround").getDeclaringClass() == (type == Slime.class ? Slime.class : LivingEntity.class)
+                    && type.getMethod("jumpFromGround").getDeclaringClass() == (type == Slime.class || type == MagmaCube.class ? type : LivingEntity.class)
                     && inherits(type, "getJumpPower") && inherits(type, "getFlyingSpeed")
                     && inherits(type, "isAffectedByFluids");
             } catch (ReflectiveOperationException failure) { return false; }
@@ -147,7 +150,7 @@ public final class ScriptNavigation {
             boolean parkour = flag(node, "parkour");
             if (physics == Physics.FISH && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_aquatic_edge");
-            if (physics == Physics.SLIME && node.has("direct")) throw error("route_unsupported_hopping_direct");
+            if (slimeHopper(physics) && node.has("direct")) throw error("route_unsupported_hopping_direct");
             if (node.has("direct")) {
                 JsonObject segment = node.getAsJsonObject("direct");
                 Vec3 from = vector(segment.getAsJsonObject("from")), to = vector(segment);
@@ -230,7 +233,7 @@ public final class ScriptNavigation {
                 complete();
             } else {
                 if (!edgeStarted) beginEdge();
-                if (++edgeTicks > EDGE_TICKS && mining == null) throw error("route_edge_timeout");
+                if (++edgeTicks > (physics == Physics.MAGMA ? MAGMA_EDGE_TICKS : EDGE_TICKS) && mining == null) throw error("route_edge_timeout");
                 checkVolume(relevant);
                 JsonObject node = nodes.get(index);
                 if (mining != null) {
@@ -246,7 +249,7 @@ public final class ScriptNavigation {
                     } else {
                         Vec3 destination = returnTo;
                         // A hopper may need several native hops to reach an edit stance.
-                        if (physics != Physics.SLIME || arrived(destination)) returnTo = null;
+                        if (!slimeHopper(physics) || arrived(destination)) returnTo = null;
                         plan(destination, false);
                         if (!trajectory.isEmpty()) predicted = followFrame();
                     }
@@ -329,7 +332,7 @@ public final class ScriptNavigation {
             throw error("route_direct_start_changed");
         if (physics == Physics.FISH) raw = raw.add(0, swimTargetOffset(mob), 0);
         target = raw;
-        double rise = physics == Physics.FISH ? 0 : Math.min(4, jumpRise(mob));
+        double rise = physics == Physics.FISH ? 0 : physics == Physics.MAGMA ? jumpRise(mob) : Math.min(4, jumpRise(mob));
         relevant = mob.getBoundingBox().minmax(mob.getBoundingBox().move(raw.subtract(edgeStart)))
             .inflate(0.1, 0, 0.1).expandTowards(0, rise + 0.1, 0).expandTowards(0, -1, 0);
         if (direct != null) {
@@ -405,14 +408,14 @@ public final class ScriptNavigation {
             if (!tower) {
                 if (!mob.onGround() || jumpRise(mob) < desired.getY() + 1 - mob.getY()) throw error("route_jump_unavailable");
                 AABB clearance = mob.getBoundingBox().expandTowards(0, jumpRise(mob), 0);
-                if (physics == Physics.SLIME) {
+                if (slimeHopper(physics)) {
                     checkVolume(clearance);
                     checkDryVolume(clearance);
                     Vec3 apex = mob.position().add(0, jumpRise(mob), 0);
                     if (!inside(apex) || !withinEdge(apex)) throw error("route_jump_outside_edge");
                 }
                 if (!level.noCollision(mob, clearance)) throw error("route_jump_obstructed");
-                if (physics == Physics.SLIME) {
+                if (slimeHopper(physics)) {
                     tower = hopControl(mob.getYRot(), 0);
                     if (!tower) phase = "waiting_hop";
                 } else { mob.setSprinting(false); mob.jumpFromGround(); tower = true; }
@@ -527,7 +530,7 @@ public final class ScriptNavigation {
         predictionDeadline = System.nanoTime() + 25_000_000L;
         if (arrived(goal)) return;
         List<Frame> best = simulate(goal, -1, false);
-        if (physics != Physics.SLIME && best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
+        if (!slimeHopper(physics) && best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
             for (boolean sprint : new boolean[]{false, true}) {
                 if (sprint && !sprintAllowed) continue;
                 for (int takeoff = 0; takeoff <= (parkour ? 12 : 5); takeoff++) {
@@ -544,7 +547,7 @@ public final class ScriptNavigation {
         Frame frame = trajectory.get(frameIndex);
         if (mob.position().distanceTo(frame.before) > 0.075 || mob.getDeltaMovement().distanceTo(frame.beforeVelocity) > 0.035
             || mob.onGround() != frame.beforeGround) throw error("route_trajectory_changed");
-        if (physics == Physics.SLIME) {
+        if (slimeHopper(physics)) {
             boolean willJump = mob.onGround() && ((Slime.SlimeMoveControl) controller).jumpDelay <= 0 && mob.noJumpDelay == 0;
             if (willJump != frame.jump) throw error("route_hop_timing_changed");
             if (hopControl(frame.wantedYaw, frame.modifier) != frame.jump) throw error("route_hop_timing_changed");
@@ -661,13 +664,18 @@ public final class ScriptNavigation {
         boolean groundWithoutBlock = ground && supporting == null;
         double baseSpeed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
         double speed = baseSpeed * (sprint ? 1.3 : 1);
-        boolean hopper = physics == Physics.SLIME;
+        boolean hopper = slimeHopper(physics);
         int hopDelay = hopper ? ((Slime.SlimeMoveControl) controller).jumpDelay : 0;
         float yaw = mob.getYRot();
         boolean hopped = !ground;
         double initialDistance = pos.distanceTo(goal);
         List<Frame> frames = new ArrayList<>();
-        for (int tick = 0; tick < 100; tick++) {
+        int horizon = HOP_FLIGHT_TICKS;
+        if (physics == Physics.MAGMA) {
+            if (hopDelay > MAGMA_MAX_DELAY) throw error("route_hop_delay_unsupported");
+            horizon += Math.max(0, hopDelay) + 1; // observed wait plus one full flight/landing check
+        }
+        for (int tick = 0; tick < horizon; tick++) {
             if (++predictionSteps > 2700 || System.nanoTime() > predictionDeadline) throw error("route_prediction_budget");
             if (tick > 0) velocity = small(velocity.scale(0.98)); // normal NoAI aiStep between Post calls
             Vec3 beforeVelocity = velocity;
@@ -713,7 +721,7 @@ public final class ScriptNavigation {
             if (jump) {
                 if (!ground) return null;
                 double power = jumpPower(mob, pos, support);
-                if (power <= 0) return null;
+                if (power <= 0 || physics == Physics.MAGMA && magmaHopRise(power, mob.getGravity()) <= 0) return null;
                 velocity = new Vec3(velocity.x, power, velocity.z);
                 if (sprint) velocity = velocity.add(direction.scale(0.2));
             }
@@ -977,9 +985,10 @@ public final class ScriptNavigation {
         }
         double gravity = supported ? mob.getGravity() : 0;
         double power = supported ? jumpPower(mob, mob.position()) : 0;
-        // Vertical-only tower jumps do not tick MoveControl, including Drowned;
-        // this is their native maximum rise. Horizontal edges model every tick.
-        double rise = supported && !mob.hasEffect(MobEffects.LEVITATION) ? jumpRise(power, gravity) : 0;
+        // Drowned's vertical-only tower does not tick its sinking controller.
+        // Slime/MagmaCube towers retain native hop timing; horizontal edges model every tick.
+        double rise = supported && !mob.hasEffect(MobEffects.LEVITATION)
+            ? mode == Physics.MAGMA ? magmaHopRise(power, gravity) : jumpRise(power, gravity) : 0;
         double speed = supported ? mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1) : 0;
         double velocity = mob.getDeltaMovement().horizontalDistance();
         double width = mob.getBbWidth();
@@ -987,13 +996,13 @@ public final class ScriptNavigation {
         result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
         result.addProperty("jumpHeight", rise);
         result.addProperty("canJump", supported && rise > 0);
-        result.addProperty("canSwim", supported && mode != Physics.SLIME && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
-        if (mode == Physics.SLIME) {
+        result.addProperty("canSwim", supported && !slimeHopper(mode) && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
+        if (slimeHopper(mode)) {
             double reach = rise > 0 ? hopEnvelope(speed, velocity, power, gravity, width) : 0;
             result.addProperty("locomotion", "hopping");
             result.addProperty("maxJumpDistance", reach);
             result.addProperty("maxSprintJumpDistance", reach);
-            result.addProperty("physics", "native-slime-hop-post-tick");
+            result.addProperty("physics", mode == Physics.MAGMA ? "native-magma-hop-post-tick" : "native-slime-hop-post-tick");
             return result;
         }
         result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED) : 0);
@@ -1014,9 +1023,12 @@ public final class ScriptNavigation {
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)) return Physics.ORDINARY;
         if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
-        if (mob.getClass() == Slime.class && control == Slime.SlimeMoveControl.class
+        if ((mob.getClass() == Slime.class || mob.getClass() == MagmaCube.class) && control == Slime.SlimeMoveControl.class
             && mob.getJumpControl().getClass() == JumpControl.class
-            && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable()) return Physics.SLIME;
+            && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable()) {
+            if (mob.getClass() == Slime.class) return Physics.SLIME;
+            return magmaHopRise(jumpPower(mob, mob.position()), mob.getGravity()) > 0 ? Physics.MAGMA : Physics.UNSUPPORTED;
+        }
         if (mob.getClass() == Fox.class && control == Fox.FoxMoveControl.class) {
             Fox fox = (Fox) mob;
             // Exact Fox.canMove predicate; do not clear its native state flags.
@@ -1031,7 +1043,7 @@ public final class ScriptNavigation {
         if (movementFailure != null) throw movementFailure;
         if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
-        if (physics == Physics.SLIME && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
+        if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
         if (physics == Physics.FISH) {
             if ((mob.getTarget() != null) != fishHadTarget) throw error("route_aquatic_target_changed");
@@ -1066,8 +1078,8 @@ public final class ScriptNavigation {
     }
 
     private void checkDryVolume(AABB bounds) {
-        if ((physics == Physics.DROWNED || physics == Physics.SLIME) && hasFluid(bounds))
-            throw error(physics == Physics.SLIME ? "route_hop_requires_dry_ground" : "route_drowned_requires_dry_ground");
+        if ((physics == Physics.DROWNED || slimeHopper(physics)) && hasFluid(bounds))
+            throw error(slimeHopper(physics) ? "route_hop_requires_dry_ground" : "route_drowned_requires_dry_ground");
     }
 
     private boolean hasFluid(AABB bounds) {
@@ -1150,6 +1162,8 @@ public final class ScriptNavigation {
         return false;
     }
 
+    private static boolean slimeHopper(Physics mode) { return mode == Physics.SLIME || mode == Physics.MAGMA; }
+
     private static double jumpPower(Mob mob, Vec3 position) {
         return jumpPower(mob, position, mob.getBlockPosBelowThatAffectsMyMovement());
     }
@@ -1158,11 +1172,16 @@ public final class ScriptNavigation {
         BlockState feet = mob.level().getBlockState(BlockPos.containing(position));
         float factor = feet.getBlock().getJumpFactor();
         if (factor == 1) factor = mob.level().getBlockState(support).getBlock().getJumpFactor();
-        return (float) mob.getAttributeValue(Attributes.JUMP_STRENGTH) * factor + mob.getJumpBoostPower();
+        float power = (float) mob.getAttributeValue(Attributes.JUMP_STRENGTH) * factor + mob.getJumpBoostPower();
+        // MagmaCube.jumpFromGround adds this after native getJumpPower, in float precision.
+        if (mob.getClass() == MagmaCube.class) power += (float) ((MagmaCube) mob).getSize() * 0.1F;
+        return power;
     }
 
     private static double jumpRise(Mob mob) {
-        return mob.hasEffect(MobEffects.LEVITATION) ? 0 : jumpRise(jumpPower(mob, mob.position()), mob.getGravity());
+        if (mob.hasEffect(MobEffects.LEVITATION)) return 0;
+        double power = jumpPower(mob, mob.position());
+        return mob.getClass() == MagmaCube.class ? magmaHopRise(power, mob.getGravity()) : jumpRise(power, mob.getGravity());
     }
 
     private static double jumpRise(double power, double gravity) {
@@ -1175,7 +1194,21 @@ public final class ScriptNavigation {
         return Double.isFinite(height) ? Math.min(16, height) : 0;
     }
 
-    /** Slime has one ground acceleration at takeoff, no running start or sprint impulse. */
+    /** Reject, rather than truncate, a MagmaCube hop beyond this executor's finite envelope. */
+    private static double magmaHopRise(double power, double gravity) {
+        if (!Double.isFinite(power) || !Double.isFinite(gravity) || power <= 0 || gravity <= 0) return 0;
+        double velocity = power, height = 0, rise = 0;
+        for (int tick = 0; tick < HOP_FLIGHT_TICKS; tick++) {
+            height += velocity;
+            rise = Math.max(rise, height);
+            if (rise > 16) return 0;
+            if (height < 0) return rise;
+            velocity = (velocity - gravity) * 0.98F * 0.98;
+        }
+        return 0;
+    }
+
+    /** Reviewed Slime/MagmaCube have one ground acceleration, no running start or sprint impulse. */
     private static double hopEnvelope(double speed, double initialVelocity, double power, double gravity, double width) {
         double horizontal = initialVelocity + speed * Math.min(1, speed) * 1.001;
         double vertical = power, height = 0, distance = 0;
