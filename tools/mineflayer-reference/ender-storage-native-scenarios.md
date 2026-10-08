@@ -72,3 +72,30 @@ is empty and paper count/components recovered exactly once. Finally return only
 that fixture paper to its test barrel and restore original belongings/selection.
 Both phase scripts remain unexecuted; a future exact artifact/lifecycle task is
 required. Unknown action outcomes stop without replay.
+
+## Packaged result: 6ede27e
+
+Executed the focused calls with Codex gpt-6.1-sol low on JAR SHA256
+`59c215d31aed15a126db64c9bf1be3cde2aa35ef48c1c4e2c364808843ca57d2`.
+Held-open single chest passed: lid counts `[1,0,1,0]`, same window for12ticks,
+10ticks after close, unchanged inventory/selection and no255/replay (4requests,
+49updates,12bridge operations).
+
+Ender deposit and withdrawal passed across actual save/stop/reopen of this same
+artifact. Independent body NBT retained paper1 in ender slot26 with its exact
+custom name/lore; after withdrawal enderItems was empty. Both measured phases used
+4requests,11updates,11bridge operations. The first withdrawal guard failed before
+any request because iron-sword enchantment-map entry order changed on restart;
+read-only comparison found identical IDs/levels and all other slots unchanged.
+Only keyed enchantments/stored_enchantments entries are normalized by ID for
+fixture equality; lore/pages and inventory slot arrays stay ordered. Original
+receipt and failure evidence remain intact. Deposit was not repeated.
+
+Fixture paper was returned via native clicks to its test barrel, verified there,
+and only the three created fixture blocks were removed. Native original slots,
+equipment and selection matched baseline; survival/right hand retained. Final
+save logged All dimensions are saved at22:34:59.519 local on2026-10-07; exact
+verified JVM67841 exited after SIGTERM. Original ender contents were empty;
+nonempty contents and human coexistence remain untested. Detailed source hashes,
+absolute call times, raw results and native evidence are in
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/6ede27e-summary.json`.

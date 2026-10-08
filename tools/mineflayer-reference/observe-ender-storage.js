@@ -10,8 +10,19 @@ if (!['deposit', 'withdraw'].includes(phase) || chest?.name !== 'ender_chest' ||
   throw new Error('Ender storage prerequisites differ');
 const itemData = item => item ? { name: item.name, count: item.count, components: item.components } : null;
 const inventory = () => bot.inventory.slots.map(itemData);
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-const named = item => item?.name === 'paper' &&
+// Native enchantment maps have no entry order; other arrays stay ordered.
+const comparable = value => {
+  if (Array.isArray(value)) return value.map(comparable);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, field]) => {
+    if (key === 'data' && ['enchantments', 'stored_enchantments'].includes(value.type) &&
+        Array.isArray(field?.enchantments))
+      field = { ...field, enchantments: field.enchantments.slice().sort((a, b) => a.id - b.id) };
+    return [key, comparable(field)];
+  }));
+};
+const same = (a, b) => JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
+const named = item => item?.name === 'paper' && item.customName != null &&
   ChatMessage.fromNotch(item.customName)?.toString() === fixtureName;
 const checkFixture = item => {
   if (!(item instanceof Item) || !named(item) || item.count !== 1 ||
