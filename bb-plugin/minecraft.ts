@@ -75,19 +75,25 @@ export function minecraftWorlds(bb: BbPluginApi) {
       if (!response.body || !response.headers.get('content-type')?.startsWith('application/x-ndjson'))
         throw new Error('Minecraft did not open a state stream');
       const reader = response.body.getReader();
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder('utf-8', { fatal: true });
       let pending = '';
+      let frameBytes = 0;
       let ended = false;
       try {
         while (!ended) {
           const { value, done } = await reader.read();
           if (done) throw new Error('Minecraft state stream ended without confirmation');
-          pending += decoder.decode(value, { stream: true });
-          if (pending.length > 8 * 1024 * 1024) throw new Error('Minecraft state frame exceeds 8 MiB');
-          let newline: number;
-          while ((newline = pending.indexOf('\n')) >= 0) {
-            const line = pending.slice(0, newline);
-            pending = pending.slice(newline + 1);
+          for (let start = 0; start < value.length;) {
+            const newline = value.indexOf(10, start);
+            const end = newline < 0 ? value.length : newline;
+            frameBytes += end - start;
+            if (frameBytes > 8 * 1024 * 1024) throw new Error('Minecraft state frame exceeds 8 MiB');
+            pending += decoder.decode(value.subarray(start, end), { stream: newline < 0 });
+            start = end + 1;
+            if (newline < 0) continue;
+            const line = pending;
+            pending = '';
+            frameBytes = 0;
             if (!line) continue;
             const frame = object(JSON.parse(line), 'Minecraft state frame');
             if (frame.type === 'state') await onState(frame.snapshot);
