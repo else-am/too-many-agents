@@ -20,7 +20,7 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 ## Latest evidence reconciliation
 
 - [x] Recovered four existing native reports for block/item observations, block-update identity/hydration, and tick/equipment ordering. Exact executed sources are retained in `tools/mineflayer-reference/recorded/observe-*-historical.js`; source/report hashes and embedded-code checks pass in the catalog. No native rerun occurred.
-- [x] Catalog verification reports no missing evidence files or unverified report hashes. Coverage remains 263 supported / 784 pending / 58 inapplicable records; indexing historical observations does not promote member coverage. Those four reports do not retain the packaged revision and do not validate the current build.
+- [x] Catalog verification reports no missing evidence files or unverified report hashes. Coverage remains 265 supported / 782 pending / 58 inapplicable records; indexing historical observations does not promote member coverage. Two EventEmitter aliases are separately verified by exact upstream function identity to the already-exercised on/off implementations. Those four reports do not retain the packaged revision and do not validate the current build.
 - [ ] Corrected Cod resting-depth fixture and fresh Slime hop/landing script are being prepared, without a new launch authorization. Rabbit/MagmaCube native controller design is assigned separately; implementation remains pending.
 
 ## Implemented

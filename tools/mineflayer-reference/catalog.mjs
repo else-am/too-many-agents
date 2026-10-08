@@ -522,6 +522,8 @@ const pureEntityContracts = new Set([
 ].map(name => `prismarine-entity.Entity.${name}`));
 // Registration/dispatch on the guest emitter; not a claim about native event sources.
 const pureEmitterContracts = new Set([
+  // events3 assigns these two aliases to the same tested on/off functions.
+  'addListener', 'removeListener',
   'on', 'once', 'prependListener', 'listenerCount', 'eventNames', 'listeners',
   'rawListeners', 'emit', 'off', 'removeAllListeners', 'setMaxListeners',
   'prependOnceListener', 'getMaxListeners',

@@ -3444,6 +3444,30 @@
       "evidence": [
         "block-library"
       ]
+    },
+    "events.EventEmitter.addListener": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Exact upstream events3 prototype alias: addListener and on reference the same function object (events.js:226-230/269-321). Bot and Entity inherit that bundled emitter without overriding either method. Existing pinned/QuickJS Entity report exercises this function through on; alias source identity supplies the name mapping. Native event payloads remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.removeListener": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Exact upstream events3 prototype alias: removeListener and off reference the same function object (events.js:226-230/269-321). Bot and Entity inherit that bundled emitter without overriding either method. Existing pinned/QuickJS Entity report exercises this function through off; alias source identity supplies the name mapping. Native event payloads remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
     }
   },
   "schemaVersion": 2,
