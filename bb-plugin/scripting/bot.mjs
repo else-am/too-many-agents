@@ -1,5 +1,5 @@
 import { createChunkClass } from './chunks.mjs';
-import { installColumns } from './columns.mjs';
+import { createColumnWorld, installColumns } from './columns.mjs';
 import { installBossBars } from './boss-bars.mjs';
 import { installScoreboards } from './scoreboard.mjs';
 import { installExplosion } from './explosion.mjs';
@@ -149,8 +149,13 @@ export function createBot(initial) {
   const scoreboards = installScoreboards(bot, ChatMessage);
   const bossBars = installBossBars(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
-  bot.world = createWorldView(position => bot.blockAt(position));
+  bot.world = createWorldView(position => bot.blockAt(position), createColumnWorld());
   const columns = installColumns(bot, ChunkColumn);
+  for (const event of ['blockUpdate', 'chunkColumnLoad', 'chunkColumnUnload'])
+    bot.world.on(event, (...args) => bot.emit(event, ...args));
+  const coordinateEvent = event => typeof event === 'string' && /^blockUpdate:\(-?\d+, -?\d+, -?\d+\)$/.test(event);
+  bot.on('newListener', (event, listener) => { if (coordinateEvent(event)) bot.world.on(event, listener); });
+  bot.on('removeListener', (event, listener) => { if (coordinateEvent(event)) bot.world.off(event, listener); });
   installWorldQueries(bot, { getLoadedBounds() {
     const full = columns.bounds();
     if (full) return full;
@@ -186,7 +191,7 @@ export function createBot(initial) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
     const changed = [];
     const blocks = next.blocks;
-    const trackBlocks = snapshot && [bot, bot.world].some(emitter => emitter.eventNames()
+    const trackBlocks = snapshot && [bot, bot.world, bot.world.async].some(emitter => emitter.eventNames()
       .some(name => typeof name === 'string' && name.startsWith('blockUpdate')));
     const oldBlock = (position, state) => {
       const { min, size, states } = snapshot.blocks;
@@ -407,13 +412,13 @@ export function createBot(initial) {
     for (const event of stateEvents) bot.emit(...event);
     for (const event of scoreEvents) bot.emit(...event);
     for (const event of bossEvents) bot.emit(...event);
-    for (const event of columnUpdate.events) { bot.world.emit(...event); bot.emit(...event); }
+    for (const event of columnUpdate.events) { bot.world.async.emit(...event); bot.world.emit(...event); }
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
+      bot.world.async.emit('blockUpdate', before, after);
+      bot.world.async.emit(`blockUpdate:${position}`, before, after);
       bot.world.emit('blockUpdate', before, after);
       bot.world.emit(`blockUpdate:${position}`, before, after);
-      bot.emit('blockUpdate', before, after);
-      bot.emit(`blockUpdate:${position}`, before, after);
     }
     if (streamed) {
       for (const event of entityEvents) bot.emit(...event);

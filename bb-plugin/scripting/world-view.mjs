@@ -15,7 +15,7 @@ const BlockFace = {
 
 // Preserve the upstream DDA ordering (ties step Z, then Y, then X), mutable
 // iterator.block and callback iterator API. No world/chunk loader is included.
-class RaycastIterator {
+export class RaycastIterator {
   #visited = 1
   #shapes = 0
   constructor (pos, dir, maxDistance) {
@@ -153,11 +153,11 @@ function finiteVector (vector) {
  * This retains upstream cell traversal, not native shape clipping: shapes that
  * extend into adjacent cells are tested only when their owning cell is visited.
  * Numeric getters preserve null for unknown cells instead of guessing zero.
- * Column loading, local mutations and async storage remain pending.
+ * Native column delivery and guest-local storage/mutations are installed separately.
  */
-export function createWorldView (lookup) {
+export function createWorldView (lookup, world = new EventEmitter()) {
   if (typeof lookup !== 'function') throw new TypeError('World view requires a synchronous block lookup')
-  return Object.assign(new EventEmitter(), {
+  return Object.assign(world, {
     getBlock (position) {
       if (!finiteVector(position)) throw new RangeError('Block position must be finite')
       const cell = position.floored()

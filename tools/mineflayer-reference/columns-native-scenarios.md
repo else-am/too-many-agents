@@ -31,8 +31,9 @@ Preauthored native checks, all unrun:
   changed-column deltas avoid repeating static terrain. Measure server and guest
   frame cost before calling the cache performant.
 
-Full async storage, client-cache mutation semantics and wider loaded-region
-coverage remain applicability/implementation work. This slice establishes real
+Guest-local async storage callbacks and cache mutations are now supplied by
+the selected upstream World/WorldSync; see world-cache-scenarios.md. Wider
+loaded-region coverage remains implementation work. This slice establishes real
 columns, not arbitrary client/plugin/world persistence compatibility.
 
 Route integration: a path extending outside the old local cache must submit a

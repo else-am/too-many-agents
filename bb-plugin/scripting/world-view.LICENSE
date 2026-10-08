@@ -7,7 +7,9 @@ https://github.com/PrismarineJS/prismarine-world
 
 Changes: inject synchronous native-cache Block lookup, specialize the query
 subset for a guest bundle, correct ray/shape clipping, and bound traversal.
-No world/chunk loaders or other world APIs are included. vec3 retains its own
+columns.mjs also uses the selected upstream World/WorldSync modules for guest-local
+cache access, mutation and storage callbacks, with corrected async ray geometry.
+No host filesystem or native storage access is added. vec3 retains its own
 license in the bundled dependency distribution.
 
 The installed package declares MIT but has no LICENSE file or separate

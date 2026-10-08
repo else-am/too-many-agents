@@ -1,19 +1,36 @@
 // Observed WorldSync columns and Mineflayer's complete 5x5 loading wait.
 // Upstream contracts: prismarine-world 3.7.0 / Mineflayer 4.39.0 (mineflayer.LICENSE).
 import { Vec3 } from 'vec3';
+import loadWorld from 'prismarine-world/src/world.js';
+import { RaycastIterator } from './world-view.mjs';
+
+const World = loadWorld();
+export function createColumnWorld() {
+  const asyncWorld = new World(null);
+  // Async World's matcher filters candidates; sync World's matcher selects hits.
+  asyncWorld.raycast = async function(from, direction, range, matcher = null) {
+    if (![from.x, from.y, from.z, direction.x, direction.y, direction.z, range].every(Number.isFinite) || range < 0)
+      throw new RangeError('Raycast requires finite vectors and a finite nonnegative range');
+    const iterator = new RaycastIterator(from, direction, range);
+    for (let cell = iterator.block; cell; cell = iterator.next()) {
+      const position = new Vec3(cell.x, cell.y, cell.z);
+      const block = await this.getBlock(position);
+      if (!block || (matcher && !matcher(block))) continue;
+      const hit = iterator.intersect(block.shapes, position);
+      if (hit) { block.face = hit.face; block.intersect = hit.pos; return block; }
+    }
+    return null;
+  };
+  return asyncWorld.sync;
+}
 
 export function installColumns(bot, ChunkColumn) {
-  const columns = new Map(), sources = new Map();
+  const sources = new Map();
   let minY = -64, worldHeight = 384, dimension;
   const key = (x, z) => `${x},${z}`;
   const local = p => new Vec3(Math.floor(p.x) & 15, Math.floor(p.y), Math.floor(p.z) & 15);
   const world = bot.world;
-  world.getColumn = (x, z) => columns.get(key(x, z));
-  world.getColumnAt = p => world.getColumn(Math.floor(p.x / 16), Math.floor(p.z / 16));
-  world.getColumns = () => [...columns].map(([id, column]) => {
-    const [chunkX, chunkZ] = id.split(',');
-    return { chunkX, chunkZ, column };
-  });
+  const cached = () => world.async.columns;
   for (const name of ['getBlockStateId', 'getBlockType', 'getBlockData', 'getBlockLight', 'getSkyLight', 'getBiome']) {
     const fallback = world[name].bind(world);
     world[name] = position => {
@@ -28,7 +45,7 @@ export function installColumns(bot, ChunkColumn) {
     const center = bot.entity.position.floored().divide(new Vec3(16, 1, 16)).floored();
     const wanted = new Set();
     for (let z = center.z - 2; z <= center.z + 2; z++) for (let x = center.x - 2; x <= center.x + 2; x++) wanted.add(key(x, z));
-    if ([...wanted].every(id => columns.has(id))) return;
+    if ([...wanted].every(id => Object.hasOwn(cached(), id))) return;
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         world.off('chunkColumnLoad', loaded);
@@ -36,7 +53,7 @@ export function installColumns(bot, ChunkColumn) {
       }, 10000);
       function loaded() {
         // Recheck the whole target; an earlier column may have unloaded.
-        if (![...wanted].every(id => columns.has(id))) return;
+        if (![...wanted].every(id => Object.hasOwn(cached(), id))) return;
         clearTimeout(timer); world.off('chunkColumnLoad', loaded); resolve();
       }
       world.on('chunkColumnLoad', loaded);
@@ -55,31 +72,32 @@ export function installColumns(bot, ChunkColumn) {
     const events = [], changes = [];
     if (!view) return { events, changes };
     if (dimension !== undefined && dimension !== view.dimension) {
-      for (const id of columns.keys()) {
+      for (const id of Object.keys(cached())) {
         const [x, z] = id.split(',').map(Number);
         if (emit) events.push(['chunkColumnUnload', new Vec3(x * 16, 0, z * 16)]);
       }
-      columns.clear(); sources.clear();
+      world.async.columns = {}; sources.clear();
     }
     dimension = view.dimension;
     minY = view.minY; worldHeight = view.worldHeight;
     const incoming = view.columns ?? view.changes;
-    const removed = view.columns ? [...columns.keys()].filter(id => !Object.hasOwn(view.columns, id)) : view.removed;
+    const removed = view.columns ? Object.keys(cached()).filter(id => !Object.hasOwn(view.columns, id)) : view.removed;
     for (const id of removed) {
-      if (!columns.delete(id)) continue;
+      if (!Object.hasOwn(cached(), id)) continue;
+      delete cached()[id];
       sources.delete(id);
       const [x, z] = id.split(',').map(Number);
       if (emit) events.push(['chunkColumnUnload', new Vec3(x * 16, 0, z * 16)]);
     }
     for (const [id, row] of Object.entries(incoming)) {
-      const old = columns.get(id), source = sources.get(id);
+      const old = cached()[id], source = sources.get(id);
       // Initial stream includes a full frame; avoid decoding identical columns twice.
       const encoded = JSON.stringify(row);
-      if (source?.encoded === encoded) continue;
+      if (old && source?.encoded === encoded) continue;
       const column = ChunkColumn.fromSnapshot(row);
-      if (old && trackBlocks && source.data !== row.data) {
+      if (old && trackBlocks && source?.data !== row.data) {
         for (let i = 0; i < column.sections.length; i++) {
-          if (old.sections[i].toJson() === column.sections[i].toJson()) continue;
+          if (old.minY === column.minY && old.sections?.[i]?.toJson() === column.sections[i].toJson()) continue;
           for (let y = 0; y < 16; y++) for (let z = 0; z < 16; z++) for (let x = 0; x < 16; x++) {
             const position = new Vec3(row.x * 16 + x, minY + i * 16 + y, row.z * 16 + z);
             if (position.x >= localBlocks.min[0] && position.x < localBlocks.min[0] + localBlocks.size[0]
@@ -92,8 +110,8 @@ export function installColumns(bot, ChunkColumn) {
           }
         }
       }
-      if (old) Object.assign(old, column);
-      else { columns.set(id, column); if (emit) events.push(['chunkColumnLoad', new Vec3(row.x * 16, 0, row.z * 16)]); }
+      if (old instanceof ChunkColumn) Object.assign(old, column);
+      else { cached()[id] = column; if (emit) events.push(['chunkColumnLoad', new Vec3(row.x * 16, 0, row.z * 16)]); }
       sources.set(id, { encoded, data: row.data });
     }
     return { events, changes };
@@ -115,8 +133,8 @@ export function installColumns(bot, ChunkColumn) {
     }
   }
   function bounds() {
-    if (!columns.size) return null;
-    const coordinates = [...columns.keys()].map(id => id.split(',').map(Number));
+    if (!Object.keys(cached()).length) return null;
+    const coordinates = Object.keys(cached()).map(id => id.split(',').map(Number));
     return { min: new Vec3(Math.min(...coordinates.map(p => p[0])) * 16, minY, Math.min(...coordinates.map(p => p[1])) * 16),
       max: new Vec3((Math.max(...coordinates.map(p => p[0])) + 1) * 16, minY + worldHeight, (Math.max(...coordinates.map(p => p[1])) + 1) * 16) };
   }
