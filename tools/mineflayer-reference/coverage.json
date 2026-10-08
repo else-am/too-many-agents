@@ -692,6 +692,49 @@
           "source"
         ]
       }
+    },
+    "native-mob-collection": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-mob-collection.js",
+      "subjects": [
+        "mineflayer.BotEvents.playerCollect",
+        "mineflayer.Bot.username"
+      ],
+      "scope": "Fox zero-count take retains original named Item/count; body pickup hydrates inventory, no duplicate callback; native username matched.",
+      "testedRevision": "67ebb2c",
+      "result": "passed",
+      "sourceSha256": "e106541a9505a1809d10e1826fa3b3284da11608b7d1516fa89c68047d64fa83",
+      "report": {
+        "path": "run/mineflayer-reference/native-mob-collection-recorded.json",
+        "sha256": "25f32f7d6c764297764a0d2e7054786b1bee31f39ccab91ce2a22a75c7aecfe7",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Selected fixture only; not current HEAD, all species/permissions, boost/jump or paired reference conformance. Independent summary retains failures and restoration; no API promoted."
+    },
+    "native-horse-controls": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-vehicle-controls.js",
+      "subjects": [
+        "mineflayer.Bot.mount",
+        "mineflayer.Bot.moveVehicle",
+        "mineflayer.Bot.dismount",
+        "mineflayer.Bot.setControlState",
+        "mineflayer.Bot.clearControlStates"
+      ],
+      "scope": "Horse-family fixture: actual body passenger, meaningful ordinary native movement, clear/zero input and dismount with unchanged inventory. Horse mounted NBT was not captured; guest passenger identity and final native state were captured.",
+      "testedRevision": "67ebb2c",
+      "result": "passed",
+      "sourceSha256": "21cc5051f5857b5a010928ea4f16fa42624ed37ed3e26c0e276c35449d7dcf47",
+      "report": {
+        "path": "run/mineflayer-reference/native-horse-controls-recorded.json",
+        "sha256": "cf155377d90336cad344d35e49264adcf07fc0342a88e52f1b291a12260b723a",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Selected fixture only; not current HEAD, all species/permissions, boost/jump or paired reference conformance. Independent summary retains failures and restoration; no API promoted."
     }
   },
   "reviewNotes": {
