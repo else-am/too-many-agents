@@ -875,8 +875,8 @@ public final class ScriptNavigation {
         if (desired > 1e-5) {
             double length = horizontal.horizontalDistance();
             Vec3 heading = length > 1e-12 ? horizontal.scale(1 / length)
-                : new Vec3(Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, -Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
-            wanted = pos.add(heading.x, vertical > 0 ? 1 : -1, heading.z);
+                : new Vec3(-Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
+            wanted = pos.add(heading.x, Math.signum(vertical), heading.z);
         }
         flightPrepared = true;
         mob.setSprinting(false);
@@ -933,8 +933,8 @@ public final class ScriptNavigation {
         if (desired > 1e-5) {
             double length = horizontal.horizontalDistance();
             Vec3 heading = length > 1e-12 ? horizontal.scale(1 / length)
-                : new Vec3(Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, -Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
-            wanted = pos.add(heading.x, vertical > 0 ? 1 : -1, heading.z);
+                : new Vec3(-Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
+            wanted = pos.add(heading.x, Math.signum(vertical), heading.z);
         }
         flightPrepared = true;
         mob.setSprinting(false);
