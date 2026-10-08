@@ -96,3 +96,42 @@ fixtures, 61 stock matches and 13 malformed-wire rejections. No client launched.
 `observe-metadata.js` is the prepared real-body flag/default-reset/identity and
 hydrated `entityUpdate` check; syntax parsed only. Packaged/native checks remain
 pending executor availability.
+
+
+## Prepared exact shared-flags default reset (unrun)
+
+`observe-metadata-default.js` requires initial metadata key0 absent or exactly0
+and records that distinction without inserting a synthetic default. It uses
+ordinary synchronous sneak controls followed by positive waitForTicks, which
+now drains preceding controls. Native transitions must be exactly2 then0,
+with the same Entity/metadata object and retained key0 at0. Both entityUpdate
+and crouch/uncrouch callbacks must see hydrated flags/convenience fields.
+Five settled ticks must not replay these transitions; inventory/menu/cursor
+and released controls are checked. This is not a claim about arbitrary
+serializer/default-key resets. The earlier live3->1 result only removed crouch
+while leaving another non-default flag; preserve that partial evidence.
+
+For a future authorized run, independently inspect the actual body awake,
+unmounted, grounded, dry and non-burning. Initial absent/zero flags alone do
+not establish ongoing sun protection. A proposed guarded fixture is night or
+an inspected temporary opaque roof covering the body with safe headroom,
+followed by one native Fire reset to-1s before invocation and independent
+Fire/position/ground/vehicle observations. Preserve binding/UUID/Health and
+belongings; restore only created cells/time changes if authorized. Do not
+assume saved ScriptProbe already meets this precondition, infer weather from
+a later snapshot, or retry a failed control merely to obtain zero. No native
+setup or execution is authorized by this preparation.
+
+### Collection check on the future metadata artifact
+
+Reuse `observe-mob-collection.js` unchanged for the changed metadata pipeline.
+Its Fox case already requires getDroppedItem() to return shared Item paper1
+with the original custom_name after native Fox split/take emptied DATA_ITEM;
+it also checks collected Entity identity, hydrated Fox hand and exact one
+event/no replay. Pinned Entity.getDroppedItem() constructs Item from the
+actual metadata Slot. Thus the existing check directly exercises original
+Item preservation through metadata; another raw-key assertion/script would
+repeat that proof. The own-body case checks duplicate suppression and
+authoritative inventory gain. This proposed reuse is specifically validation
+of the new event-time metadata overlay, not a general collection rerun.
+No live run, new collection script or production edit was made here.
