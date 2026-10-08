@@ -33,6 +33,50 @@ const goals = { ...upstreamGoals,
   },
 };
 
+// Only native observation fields may be copied onto a shared Entity instance.
+const entityFields = ['uuid', 'width', 'height', 'onGround', 'eyeHeight', 'eyePosition', 'direction', 'alive',
+  'isInWater', 'isInLava', 'crouching', 'fireworkAttachedTo', 'fireworkTicksRemaining', 'elytraFlying',
+  'health', 'mainHand', 'isSleeping', 'airSupply', 'maxAirSupply', 'attributes', 'agent'];
+const metadataKeys = new WeakMap();
+
+// Keep sparse initial values and actual resets without inventing native defaults.
+// Exported only for the focused transport/QuickJS contract probe.
+export function mergeEntityMetadata(entity, frames) {
+  if (!Array.isArray(frames) || frames.length > 1024) throw new Error('Invalid metadata observations');
+  let seen = metadataKeys.get(entity);
+  if (!seen) { seen = new Set(); metadataKeys.set(entity, seen); }
+  let changed = false;
+  for (const frame of frames) {
+    if (!frame || !Array.isArray(frame.nonDefaultKeys)) throw new Error('Missing entity metadata');
+    const entries = decodeItemTransport(frame.values);
+    if (!Array.isArray(entries) || entries.length > 255) throw new Error('Invalid entity metadata entries');
+    const keys = new Set();
+    for (const entry of entries) {
+      if (!entry || !Number.isInteger(entry.key) || entry.key < 0 || entry.key >= 255 || keys.has(entry.key))
+        throw new Error('Invalid entity metadata key');
+      keys.add(entry.key);
+    }
+    const nonDefaults = new Set(frame.nonDefaultKeys);
+    if (nonDefaults.size !== frame.nonDefaultKeys.length || nonDefaults.size > keys.size
+      || frame.nonDefaultKeys.some(key => !Number.isInteger(key) || !keys.has(key))) throw new Error('Invalid non-default metadata keys');
+    for (const { key, value } of entries) {
+      if (!nonDefaults.has(key) && !seen.has(key)) continue;
+      // Protocol values are trees; tagged transport preserves long/NaN/-0 values
+      // but JSON comparison alone would not. Compare those leaves explicitly.
+      if (!seen.has(key) || !sameMetadata(entity.metadata[key], value)) changed = true;
+      entity.metadata[key] = value;
+      seen.add(key);
+    }
+  }
+  return changed;
+}
+function sameMetadata(a, b) {
+  if (Object.is(a, b)) return true;
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object' || Array.isArray(a) !== Array.isArray(b)) return false;
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every(key => Object.hasOwn(b, key) && sameMetadata(a[key], b[key]));
+}
+
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
 export function createBot(initial) {
@@ -269,9 +313,14 @@ export function createBot(initial) {
     const entityEvents = [];
     // Event-only entities can spawn and be collected between observations.
     // Current observations win over the earlier event-time record for live entities.
-    const observed = new Map();
-    for (const event of next.entityEvents ?? []) for (const source of event.entities) observed.set(source.id, source);
-    for (const source of [next.body, ...next.entities]) observed.set(source.id, source);
+    const observed = new Map(), metadataObservations = new Map();
+    const observe = source => {
+      observed.set(source.id, source);
+      const frames = metadataObservations.get(source.uuid) ?? [];
+      frames.push(source.rawMetadata); metadataObservations.set(source.uuid, frames);
+    };
+    for (const event of next.entityEvents ?? []) for (const source of event.entities) observe(source);
+    for (const source of [next.body, ...next.entities]) observe(source);
     const sources = [...observed.values()];
     for (const source of sources) {
       present.add(source.id);
@@ -305,16 +354,16 @@ export function createBot(initial) {
       }
       const attributesChanged = !fresh && JSON.stringify(entity.attributes) !== JSON.stringify(source.attributes);
       let equipmentChanged = false;
-      const { position, velocity, yaw, pitch, type, name, customName, droppedItem, equipment, passengers, vehicle, effects, effectTick, ...fields } = source;
+      const { position, velocity, yaw, pitch, type, name, equipment } = source;
       const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
-      Object.assign(entity, fields, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
+      for (const key of entityFields) if (Object.hasOwn(source, key)) entity[key] = source[key];
+      Object.assign(entity, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
         name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other',
         entityType: kind?.id, kind: kind?.category, isValid: true });
       if (kind?.name === 'player') entity.username = name;
       entity.position.update(position);
       entity.velocity.update(velocity);
-      entity.metadata[2] = customName ?? undefined;
-      if (droppedItem) entity.metadata[8] = decodeItemTransport(droppedItem.item);
+      const metadataChanged = mergeEntityMetadata(entity, metadataObservations.get(source.uuid));
       if (equipment) {
         let keys = equipmentKeys.get(entity);
         if (!keys) { keys = []; equipmentKeys.set(entity, keys); }
@@ -333,6 +382,7 @@ export function createBot(initial) {
       }
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
+      if (metadataChanged) entityEvents.push(['entityUpdate', entity]);
       entityEvents.push(...effectEvents);
       if (!flew && entity.elytraFlying) entityEvents.push(['entityElytraFlew', entity]);
       if ((!fresh && crouched !== !!entity.crouching) || fresh && entity.crouching)

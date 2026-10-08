@@ -69,6 +69,7 @@ final class ScriptEntities {
             throw new IllegalStateException("script_entity_requires_server_level");
         requireServerThread(level);
 
+        ScriptMetadata.write(entity, result, items);
         var name = entity.getCustomName();
         if (name == null) result.remove("customName");
         else {

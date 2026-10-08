@@ -18,7 +18,7 @@ import net.neoforged.neoforge.network.connection.ConnectionType;
 final class ScriptItems {
     private final ServerLevel level;
     private final Map<ItemStack, String> encoded = new IdentityHashMap<>();
-    private int bytesUsed;
+    private int bytesUsed, metadataBytesUsed;
 
     ScriptItems(ServerLevel level) { this.level = level; }
 
@@ -39,6 +39,11 @@ final class ScriptItems {
             encoded.put(stack, result);
             return result;
         } finally { raw.release(); }
+    }
+
+    void accountMetadataBytes(int count) {
+        metadataBytesUsed += count;
+        if (metadataBytesUsed > 2 * 1024 * 1024) throw new IllegalStateException("script_metadata_exceeds_2_MiB");
     }
 
     ItemStack read(String wire) {
@@ -63,9 +68,12 @@ final class ScriptItems {
         var result = new JsonObject();
         result.add("items", names(BuiltInRegistries.ITEM));
         result.add("components", names(BuiltInRegistries.DATA_COMPONENT_TYPE));
+        result.add("metadataSerializers", ScriptMetadata.serializers());
+        result.add("particles", names(BuiltInRegistries.PARTICLE_TYPE));
         var references = new JsonObject();
         var needed = Set.of("enchantment", "potion", "mob_effect", "attribute", "block", "sound_event",
-            "instrument", "trim_material", "trim_pattern", "armor_material", "banner_pattern", "jukebox_song", "worldgen/biome");
+            "instrument", "trim_material", "trim_pattern", "armor_material", "banner_pattern", "jukebox_song", "worldgen/biome",
+            "cat_variant", "wolf_variant", "frog_variant", "painting_variant", "villager_type", "villager_profession");
         level.registryAccess().registries().forEach(entry -> {
             if (entry.key().location().getNamespace().equals("minecraft") && needed.contains(entry.key().location().getPath()))
                 references.add(entry.key().location().toString(), names(entry.value()));

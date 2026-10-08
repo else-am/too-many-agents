@@ -25,7 +25,8 @@ const MAX_DEPTH = 128;
 // Supply immutable observations from the same world session as the bytes.
 // We copy both maps. Unknown names can exist in the maps, but referencing them
 // in a Slot fails explicitly. Custom component binary codecs cannot be guessed.
-// Additional registry fields (such as references) are ignored.
+// Metadata also needs metadataSerializers and particles, keyed by native IDs.
+// Additional registry fields (such as references) are ignored by these codecs.
 // Item IDs (including nested Slots, trim ingredients/templates, decorations)
 // become minecraft-data guest item IDs. All other registry IDs remain native;
 // integration must expose their world-specific name/ID maps separately.
@@ -35,14 +36,34 @@ const MAX_DEPTH = 128;
 // RegistryAccess and NeoForge ConnectionType.OTHER, not NEOFORGE.
 export function createItemDecoder (registries) { return createItemCodec(registries).decode; }
 export function createItemEncoder (registries) { return createItemCodec(registries).encode; }
+export function createMetadataDecoder (registries) {
+  if (!registries?.metadataSerializers || !registries?.particles) throw new Error('Missing native metadata registries');
+  return createItemCodec(registries).decodeMetadata;
+}
 
 function createItemCodec (registries) {
   const items = registryEntries(registries?.items, 'items');
   const components = registryEntries(registries?.components, 'components');
-  const fingerprint = JSON.stringify([items, components]);
+  const serializers = registries?.metadataSerializers == null ? null : registryEntries(registries.metadataSerializers, 'metadata serializers');
+  const particles = registries?.particles == null ? null : registryEntries(registries.particles, 'particles');
+  const fingerprint = JSON.stringify([items, components, serializers, particles]);
   if (codecs.has(fingerprint)) return codecs.get(fingerprint);
   const itemIds = new Map(items.map(([id, name]) => [id, guestItemIds.get(name)]));
   const types = correctedTypes();
+  const metadataType = types.entityMetadataEntry[1].find(field => field.name === 'type');
+  const particleType = types.Particle[1].find(field => field.name === 'type');
+  const knownSerializers = new Set(Object.values(metadataType.type[1].mappings));
+  const knownParticles = new Set(Object.values(particleType.type[1].mappings));
+  const serializerNames = new Map((serializers ?? []).filter(([, name]) => name.startsWith('minecraft:') && knownSerializers.has(name.slice(10)))
+    .map(([id, name]) => [id, name.slice(10)]));
+  const particleNames = new Map((particles ?? []).filter(([, name]) => name.startsWith('minecraft:') && knownParticles.has(name.slice(10)))
+    .map(([id, name]) => [id, name.slice(10)]));
+  types.metadataLong = 'varlong';
+  types.entityMetadataEntry[1].find(field => field.name === 'value').type[1].fields.long = 'metadataLong';
+  types.metadataSerializerType = metadataType.type;
+  types.metadataParticleType = particleType.type;
+  metadataType.type = 'metadataSerializerType';
+  particleType.type = 'metadataParticleType';
   const knownComponents = new Set(Object.values(types.SlotComponentType[1].mappings));
   const componentNames = new Map(components.filter(([, name]) => name.startsWith('minecraft:') && knownComponents.has(name.slice(10)))
     .map(([id, name]) => [id, name.slice(10)]));
@@ -113,6 +134,31 @@ function createItemCodec (registries) {
     if (name === undefined) throw new Error(`Unsupported native component ID ${result.value}`);
     return { value: name, size: result.size };
   };
+  for (const [type, names, enabled] of [['metadataSerializerType', serializerNames, serializers], ['metadataParticleType', particleNames, particles]]) {
+    if (enabled) readers[type] = (buffer, offset) => {
+      const result = readers.varint(buffer, offset);
+      const name = names.get(result.value);
+      if (name === undefined) throw new Error(`Unsupported native ${type} ID ${result.value}`);
+      return { value: name, size: result.size };
+    };
+  }
+  // Pinned minecraft-protocol aliases VarLong to the lossy 32-bit VarInt reader.
+  // Reuse the existing signed-long representation and tagged transport.
+  readers.metadataLong = (buffer, offset) => {
+    let bits = 0n;
+    for (let i = 0; i < 10; i++) {
+      if (offset + i >= buffer.length) throw new Error('Truncated metadata long');
+      const byte = buffer[offset + i];
+      if (i === 9 && byte > 1) throw new Error('Metadata long exceeds 64 bits');
+      bits |= BigInt(byte & 127) << BigInt(i * 7);
+      if (!(byte & 128)) {
+        const fixed = Buffer.alloc(8);
+        fixed.writeBigUInt64BE(bits);
+        return { value: readers.i64(fixed, 0).value, size: i + 1 };
+      }
+    }
+    throw new Error('Unterminated metadata long');
+  };
   const readSlot = readers.Slot;
   readers.Slot = (buffer, offset) => {
     const count = readers.varint(buffer, offset).value;
@@ -167,6 +213,18 @@ function createItemCodec (registries) {
       offset += result.size;
     }
   };
+  readers.entityMetadata = (buffer, offset) => {
+    const value = [], seen = new Set();
+    let cursor = offset;
+    while (true) {
+      if (cursor >= buffer.length) throw new Error('Truncated metadata terminator');
+      if (buffer[cursor] === 255) return { value, size: cursor + 1 - offset };
+      if (value.length >= 255 || seen.has(buffer[cursor])) throw new Error('Duplicate or excessive metadata keys');
+      seen.add(buffer[cursor]);
+      const entry = readers.entityMetadataEntry(buffer, cursor);
+      value.push(entry.value); cursor += entry.size;
+    }
+  };
   let depth = 0;
   let reads = 0;
   for (const [name, read] of Object.entries(readers)) {
@@ -181,17 +239,31 @@ function createItemCodec (registries) {
       } finally { depth--; }
     };
   }
-  const decode = base64 => {
+  const decodeWire = (base64, type, maxBytes = MAX_BYTES) => {
     // Buffer.from alone accepts malformed base64. Require a canonical envelope.
     if (typeof base64 !== 'string' || !base64.length || base64.length > 4 * Math.ceil(MAX_BYTES / 3)
       || base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64)) throw new Error('Invalid item base64');
     const buffer = Buffer.from(base64, 'base64');
-    if (buffer.length > MAX_BYTES || buffer.toString('base64') !== base64) throw new Error('Invalid item base64');
+    if (buffer.length > maxBytes || buffer.toString('base64') !== base64) throw new Error('Invalid item base64');
     depth = 0;
     reads = 0;
-    const result = proto.read(buffer, 0, 'Slot');
+    const result = proto.read(buffer, 0, type);
     if (result.size !== buffer.length) throw new Error('Trailing item wire bytes');
     return result.value;
+  };
+  const decode = base64 => decodeWire(base64, 'Slot');
+  const decodeMetadata = (base64, nonDefaultKeys) => {
+    if (!serializers || !particles) throw new Error('Missing native metadata registries');
+    const entries = decodeWire(base64, 'entityMetadata', 256 * 1024);
+    if (!Array.isArray(entries) || entries.length > 255) throw new Error('Metadata entry limit');
+    const keys = new Set();
+    for (const entry of entries) {
+      if (!Number.isInteger(entry.key) || entry.key < 0 || entry.key >= 255 || keys.has(entry.key)) throw new Error('Invalid or duplicate metadata key');
+      keys.add(entry.key);
+    }
+    if (!Array.isArray(nonDefaultKeys) || nonDefaultKeys.length > entries.length || new Set(nonDefaultKeys).size !== nonDefaultKeys.length
+      || nonDefaultKeys.some(key => !Number.isInteger(key) || !keys.has(key))) throw new Error('Invalid non-default metadata keys');
+    return { values: encodeItemTransport(entries), nonDefaultKeys: nonDefaultKeys.slice() };
   };
   const writers = proto.writeCtx, sizes = proto.sizeOfCtx;
   const nativeItemIds = new Map([...itemIds].filter(([, guest]) => guest !== undefined).map(([native, guest]) => [guest, native]));
@@ -269,7 +341,7 @@ function createItemCodec (registries) {
     decode(base64); // Require a fully bounded, consumable Slot, not unchecked writer output.
     return base64;
   };
-  const codec = { decode, encode };
+  const codec = { decode, encode, decodeMetadata };
   if (codecs.size === 4) codecs.delete(codecs.keys().next().value);
   codecs.set(fingerprint, codec);
   return codec;
@@ -292,6 +364,14 @@ function registryEntries (mapping, label) {
 
 function correctedTypes () {
   const types = structuredClone(protocol.types);
+  // Native 1.21.1 GlobalPos includes a dimension AND packed BlockPos.
+  types.entityMetadataEntry[1].find(field => field.name === 'value').type[1].fields.optional_global_pos = ['option', ['container', [
+    { name: 'dimension', type: 'string' }, { name: 'position', type: 'position' },
+  ]]];
+  // Native PaintingVariant has VarInt dimensions; title/author arrived later.
+  types.EntityMetadataPaintingVariant = ['container', [
+    { name: 'width', type: 'varint' }, { name: 'height', type: 'varint' }, { name: 'assetId', type: 'string' },
+  ]];
   const fields = types.SlotComponent[1][1].type[1].fields;
   // PotionContents.STREAM_CODEC: no customName until after PC1.21.1.
   fields.potion_contents[1] = fields.potion_contents[1].filter(field => field.name !== 'customName');

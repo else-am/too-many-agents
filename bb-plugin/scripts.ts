@@ -7,7 +7,7 @@ import type { BbPluginApi, PluginAgentToolResult } from '@get-bb/plugin-sdk';
 import type { MinecraftWorlds } from './minecraft.js';
 import { ApiError, object, describe, type Session } from './protocol.js';
 import { runScript } from './scripting/runner.mjs';
-import { createItemDecoder, createItemEncoder, encodeItemTransport, decodeItemTransport } from './scripting/item-wire.mjs';
+import { createMetadataDecoder, createItemDecoder, createItemEncoder, encodeItemTransport, decodeItemTransport } from './scripting/item-wire.mjs';
 
 export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const running = new Map<string, AbortController>();
@@ -60,6 +60,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       began = true;
       const initial = await call('begin', { timeoutMs });
       const decodeItem = createItemDecoder(initial.itemRegistries);
+      const decodeMetadata = createMetadataDecoder(initial.itemRegistries);
       const encodeItem = createItemEncoder(initial.itemRegistries);
       // Repeated equipment/menu/stream copies usually contain identical bytes.
       // Bound both entry count and retained bytes for large books or nested items.
@@ -78,8 +79,18 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         }
         const eventEntities = ((snapshot.entityEvents ?? []) as unknown[])
           .flatMap(value => object(value).entities as unknown[]);
-        for (const value of [snapshot.body, ...snapshot.entities as unknown[], ...eventEntities]) {
+        const observedEntities = [snapshot.body, ...snapshot.entities as unknown[], ...eventEntities];
+        if (observedEntities.length > 1024) throw new Error('Metadata observation count exceeds bounds');
+        let metadataBytes = 0;
+        for (const value of observedEntities) {
           const entity = object(value);
+          const wire = entity.metadataWire;
+          if (typeof wire !== 'string') throw new Error('Missing native entity metadata wire');
+          metadataBytes += wire.length / 4 * 3 - (wire.endsWith('==') ? 2 : wire.endsWith('=') ? 1 : 0);
+          if (metadataBytes > 2 * 1024 * 1024) throw new Error('Metadata snapshot exceeds 2 MiB');
+          entity.rawMetadata = decodeMetadata(wire, entity.metadataNonDefaults);
+          delete entity.metadataWire;
+          delete entity.metadataNonDefaults;
           if (entity.equipment) entries.push(...entity.equipment as unknown[]);
           if (entity.droppedItem) entries.push(entity.droppedItem);
         }
@@ -105,6 +116,26 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           entry.item = cached.value;
           entry.itemKey = cached.key;
           delete entry.wire;
+        }
+        // Preserve the existing native pre-pickup capture (notably Fox, which
+        // empties DATA_ITEM before take). Current entity observations still win
+        // in guest hydration; never apply this capture to a current snapshot.
+        for (const value of (snapshot.entityEvents ?? []) as unknown[]) {
+          const event = object(value);
+          if (event.name !== 'playerCollect') continue;
+          for (const value of event.entities as unknown[]) {
+            const entity = object(value);
+            if (entity.id !== event.cause || !entity.droppedItem) continue;
+            const slot = decodeItemTransport(object(entity.droppedItem).item) as { itemCount: number };
+            if (!(slot.itemCount > 0)) continue;
+            const metadata = entity.rawMetadata as ReturnType<typeof decodeMetadata>;
+            const entries = decodeItemTransport(metadata.values) as { key: number; type: string; value: unknown }[];
+            const item = entries.find(entry => entry.key === 8 && entry.type === 'item_stack');
+            if (!item) throw new Error('Collected item lacks native Item metadata');
+            item.value = slot;
+            metadata.values = encodeItemTransport(entries);
+            if (!metadata.nonDefaultKeys.includes(item.key)) metadata.nonDefaultKeys.push(item.key);
+          }
         }
         return snapshot;
       };
