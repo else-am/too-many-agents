@@ -17,6 +17,9 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 - Earlier saved/stopped batches retain their evidence below. The dead disposable record remains after its one archival attempt rejected `body_missing_or_unloaded`; no retry or bypass. Extra usage credits are working.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
+- Affected39580f7 results: Slime performed a native hop but overshot the first selected endpoint and failed route_edge_unexecutable; step/drop were unreached. Cod entered its first native edge, moved slightly upward, then failed route_fish_controller_unavailable at tick2; detour/down were unreached. Both released control; no replay. Coordinator is cleaning up; final handback pending.
+- Hop input selection correction09c3bd5 and capability-gated guest flight geometry6e75d5d are built (11s). Six flight graph cases, six fish graph cases and existing movement/planning checks pass. Native hop convergence needs rebuilt validation; fish mismatch remains undiagnosed. Native Parrot flight is still unimplemented.
+
 ## Latest evidence reconciliation
 
 - [x] Recovered four existing native reports for block/item observations, block-update identity/hydration, and tick/equipment ordering. Exact executed sources are retained in `tools/mineflayer-reference/recorded/observe-*-historical.js`; source/report hashes and embedded-code checks pass in the catalog. No native rerun occurred.
