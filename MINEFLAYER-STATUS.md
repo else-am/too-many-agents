@@ -10,7 +10,7 @@ Updated October 7, 2026. **Core gameplay is broadly implemented and selectively 
 - Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `e5035c0845beb03dfd4aed50c24ef04e8ae839cbbd9216f8618ec825ced435dc`.
 - The earlier `aad8063` artifact passed shortcut/following, sound and accepted hurt/death/pickup checks; those passes do not verify the new additions. Previous performance measurements remain tied to **`042cc01`**, hash `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`; they are not measurements of newer builds.
 - Latest focused native pass: **`c244383`**, dominant-hand changes/invalid-option rejection/finish-drain restoration and healthy strider movement/release/dismount. Earlier `67ebb2c` passed Fox/body collection, username and basic horse/Pig/minecart controls. These selected cases do not verify every species, boost, jump or lifecycle combination.
-- Lifecycle: tester `thr_xykqkgui57` saved/disconnected and stopped exact `67ebb2c` JVM `50399`; original belongings/equipment/selection were restored. It is authorized to own the next `c244383` settings/healthy-strider check. Do not launch a competing client or change its artifact. [Handback](</Users/scott/.bb/thread-storage/thr_xykqkgui57/67ebb2c-summary.json>).
+- Lifecycle: `c244383` tester saved/disconnected with all dimensions saved and stopped exact JVM `82802`. Original belongings, selection and handedness were restored; Dev was unchanged. Lifecycle is free. [Handback](</Users/scott/.bb/thread-storage/thr_xykqkgui57/c244383-summary.json>).
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
