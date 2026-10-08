@@ -15,9 +15,11 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
+import net.minecraft.world.entity.animal.Parrot;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Salmon;
@@ -52,7 +54,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH, SLIME, MAGMA, RABBIT }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH, SLIME, MAGMA, RABBIT, PARROT }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -101,6 +103,10 @@ public final class ScriptNavigation {
     private boolean rabbitBaby, rabbitPrepared;
     private float rabbitWidth, rabbitHeight;
     private RabbitStep rabbitStep;
+    private DryStep flightStep;
+    private Vec3 flightHold;
+    private boolean flightPrepared, flightLanding;
+    private float flightWidth, flightHeight, flightEyeHeight;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
                          boolean jump, boolean sprint, float wantedYaw, double modifier) {
@@ -112,6 +118,7 @@ public final class ScriptNavigation {
     private record SwimStep(Vec3 wanted, double modifier, float speed, float yaw, Vec3 after, Vec3 velocity) {}
     private record Motion(Vec3 delta, boolean ground, boolean wall) {}
     private record RabbitStep(Vec3 after, Vec3 velocity, boolean jump) {}
+    private record DryStep(Vec3 after, Vec3 velocity) {}
 
     ScriptNavigation(AgentActions owner, Supplier<BodyBox> box) {
         this.owner = owner;
@@ -144,6 +151,8 @@ public final class ScriptNavigation {
             rabbitWidth = rabbit.getBbWidth(); rabbitHeight = rabbit.getBbHeight();
         }
         rabbitPrepared = false; rabbitStep = null;
+        flightPrepared = flightLanding = false; flightStep = null; flightHold = mob.position();
+        flightWidth = mob.getBbWidth(); flightHeight = mob.getBbHeight(); flightEyeHeight = mob.getEyeHeight();
         fishHadTarget = mob.getTarget() != null;
         swimHold = mob.position();
         if (!inside(mob.position())) throw error("route_outside_body_box");
@@ -161,6 +170,8 @@ public final class ScriptNavigation {
             boolean parkour = flag(node, "parkour");
             if (physics == Physics.FISH && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_aquatic_edge");
+            if (physics == Physics.PARROT && (node.has("direct") || parkour || Math.abs(dy) > 1))
+                throw error("route_unsupported_flying_edge");
             if ((slimeHopper(physics) || physics == Physics.RABBIT) && node.has("direct")) throw error("route_unsupported_hopping_direct");
             if (node.has("direct")) {
                 JsonObject segment = node.getAsJsonObject("direct");
@@ -233,7 +244,7 @@ public final class ScriptNavigation {
             requireMode();
             if (!inside(mob.position())) throw error("route_outside_body_box");
             clearInputs();
-            rabbitStep = null;
+            rabbitStep = null; flightStep = null;
             if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
             Frame predicted = null;
             SwimStep swimming = null;
@@ -258,6 +269,9 @@ public final class ScriptNavigation {
                     if (physics == Physics.FISH) {
                         swimming = swimStep(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
+                    } else if (physics == Physics.PARROT) {
+                        if (arrived(returnTo)) { flightHold = returnTo; returnTo = null; }
+                        else prepareFlight(returnTo, false);
                     } else if (physics == Physics.RABBIT) {
                         if (arrived(returnTo)) returnTo = null;
                         else prepareRabbit(returnTo, 0);
@@ -278,6 +292,10 @@ public final class ScriptNavigation {
                     if (physics == Physics.FISH) {
                         phase = "swimming";
                         swimming = swimStep(target);
+                        checkArrival = true;
+                    } else if (physics == Physics.PARROT) {
+                        phase = flightLanding ? "landing" : "flying";
+                        prepareFlight(target, flightLanding);
                         checkArrival = true;
                     } else if (arrivedAtNode(target)) { clearControls(); checkArrival = true; }
                     else if (physics == Physics.RABBIT) {
@@ -312,8 +330,12 @@ public final class ScriptNavigation {
                 if (swimming == null) swimming = swimStep(swimHold);
                 swimControl(swimming);
             }
+            if (physics == Physics.PARROT && active && flightStep == null) prepareFlight(flightHold, false);
             // Exactly one native travel on a successful tick, including mining and building waits.
             travel();
+            if (flightStep != null && (mob.position().distanceTo(flightStep.after) > 0.01
+                || mob.getDeltaMovement().distanceTo(flightStep.velocity) > 0.01))
+                throw error("route_flight_trajectory_changed");
             if (rabbitStep != null && (mob.position().distanceTo(rabbitStep.after) > 0.01
                 || mob.getDeltaMovement().distanceTo(rabbitStep.velocity) > 0.01))
                 throw error("route_rabbit_trajectory_changed");
@@ -331,6 +353,8 @@ public final class ScriptNavigation {
             // Native timer/animation/RNG preparation is not a replay-safe preflight.
             if (physics == Physics.RABBIT && rabbitPrepared)
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
+            if (physics == Physics.PARROT && flightPrepared)
+                throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
             throw failure;
         }
     }
@@ -350,14 +374,14 @@ public final class ScriptNavigation {
         edgeStarted = true; edgeTicks = breakIndex = placeIndex = frameIndex = 0;
         trajectory.clear(); tower = waterTravel = false; returnTo = null;
         edgeStart = mob.position();
-        swimHold = edgeStart;
+        swimHold = edgeStart; flightHold = edgeStart; flightLanding = false;
         direct = nodes.get(index).has("direct") ? nodes.get(index).getAsJsonObject("direct") : null;
         Vec3 raw = direct == null ? Vec3.atBottomCenterOf(integerPosition(nodes.get(index))) : vector(direct);
         if (direct != null && edgeStart.distanceTo(vector(direct.getAsJsonObject("from"))) > 0.2)
             throw error("route_direct_start_changed");
-        if (physics == Physics.FISH) raw = raw.add(0, swimTargetOffset(mob), 0);
+        if (physics == Physics.FISH || physics == Physics.PARROT) raw = raw.add(0, swimTargetOffset(mob), 0);
         target = raw;
-        double rise = physics == Physics.FISH ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
+        double rise = physics == Physics.FISH || physics == Physics.PARROT ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
         relevant = mob.getBoundingBox().minmax(mob.getBoundingBox().move(raw.subtract(edgeStart)))
             .inflate(0.1, 0, 0.1).expandTowards(0, rise + 0.1, 0).expandTowards(0, -1, 0);
         if (direct != null) {
@@ -367,6 +391,7 @@ public final class ScriptNavigation {
                 Math.min(from.z, raw.z) - half, Math.max(from.x, raw.x) + half,
                 direct.get("maxY").getAsDouble() + mob.getBbHeight(), Math.max(from.z, raw.z) + half);
         }
+        if (physics == Physics.PARROT) relevant = flightVolume(relevant);
         checkVolume(relevant);
         for (String key : List.of("toBreak", "toPlace")) for (JsonElement entry : nodes.get(index).getAsJsonArray(key)) {
             BlockPos pos = integerPosition(entry.getAsJsonObject());
@@ -430,6 +455,7 @@ public final class ScriptNavigation {
         checkCell(desired);
         if (flag(edit, "jump")) {
             if (physics == Physics.FISH) throw error("route_aquatic_jump_unavailable");
+            if (physics == Physics.PARROT) throw error("route_flying_jump_placement_unavailable");
             if (!tower) {
                 if (!mob.onGround() || jumpRise(mob) < desired.getY() + 1 - mob.getY()) throw error("route_jump_unavailable");
                 AABB clearance = mob.getBoundingBox().expandTowards(0, jumpRise(mob), 0);
@@ -483,7 +509,7 @@ public final class ScriptNavigation {
         recordEdit("place", desired, before);
         placeIndex++; tower = false;
         if (edit.has("returnPos")) returnTo = Vec3.atBottomCenterOf(integerPosition(edit.getAsJsonObject("returnPos")))
-            .add(0, physics == Physics.FISH ? swimTargetOffset(mob) : 0, 0);
+            .add(0, physics == Physics.FISH || physics == Physics.PARROT ? swimTargetOffset(mob) : 0, 0);
     }
 
     private void use(BlockPos pos) {
@@ -680,6 +706,18 @@ public final class ScriptNavigation {
             if (controller.getSpeedModifier() > 0 && velocity.horizontalDistanceSqr() < 0.01)
                 velocity = velocity.add(forward.scale(0.1F));
         }
+        DryStep step = predictDryStep(velocity, friction);
+        rabbitStep = new RabbitStep(step.after, step.velocity, jump);
+        // Only the native method applies the impulse, after collision/loaded/
+        // revision/box checks. Actual travel still happens once in tick().
+        if (jump) rabbit.jumpFromGround();
+        requireRabbitLease();
+    }
+
+    /** Native LivingEntity dry travel from already prepared inputs; no entity mutation. */
+    private DryStep predictDryStep(Vec3 velocity, float friction) {
+        Vec3 pos = mob.position();
+        float radians = mob.getYRot() * ((float) Math.PI / 180);
         double drag = mob.onGround() ? friction * 0.91F : 0.91F;
         float acceleration = mob.onGround() ? mob.getSpeed() * (0.21600002F / (friction * friction * friction)) : 0.02F;
         Vec3 input = new Vec3(mob.xxa, mob.yya, mob.zza);
@@ -691,7 +729,7 @@ public final class ScriptNavigation {
         }
         Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
         Vec3 after = pos.add(motion.delta);
-        if (!inside(after) || !withinEdge(after)) throw error("route_rabbit_edge_unexecutable");
+        if (!inside(after) || !withinEdge(after)) throw error(physics == Physics.PARROT ? "route_flight_edge_unexecutable" : "route_rabbit_edge_unexecutable");
         checkDryVolume(mob.getBoundingBox().expandTowards(motion.delta));
         Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0,
             Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
@@ -705,12 +743,72 @@ public final class ScriptNavigation {
         float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
         if (factor == 1) factor = level.getBlockState(below).getBlock().getSpeedFactor();
         remaining = remaining.multiply(factor * drag, 1, factor * drag);
-        remaining = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * 0.98F, remaining.z);
-        rabbitStep = new RabbitStep(after, remaining, jump);
-        // Only the native method applies the impulse, after collision/loaded/
-        // revision/box checks. Actual travel still happens once in tick().
-        if (jump) rabbit.jumpFromGround();
-        requireRabbitLease();
+        // LivingEntity uses the horizontal drag for FlyingAnimal vertical motion.
+        remaining = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * (physics == Physics.PARROT ? drag : 0.98F), remaining.z);
+        return new DryStep(after, remaining);
+    }
+
+    private void prepareFlight(Vec3 goal, boolean landing) {
+        requireFlightLease();
+        if (flightStep != null) throw error("route_duplicate_flight_control");
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), difference = goal.subtract(pos);
+        BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
+        checkCell(support);
+        float friction = level.getBlockState(support).getFriction(level, support, mob);
+        if (!(friction >= 0.6F && friction <= 1)) throw error("route_flight_friction_unsupported");
+        double speed = mob.getAttributeValue(mob.onGround() ? Attributes.MOVEMENT_SPEED : Attributes.FLYING_SPEED);
+        if (mob.isSprinting() && mob.onGround()) speed /= 1.3;
+        if (!Double.isFinite(speed) || speed <= 0 || speed > 4) throw error("route_flight_speed_unsupported");
+        Vec3 horizontal = difference.multiply(0.05, 0, 0.05).subtract(velocity.multiply(0.7, 0, 0.7));
+        double vertical = difference.y * 0.02 - velocity.y * 0.5;
+        // Keep actual downward contact for a supported endpoint; a zero-motion
+        // noGravity tick would clear native onGround instead of proving landing.
+        if (landing && difference.y <= 0.12) vertical = Math.min(vertical, -0.001);
+        double desired = Math.max(horizontal.horizontalDistance(), Math.abs(vertical));
+        double modifier = mob.onGround()
+            ? Math.sqrt(desired / (speed * speed * (0.21600002F / (friction * friction * friction))))
+            : desired / (0.02F * speed);
+        modifier = Math.clamp(modifier, 0, Math.min(1, 0.5 / speed));
+        Vec3 wanted = pos;
+        if (desired > 1e-5) {
+            double length = horizontal.horizontalDistance();
+            Vec3 heading = length > 1e-12 ? horizontal.scale(1 / length)
+                : new Vec3(Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, -Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
+            wanted = pos.add(heading.x, vertical > 0 ? 1 : -1, heading.z);
+        }
+        flightPrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(wanted.x, wanted.y, wanted.z, modifier);
+        controller.tick();
+        requireFlightLease();
+        if (!mob.isNoGravity() || !mob.position().equals(pos) || !mob.getDeltaMovement().equals(velocity))
+            throw error("route_flight_preparation_changed");
+        // Input is coupled by FlyingMoveControl. Predict the actual values,
+        // not the desired feedback vector, and never write simulated velocity.
+        flightStep = predictDryStep(velocity, friction);
+    }
+
+    private void requireFlightLease() {
+        if (OWNED.get(mob) != this || !active || !owner.vehicleLeaseActive(lease))
+            throw error("script_no_longer_controls_body");
+        requireMode();
+        if (mob.getNavigation().getPath() != null) throw error("route_flight_navigation_changed");
+    }
+
+    /** Cleanup uses the original native WAIT branch and never changes velocity. */
+    private void clearFlightControls() {
+        if (mob.level() != level || mob.isRemoved() || mob.getMoveControl() != controller
+            || OWNED.get(mob) != null && OWNED.get(mob) != this
+            || owner.currentScriptId() != null && !lease.equals(owner.currentScriptId())) return;
+        mob.getNavigation().stop();
+        mob.setXxa(0); mob.setYya(0); mob.setZza(0); mob.setSpeed(0);
+        mob.getJumpControl().tick(); mob.setJumping(false); mob.setSprinting(false);
+        if (controller.hasWanted()) {
+            controller.setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
+            controller.tick(); // consume MOVE_TO at the current position, without travel
+        }
+        controller.tick(); // native WAIT clears noGravity (hoversInPlace=false)
+        if (mob.isNoGravity()) throw error("route_flight_gravity_not_released");
     }
 
     private void requireRabbitLease() {
@@ -984,6 +1082,7 @@ public final class ScriptNavigation {
     }
 
     private void clearControls() {
+        if (physics == Physics.PARROT) { clearFlightControls(); return; }
         clearInputs();
         if (physics == Physics.RABBIT) { mob.getJumpControl().tick(); mob.setJumping(false); }
         if (physics == Physics.FISH) mob.setSpeed(0);
@@ -992,10 +1091,13 @@ public final class ScriptNavigation {
         mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
     }
 
-    private boolean settled() { return mob.onGround() || mob.isInWater() || mob.onClimbable(); }
+    private boolean settled() {
+        return mob.onGround() || mob.isInWater() || mob.onClimbable()
+            || physics == Physics.PARROT && mob.getDeltaMovement().length() <= 0.03;
+    }
     private boolean arrived(Vec3 goal) {
         return goal.subtract(mob.position()).horizontalDistance() < 0.12 && Math.abs(goal.y - mob.getY()) < 0.12 && settled()
-            && (physics != Physics.FISH || mob.getDeltaMovement().length() <= 0.03);
+            && (physics != Physics.FISH && physics != Physics.PARROT || mob.getDeltaMovement().length() <= 0.03);
     }
 
     private BlockPos logicalPosition(Vec3 position) {
@@ -1011,6 +1113,8 @@ public final class ScriptNavigation {
     private boolean arrivedAtNode(Vec3 goal) {
         if (direct != null) return arrived(goal);
         BlockPos node = integerPosition(nodes.get(index));
+        if (physics == Physics.PARROT)
+            return BlockPos.containing(mob.position()).equals(node) && arrived(goal) && (!flightLanding || mob.onGround());
         if (!settled() || !logicalPosition(mob.position()).equals(node)
             || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
         if (physics == Physics.FISH) return arrived(goal);
@@ -1022,6 +1126,7 @@ public final class ScriptNavigation {
     private Vec3 destination(BlockPos node) {
         Vec3 center = Vec3.atBottomCenterOf(node);
         if (physics == Physics.FISH) return center.add(0, swimTargetOffset(mob), 0);
+        if (physics == Physics.PARROT) return flightDestination(node);
         if (waterOrClimb(node)) return center;
         double y = node.getY() - 1;
         boolean supported = false;
@@ -1042,13 +1147,36 @@ public final class ScriptNavigation {
         return new Vec3(center.x, y, center.z);
     }
 
+    private Vec3 flightDestination(BlockPos node) {
+        Vec3 center = Vec3.atBottomCenterOf(node);
+        AABB footprint = mob.getBoundingBox().move(center.subtract(mob.position()));
+        flightLanding = false;
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(footprint.minX, node.getY() - 1, footprint.minZ),
+            BlockPos.containing(footprint.maxX - EPS, node.getY(), footprint.maxZ - EPS))) {
+            checkCell(pos);
+            for (AABB local : level.getBlockState(pos).getCollisionShape(level, pos, CollisionContext.of(mob)).toAabbs()) {
+                AABB shape = local.move(pos);
+                if (Math.abs(shape.maxY - node.getY()) <= EPS && shape.maxX > footprint.minX + EPS
+                    && shape.minX < footprint.maxX - EPS && shape.maxZ > footprint.minZ + EPS && shape.minZ < footprint.maxZ - EPS)
+                    flightLanding = true;
+            }
+        }
+        if (flightLanding) {
+            // The graph surveyed y+offset. Cover the additional descent to real
+            // support; it stays in the same policy-surveyed feet block cells.
+            requireFlightVolume(footprint.expandTowards(0, swimTargetOffset(mob), 0));
+            return center;
+        }
+        return center.add(0, swimTargetOffset(mob), 0);
+    }
+
     private boolean inside(Vec3 position) {
         BodyBox confined = box.get();
         return confined == null || confined.dimension().equals(level.dimension().location().toString()) && confined.holds(position);
     }
 
     private boolean withinEdge(Vec3 position) {
-        if (physics == Physics.FISH && edgeStart != null && target != null) {
+        if ((physics == Physics.FISH || physics == Physics.PARROT) && edgeStart != null && target != null) {
             Vec3 edge = target.subtract(edgeStart);
             double t = edge.lengthSqr() == 0 ? 0 : Math.clamp(position.subtract(edgeStart).dot(edge) / edge.lengthSqr(), 0, 1);
             return position.distanceTo(edgeStart.add(edge.scale(t))) <= 0.3;
@@ -1114,6 +1242,17 @@ public final class ScriptNavigation {
     static JsonObject capabilities(Mob mob) {
         Physics mode = physics(mob);
         boolean supported = mode != Physics.UNSUPPORTED;
+        if (mode == Physics.PARROT) {
+            JsonObject result = new JsonObject();
+            result.addProperty("physics", "native-parrot-flight-post-tick");
+            result.addProperty("locomotion", "flying");
+            result.addProperty("canFly", true);
+            result.addProperty("flightTargetYOffset", swimTargetOffset(mob));
+            result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
+            result.addProperty("canSwim", false); result.addProperty("canJump", false);
+            result.addProperty("jumpHeight", 0); result.addProperty("maxJumpDistance", 0); result.addProperty("maxSprintJumpDistance", 0);
+            return result;
+        }
         if (mode == Physics.FISH) {
             JsonObject result = new JsonObject();
             result.addProperty("physics", "native-fish-submerged-post-tick");
@@ -1158,9 +1297,19 @@ public final class ScriptNavigation {
     }
 
     private static Physics physics(Mob mob) {
-        if (mob.isPassenger() || mob.isNoGravity() || mob.noPhysics || mob.isFallFlying()
-            || mob.shouldDiscardFriction()) return Physics.UNSUPPORTED;
+        if (mob.isPassenger() || mob.noPhysics || mob.isFallFlying() || mob.shouldDiscardFriction()) return Physics.UNSUPPORTED;
         Class<?> control = mob.getMoveControl().getClass();
+        // Only this reviewed native controller owns its noGravity switch.
+        if (mob.getClass() == Parrot.class && control == FlyingMoveControl.class && GROUND_METHODS.get(Parrot.class)) {
+            Parrot parrot = (Parrot) mob;
+            FlyingMoveControl flying = (FlyingMoveControl) mob.getMoveControl();
+            if (flying.maxTurn == 10 && !flying.hoversInPlace && !parrot.isSleeping()
+                && !parrot.isInSittingPose() && !parrot.isOrderedToSit() && !mob.isInWater() && !mob.isInLava()
+                && !mob.onClimbable() && !mob.hasEffect(MobEffects.LEVITATION) && !mob.hasEffect(MobEffects.SLOW_FALLING))
+                return Physics.PARROT;
+            return Physics.UNSUPPORTED;
+        }
+        if (mob.isNoGravity()) return Physics.UNSUPPORTED;
         // These three concrete native classes share AbstractFish's controller,
         // travel/aiStep and WaterAnimal's no-current-push behavior.
         if ((mob.getClass() == Cod.class || mob.getClass() == Salmon.class || mob.getClass() == TropicalFish.class)
@@ -1168,7 +1317,8 @@ public final class ScriptNavigation {
             return Physics.FISH;
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)
-            && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class)
+            && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class
+            && mob.getClass() != Parrot.class)
             return Physics.ORDINARY;
         if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
         if ((mob.getClass() == Slime.class || mob.getClass() == MagmaCube.class) && control == Slime.SlimeMoveControl.class
@@ -1201,6 +1351,8 @@ public final class ScriptNavigation {
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
         if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
+        if (physics == Physics.PARROT && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
+            || mob.getEyeHeight() != flightEyeHeight)) throw error("route_flight_body_changed");
         if (physics == Physics.RABBIT) {
             Rabbit rabbit = (Rabbit) mob;
             if (rabbit.getVariant() != rabbitVariant || rabbit.isBaby() != rabbitBaby
@@ -1239,7 +1391,22 @@ public final class ScriptNavigation {
         checkVolume(volume.expandTowards(0, 1, 0));
     }
 
+    private AABB flightVolume(AABB bounds) {
+        return new AABB(bounds.minX, bounds.minY, bounds.minZ, bounds.maxX,
+            bounds.maxY + Math.max(0, mob.getEyeHeight() - mob.getBbHeight()), bounds.maxZ);
+    }
+
+    private void requireFlightVolume(AABB bodyBounds) {
+        AABB volume = flightVolume(bodyBounds);
+        checkVolume(volume);
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(volume.minX, volume.minY, volume.minZ),
+            BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS)))
+            if (!level.getFluidState(pos).isEmpty()) throw error("route_flight_requires_dry_volume");
+        if (!level.noCollision(mob, volume)) throw error("route_flight_volume_obstructed");
+    }
+
     private void checkDryVolume(AABB bounds) {
+        if (physics == Physics.PARROT) { requireFlightVolume(bounds); return; }
         if ((physics == Physics.DROWNED || slimeHopper(physics) || physics == Physics.RABBIT) && hasFluid(bounds))
             throw error(physics == Physics.DROWNED ? "route_drowned_requires_dry_ground" : "route_hop_requires_dry_ground");
     }
@@ -1281,7 +1448,8 @@ public final class ScriptNavigation {
                 || Math.max(Math.abs(delta.x), Math.max(Math.abs(delta.y), Math.abs(delta.z))) > 16)
                 throw error("route_move_limit");
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
-            route.checkVolume(clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0));
+            AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
+            route.checkVolume(route.physics == Physics.PARROT ? route.flightVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
                 if (!route.inside(next)) throw error("route_leaves_body_box");
