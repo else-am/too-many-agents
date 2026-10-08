@@ -78,6 +78,7 @@ final class AgentActions {
         hands = new AgentHands(mob, box);
         hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
             overlay ? "game_info" : "system", null));
+        hands.presentationSink = this::recordMessage;
         ambient = new AmbientBehavior(mob);
     }
 

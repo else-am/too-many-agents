@@ -195,8 +195,18 @@ export function createBot(initial) {
     const seen = new Set(changed.map(([, p]) => p.toString()));
     for (const entry of incoming) if (!seen.has(entry[1].toString())) changed.push(entry);
   }
+  const tablistKeys = {};
+  bot.tablist = { header: new ChatMessage(''), footer: new ChatMessage('') };
   function update(next, streamed = false) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
+    for (const key of ['header', 'footer']) {
+      const value = next.hands.tablist?.[key] ?? '';
+      const encoded = JSON.stringify(value);
+      if (tablistKeys[key] !== encoded) {
+        tablistKeys[key] = encoded;
+        bot.tablist[key] = new ChatMessage(value);
+      }
+    }
     const changed = [];
     const blocks = next.blocks;
     const blockEntityPositions = new Map();
@@ -472,6 +482,15 @@ export function createBot(initial) {
       bot.emit('particle', Particle.fromNetwork({ ...particle, particle: { type: type.id } }));
     }
     for (const entry of next.messages ?? []) {
+      if (entry.kind === 'title') {
+        bot.emit('title', new ChatMessage(entry.message).toString(), entry.type);
+        continue;
+      }
+      if (entry.kind === 'title_times') {
+        bot.emit('title_times', entry.fadeIn, entry.stay, entry.fadeOut);
+        continue;
+      }
+      if (entry.kind === 'title_clear') { bot.emit('title_clear'); continue; }
       const message = new ChatMessage(entry.message);
       const sender = entry.sender ?? null;
       bot.emit('message', message, entry.position, sender, entry.verified);

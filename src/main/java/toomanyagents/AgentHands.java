@@ -90,9 +90,11 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /** Native player interactions for one visible body. Never added to the world or player list. */
-final class AgentHands extends FakePlayer {
+public final class AgentHands extends FakePlayer {
     java.util.function.BiConsumer<Component, Boolean> messageSink;
     Consumer<Entity> collectSink;
+    Consumer<JsonObject> presentationSink;
+    private JsonObject tablist = JsonState.object("header", "", "footer", "");
     private final Mob body;
     private final Supplier<BodyBox> bodyBox;
     private final EnumMap<EquipmentSlot, ItemStack> previousEquipment = new EnumMap<>(EquipmentSlot.class);
@@ -135,6 +137,49 @@ final class AgentHands extends FakePlayer {
         restore();
         observeMenu(getInventory().getDisplayName());
         save();
+    }
+
+    /** Observe only presentation packets sent to this body's no-op connection. */
+    public void observePresentation(net.minecraft.network.protocol.Packet<?> packet) {
+        if (!(packet instanceof net.minecraft.network.protocol.game.ClientboundTabListPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket)) return;
+        requireThread();
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundTabListPacket value) {
+            var next = new JsonObject();
+            next.add("header", componentJson(value.header()));
+            next.add("footer", componentJson(value.footer()));
+            if (next.toString().length() > 65536) throw error("tablist_too_large");
+            tablist = next;
+            return;
+        }
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket value) {
+            displayClientMessage(value.text(), true);
+            return;
+        }
+        if (presentationSink == null) return;
+        JsonObject event;
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket value) {
+            event = JsonState.object("kind", "title", "type", "title");
+            event.add("message", componentJson(value.text()));
+        } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket value) {
+            event = JsonState.object("kind", "title", "type", "subtitle");
+            event.add("message", componentJson(value.text()));
+        } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket value) {
+            event = JsonState.object("kind", "title_times", "fadeIn", value.getFadeIn(),
+                "stay", value.getStay(), "fadeOut", value.getFadeOut());
+        } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket) {
+            event = JsonState.object("kind", "title_clear");
+        } else return;
+        presentationSink.accept(event);
+    }
+
+    private com.google.gson.JsonElement componentJson(Component component) {
+        return ComponentSerialization.CODEC.encodeStart(
+            level().registryAccess().createSerializationContext(com.mojang.serialization.JsonOps.INSTANCE), component).getOrThrow();
     }
 
     @Override public void displayClientMessage(Component message, boolean actionBar) {
@@ -1297,6 +1342,7 @@ final class AgentHands extends FakePlayer {
     JsonObject scriptSnapshot(ScriptItems items) {
         var result = snapshot();
         result.addProperty("blockInteractionRange", blockInteractionRange());
+        result.add("tablist", tablist.deepCopy());
         if (editedSign != null && !editedSign.isRemoved() && editedSign.getLevel() == level()
             && level().getGameTime() <= signEditorExpires) {
             var position = editedSign.getBlockPos();
