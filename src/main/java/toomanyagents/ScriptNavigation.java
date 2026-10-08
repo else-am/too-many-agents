@@ -23,6 +23,7 @@ import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
 import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import net.minecraft.world.entity.animal.frog.Tadpole;
 import net.minecraft.world.entity.animal.frog.Frog;
+import net.minecraft.world.entity.animal.Panda;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -70,7 +71,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -132,6 +133,10 @@ public final class ScriptNavigation {
     private Vec3 drownedHold;
     private AABB drownedPolicyVolume, drownedInitialVolume;
     private DryStep drownedStep;
+    private boolean pandaBaby;
+    private Pose pandaPose;
+    private PathNavigation pandaNavigation;
+    private float pandaWidth, pandaHeight, pandaEyeHeight;
     private int slimeSize;
     private Rabbit.Variant rabbitVariant;
     private boolean rabbitBaby, rabbitPrepared;
@@ -192,6 +197,10 @@ public final class ScriptNavigation {
         if (mob instanceof Rabbit rabbit) {
             rabbitVariant = rabbit.getVariant(); rabbitBaby = rabbit.isBaby();
             rabbitWidth = rabbit.getBbWidth(); rabbitHeight = rabbit.getBbHeight();
+        }
+        if (physics == Physics.PANDA) {
+            pandaBaby = mob.isBaby(); pandaPose = mob.getPose(); pandaNavigation = mob.getNavigation();
+            pandaWidth = mob.getBbWidth(); pandaHeight = mob.getBbHeight(); pandaEyeHeight = mob.getEyeHeight();
         }
         rabbitPrepared = false; rabbitStep = null;
         flightPrepared = flightLanding = false; flightStep = null; flightHold = mob.position();
@@ -477,7 +486,8 @@ public final class ScriptNavigation {
         boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
             && (!smoothSwimmer(physics) || ownsSmoothSwimCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
-            && (!drownedWaterMode(physics) || ownsDrownedWaterCleanup());
+            && (!drownedWaterMode(physics) || ownsDrownedWaterCleanup())
+            && (physics != Physics.PANDA || ownsPandaCleanup());
         OWNED.remove(mob, this);
         active = false;
         if (!cleanup) { mining = null; trajectory.clear(); return; }
@@ -1531,7 +1541,7 @@ public final class ScriptNavigation {
             Motion motion = collide(bounds, velocity, ground);
             Vec3 next = pos.add(motion.delta);
             if (!inside(next) || !withinEdge(next)) return null;
-            if ((physics == Physics.DROWNED || hopper) && hasFluid(bounds.expandTowards(motion.delta))) return null;
+            if ((physics == Physics.DROWNED || physics == Physics.PANDA || hopper) && hasFluid(bounds.expandTowards(motion.delta))) return null;
             if (next.y < Math.min(edgeStart.y, goal.y) - 1.1) return null;
             Vec3 remaining = new Vec3(Math.abs(velocity.x - motion.delta.x) > EPS ? 0 : velocity.x,
                 Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
@@ -1646,6 +1656,7 @@ public final class ScriptNavigation {
     }
 
     private void clearControls() {
+        if (physics == Physics.PANDA && !ownsPandaCleanup()) return;
         if (smoothSwimmer(physics) && !ownsSmoothSwimCleanup()) return;
         if (drownedWaterMode(physics) && !ownsDrownedWaterCleanup()) return;
         if (puffState >= 0 && !ownsPufferfishCleanup()) return;
@@ -1902,7 +1913,7 @@ public final class ScriptNavigation {
         result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
         result.addProperty("jumpHeight", rise);
         result.addProperty("canJump", supported && rise > 0);
-        result.addProperty("canSwim", supported && mode != Physics.RABBIT && !slimeHopper(mode) && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
+        result.addProperty("canSwim", supported && mode != Physics.RABBIT && !slimeHopper(mode) && mode != Physics.DROWNED && mode != Physics.PANDA && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
         if (slimeHopper(mode) || mode == Physics.RABBIT) {
             double takeoffVelocity = mode == Physics.RABBIT && velocity < 0.1 ? velocity + 0.1F : velocity;
             double reach = rise > 0 ? hopEnvelope(speed, takeoffVelocity, power, gravity, width) : 0;
@@ -1915,7 +1926,7 @@ public final class ScriptNavigation {
         }
         result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED) : 0);
         result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true, mode == Physics.DROWNED) : 0);
-        result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
+        result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : mode == Physics.PANDA ? "native-panda-ground-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
         return result;
     }
 
@@ -2005,7 +2016,7 @@ public final class ScriptNavigation {
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)
             && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class
-            && mob.getClass() != Parrot.class)
+            && mob.getClass() != Parrot.class && mob.getClass() != Panda.class)
             return Physics.ORDINARY;
         if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
         if ((mob.getClass() == Slime.class || mob.getClass() == MagmaCube.class) && control == Slime.SlimeMoveControl.class
@@ -2022,6 +2033,11 @@ public final class ScriptNavigation {
                 && rabbit.distanceToSqr(rabbit.getTarget()) < 16) return Physics.UNSUPPORTED;
             return boundedHopRise(jumpPower(mob, mob.position()), mob.getGravity()) > 0 ? Physics.RABBIT : Physics.UNSUPPORTED;
         }
+        if (mob.getClass() == Panda.class && control == Panda.PandaMoveControl.class
+            && mob.getJumpControl().getClass() == JumpControl.class
+            && mob.getNavigation().getClass() == GroundPathNavigation.class
+            && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable() && !mob.isSleeping()
+            && ((Panda) mob).canPerformAction()) return Physics.PANDA;
         if (mob.getClass() == Fox.class && control == Fox.FoxMoveControl.class) {
             Fox fox = (Fox) mob;
             // Exact Fox.canMove predicate; do not clear its native state flags.
@@ -2048,6 +2064,10 @@ public final class ScriptNavigation {
             || mob.getBbWidth() != puffWidth || mob.getBbHeight() != puffHeight || mob.getEyeHeight() != puffEyeHeight))
             throw error("route_pufferfish_body_changed");
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
+        if (physics == Physics.PANDA && (mob.isBaby() != pandaBaby || mob.getPose() != pandaPose
+            || mob.getNavigation() != pandaNavigation || mob.getBbWidth() != pandaWidth
+            || mob.getBbHeight() != pandaHeight || mob.getEyeHeight() != pandaEyeHeight))
+            throw error("route_panda_body_changed");
         if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
         if (flightMode(physics) && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
@@ -2160,8 +2180,9 @@ public final class ScriptNavigation {
 
     private void checkDryVolume(AABB bounds) {
         if (flightMode(physics)) { requireFlightVolume(bounds); return; }
-        if ((physics == Physics.DROWNED || slimeHopper(physics) || physics == Physics.RABBIT) && hasFluid(bounds))
-            throw error(physics == Physics.DROWNED ? "route_drowned_requires_dry_ground" : "route_hop_requires_dry_ground");
+        if ((physics == Physics.DROWNED || physics == Physics.PANDA || slimeHopper(physics) || physics == Physics.RABBIT) && hasFluid(bounds))
+            throw error(physics == Physics.PANDA ? "route_panda_requires_dry_ground"
+                : physics == Physics.DROWNED ? "route_drowned_requires_dry_ground" : "route_hop_requires_dry_ground");
     }
 
     private boolean hasFluid(AABB bounds) {
@@ -2293,6 +2314,30 @@ public final class ScriptNavigation {
             route.active = false;
         }
         // Native age, dimensions and any direct reposition proceed unchanged.
+    }
+
+    private boolean ownsPandaCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && mob.getNavigation() == pandaNavigation
+            && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    /** End captured Panda ownership before native growth can directly reposition it. */
+    public static void beforePandaAgeDimensions(Panda panda) {
+        if (panda.getClass() != Panda.class || panda.level().isClientSide || panda.level().getServer() == null
+            || !panda.level().getServer().isSameThread()) return;
+        ScriptNavigation route = OWNED.get(panda);
+        if (route == null || !route.active || route.physics != Physics.PANDA || panda.isBaby() == route.pandaBaby) return;
+        if (route.movementFailure == null) route.movementFailure = error("route_panda_age_changed");
+        try {
+            if (panda.level() == route.level && route.owner.vehicleLeaseActive(route.lease) && route.ownsPandaCleanup()) route.stop();
+        } catch (RuntimeException | LinkageError cleanup) {
+            if (cleanup != route.movementFailure) route.movementFailure.addSuppressed(cleanup);
+        } finally {
+            OWNED.remove(panda, route);
+            route.active = false;
+        }
     }
 
     /** Used only at FishMoveControl's isDone query, during our explicit tick. */
