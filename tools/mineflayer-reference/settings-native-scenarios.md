@@ -27,3 +27,13 @@ and sends its bit; native `Mob.setLeftHanded/isLeftHanded/getMainArm` and Mob
 NBT save/load own the actual value. This is an explicit supported subset of
 setSettings, not full client-settings compatibility. Source/syntax/compilation
 checks do not establish these native outcomes.
+
+Focused packaged c244383 check passed once with Codex gpt-6.1-sol low. The ready
+script retained settings identity, rejected its invalid options, left the observed
+opposite hand selected and preserved inventory through a drained main-hand swing
+(2 requests, 9 updates, 7 bridge operations; 1077 ms tool). Independent body NBT
+changed LeftHanded 0 -> 1; native Dev mainHand remained right. A separate script
+queued the original right hand and returned immediately without await; runner
+finish drain completed it (1 request, 2 updates, 5 bridge operations; 644 ms).
+Independent body NBT returned to LeftHanded 0 and native inventory/equipment/
+selection matched the original baseline. No full settings/reopen matrix ran.

@@ -87,3 +87,13 @@ exception was not retained. This is not a demonstrated control-clear defect.
 The lead bounded diagnosis and declined a Strider rerun in that lifecycle. No boost, horse jump,
 powered/slope or ownership matrices ran. Preserve dry weather for a future Strider
 fixture; current clear weather alone does not describe the earlier attempt.
+
+On the next fixed c244383 package, one authorized healthy Strider replacement
+passed the same family-only script. Weather was explicitly cleared; native
+Health 20 and grounded state remained stable across 30 server ticks before the
+call. Its normal-AI dry holding gate opened only after completed native mount.
+Movement was 1.735 blocks; actual-body passenger identity, control clear/zero,
+dismount and unchanged inventory passed (7 completed requests, 77 updates,
+19 bridge operations; 4351 ms script, 4831 ms tool). Native mounted Passengers
+matched the body UUID. Native dry slowness, always-forward and coast were allowed;
+no boost/jump or other family was repeated on this package.
