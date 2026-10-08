@@ -14,7 +14,7 @@ const featureTable = Object.fromEntries(features.map(({ name }) => [name, regist
 const data = JSON.stringify({
   featureTable,
   protocolVersion: registry.version.version, majorVersion: registry.version.majorVersion,
-  blocksArray: registry.blocksArray, itemsArray: registry.itemsArray, biomesArray: registry.biomesArray,
+  blocksArray: registry.blocksArray, itemsArray: registry.itemsArray, biomesArray: registry.biomesArray, particlesArray: registry.particlesArray,
   blockCollisionShapes: registry.blockCollisionShapes,
   materials: registry.materials, effectsByName: registry.effectsByName,
   enchantmentsByName: registry.enchantmentsByName, language: registry.language,
@@ -39,7 +39,7 @@ licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'ut
 licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
-licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
+licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar, Particle object and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));

@@ -1,3 +1,4 @@
+import { createParticleClass } from './particle.mjs';
 import { createChunkClass } from './chunks.mjs';
 import { createColumnWorld, installColumns } from './columns.mjs';
 import { installBossBars } from './boss-bars.mjs';
@@ -58,6 +59,9 @@ export function createBot(initial) {
   registry.biomesByName = Object.fromEntries(registry.biomesArray.map(biome => [biome.name, biome]));
   const Block = createBlockClass(registry);
   const ChunkColumn = createChunkClass(registry, Block);
+  registry.particles = Object.fromEntries(data.particlesArray.map(particle => [particle.id, particle]));
+  registry.particlesByName = Object.fromEntries(data.particlesArray.map(particle => [particle.name, particle]));
+  const Particle = createParticleClass(registry);
   const Item = createItemClass(registry);
   const ChatMessage = createChatMessageClass(registry);
   const Entity = createEntityClass(registry, { Item, ChatMessage });
@@ -488,5 +492,5 @@ export function createBot(initial) {
   installRecipeQueries(bot, recipeFactory);
   installExplosion(bot);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
-    ChunkColumn, BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
+    Particle, ChunkColumn, BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

@@ -179,7 +179,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, BossBar, ChunkColumn, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, BossBar, ChunkColumn, Particle, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }
           async function __mcFinish() { await drainControls?.(); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),
