@@ -1296,15 +1296,20 @@ public final class ScriptNavigation {
         return result;
     }
 
+    /** Stable native controller identity for outer input cleanup; no route/state mutation. */
+    static boolean reviewedParrotFlightBody(Mob mob) {
+        if (mob.getClass() != Parrot.class || mob.getMoveControl().getClass() != FlyingMoveControl.class) return false;
+        FlyingMoveControl control = (FlyingMoveControl) mob.getMoveControl();
+        return control.maxTurn == 10 && !control.hoversInPlace;
+    }
+
     private static Physics physics(Mob mob) {
         if (mob.isPassenger() || mob.noPhysics || mob.isFallFlying() || mob.shouldDiscardFriction()) return Physics.UNSUPPORTED;
         Class<?> control = mob.getMoveControl().getClass();
         // Only this reviewed native controller owns its noGravity switch.
-        if (mob.getClass() == Parrot.class && control == FlyingMoveControl.class && GROUND_METHODS.get(Parrot.class)) {
+        if (reviewedParrotFlightBody(mob) && GROUND_METHODS.get(Parrot.class)) {
             Parrot parrot = (Parrot) mob;
-            FlyingMoveControl flying = (FlyingMoveControl) mob.getMoveControl();
-            if (flying.maxTurn == 10 && !flying.hoversInPlace && !parrot.isSleeping()
-                && !parrot.isInSittingPose() && !parrot.isOrderedToSit() && !mob.isInWater() && !mob.isInLava()
+            if (!parrot.isSleeping() && !parrot.isInSittingPose() && !parrot.isOrderedToSit() && !mob.isInWater() && !mob.isInLava()
                 && !mob.onClimbable() && !mob.hasEffect(MobEffects.LEVITATION) && !mob.hasEffect(MobEffects.SLOW_FALLING))
                 return Physics.PARROT;
             return Physics.UNSUPPORTED;
