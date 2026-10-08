@@ -4822,6 +4822,19 @@
         "path": "run/mineflayer-reference/action-start-http-uncertainty.json",
         "sha256": "8d9fc30caa4c02bed0aed5789a7ed0725b2807edc1072aa3db1edb862b31ceac"
       }
+    },
+    "terminal-host-race-current": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/terminal-host-race.mjs",
+      "subjects": [],
+      "scope": "Actual current host HTTP decoder/script coordinator/real runner QuickJS. Typed native-shaped HTTP400 body/lease errors during start, await and heartbeat defer to ordered health/death; unknown lost start aborts with no guest replacement. Controlled fetch only, no real server fault. Native emitter compiled in572692c; packaged emission still pending.",
+      "testedRevision": "572692c",
+      "result": "passed",
+      "sourceSha256": "05eb717e9d2234424b0567e0fe312b388b48e4844c8a35d2b03b0228e7066024",
+      "report": {
+        "path": "run/mineflayer-reference/terminal-host-race-current.json",
+        "sha256": "df09e4863358f8b58a9cda18436d947482045fa64a8232cdd3c22bcf6dd9a875"
+      }
     }
   },
   "reviewNotes": {

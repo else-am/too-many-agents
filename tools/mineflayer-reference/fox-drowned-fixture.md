@@ -115,3 +115,10 @@ trace, remove only listeners in finally, and issue no error-handler cleanup/acti
 retry. Coordinator diagnoses read-only before separately authorized known-state
 cleanup. Restore only disposable fixture cells/items; save/disconnect/stop exact
 isolated test JVM. These files are prepared, syntax-parsed only and UNRUN.
+
+
+## Selected live partial outcomes — 22ac99f
+
+Each exact UUID-substituted script ran once in a separate ordinary bound Codex gpt-6.1-sol low thread. Fox detour arrived, but its prepared actual-body-overlap exclusion assertion failed; sampled center never entered the excluded logical cell. Step/dig were not reached. Drowned approach and raised destination arrived without edits; native step_height was independently1.0, all observed ground flags remained true, so the full-block fixture did not establish jumping. Platform/drop were not reached. Preserve original sources/failures; no whole-script pass or production failure inferred from these fixture assumptions.
+
+Known Fox setup-only default-UP interaction rejection had zero withdrawal; visible NORTH-face setup then succeeded. Original tool returned to its temporary barrel, both empty disposable bodies archived through supported workflow, all owned cells restored and temporary30 forced chunks removed. ScriptProbe inventory/equipment/selection/carried matched original baseline. All dimensions saved00:16:59.837; exact JVM56121 stopped. Full raw sources/hashes/times/counts/diagnosis: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/22ac99f-summary.json`. Mode/revision/fence checks remain unrun.
