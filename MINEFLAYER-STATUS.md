@@ -6,10 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest focused live-validated implementation: **`53dd7ca`** (chat, scoreboard/team updates and biome name); complete columns/freshness passed on `26aea35`; observed events passed on `3875c0b`; sleep/wake passed on `6ee4bb3`; fishing/boat controls passed on `8bfa67e`, earlier broad workflows on `880c87b`.
-- Built artifact: `build/libs/too-many-agents-0.9.0.jar`.
-- Validated `26aea35` JAR SHA-256: `da582366c5da7af779afeffbfac6adb82017476c7389b7e2b3b476fd10253263`.
-- Packaged `53dd7ca` test JVM `50868` saved/disconnected and stopped successfully. Packaged `35e8a4f` JVM `62656` saved/disconnected (all dimensions saved) and stopped; root owns lifecycle again. Its fixed JAR SHA-256 is `2bf908ecac876541ad5c40f8417f7f398dde761c12696c2a20262ace5697d6f3`. Completion/sign events passed; particle delivery remains unverified because the actual landing occurred after the listener ended. The earlier `ad76f78` artifact was not launched. Chat, whisper, patterns, scoreboard/team create/update/remove and biome name passed. Completion exposed unauthorized root literals; the rebuilt native permission filter passed on `35e8a4f` (development GameTest `test` is legitimately permitted). Earlier `26aea35` columns client saved/disconnected and stopped. Guest storage and sign/block-entity events were added afterward; do not attribute them to these native runs.
+- Latest built implementation: **`53dadd0`**, adding native animation/status and consumption events; these additions await native verification.
+- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `d4af21c517d11925662a9c12ba9bcaba0aae36a0789f608be16fabef9dbcc241`.
+- Latest focused native pass: **`35e8a4f`**, completion permission filtering and sign events. Particle delivery remains unverified because fixture timing prevented a valid observation. Previous chat/scoreboard checks passed on `53dd7ca`, columns on `26aea35`; earlier evidence is linked below.
+- Previous test JVM `62656` saved/disconnected with all dimensions saved, then stopped. The tester is assigned the next grouped `53dadd0` animation/consumption/particle check; no previous passing suites are requested again.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
