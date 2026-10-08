@@ -64,11 +64,12 @@ query, never an assertion that the matching gameplay API is implemented.
 Validation performed: node --check passed; Java21 javac compiled owned GameAccess
 and Observations against existing generated NeoForge21.1.251 artifacts/project
 classes. No expanded test suite, native/live check, game/BB/server lifecycle or
-installation ran. Remaining specific gap: raw native thunderLevel requires access
-beyond the current public Level API/owned files; thunderState explicitly stays
-null. No rain division or weighted-thunder substitution is used.
+installation ran for the original state slice. Follow-up integration now reads raw
+native Level.thunderLevel through the existing access transformer. Thunder is no
+longer an implementation gap; transition/zero-rain live verification remains
+pending. No rain division or weighted-thunder substitution is used.
 
-Raw thunder follow-up: while the tester uses the prior packaged build, expose Level.thunderLevel through the existing access transformer. Verify the next packaged build can read it (including zero rain); do not substitute getThunderLevel, which multiplies by rain. Compare native weather commands and actual raw state after restart.
+Raw thunder follow-up verification: compare native weather commands and actual raw state, including zero rain. Do not substitute getThunderLevel, which multiplies by rain.
 
 Additional native game-state check: retain bot.game across physics ticks and
 confirm actual difficulty, hardcore/flat-world flags, server view distance and

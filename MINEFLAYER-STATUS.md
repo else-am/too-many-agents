@@ -6,10 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`53dadd0`**, adding native animation/status and consumption events; focused swing/eat/particle checks passed, wider signal types remain unverified.
-- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `d4af21c517d11925662a9c12ba9bcaba0aae36a0789f608be16fabef9dbcc241`.
+- Latest built implementation: **`0d972c0`**, adding native-body elytra rockets and actual boost-duration observations. Flight/boost verification is assigned; wider animation/status types remain unverified.
+- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `60471b31b674f49d75f7d7126dcff5cf01ef2c3acf27e9f9e57b1a27a977b028`.
 - Latest focused native pass: **`53dadd0`**, two actual arm swings, one hydrated apple-consumption event and a natural landing particle. Completion permission filtering and sign events passed on `35e8a4f`. Previous chat/scoreboard checks passed on `53dd7ca`, columns on `26aea35`; earlier evidence is linked below.
-- Test JVM `70727` on `53dadd0` saved/disconnected with all dimensions saved, then stopped. Root owns lifecycle. Its focused signal check completed 7/7 requests, 100 updates and 17 bridge operations in 5,580 ms using Codex 6.1 Sol low.
+- Test JVM `70727` on `53dadd0` saved/disconnected with all dimensions saved, then stopped. Tester owns packaged `0d972c0`, JVM `78120`. Its first flight check stopped before takeoff; setup/control timing is under investigation, with no gliding or rocket outcome claimed. The completed signal check completed 7/7 requests, 100 updates and 17 bridge operations in 5,580 ms using Codex 6.1 Sol low.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
