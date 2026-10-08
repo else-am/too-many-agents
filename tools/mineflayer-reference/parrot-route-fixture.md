@@ -6,7 +6,7 @@ Inspect loaded original cells: stone floor x277..291/z105..115/y-61, dry clear a
 
 The observer keeps at most64 sampled trace rows and16 path/reset records; full frame traces exceeded runner output in an earlier long Magma check. It returns counters, arrivals and airborne/ascent/descent witnesses without claiming every frame is retained. First failure stops remaining phases; no tolerance relaxation or retry. A route start mismatch must preserve actual request/start-position evidence if available, rather than assuming fixture drift.
 
-After completed route and script release, independently inspect exact native body NoGravity=false, grounded state, inventory and action ownership. Native controller WAIT is required to restore gravity; passive momentum must not be replaced by synthetic velocity. Ordinary later physics is allowed. Successful flight alone does not prove cancellation. A separate preauthored cancellation case in flying-route-scenarios.md remains pending exact observer preparation; do not improvise or combine it into this measured script.
+After completed route and script release, independently inspect exact native body NoGravity=false, grounded state, inventory and action ownership. Native controller WAIT is required to restore gravity; passive momentum must not be replaced by synthetic velocity. Ordinary later physics is allowed. Successful flight alone does not prove cancellation. The separate prepared observe-parrot-cancel.js covers airborne cancellation; do not combine it into this measured script.
 
 Restore/archive only the known-empty new body and owned fixture changes; remove only added forced chunks. Save/disconnect and stop only the identified test JVM. No launch or native execution is authorized merely by this prepared file.
 
