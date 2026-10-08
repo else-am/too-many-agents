@@ -35,3 +35,32 @@ canDigBlock uses native body eye/range, not fixed player 1.65/5.1; look does not
 apply the player's sensitivity quantization; placement checks state changes,
 including same-type slab merges; entityAt never mutates its supplied vector.
 Combat, fishing, mounts, creative and general control-state APIs remain pending.
+
+## Reference equipment pairing — preauthored
+
+Run inventory-equipment.js unchanged once against pinned Mineflayer. Isolated
+survival Reference at12.5/-60/0.5, chest12/-60/2 with iron helmet slot2 and shield
+slot3; player stone17 in main inventory slot9, diamond pickaxe hotbar6, named
+diamond sword damage7 hotbar0. Empty other slots/cursor and selected hotbar6.
+The procedure itself checks split/reassembly, container offhand transfer, armor
+staging/close, unequip, and preservation of the sword's damage. Its final
+setQuickBarSlot intentionally has no await; do not invent completion timing
+parity with the native queue. Independently confirm stone17, helmet1, shield1,
+sword damage7 and selected slot6 after successful return. Preserve literal
+source/result and stop at first failure without repair or replay. Reference
+setup uses only its own server/world, not the guarded native client.
+
+Reference equipment result (2026-10-08T11:16:42.428Z): unchanged source ran once,
+passed odd split/one-item placement/reassembly, then failed Container offhand
+mapping failed. Armor/unequip/sword/final control phases were not reached. No
+repair or retry. Pinned simple_inventory.js sets off-hand destination45 and calls
+moveSlotItem(sourceSlot,45), whose clicks use the active window. In a 27-slot
+chest, window slot45 maps to player inventory slot27, not offhand. Independently
+parsed saved player NBT confirms shield in Slot27, stone17 in Slot9, sworddamage7
+in Slot0, pickaxe in Slot6 and selection6. Thus this is a concrete upstream
+container-slot defect, not a reason to mis-equip the native body. Preserve the
+native adapter's equipment mapping and require its own native evidence; this
+failure does not establish the unreached methods' parity. Existing protocol and
+setup teleport warnings remain. All dimensions saved; owned server stopped and
+port25575 unbound. Exact result/source/server log/player NBT and decoded inventory:
+/Users/scott/.bb/thread-storage/equipment-reference/. No production code changed.

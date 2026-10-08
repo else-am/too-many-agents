@@ -10197,6 +10197,22 @@
         ]
       },
       "limitations": "Reference only; native counterpart and other placement faces/options remain pending. Existing ArmorTrimMaterial protocol warning retained. Temporary spawn-animals setting restored byte-for-byte."
+    },
+    "reference-equipment-container-mapping": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/inventory-equipment.js",
+      "subjects": [],
+      "scope": "Unchanged historical native equipment procedure: split/reassembly passed, container offhand equip failed; later equipment phases unreached.",
+      "result": "failed",
+      "sourceSha256": "4f435bee410a94beb6c33cd013867c677b481ff509b3fff726336adf5c985828",
+      "report": {
+        "path": "run/mineflayer-reference/equipment-reference.json",
+        "sha256": "4faeab3e198abb1959846325e88be04f502695ec0e621cbcc3f3e03257cb90d3",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Pinned equip uses player slot45 in the active chest window. Saved player NBT confirms shield in ordinary inventory slot27, not offhand. No full equipment parity or native coverage promotion; protocol/setup teleport warnings retained."
     }
   },
   "reviewNotes": {

@@ -80,6 +80,7 @@ async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--placement-refusal')) return placementRefusalScenario();
+  if (process.argv.includes('--equipment')) return equipmentScenario();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--container')) return containerScenario();
   if (process.argv.includes('--wall-convergence')) return wallConvergenceScenario();
@@ -115,6 +116,44 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function equipmentScenario() {
+  const source = await readFile(new URL('./inventory-equipment.js', import.meta.url), 'utf8');
+  const report = { scenario:'equipment',backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
+    source,sourceSha256:createHash('sha256').update(source).digest('hex'),startedAt:new Date().toISOString(),
+    clientErrors,protocolWarnings,serverConfirmed:false };
+  try {
+    await consoleCommands([
+      'fill 10 -61 -1 15 -61 4 minecraft:stone','fill 10 -60 -1 15 -55 4 minecraft:air',
+      'tp Reference 12.5 -60.0 0.5','gamemode survival Reference','clear Reference',
+      'setblock 12 -60 2 minecraft:chest',
+      'item replace block 12 -60 2 container.2 with minecraft:iron_helmet 1',
+      'item replace block 12 -60 2 container.3 with minecraft:shield 1',
+      'item replace entity Reference inventory.0 with minecraft:stone 17',
+      'item replace entity Reference hotbar.6 with minecraft:diamond_pickaxe 1',
+      `item replace entity Reference hotbar.0 with minecraft:diamond_sword[minecraft:damage=7,minecraft:custom_name='"Equipment sword"'] 1`,
+    ]);
+    bot.setQuickBarSlot(6);
+    await bot.waitForTicks(5);
+    report.invokedAt = new Date().toISOString();
+    report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3',source)(bot,Vec3);
+    const conditions = ['if data entity Reference Inventory[{id:"minecraft:stone",count:17}]',
+      'if data entity Reference Inventory[{id:"minecraft:iron_helmet",count:1}]',
+      'if data entity Reference Inventory[{id:"minecraft:shield",count:1}]',
+      'if data entity Reference Inventory[{id:"minecraft:diamond_sword",components:{"minecraft:damage":7}}]',
+      'if data entity Reference {SelectedItemSlot:6}'];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition,index) => `execute ${condition} run say ${markers[index]}`));
+    report.confirmations = {conditions,markers,messages};
+    assert(markers.every(marker => messages.some(message => message.includes(marker))), 'Server equipment outcome must match');
+    report.serverConfirmed = true;
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'equipment-reference.json'),JSON.stringify(report,null,2)+'\n');
+  }
+  console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
 
 async function placementRefusalScenario() {
