@@ -505,10 +505,13 @@ const pureVectorContracts = new Set([
 // These methods render/transform supplied component data. Native delivery and
 // registry chat-type initialization are not covered by this classification.
 const pureChatContracts = new Set([
+  'constructor', 'fromNotch', 'fromNetwork', 'json', 'extra', 'translate',
+  'selector', 'keybind', 'score',
   'append', 'clone', 'getText', 'length', 'parse', 'toAnsi', 'toHTML', 'toMotd',
   'toString', 'valueOf',
 ].map(name => `prismarine-chat.ChatMessage.${name}`));
 const pureBuilderContracts = new Set([
+  "fromNetwork",
   "addExtra",
   "addWith",
   "fromString",

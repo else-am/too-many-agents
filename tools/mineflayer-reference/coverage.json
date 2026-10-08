@@ -4584,6 +4584,126 @@
       "evidence": [
         "registry-library-current"
       ]
+    },
+    "prismarine-chat.ChatMessage.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.fromNotch": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.fromNetwork": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.json": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.extra": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.translate": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.selector": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.keybind": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.score": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.MessageBuilder.fromNetwork": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing 292-case bundled QuickJS differential compares construction, supplied NBT/JSON/network-format conversion and complete own fields; two separate builder network fixtures use pinned ChatMessage JSON as oracle. This covers caller-supplied components and formats only, not native delivery or registry initialization.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -5167,9 +5287,19 @@
         "prismarine-chat.MessageBuilder.text",
         "prismarine-chat.MessageBuilder.translate",
         "prismarine-chat.MessageBuilder.underlined",
-        "prismarine-chat.MessageBuilder.with"
+        "prismarine-chat.MessageBuilder.with",
+        "prismarine-chat.ChatMessage.constructor",
+        "prismarine-chat.ChatMessage.fromNotch",
+        "prismarine-chat.ChatMessage.fromNetwork",
+        "prismarine-chat.ChatMessage.json",
+        "prismarine-chat.ChatMessage.extra",
+        "prismarine-chat.ChatMessage.translate",
+        "prismarine-chat.ChatMessage.selector",
+        "prismarine-chat.ChatMessage.keybind",
+        "prismarine-chat.ChatMessage.score",
+        "prismarine-chat.MessageBuilder.fromNetwork"
       ],
-      "scope": "292 pinned ChatMessage/builder comparisons and two network-builder fixtures in bundled QuickJS; selected text transformation members individually reviewed.",
+      "scope": "292 pinned ChatMessage/builder comparisons and two network-builder fixtures in bundled QuickJS; reviewed supplied-component construction, fields, conversions and text transformations. Native hydration remains separate.",
       "result": "passed",
       "sourceSha256": "02f73e574127a5fe44ff3d7fb79502dcd52aa7e6771e0a5912b95144dea8a8e7",
       "report": {
@@ -6330,6 +6460,7 @@
     "mineflayer.BotEvents.forcedMove": "Implemented accepted native teleport overloads, same-level dimension transitions and affected active passengers at 11ea771. RandomTeleport trial/rollback is atomic; nested operations do not duplicate events, no-op/ordinary motion does not invent correction packets. Existing bounded queue and captured lease enforce scope; zero-argument callback follows full hydration. Full build passed; packaged mixin/live delivery pending. See forced-move-scenarios.md.",
     "prismarine-world.World": "Bounded source audit at 39853c1: the selected prismarine-world/src/world.js is directly bundled by columns.mjs, retaining all public async methods, storage/generator callbacks and sync reference. Overrides are guest-local save queue retention/draining and corrected bounded ray geometry. Providers have no host filesystem/native world authority. No absent public method established; source review does not establish every runtime path. See world-cache-scenarios.md. Audit79990c1 found public sync reads resurrecting a guest-unloaded column through bot.blockAt fallback. b21ce69 routes World reads through its own column cache, leaving bot.blockAt native observations separate. Full build passed; runtime check is prepared.",
     "prismarine-entity.Entity.count": "For native ExperienceOrb only, observations now expose getValue() as count and type orb, matching the pinned experience-orb spawn handler. Native internal merged count is deliberately not used. See entity-events-native-scenarios.md. Subsequently verified on packaged52ca8d0: actual native Value7/Count3 yielded public count7/type orb, stable identity. Pickup is still unverified; see registry-orb-native.",
-    "mineflayer.Bot.craft": "Native output authority and ordered action barriers intentionally differ from pinned optimistic slot writes. The retained reference-craft-diagnostic failed with an actual output-pickup/resynchronization interleaving; see reference-failure-review.md. Preserve this failure and compare the documented task outcome, not the upstream defect. Full member coverage remains pending."
+    "mineflayer.Bot.craft": "Native output authority and ordered action barriers intentionally differ from pinned optimistic slot writes. The retained reference-craft-diagnostic failed with an actual output-pickup/resynchronization interleaving; see reference-failure-review.md. Preserve this failure and compare the documented task outcome, not the upstream defect. Full member coverage remains pending.",
+    "prismarine-chat.ChatMessage": "chat.mjs exercise describes complete enumerable fields before/after rendering, explicit new ChatMessage malformed/primitive/component cases, all listed selector/keybind/score/translate/extra fixtures, decoded NBT and JSON fromNotch inputs, and supplied-format fromNetwork cases. Builder.fromNetwork fills an upstream declaration-only method with two independent pinned ChatMessage.fromNetwork JSON comparisons. Product chat.mjs remains unchanged since ebbce7c; no rerun or native promotion."
   }
 }
