@@ -27,7 +27,6 @@
     "@types/react-dom": "^19.3.0",
     "esbuild": "0.25.12",
     "events": "3.3.0",
-    "mineflayer-pathfinder": "2.4.5",
     "mojangson": "2.1.0",
     "typescript": "^5.9.3",
     "vec3": "0.1.10"

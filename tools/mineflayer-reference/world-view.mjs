@@ -10,20 +10,19 @@ const referenceRoot = resolve(process.env.MINEFLAYER_REFERENCE_ROOT ?? resolve(r
 const pluginRoot = resolve(process.env.MINEFLAYER_PLUGIN_ROOT ?? resolve(root, 'bb-plugin'));
 const reference = createRequire(resolve(referenceRoot, 'package.json'));
 const plugin = createRequire(resolve(pluginRoot, 'package.json'));
-for (const [name, version] of Object.entries({ 'prismarine-world': '3.7.0', 'prismarine-block': '1.23.0', 'minecraft-data': '3.117.0', 'mineflayer-pathfinder': '2.4.5', vec3: '0.1.10' })) {
+for (const [name, version] of Object.entries({ 'prismarine-world': '3.7.0', 'prismarine-block': '1.23.0', 'minecraft-data': '3.117.0', vec3: '0.1.10' })) {
   assert.equal(reference(resolve(referenceRoot, 'node_modules', name, 'package.json')).version, version, `Pinned ${name}`);
 }
 const registry = reference('minecraft-data')('1.21.1');
 const Block = reference('prismarine-block')('1.21.1');
 const { Vec3 } = reference('vec3');
 const WorldSync = reference('prismarine-world/src/worldsync');
-const goals = reference('mineflayer-pathfinder/lib/goals');
 // Exercise the installed WorldSync method against exactly the same synthetic
 // lookup as the guest, without loading/generating any world or chunk.
 const referenceView = getBlock => Object.assign(new WorldSync(null), { getBlock });
 const data = Object.fromEntries(['blocksArray', 'biomesArray', 'blockCollisionShapes', 'materials', 'effectsByName', 'enchantmentsByName', 'language'].map(k => [k, registry[k]]));
 
-function exercise(createWorldView, Block, Vec3, goals, s) {
+function exercise(createWorldView, Block, Vec3, s) {
   const vector = values => new Vec3(...values);
   const trace = [], matches = [], supplied = [];
   const lookup = position => {
@@ -49,15 +48,7 @@ function exercise(createWorldView, Block, Vec3, goals, s) {
   let value;
   try {
     if (s.kind === 'get') value = describe(world.getBlock(vector(s.origin)));
-    else if (s.kind === 'goal') {
-      const options = { ...s.options };
-      if (options.faces) options.faces = options.faces.map(vector);
-      const goal = new goals[s.goal](vector(s.target), world, options);
-      value = {
-        heuristic: goal.heuristic(vector(s.node)), end: goal.isEnd(vector(s.node)),
-        faceAndRef: goal.getFaceAndRef?.(vector(s.node).offset(0.5, 1.6, 0.5)),
-      };
-    } else {
+    else {
       const from = vector(s.origin), dir = vector(s.direction);
       if (s.normalize !== false) dir.normalize();
       const before = { from: from.clone(), dir: dir.clone() };
@@ -144,18 +135,6 @@ for (const matcher of ['stone', 'shape', 'skip', 'air', 'water', 'advance', 'thr
 }
 add('lookup failure propagates', { origin: [0, 0, 0], direction: [1, 0, 0], range: 1, lookupError: true });
 add('unsupported nonunit retains parametric interpretation', { origin: [0, 0.5, 0.5], direction: [2, 0, 0], normalize: false, range: 2, blocks: [cube([3, 0, 0])] });
-for (const occluded of [false, true]) {
-  for (const name of ['stone', 'oak_slab', 'oak_stairs']) {
-    const blocks = [{ at: [3, 0, 0], name }, ...(occluded ? [cube([1, 0, 0]), cube([1, 1, 0]), cube([2, 1, 0])] : [])];
-    add(`GoalLookAtBlock ${name}/${occluded}`, { kind: 'goal', goal: 'GoalLookAtBlock', target: [3, 0, 0], node: [0, 0, 0], blocks });
-    for (const options of [{}, { LOS: false }, { half: 'top' }, { facing: 'north', facing3D: true }, { range: 2 }]) {
-      add(`GoalPlaceBlock ${name}/${occluded}/${JSON.stringify(options)}`, { kind: 'goal', goal: 'GoalPlaceBlock', target: [3, 1, 0], node: [0, 0, 0], blocks, options });
-    }
-  }
-}
-add('GoalPlaceBlock unloaded neighbors', { kind: 'goal', goal: 'GoalPlaceBlock', target: [0, 0, 0], node: [3, 0, 0], onlyListedLoaded: true, options: {} });
-add('GoalLookAtBlock out of reach', { kind: 'goal', goal: 'GoalLookAtBlock', target: [30, 0, 0], node: [0, 0, 0], blocks: [cube([30, 0, 0])] });
-
 // Corrections are independent, hand-derived ray/AABB geometry. These expose
 // upstream defects instead of using guest output as its own oracle.
 fix('first partial shape uses floored block position', { origin: [0.5, 0.75, 0.5], direction: [1, 0, 0], range: 3, blocks: [{ at: [0, 0, 0], name: 'oak_slab', properties: { type: 'bottom' } }, cube([2, 0, 0])] }, hit('stone', [2, 0, 0], [2, 0.75, 0.5], 4));
@@ -175,7 +154,7 @@ for (const [label, extra] of [['negative range', { range: -1 }], ['infinite rang
 }
 bounds.push({ label: 'finite ray has a traversal budget', s: { origin: [0, 0, 0], direction: [1, 0, 0], range: 1000000, onlyListedLoaded: true, project: 'error' }, expected: { error: 'RangeError', calls: 65536 } });
 bounds.push({ label: 'shape count budget', s: { origin: [0, 0, 0], direction: [1, 0, 0], range: 1, blocks: [{ ...cube([0, 0, 0]), shapes: Array(262145).fill([2, 2, 2, 3, 3, 3]) }], project: 'error' }, expected: { error: 'RangeError', calls: 1 } });
-const runReference = s => encode(exercise(referenceView, Block, Vec3, goals, structuredClone(s)));
+const runReference = s => encode(exercise(referenceView, Block, Vec3, structuredClone(s)));
 const expected = cases.map(({ s }) => runReference(s));
 for (const { label, s, expected } of fixes) assert.notDeepEqual(runReference(s), encode(expected), `Demonstrate upstream defect: ${label}`);
 if (process.argv.includes('--reference-only')) {
@@ -184,10 +163,10 @@ if (process.argv.includes('--reference-only')) {
   const { build } = plugin('esbuild');
   const { getQuickJS } = plugin('quickjs-emscripten');
   const bundle = await build({
-    stdin: { contents: `import { createWorldView } from './bb-plugin/scripting/world-view.mjs'; import { createBlockClass } from './bb-plugin/scripting/blocks.mjs'; import { Vec3 } from 'vec3'; import goals from 'mineflayer-pathfinder/lib/goals.js'; globalThis.createWorldView = createWorldView; globalThis.Block = createBlockClass(${JSON.stringify(data)}); globalThis.Vec3 = Vec3; globalThis.goals = goals;`, resolveDir: root },
+    stdin: { contents: `import { createWorldView } from './bb-plugin/scripting/world-view.mjs'; import { createBlockClass } from './bb-plugin/scripting/blocks.mjs'; import { Vec3 } from 'vec3'; globalThis.createWorldView = createWorldView; globalThis.Block = createBlockClass(${JSON.stringify(data)}); globalThis.Vec3 = Vec3;`, resolveDir: root },
     bundle: true, write: false, platform: 'browser', format: 'iife', target: 'es2022', nodePaths: [resolve(referenceRoot, 'node_modules'), resolve(pluginRoot, 'node_modules')],
     // The harness imports from two dependency roots; the production guest has
-    // one Vec3 constructor. Keep the reference goals and guest in that same realm.
+    // one Vec3 constructor. Keep the reference and guest in that same realm.
     alias: { vec3: plugin.resolve('vec3') },
   });
   const vm = (await getQuickJS()).newContext();
@@ -206,7 +185,7 @@ if (process.argv.includes('--reference-only')) {
     : Array.isArray(value) ? `[${value.map(literal).join(',')}]`
       : value && typeof value === 'object' ? `{${Object.entries(value).map(([k, v]) => `${JSON.stringify(k)}:${literal(v)}`).join(',')}}`
         : JSON.stringify(value);
-  const guest = s => JSON.parse(evaluate(`JSON.stringify(encode(exercise(createWorldView, Block, Vec3, goals, ${literal(s)})))`));
+  const guest = s => JSON.parse(evaluate(`JSON.stringify(encode(exercise(createWorldView, Block, Vec3, ${literal(s)})))`));
   try {
     evaluate(bundle.outputFiles[0].text);
     evaluate(`globalThis.exercise = ${exercise}; globalThis.encode = ${encode};`);

@@ -25,8 +25,6 @@ licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8
 licenses.push(await readFile(new URL('./block-events.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chunks.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./movements-LICENSE.txt', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), 'utf8'));
@@ -39,7 +37,7 @@ licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'u
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
 licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar, Particle object and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
-for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
+for (const name of ['minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
   let license;

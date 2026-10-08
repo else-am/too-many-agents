@@ -5,7 +5,6 @@ import { installBossBars } from './boss-bars.mjs';
 import { installScoreboards } from './scoreboard.mjs';
 import { installExplosion } from './explosion.mjs';
 import { Vec3 } from 'vec3';
-import upstreamGoals from 'mineflayer-pathfinder/lib/goals.js';
 import data from 'minecraft-version-data';
 import { createBlockClass } from './blocks.mjs';
 import { createItemClass } from './items.mjs';
@@ -13,8 +12,6 @@ import { createWindowFactory } from './windows.mjs';
 import { createWorldView } from './world-view.mjs';
 import { decodeItemTransport } from 'minecraft-item-transport';
 import { EventEmitter } from 'events';
-import { Movements } from './movements.mjs';
-import { installPathfinder } from './pathfinder.mjs';
 import { createRecipeFactory, installRecipeQueries } from './recipes.mjs';
 import { createChatMessageClass } from './chat.mjs';
 import { createEntityClass } from './entities.mjs';
@@ -26,14 +23,6 @@ import { installEntityQueries } from './entity-queries.mjs';
 import { installChatPatterns } from './chat-patterns.mjs';
 import { installBlockEvents } from './block-events.mjs';
 import { createRegistry } from './registry.mjs';
-
-const goals = { ...upstreamGoals,
-  GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
-    constructor(x, y, z, bot, options) { super(x, y, z, bot.world ?? bot, options); }
-    // Pinned upstream drops the required node argument here.
-    isEnd(node) { return this.goal.isEnd(node); }
-  },
-};
 
 // Only native observation fields may be copied onto a shared Entity instance.
 const entityFields = ['uuid', 'width', 'height', 'onGround', 'eyeHeight', 'eyePosition', 'direction', 'alive',
@@ -296,7 +285,6 @@ export function createBot(initial) {
     changesFromColumns(columnUpdate.changes, changed);
     columns.patchLocal(next.blocks);
     snapshot = next;
-    bot.nativeBody = next.nativeBody;
     const present = new Set();
     const entityEvents = [];
     // Event-only entities can spawn and be collected between observations.
@@ -602,15 +590,8 @@ export function createBot(initial) {
     drainControls: inventory.drainControls, isKnownActionError: error => error instanceof NativeActionError });
   async function drainControls() { await inventory.drainControls(); await actions.drainControls(); }
   lastPhysicsTick = initial.tick;
-  installPathfinder(bot, {
-    async request(operation, value) {
-      if (operation === 'action' || operation === 'startAction') await drainControls();
-      return request(operation, value);
-    },
-    waitForActionState, snapshot: () => snapshot,
-  });
   installRecipeQueries(bot, recipeFactory);
   installExplosion(bot);
-  return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
+  return { bot, Vec3, Block, Item, Entity, ChatMessage,
     Particle, ChunkColumn, BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

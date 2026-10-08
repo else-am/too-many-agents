@@ -37,8 +37,6 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       if (state.status === 'running' && record.lastObserved !== 'running') return;
       record.lastObserved = state.status;
       record.detail = state.detail;
-      // Keep verified edits even when the final action reply or world is lost.
-      if (record.type === 'route') record.progress = state.result ?? state.progress;
     };
     let bridgeOperations = 0;
     let began = false;
@@ -204,7 +202,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           return status;
         } catch (error) {
           if (deferToStream(error)) return waitForStreamAbort(requestSignal);
-          // Without the terminal barrier, catching goto must not allow the
+          // Without the terminal barrier, catching an action failure must not allow the
           // body to keep working unobserved under a renewed lease.
           controller.abort(error);
           throw error;
@@ -216,13 +214,13 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         if (operation === 'startAction') return startAction(request, requestSignal);
         if (operation === 'awaitAction') return awaitAction(request.id, requestSignal);
         if (operation === 'action') return awaitAction((await startAction(request, requestSignal)).id, requestSignal);
-        if (operation === 'cancelAction' || operation === 'stopRoute') {
+        if (operation === 'cancelAction') {
           if (!actions.some(action => action.id === request.id)) throw new Error('Action does not belong to this execution');
-          try { return await call(operation === 'cancelAction' ? 'cancel' : 'stopRoute', { id: request.id }, requestSignal); }
+          try { return await call('cancel', { id: request.id }, requestSignal); }
           catch (error) {
             if (deferToStream(error)) return waitForStreamAbort(requestSignal);
             // A missing stop acknowledgement must not permit a replacement
-            // route to start while the old route might still control the body.
+            // action to start while the old action might still control the body.
             controller.abort(error);
             throw error;
           }
@@ -231,7 +229,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, goals, Vec3, Movements, Block, Item, Entity, ChatMessage, MessageBuilder, BossBar, ChunkColumn, Particle, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, Vec3, Block, Item, Entity, ChatMessage, MessageBuilder, BossBar, ChunkColumn, Particle, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }
           async function __mcFinish() { await drainControls?.(); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),

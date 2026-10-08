@@ -20,7 +20,7 @@ const packages = new Map(), inputs = new Map(), declarations = new Map();
 const documents = [], inheritance = [], runtimeInheritance = [], imports = [], privateMembers = [], sourceFindings = [];
 const legacyKeys = new Set();
 
-for (const [name, pin] of Object.entries({ mineflayer: pins.mineflayer, 'mineflayer-pathfinder': pins.pathfinder, ...pins.dependencies })) {
+for (const [name, pin] of Object.entries({ mineflayer: pins.mineflayer, ...pins.dependencies })) {
   let location, manifest;
   for (const base of [referenceRoot, pluginRoot]) {
     try {
@@ -58,7 +58,7 @@ function put(key, kind, input, node, extra = {}) {
 }
 const memberName = node => ts.isConstructorDeclaration(node) ? 'constructor' : node.name?.getText().replace(/^['"]|['"]$/g, '');
 const has = (node, token) => node.modifiers?.some(m => m.kind === token);
-const runtimeInterfaces = new Set(['Bot', 'Pathfinder', 'Movements', 'creativeMethods', 'WindowsExports', 'TypedEventEmitter', 'RegistryPc', 'IndexedData']);
+const runtimeInterfaces = new Set(['Bot', 'creativeMethods', 'WindowsExports', 'TypedEventEmitter', 'RegistryPc', 'IndexedData']);
 const reviewPackages = new Set(['prismarine-chunk', 'prismarine-registry', 'minecraft-data', 'prismarine-nbt']);
 const aliases = { EventEmitter: 'events.EventEmitter', TypedEmitter: 'typed-emitter.TypedEventEmitter' };
 
@@ -123,7 +123,7 @@ async function scanDeclarations(name, path, legacy = false) {
 }
 
 const declarationFiles = {
-  mineflayer: ['index.d.ts'], 'mineflayer-pathfinder': ['index.d.ts'],
+  mineflayer: ['index.d.ts'],
   'prismarine-block': ['index.d.ts'], 'prismarine-item': ['index.d.ts'], 'prismarine-windows': ['index.d.ts'],
   'prismarine-entity': ['index.d.ts'], vec3: ['index.d.ts'], 'prismarine-recipe': ['index.d.ts'],
   'prismarine-world': ['types/index.d.ts', 'types/world.d.ts', 'types/iterators.d.ts'],
@@ -132,7 +132,7 @@ const declarationFiles = {
   'prismarine-chunk': ['types/index.d.ts', 'types/section.d.ts'], 'prismarine-nbt': ['typings/index.d.ts'],
   'typed-emitter': ['index.d.ts'],
 };
-for (const [name, files] of Object.entries(declarationFiles)) for (const file of files) await scanDeclarations(name, file, name === 'mineflayer' || name === 'mineflayer-pathfinder');
+for (const [name, files] of Object.entries(declarationFiles)) for (const file of files) await scanDeclarations(name, file, name === 'mineflayer');
 
 // Selected public runtime objects, not every implementation helper/export.
 // Source-only discoveries remain candidates until declarations/docs/review
@@ -218,10 +218,6 @@ for (const [name, file, classes, targets] of [
   ['prismarine-world', 'src/worldsync.js', { WorldSync: 'prismarine-world.WorldSync' }],
   ['prismarine-world', 'src/world.js', { World: 'prismarine-world.World' }],
   ['prismarine-world', 'src/iterators.js', Object.fromEntries(['RaycastIterator', 'ManhattanIterator', 'OctahedronIterator', 'SpiralIterator2d'].map(n => [n, `prismarine-world.${n}`]))],
-  ['mineflayer-pathfinder', 'lib/movements.js', { Movements: 'mineflayer-pathfinder.Movements' }],
-  ['mineflayer-pathfinder', 'lib/move.js', { Move: 'mineflayer-pathfinder.Move' }],
-  ['mineflayer-pathfinder', 'lib/goals.js', Object.fromEntries([...declarations.keys()].filter(k => /^mineflayer-pathfinder\.goals\.[^.]+$/.test(k)).map(k => [k.split('.').at(-1), k]))],
-  ['mineflayer-pathfinder', 'index.js', {}, { 'bot.pathfinder': 'mineflayer-pathfinder.Pathfinder', bot: 'mineflayer.Bot' }],
   ['events', 'events.js', { EventEmitter: 'events.EventEmitter' }, { EventEmitter: 'events.EventEmitter', 'module.exports': 'events' }],
 ]) await scanSource(name, file, classes, targets);
 for (const file of (await readdir(join(packages.get('mineflayer').root, 'lib/plugins'))).filter(f => f.endsWith('.js')).sort()) {
@@ -233,7 +229,7 @@ for (const entry of declarations.values()) if (entry.owner === 'events.EventEmit
 }
 
 const documentFiles = {
-  mineflayer: ['docs/api.md'], 'mineflayer-pathfinder': ['readme.md'],
+  mineflayer: ['docs/api.md'],
   'prismarine-block': ['doc/API.md'], 'prismarine-item': ['README.md'], 'prismarine-windows': ['API.md'],
   'prismarine-entity': ['README.md'], vec3: ['README.md'], 'prismarine-recipe': ['README.md'],
   'prismarine-world': ['docs/API.md'], 'prismarine-biome': ['README.md'], 'prismarine-chat': ['README.md'],
@@ -245,7 +241,6 @@ const docOwners = {
   recipe: ['prismarine-recipe.Recipe'], recipeitem: ['prismarine-recipe.RecipeItem'],
   world: ['prismarine-world.World', 'prismarine-world.WorldSync'],
   chatmessage: ['prismarine-chat.ChatMessage'], messagebuilder: ['prismarine-chat.MessageBuilder'],
-  'bot.pathfinder': ['mineflayer-pathfinder.Pathfinder'], movements: ['mineflayer-pathfinder.Movements'],
 };
 for (const [name, paths] of Object.entries(documentFiles)) for (const path of paths) {
   const input = await source(name, path, 'documentation');
@@ -253,7 +248,7 @@ for (const [name, paths] of Object.entries(documentFiles)) for (const path of pa
     const heading = match[1], line = input.text.slice(0, match.index).split('\n').length;
     const doc = { id: `${input.id}:${line}`, package: name, heading, input: input.id, line, status: 'pending-review', members: [] };
     const clean = heading.replace(/[`*]/g, '');
-    const member = /\b(bot\.pathfinder|\w+)\.([A-Za-z_$][\w$]*)/.exec(clean);
+    const member = /\b(\w+)\.([A-Za-z_$][\w$]*)/.exec(clean);
     if (member) for (const owner of docOwners[member[1].toLowerCase()] ?? []) {
       const key = `${owner}.${member[2]}`;
       const entry = declarations.get(key) ?? put(key, 'member', null, null, { owner, category: 'documentation-only', applicability: 'pending-review' });
@@ -266,7 +261,7 @@ for (const [name, paths] of Object.entries(documentFiles)) for (const path of pa
       const entry = declarations.get(key) ?? put(key, 'event', null, null, { owner: eventOwner, category: 'event', applicability: 'applicable' });
       (entry.documentation ??= []).push(doc.id); doc.members.push(key);
     }
-    // Bare documented names (Movements properties, goal constructors and
+    // Bare documented names (object properties, constructors and
     // Pathfinder events) are resolved only within this package's inputs.
     if (!doc.members.length) {
       const nameMatch = /^([A-Za-z_$][\w$]*)(?:\(|$)/.exec(clean.trim());
@@ -305,17 +300,7 @@ for (const edge of inheritance) {
     edge.runtimeBase = runtime.base;
     edge.status = 'pending-review';
     edge.reason = 'Declaration and source inheritance disagree';
-    // The documented deprecated wrapper owns a GoalLookAtBlock; it does not
-    // inherit that class's fields or constructor (pinned goals.js:209).
-    if (edge.derived === 'mineflayer-pathfinder.goals.GoalBreakBlock'
-        && edge.base === 'mineflayer-pathfinder.goals.GoalLookAtBlock'
-        && runtime.base === 'mineflayer-pathfinder.goals.Goal') {
-      edge.declaredBase = edge.base;
-      edge.base = runtime.base;
-      edge.status = 'reviewed-source-correction';
-      edge.reason = 'Pinned readme.md:421 and goals.js:209 define the Goal wrapper; index.d.ts:199 incorrectly declares GoalLookAtBlock inheritance';
-      delete edge.runtimeBase;
-    }
+
   }
   delete edge.imported;
 }
@@ -684,20 +669,6 @@ const pureWindowContracts = new Set([
   "dragClick",
   "doubleClick"
 ].map(name => `prismarine-windows.Window.${name}`));
-// Local predicates imported unchanged from the pinned goals module. These do not
-// establish Pathfinder consumption, native arrivals or entity/world hydration.
-const pureGoalContracts = new Set(Object.entries({
-  Goal: ['heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalBlock: ['constructor', 'x', 'y', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalNear: ['constructor', 'x', 'y', 'z', 'rangeSq', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalXZ: ['constructor', 'x', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalNearXZ: ['constructor', 'x', 'z', 'rangeSq', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalY: ['constructor', 'y', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalGetToBlock: ['constructor', 'x', 'y', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalCompositeAny: ['constructor', 'goals', 'push', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalCompositeAll: ['constructor', 'goals', 'push', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-  GoalInvert: ['constructor', 'goal', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
-}).flatMap(([name, members]) => members.map(member => `mineflayer-pathfinder.goals.${name}.${member}`)));
 // These are pinned PC version-query return contracts, not native gameplay support.
 const pureFeatureContracts = new Set([
   'mineflayer.Bot.supportFeature', 'minecraft-data.MinecraftData.IndexedData.supportFeature',
@@ -748,7 +719,7 @@ const pureFeatureContracts = new Set([
   ].map(name => `minecraft-data.MinecraftData.SupportsFeature.${name}`)
 ]);
 const purePluginContracts = ['mineflayer.Bot.loadPlugin', 'mineflayer.Bot.loadPlugins', 'mineflayer.Bot.hasPlugin'];
-const pureLibraryContracts = new Set([...purePluginContracts, ...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts, ...pureFeatureContracts]);
+const pureLibraryContracts = new Set([...purePluginContracts, ...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureFeatureContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
@@ -793,8 +764,7 @@ for (const entry of declarations.values()) {
 // Locate guest registrations separately from conformance. A source assignment
 // cannot prove correct native behavior; missing sites may be indirect installs.
 const implementationInputs = [], implementationSites = [];
-const guestTargets = { bot: 'mineflayer.Bot', 'bot.creative': 'mineflayer.creativeMethods',
-  pathfinder: 'mineflayer-pathfinder.Pathfinder', 'bot.pathfinder': 'mineflayer-pathfinder.Pathfinder' };
+const guestTargets = { bot: 'mineflayer.Bot', 'bot.creative': 'mineflayer.creativeMethods' };
 for (const name of (await readdir(join(sourceRoot, 'bb-plugin/scripting'))).filter(name => name.endsWith('.mjs') && name !== 'build.mjs').sort()) {
   const path = `bb-plugin/scripting/${name}`;
   const text = await readFile(join(sourceRoot, path), 'utf8');

@@ -787,7 +787,6 @@ final class GameAccess {
             var entity = level.getEntity(observed.get("id").getAsInt());
             if (entity != null) ScriptEntities.enrich(entity, observed, items);
         }
-        snapshot.add("nativeBody", ScriptNavigation.capabilities(mob));
         snapshot.add("action", controller.status(""));
         snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
         snapshot.add("columnView", controller.columns.snapshot(level, mob, controller.completedActionSequence()));
@@ -846,7 +845,6 @@ final class GameAccess {
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
             case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
             case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
-            case "stopRoute" -> controller.stopRoute(string(args, "id", 80));
             default -> throw error("unknown_script_operation");
         };
     }

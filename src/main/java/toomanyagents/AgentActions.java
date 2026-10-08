@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "set_settings", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
+    private static final Set<String> SCRIPT_TYPES = Set.of("set_settings", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -57,7 +57,6 @@ final class AgentActions {
     private BlockState original;
     private boolean mining;
     private boolean approachTargets;
-    private ScriptNavigation route;
     private boolean travelled;
     private String scriptId, lastScriptId;
     private long scriptDeadline, scriptHeartbeat;
@@ -331,18 +330,18 @@ final class AgentActions {
         if (busy()) throw startRejection(approachTargets, "action_already_running_cancel_or_wait");
         String type = text(request, "type");
         if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw startRejection(approachTargets, "unknown_action_type");
-        if ((type.equals("route") || type.equals("walk")) && creativeFlying) throw startRejection(approachTargets, "stop_creative_flight_before_navigation");
+        if (type.equals("walk") && creativeFlying) throw startRejection(approachTargets, "stop_creative_flight_before_navigation");
         if (type.equals("creative_flying") && (!request.has("state") || !request.get("state").isJsonPrimitive()
             || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_flight_state");
         if (type.equals("creative_fly") || type.equals("creative_flying") && request.get("state").getAsBoolean()) requireCreativeFlight();
         if (type.equals("creative_fly") && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_fly_to");
-        if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_navigation");
-        if (mob.isSleeping() && (type.equals("route") || type.equals("walk")
+        if (type.equals("walk") && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_navigation");
+        if (mob.isSleeping() && (type.equals("walk")
             || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw startRejection(approachTargets, "wake_before_movement");
-        if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw startRejection(approachTargets, "dismount_before_navigation");
+        if (type.equals("walk") && mob.isPassenger()) throw startRejection(approachTargets, "dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_control");
-        if (mob.isFallFlying() && List.of("walk", "route", "creative_fly").contains(type))
+        if (mob.isFallFlying() && List.of("walk", "creative_fly").contains(type))
             throw startRejection(approachTargets, "land_before_ground_navigation_or_creative_flight");
         if (request.has("position") && request.has("entity")) throw startRejection(approachTargets, "choose_position_or_entity");
         if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw startRejection(approachTargets, "position_or_entity_required");
@@ -352,8 +351,6 @@ final class AgentActions {
             || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
             throw startRejection(approachTargets, "invalid_command_block_command");
         if (type.equals("set_settings")) mainHandSetting(request);
-        // Reject stale observations before route preparation or its cleanup can change controls.
-        if (type.equals("route")) ScriptNavigation.validateStartPosition(mob, request);
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
@@ -372,12 +369,6 @@ final class AgentActions {
         if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()
             && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
             requireVehicleController();
-        }
-        if (type.equals("route")) {
-            var selected = new ScriptNavigation(this, box);
-            try { selected.start(args); }
-            catch (RuntimeException failure) { selected.stop(); throw failure; }
-            route = selected;
         }
         kind = type;
         completion = new CompletableFuture<>();
@@ -403,15 +394,6 @@ final class AgentActions {
         hands.cancelMine();
         stopMotion();
         return status("");
-    }
-
-    JsonObject stopRoute(String id) {
-        var state = status(id);
-        if (action != null && id.equals(text(action, "id")) && busy()) {
-            if (route == null) throw error("action_is_not_route");
-            route.requestStop();
-        }
-        return state;
     }
 
     void close(String reason) {
@@ -458,17 +440,8 @@ final class AgentActions {
             // Explicit pickup must collect and report its own target before it disappears.
             if (minecraftAccess && (!busy() || !kind.equals("pickup"))) hands.pickupNearby();
             if (!busy()) return;
-            if (++ticks > (route == null ? 1200 : 2400)) { finish("timeout", "Action exceeded its game-time limit.", null); return; }
+            if (++ticks > 1200) { finish("timeout", "Action exceeded its game-time limit.", null); return; }
             switch (kind) {
-                case "route" -> {
-                    // The executor owns this tick's travel, including edit waits.
-                    // If it fails after moving, cleanup must not move a second time.
-                    travelled = true;
-                    var progress = route.tick();
-                    action.addProperty("phase", text(progress, "phase"));
-                    action.add("progress", progress.deepCopy());
-                    if ("completed".equals(text(progress, "status"))) finish("completed", "route_finished", progress);
-                }
                 case "walk" -> {
                     var wanted = target();
                     var confined = box.get();
@@ -914,11 +887,8 @@ final class AgentActions {
     private void stopMotion() {
         var velocity = mob.getDeltaMovement();
         GameAccess.stopFollowingMotion(mob);
-        // The reviewed flight controllers retain passive momentum, including
-        // release after the script lease is cleared. Route cleanup owns gravity.
-        if (ScriptNavigation.reviewedParrotFlightBody(mob) || ScriptNavigation.reviewedAllayFlightBody(mob)
-            || ScriptNavigation.reviewedBeeFlightBody(mob)
-            || scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
+        // Preserve native gliding momentum while a script controls the body.
+        if (scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
             mob.setDeltaMovement(velocity);
     }
 
@@ -1099,14 +1069,6 @@ final class AgentActions {
         if ("creative_fly".equals(kind) && !"completed".equals(status)) creativeFlying = false;
         if (suggestions != null) { suggestions.cancel(false); suggestions = null; }
         if ("fish".equals(kind)) hands.cancelFishing();
-        if (route != null) {
-            route.stop();
-            if (result == null) {
-                result = route.progress();
-                result.addProperty("status", status);
-            }
-            route = null;
-        }
         hands.cancelMine();
         stopMotion();
         action.addProperty("terminal",true); action.addProperty("status",status); action.addProperty("detail",detail == null ? "action_failed" : detail);
