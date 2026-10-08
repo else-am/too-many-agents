@@ -24,6 +24,7 @@ import { installState } from './state.mjs';
 import { installActions } from './actions.mjs';
 import { installEntityQueries } from './entity-queries.mjs';
 import { installChatPatterns } from './chat-patterns.mjs';
+import { installBlockEvents } from './block-events.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -114,6 +115,7 @@ export function createBot(initial) {
   const windowKeys = new WeakMap();
   const equipmentKeys = new WeakMap();
   const effectTicks = new WeakMap();
+  const vehicleLinks = new WeakMap();
   const playerKeys = new Map();
   const knownFireworks = new Set();
   let snapshot;
@@ -209,6 +211,7 @@ export function createBot(initial) {
   const columns = installColumns(bot, ChunkColumn);
   for (const event of ['blockUpdate', 'chunkColumnLoad', 'chunkColumnUnload'])
     bot.world.on(event, (...args) => bot.emit(event, ...args));
+  const blockEvents = installBlockEvents(bot);
   const coordinateEvent = event => typeof event === 'string' && /^blockUpdate:\(-?\d+, -?\d+, -?\d+\)$/.test(event);
   bot.on('newListener', (event, listener) => { if (coordinateEvent(event)) bot.world.on(event, listener); });
   bot.on('removeListener', (event, listener) => { if (coordinateEvent(event)) bot.world.off(event, listener); });
@@ -333,6 +336,7 @@ export function createBot(initial) {
       const slept = !!entity.isSleeping;
       const flew = !!entity.elytraFlying;
       const crouched = !!entity.crouching;
+      const droppedBefore = entity.metadata[8];
       const effectEvents = [];
       const elapsed = source.effectTick - effectTicks.get(entity);
       effectTicks.set(entity, source.effectTick);
@@ -383,6 +387,8 @@ export function createBot(initial) {
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
       if (metadataChanged) entityEvents.push(['entityUpdate', entity]);
+      if (entity.name === 'item' && entity.metadata[8]?.itemCount > 0
+        && !sameMetadata(droppedBefore, entity.metadata[8])) entityEvents.push(['itemDrop', entity]);
       entityEvents.push(...effectEvents);
       if (!flew && entity.elytraFlying) entityEvents.push(['entityElytraFlew', entity]);
       if ((!fresh && crouched !== !!entity.crouching) || fresh && entity.crouching)
@@ -407,6 +413,17 @@ export function createBot(initial) {
       // invent entities or erase passenger positions at the cache boundary.
       entity.passengers = (source.passengers ?? []).map(id => bot.entities[id]);
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
+      const vehicleId = source.vehicle ?? null;
+      const previous = vehicleLinks.get(entity);
+      const sameVehicle = previous?.id === vehicleId;
+      // Keep a known relationship across cache boundaries, without inventing
+      // a dismount when the native vehicle still exists outside observation.
+      const vehicle = entity.vehicle ?? (sameVehicle ? previous.entity : null);
+      if (previous?.entity && (!sameVehicle || vehicle !== previous.entity))
+        entityEvents.push(['entityDetach', entity, previous.entity]);
+      if (entity.vehicle && (!sameVehicle || entity.vehicle !== previous?.entity))
+        entityEvents.push(['entityAttach', entity, entity.vehicle]);
+      vehicleLinks.set(entity, { id: vehicleId, entity: vehicle });
     }
     bot.isSleeping = !!bot.entity.isSleeping;
     bot.fireworkRocketDuration = 0;
@@ -520,10 +537,15 @@ export function createBot(initial) {
       bot.world.emit(`blockUpdate:${position}`, before, after);
     }
     for (const position of blockEntityPositions.values()) bot.emit('blockEntityData', bot.blockAt(position));
+    for (const event of blockEvents.update(next.blockEvents)) bot.emit(...event);
     if (openedSign) bot.emit('signOpen', bot.blockAt(new Vec3(editor.position.x, editor.position.y, editor.position.z)));
     if (streamed) {
       for (const event of entityEvents) bot.emit(...event);
-      if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }
+      if (next.tick !== lastPhysicsTick) {
+        lastPhysicsTick = next.tick;
+        bot.emit('physicsTick');
+        bot.emit('physicTick');
+      }
     }
     for (const event of next.entityEvents ?? []) {
       const subject = bot.entities[event.subject], cause = event.cause == null ? undefined : bot.entities[event.cause];

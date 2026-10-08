@@ -24,6 +24,7 @@ const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./state.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./block-events.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chunks.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./movements-LICENSE.txt', import.meta.url), 'utf8'));
