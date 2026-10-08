@@ -5544,6 +5544,2082 @@
       "evidence": [
         "goal-library"
       ]
+    },
+    "mineflayer.Bot.supportFeature": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.supportFeature": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.acknowledgePlayerDigging": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.actionIdUsed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.allEntityEquipmentInOne": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.anvilNameLengthIsFifty": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.armAnimationBeforeUse": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.attachStackEntity": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.attackUsesOwnPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.attributeSnakeCase": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.biomesSentSeparately": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockMetadata": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHandAndFloatCursor": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHandAndIntCursor": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHeldItem": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasInsideBlock": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasIntCursor": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockSchemeIsFlat": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.blockStateId": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.booksUseStoredEnchantments": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.chainedChatWithHashing": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.chatCommandsQueuedToMainThread": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.chatGlobalIndexAndChecksum": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.chatPacketsUseNbtComponents": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.chatTypeIsHolder": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.clientUpdateBookIdWhenSign": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.clientboundChatHasSender": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.clientsideChatFormatting": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.consolidatedEntitySpawnPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.creativeSleepNearMobs": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.customChannelIdentifier": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.customChannelMCPrefixed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.difficultySentSeparately": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.dimensionDataInCodec": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.dimensionDataIsAvailable": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAString": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAWorld": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAnInt": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.doesntHaveChestType": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.doesntHaveOffHandSlot": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.doublePosition": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.editBookIsPluginChannel": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.editBookPacketUsesNbt": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.effectAreMinecraftPrefixed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.effectAreNotPrefixed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.effectNamesMatchRegistryName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.enchantmentsComponentIsFlat": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.enderCrystalNameEndsInErNoCaps": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.enderCrystalNameNoCapsWithUnderscore": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityCamelCase": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityMCPrefixed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityMetadataHasLong": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityMetadataSentSeparately": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityNameLowerCaseNoUnderscore": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityNameUpperCaseNoUnderscore": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entitySnakeCase": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityTeleportHasRelativeFlags": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.entityVelocityIsLpVec3": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.explicitMaxDurability": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataOptVarInt8": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataOptVarInt9": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataVarInt7": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fireworkNamePlural": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fireworkNameSingular": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fishingBiteDelayMaxTicks": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fishingBobberCorrectlyNamed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fixedPointDelta": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fixedPointDelta128": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.fixedPointPosition": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.furnaceNbtUsesSnakeCase": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.gameRuleUsesResourceLocation": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasAttackCooldown": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasBundlePacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasConfigurationState": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasDataCommand": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasEditBookPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasElytraFlying": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasExecuteCommand": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.hasItemCommand": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.indexesVillagerRecipes": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemLoreIsAString": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemSerializationAllowsPresent": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemSerializationUsesBlockId": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemSerializationWillOnlyUsePresent": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemsAreAlsoBlocks": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemsAreNotBlocks": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.itemsWithComponents": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.lessCharsInChat": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.lightSentSeparately": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.mcDataHasEntityMetadata": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.metadataIxOfItem": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.mobSpawner": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.multiBlockChangeHasTrustEdges": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.multiSidedSigns": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.multiTypeSigns": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.nbtNameForEnchant": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.nbtOnMetadata": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.netherUpdateInventoryWindows": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.newLightingDataFormat": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.newPlayerInputPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.noAckOnCreateSetSlotPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.noteBlockNameIsNoteBlock": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.oneBlockForSeveralVariations": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.playerInfoActionIsBitfield": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.playsoundUsesResourceLocation": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.positionPacketHasBitflags": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.positionUpdateSentEveryTick": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.profileKeySignatureV2": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.quickMoveClickSendsEmptyItem": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.registryDataIsMandatory": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.removedNamedSoundEffectPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.replaceItemSlotIsPrefixed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.resourcePackUsesHash": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.resourcePackUsesUUID": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.respawnIsActionId": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.respawnIsPayload": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.saveDurabilityAsDamage": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.segmentedRegistryCodecData": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.selectingTradeMovesItems": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.sendStringifiedSignText": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.sendsClientTickEndPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.sendsPlayerLoadedPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.seperateSignedChatCommandPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.setBlockUsesMetadataNumber": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.setPassengerStackEntity": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.setSlotAsTransaction": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.shieldSlot": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.signatureEncryption": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.signedChat": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.sneakUsesEntityAction": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawnEggsHaveSpawnedEntityInName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawnEggsUseEntityTagInNbt": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawnEggsUseInternalIdInNbt": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawnPositionIsGlobal": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawnRespawnWorldDataField": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.spawner": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.stateIdUsed": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.tabCompleteHasAToolTip": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.tabCompleteHasNoToolTip": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.tallWorld": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.teamUsesChatComponents": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.teamUsesScoreboard": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.teleportUsesOwnPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.teleportUsesPositionPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.theFlattening": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.theShulkerBoxes": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.titleUsesLegacyPackets": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.titleUsesNewPackets": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.transactionPacketExists": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.typeOfValueForEnchantLevel": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.unifiedPlayerAndEntitySpawnPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.unloadChunkByEmptyChunk": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.unloadChunkDirect": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.updateViewPosition": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.updatedParticlesPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useChatSessions": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useEntityHasLocation": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useItemWithBlockPlace": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useItemWithOwnPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useMCItemName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useMCTrList": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.useMCTrSel": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesAdvCdm": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesAdvCmd": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesBlockStates": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesLoginPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesMultiblock3DChunkCoords": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesMultiblockSingleLong": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesOldSoundPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usesPalettedChunks": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.usetraderlist": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.village&pillageInventoryWindows": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.SupportsFeature.whereDurabilityIsSerialized": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 version-query return contract, compared exhaustively against pinned data in actual QuickJS adapter. True means a version feature exists, not that this port implements its gameplay. Native hydration/permissions remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/version-features.mjs"
+      ],
+      "evidence": [
+        "version-features-library"
+      ],
+      "applicability": "applicable"
     }
   },
   "schemaVersion": 2,
@@ -7424,6 +9500,193 @@
         "sha256": "e065c082d3043a311e4fd54a9c17eff7d099fcbe4b5c72ea5f750c225a4a9e12"
       },
       "limitations": "No native movement/arrival, Pathfinder consumption, world raycasts or live Entity GoalFollow hydration. Corrected GoalBreakBlock excluded. Initial harness bundle resolution failed before execution; resolveDir corrected."
+    },
+    "version-features-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/version-features.mjs",
+      "subjects": [
+        "mineflayer.Bot.supportFeature",
+        "minecraft-data.MinecraftData.IndexedData.supportFeature",
+        "minecraft-data.MinecraftData.SupportsFeature.acknowledgePlayerDigging",
+        "minecraft-data.MinecraftData.SupportsFeature.actionIdUsed",
+        "minecraft-data.MinecraftData.SupportsFeature.allEntityEquipmentInOne",
+        "minecraft-data.MinecraftData.SupportsFeature.anvilNameLengthIsFifty",
+        "minecraft-data.MinecraftData.SupportsFeature.armAnimationBeforeUse",
+        "minecraft-data.MinecraftData.SupportsFeature.attachStackEntity",
+        "minecraft-data.MinecraftData.SupportsFeature.attackUsesOwnPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.attributeSnakeCase",
+        "minecraft-data.MinecraftData.SupportsFeature.biomesSentSeparately",
+        "minecraft-data.MinecraftData.SupportsFeature.blockMetadata",
+        "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHandAndFloatCursor",
+        "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHandAndIntCursor",
+        "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasHeldItem",
+        "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasInsideBlock",
+        "minecraft-data.MinecraftData.SupportsFeature.blockPlaceHasIntCursor",
+        "minecraft-data.MinecraftData.SupportsFeature.blockSchemeIsFlat",
+        "minecraft-data.MinecraftData.SupportsFeature.blockStateId",
+        "minecraft-data.MinecraftData.SupportsFeature.booksUseStoredEnchantments",
+        "minecraft-data.MinecraftData.SupportsFeature.chainedChatWithHashing",
+        "minecraft-data.MinecraftData.SupportsFeature.chatCommandsQueuedToMainThread",
+        "minecraft-data.MinecraftData.SupportsFeature.chatGlobalIndexAndChecksum",
+        "minecraft-data.MinecraftData.SupportsFeature.chatPacketsUseNbtComponents",
+        "minecraft-data.MinecraftData.SupportsFeature.chatTypeIsHolder",
+        "minecraft-data.MinecraftData.SupportsFeature.clientUpdateBookIdWhenSign",
+        "minecraft-data.MinecraftData.SupportsFeature.clientboundChatHasSender",
+        "minecraft-data.MinecraftData.SupportsFeature.clientsideChatFormatting",
+        "minecraft-data.MinecraftData.SupportsFeature.consolidatedEntitySpawnPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.creativeSleepNearMobs",
+        "minecraft-data.MinecraftData.SupportsFeature.customChannelIdentifier",
+        "minecraft-data.MinecraftData.SupportsFeature.customChannelMCPrefixed",
+        "minecraft-data.MinecraftData.SupportsFeature.difficultySentSeparately",
+        "minecraft-data.MinecraftData.SupportsFeature.dimensionDataInCodec",
+        "minecraft-data.MinecraftData.SupportsFeature.dimensionDataIsAvailable",
+        "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAString",
+        "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAWorld",
+        "minecraft-data.MinecraftData.SupportsFeature.dimensionIsAnInt",
+        "minecraft-data.MinecraftData.SupportsFeature.doesntHaveChestType",
+        "minecraft-data.MinecraftData.SupportsFeature.doesntHaveOffHandSlot",
+        "minecraft-data.MinecraftData.SupportsFeature.doublePosition",
+        "minecraft-data.MinecraftData.SupportsFeature.editBookIsPluginChannel",
+        "minecraft-data.MinecraftData.SupportsFeature.editBookPacketUsesNbt",
+        "minecraft-data.MinecraftData.SupportsFeature.effectAreMinecraftPrefixed",
+        "minecraft-data.MinecraftData.SupportsFeature.effectAreNotPrefixed",
+        "minecraft-data.MinecraftData.SupportsFeature.effectNamesMatchRegistryName",
+        "minecraft-data.MinecraftData.SupportsFeature.enchantmentsComponentIsFlat",
+        "minecraft-data.MinecraftData.SupportsFeature.enderCrystalNameEndsInErNoCaps",
+        "minecraft-data.MinecraftData.SupportsFeature.enderCrystalNameNoCapsWithUnderscore",
+        "minecraft-data.MinecraftData.SupportsFeature.entityCamelCase",
+        "minecraft-data.MinecraftData.SupportsFeature.entityMCPrefixed",
+        "minecraft-data.MinecraftData.SupportsFeature.entityMetadataHasLong",
+        "minecraft-data.MinecraftData.SupportsFeature.entityMetadataSentSeparately",
+        "minecraft-data.MinecraftData.SupportsFeature.entityNameLowerCaseNoUnderscore",
+        "minecraft-data.MinecraftData.SupportsFeature.entityNameUpperCaseNoUnderscore",
+        "minecraft-data.MinecraftData.SupportsFeature.entitySnakeCase",
+        "minecraft-data.MinecraftData.SupportsFeature.entityTeleportHasRelativeFlags",
+        "minecraft-data.MinecraftData.SupportsFeature.entityVelocityIsLpVec3",
+        "minecraft-data.MinecraftData.SupportsFeature.explicitMaxDurability",
+        "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataOptVarInt8",
+        "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataOptVarInt9",
+        "minecraft-data.MinecraftData.SupportsFeature.fireworkMetadataVarInt7",
+        "minecraft-data.MinecraftData.SupportsFeature.fireworkNamePlural",
+        "minecraft-data.MinecraftData.SupportsFeature.fireworkNameSingular",
+        "minecraft-data.MinecraftData.SupportsFeature.fishingBiteDelayMaxTicks",
+        "minecraft-data.MinecraftData.SupportsFeature.fishingBobberCorrectlyNamed",
+        "minecraft-data.MinecraftData.SupportsFeature.fixedPointDelta",
+        "minecraft-data.MinecraftData.SupportsFeature.fixedPointDelta128",
+        "minecraft-data.MinecraftData.SupportsFeature.fixedPointPosition",
+        "minecraft-data.MinecraftData.SupportsFeature.furnaceNbtUsesSnakeCase",
+        "minecraft-data.MinecraftData.SupportsFeature.gameRuleUsesResourceLocation",
+        "minecraft-data.MinecraftData.SupportsFeature.hasAttackCooldown",
+        "minecraft-data.MinecraftData.SupportsFeature.hasBundlePacket",
+        "minecraft-data.MinecraftData.SupportsFeature.hasConfigurationState",
+        "minecraft-data.MinecraftData.SupportsFeature.hasDataCommand",
+        "minecraft-data.MinecraftData.SupportsFeature.hasEditBookPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.hasElytraFlying",
+        "minecraft-data.MinecraftData.SupportsFeature.hasExecuteCommand",
+        "minecraft-data.MinecraftData.SupportsFeature.hasItemCommand",
+        "minecraft-data.MinecraftData.SupportsFeature.indexesVillagerRecipes",
+        "minecraft-data.MinecraftData.SupportsFeature.itemLoreIsAString",
+        "minecraft-data.MinecraftData.SupportsFeature.itemSerializationAllowsPresent",
+        "minecraft-data.MinecraftData.SupportsFeature.itemSerializationUsesBlockId",
+        "minecraft-data.MinecraftData.SupportsFeature.itemSerializationWillOnlyUsePresent",
+        "minecraft-data.MinecraftData.SupportsFeature.itemsAreAlsoBlocks",
+        "minecraft-data.MinecraftData.SupportsFeature.itemsAreNotBlocks",
+        "minecraft-data.MinecraftData.SupportsFeature.itemsWithComponents",
+        "minecraft-data.MinecraftData.SupportsFeature.lessCharsInChat",
+        "minecraft-data.MinecraftData.SupportsFeature.lightSentSeparately",
+        "minecraft-data.MinecraftData.SupportsFeature.mcDataHasEntityMetadata",
+        "minecraft-data.MinecraftData.SupportsFeature.metadataIxOfItem",
+        "minecraft-data.MinecraftData.SupportsFeature.mobSpawner",
+        "minecraft-data.MinecraftData.SupportsFeature.multiBlockChangeHasTrustEdges",
+        "minecraft-data.MinecraftData.SupportsFeature.multiSidedSigns",
+        "minecraft-data.MinecraftData.SupportsFeature.multiTypeSigns",
+        "minecraft-data.MinecraftData.SupportsFeature.nbtNameForEnchant",
+        "minecraft-data.MinecraftData.SupportsFeature.nbtOnMetadata",
+        "minecraft-data.MinecraftData.SupportsFeature.netherUpdateInventoryWindows",
+        "minecraft-data.MinecraftData.SupportsFeature.newLightingDataFormat",
+        "minecraft-data.MinecraftData.SupportsFeature.newPlayerInputPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.noAckOnCreateSetSlotPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.noteBlockNameIsNoteBlock",
+        "minecraft-data.MinecraftData.SupportsFeature.oneBlockForSeveralVariations",
+        "minecraft-data.MinecraftData.SupportsFeature.playerInfoActionIsBitfield",
+        "minecraft-data.MinecraftData.SupportsFeature.playsoundUsesResourceLocation",
+        "minecraft-data.MinecraftData.SupportsFeature.positionPacketHasBitflags",
+        "minecraft-data.MinecraftData.SupportsFeature.positionUpdateSentEveryTick",
+        "minecraft-data.MinecraftData.SupportsFeature.profileKeySignatureV2",
+        "minecraft-data.MinecraftData.SupportsFeature.quickMoveClickSendsEmptyItem",
+        "minecraft-data.MinecraftData.SupportsFeature.registryDataIsMandatory",
+        "minecraft-data.MinecraftData.SupportsFeature.removedNamedSoundEffectPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.replaceItemSlotIsPrefixed",
+        "minecraft-data.MinecraftData.SupportsFeature.resourcePackUsesHash",
+        "minecraft-data.MinecraftData.SupportsFeature.resourcePackUsesUUID",
+        "minecraft-data.MinecraftData.SupportsFeature.respawnIsActionId",
+        "minecraft-data.MinecraftData.SupportsFeature.respawnIsPayload",
+        "minecraft-data.MinecraftData.SupportsFeature.saveDurabilityAsDamage",
+        "minecraft-data.MinecraftData.SupportsFeature.segmentedRegistryCodecData",
+        "minecraft-data.MinecraftData.SupportsFeature.selectingTradeMovesItems",
+        "minecraft-data.MinecraftData.SupportsFeature.sendStringifiedSignText",
+        "minecraft-data.MinecraftData.SupportsFeature.sendsClientTickEndPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.sendsPlayerLoadedPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.seperateSignedChatCommandPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.setBlockUsesMetadataNumber",
+        "minecraft-data.MinecraftData.SupportsFeature.setPassengerStackEntity",
+        "minecraft-data.MinecraftData.SupportsFeature.setSlotAsTransaction",
+        "minecraft-data.MinecraftData.SupportsFeature.shieldSlot",
+        "minecraft-data.MinecraftData.SupportsFeature.signatureEncryption",
+        "minecraft-data.MinecraftData.SupportsFeature.signedChat",
+        "minecraft-data.MinecraftData.SupportsFeature.sneakUsesEntityAction",
+        "minecraft-data.MinecraftData.SupportsFeature.spawnEggsHaveSpawnedEntityInName",
+        "minecraft-data.MinecraftData.SupportsFeature.spawnEggsUseEntityTagInNbt",
+        "minecraft-data.MinecraftData.SupportsFeature.spawnEggsUseInternalIdInNbt",
+        "minecraft-data.MinecraftData.SupportsFeature.spawnPositionIsGlobal",
+        "minecraft-data.MinecraftData.SupportsFeature.spawnRespawnWorldDataField",
+        "minecraft-data.MinecraftData.SupportsFeature.spawner",
+        "minecraft-data.MinecraftData.SupportsFeature.stateIdUsed",
+        "minecraft-data.MinecraftData.SupportsFeature.tabCompleteHasAToolTip",
+        "minecraft-data.MinecraftData.SupportsFeature.tabCompleteHasNoToolTip",
+        "minecraft-data.MinecraftData.SupportsFeature.tallWorld",
+        "minecraft-data.MinecraftData.SupportsFeature.teamUsesChatComponents",
+        "minecraft-data.MinecraftData.SupportsFeature.teamUsesScoreboard",
+        "minecraft-data.MinecraftData.SupportsFeature.teleportUsesOwnPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.teleportUsesPositionPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.theFlattening",
+        "minecraft-data.MinecraftData.SupportsFeature.theShulkerBoxes",
+        "minecraft-data.MinecraftData.SupportsFeature.titleUsesLegacyPackets",
+        "minecraft-data.MinecraftData.SupportsFeature.titleUsesNewPackets",
+        "minecraft-data.MinecraftData.SupportsFeature.transactionPacketExists",
+        "minecraft-data.MinecraftData.SupportsFeature.typeOfValueForEnchantLevel",
+        "minecraft-data.MinecraftData.SupportsFeature.unifiedPlayerAndEntitySpawnPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.unloadChunkByEmptyChunk",
+        "minecraft-data.MinecraftData.SupportsFeature.unloadChunkDirect",
+        "minecraft-data.MinecraftData.SupportsFeature.updateViewPosition",
+        "minecraft-data.MinecraftData.SupportsFeature.updatedParticlesPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.useChatSessions",
+        "minecraft-data.MinecraftData.SupportsFeature.useEntityHasLocation",
+        "minecraft-data.MinecraftData.SupportsFeature.useItemWithBlockPlace",
+        "minecraft-data.MinecraftData.SupportsFeature.useItemWithOwnPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.useMCItemName",
+        "minecraft-data.MinecraftData.SupportsFeature.useMCTrList",
+        "minecraft-data.MinecraftData.SupportsFeature.useMCTrSel",
+        "minecraft-data.MinecraftData.SupportsFeature.usesAdvCdm",
+        "minecraft-data.MinecraftData.SupportsFeature.usesAdvCmd",
+        "minecraft-data.MinecraftData.SupportsFeature.usesBlockStates",
+        "minecraft-data.MinecraftData.SupportsFeature.usesLoginPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.usesMultiblock3DChunkCoords",
+        "minecraft-data.MinecraftData.SupportsFeature.usesMultiblockSingleLong",
+        "minecraft-data.MinecraftData.SupportsFeature.usesOldSoundPacket",
+        "minecraft-data.MinecraftData.SupportsFeature.usesPalettedChunks",
+        "minecraft-data.MinecraftData.SupportsFeature.usetraderlist",
+        "minecraft-data.MinecraftData.SupportsFeature.village&pillageInventoryWindows",
+        "minecraft-data.MinecraftData.SupportsFeature.whereDurabilityIsSerialized"
+      ],
+      "scope": "All 171 PC1.21.1 version feature queries, including numeric/string values, actual installState browser bundle in QuickJS and source-checked Bot/registry wiring.",
+      "result": "passed",
+      "sourceSha256": "4553dadbcc7b0caca8e122185ba703ca5669e1124b2211ed769825785aaaffb3",
+      "report": {
+        "path": "run/mineflayer-reference/version-features.json",
+        "sha256": "eda7b1b9f38c91583c045a7ff1ec6799a8292577600175fc5bac3d3f2379db14"
+      },
+      "limitations": "Version queries only; no native feature implementation, state hydration, world, or packaged runtime initialization claim. Inherited prototype names explicitly return false rather than upstream prototype values."
     }
   },
   "reviewNotes": {

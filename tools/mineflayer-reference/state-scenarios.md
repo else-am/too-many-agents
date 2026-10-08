@@ -75,3 +75,16 @@ Additional native game-state check: retain bot.game across physics ticks and
 confirm actual difficulty, hardcore/flat-world flags, server view distance and
 max players. Native dimension keys lose only the minecraft: prefix, as upstream.
 Changing difficulty must update observed state; no login/respawn is fabricated.
+
+## Focused version-feature differential
+
+Run the existing feature-table criterion independently of native state updates:
+compare every name in pinned PC features.json through the actual browser-bundled
+installState function in QuickJS (64MiB/512KiB), including nonboolean values and
+unknown/prototype keys. Retain pin/source/bundle hashes and complete results.
+Verify current build table construction and Bot/registry wiring at source; this
+is not packaged runtime initialization or native gameplay evidence. A copied
+feature table must not change when its caller later changes the source object.
+The pinned function accidentally returns Object.prototype members for inherited
+names; explicit false for those names remains a documented adapter correction.
+Do not infer gameplay support from a true version feature.

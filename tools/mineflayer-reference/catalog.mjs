@@ -688,7 +688,56 @@ const pureGoalContracts = new Set(Object.entries({
   GoalCompositeAll: ['constructor', 'goals', 'push', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
   GoalInvert: ['constructor', 'goal', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
 }).flatMap(([name, members]) => members.map(member => `mineflayer-pathfinder.goals.${name}.${member}`)));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts]);
+// These are pinned PC version-query return contracts, not native gameplay support.
+const pureFeatureContracts = new Set([
+  'mineflayer.Bot.supportFeature', 'minecraft-data.MinecraftData.IndexedData.supportFeature',
+  ...[
+    "acknowledgePlayerDigging", "actionIdUsed", "allEntityEquipmentInOne", "anvilNameLengthIsFifty",
+    "armAnimationBeforeUse", "attachStackEntity", "attackUsesOwnPacket", "attributeSnakeCase",
+    "biomesSentSeparately", "blockMetadata", "blockPlaceHasHandAndFloatCursor", "blockPlaceHasHandAndIntCursor",
+    "blockPlaceHasHeldItem", "blockPlaceHasInsideBlock", "blockPlaceHasIntCursor", "blockSchemeIsFlat",
+    "blockStateId", "booksUseStoredEnchantments", "chainedChatWithHashing", "chatCommandsQueuedToMainThread",
+    "chatGlobalIndexAndChecksum", "chatPacketsUseNbtComponents", "chatTypeIsHolder", "clientUpdateBookIdWhenSign",
+    "clientboundChatHasSender", "clientsideChatFormatting", "consolidatedEntitySpawnPacket", "creativeSleepNearMobs",
+    "customChannelIdentifier", "customChannelMCPrefixed", "difficultySentSeparately", "dimensionDataInCodec",
+    "dimensionDataIsAvailable", "dimensionIsAString", "dimensionIsAWorld", "dimensionIsAnInt",
+    "doesntHaveChestType", "doesntHaveOffHandSlot", "doublePosition", "editBookIsPluginChannel",
+    "editBookPacketUsesNbt", "effectAreMinecraftPrefixed", "effectAreNotPrefixed", "effectNamesMatchRegistryName",
+    "enchantmentsComponentIsFlat", "enderCrystalNameEndsInErNoCaps", "enderCrystalNameNoCapsWithUnderscore", "entityCamelCase",
+    "entityMCPrefixed", "entityMetadataHasLong", "entityMetadataSentSeparately", "entityNameLowerCaseNoUnderscore",
+    "entityNameUpperCaseNoUnderscore", "entitySnakeCase", "entityTeleportHasRelativeFlags", "entityVelocityIsLpVec3",
+    "explicitMaxDurability", "fireworkMetadataOptVarInt8", "fireworkMetadataOptVarInt9", "fireworkMetadataVarInt7",
+    "fireworkNamePlural", "fireworkNameSingular", "fishingBiteDelayMaxTicks", "fishingBobberCorrectlyNamed",
+    "fixedPointDelta", "fixedPointDelta128", "fixedPointPosition", "furnaceNbtUsesSnakeCase",
+    "gameRuleUsesResourceLocation", "hasAttackCooldown", "hasBundlePacket", "hasConfigurationState",
+    "hasDataCommand", "hasEditBookPacket", "hasElytraFlying", "hasExecuteCommand",
+    "hasItemCommand", "indexesVillagerRecipes", "itemLoreIsAString", "itemSerializationAllowsPresent",
+    "itemSerializationUsesBlockId", "itemSerializationWillOnlyUsePresent", "itemsAreAlsoBlocks", "itemsAreNotBlocks",
+    "itemsWithComponents", "lessCharsInChat", "lightSentSeparately", "mcDataHasEntityMetadata",
+    "metadataIxOfItem", "mobSpawner", "multiBlockChangeHasTrustEdges", "multiSidedSigns",
+    "multiTypeSigns", "nbtNameForEnchant", "nbtOnMetadata", "netherUpdateInventoryWindows",
+    "newLightingDataFormat", "newPlayerInputPacket", "noAckOnCreateSetSlotPacket", "noteBlockNameIsNoteBlock",
+    "oneBlockForSeveralVariations", "playerInfoActionIsBitfield", "playsoundUsesResourceLocation", "positionPacketHasBitflags",
+    "positionUpdateSentEveryTick", "profileKeySignatureV2", "quickMoveClickSendsEmptyItem", "registryDataIsMandatory",
+    "removedNamedSoundEffectPacket", "replaceItemSlotIsPrefixed", "resourcePackUsesHash", "resourcePackUsesUUID",
+    "respawnIsActionId", "respawnIsPayload", "saveDurabilityAsDamage", "segmentedRegistryCodecData",
+    "selectingTradeMovesItems", "sendStringifiedSignText", "sendsClientTickEndPacket", "sendsPlayerLoadedPacket",
+    "seperateSignedChatCommandPacket", "setBlockUsesMetadataNumber", "setPassengerStackEntity", "setSlotAsTransaction",
+    "shieldSlot", "signatureEncryption", "signedChat", "sneakUsesEntityAction",
+    "spawnEggsHaveSpawnedEntityInName", "spawnEggsUseEntityTagInNbt", "spawnEggsUseInternalIdInNbt", "spawnPositionIsGlobal",
+    "spawnRespawnWorldDataField", "spawner", "stateIdUsed", "tabCompleteHasAToolTip",
+    "tabCompleteHasNoToolTip", "tallWorld", "teamUsesChatComponents", "teamUsesScoreboard",
+    "teleportUsesOwnPacket", "teleportUsesPositionPacket", "theFlattening", "theShulkerBoxes",
+    "titleUsesLegacyPackets", "titleUsesNewPackets", "transactionPacketExists", "typeOfValueForEnchantLevel",
+    "unifiedPlayerAndEntitySpawnPacket", "unloadChunkByEmptyChunk", "unloadChunkDirect", "updateViewPosition",
+    "updatedParticlesPacket", "useChatSessions", "useEntityHasLocation", "useItemWithBlockPlace",
+    "useItemWithOwnPacket", "useMCItemName", "useMCTrList", "useMCTrSel",
+    "usesAdvCdm", "usesAdvCmd", "usesBlockStates", "usesLoginPacket",
+    "usesMultiblock3DChunkCoords", "usesMultiblockSingleLong", "usesOldSoundPacket", "usesPalettedChunks",
+    "usetraderlist", "village&pillageInventoryWindows", "whereDurabilityIsSerialized",
+  ].map(name => `minecraft-data.MinecraftData.SupportsFeature.${name}`)
+]);
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts, ...pureFeatureContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
