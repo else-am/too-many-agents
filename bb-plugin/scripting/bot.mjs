@@ -191,7 +191,8 @@ export function createBot(initial) {
   const scoreboards = installScoreboards(bot, ChatMessage);
   const bossBars = installBossBars(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
-  bot.world = createWorldView(position => bot.blockAt(position), createColumnWorld());
+  // World reads share its column cache, including explicit guest unloads.
+  bot.world = createWorldView(position => columns.getBlock(position), createColumnWorld());
   const columns = installColumns(bot, ChunkColumn);
   for (const event of ['blockUpdate', 'chunkColumnLoad', 'chunkColumnUnload'])
     bot.world.on(event, (...args) => bot.emit(event, ...args));

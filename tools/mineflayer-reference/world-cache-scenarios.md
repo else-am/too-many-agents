@@ -29,7 +29,13 @@ Focused scenarios before the port:
   separate column/native scenarios, not established by this cache-only check.
 
 Do not rerun earlier gameplay suites for this guest cache port. Native checks
-remain blocked by the other connected game and must use a rebuilt artifact.
+must use an explicitly assigned rebuilt artifact.
+
+Public World reads now use that World's column cache. An explicit unload must
+leave getBlock and numeric getters unknown even inside the last local snapshot;
+bot.blockAt retains its separate native partial-observation fallback. This is a
+guest cache correction, not a native terrain unload. The source audit found the
+previous lookup routing through bot.blockAt could resurrect an unloaded cell.
 
 Native-frame/storage integration contract (before this follow-up):
 - A guest edits a remote column, queues its in-memory save, and receives a native
