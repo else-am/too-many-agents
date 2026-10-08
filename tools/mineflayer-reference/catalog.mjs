@@ -674,7 +674,21 @@ const pureWindowContracts = new Set([
   "dragClick",
   "doubleClick"
 ].map(name => `prismarine-windows.Window.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts]);
+// Local predicates imported unchanged from the pinned goals module. These do not
+// establish Pathfinder consumption, native arrivals or entity/world hydration.
+const pureGoalContracts = new Set(Object.entries({
+  Goal: ['heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalBlock: ['constructor', 'x', 'y', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalNear: ['constructor', 'x', 'y', 'z', 'rangeSq', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalXZ: ['constructor', 'x', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalNearXZ: ['constructor', 'x', 'z', 'rangeSq', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalY: ['constructor', 'y', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalGetToBlock: ['constructor', 'x', 'y', 'z', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalCompositeAny: ['constructor', 'goals', 'push', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalCompositeAll: ['constructor', 'goals', 'push', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+  GoalInvert: ['constructor', 'goal', 'heuristic', 'isEnd', 'hasChanged', 'isValid'],
+}).flatMap(([name, members]) => members.map(member => `mineflayer-pathfinder.goals.${name}.${member}`)));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

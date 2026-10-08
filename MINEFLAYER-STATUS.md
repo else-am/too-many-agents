@@ -207,6 +207,12 @@ The [catalog guide](tools/mineflayer-reference/README.md) and coverage.json reta
 
 ### Latest locomotion addition
 
+Local coordinate/composite Goal contracts were reconciled separately: ten pinned
+classes passed Node/browser-QuickJS comparison and independent geometric checks.
+Seventy reviewed member keys (61 canonical records) now have pure-library
+evidence. This does not promote Pathfinder execution, dynamic entity hydration,
+world-raycast goals or native arrival/cancellation. [Evidence](</Users/scott/.bb/thread-storage/goal-library/goal-library.json>).
+
 Exact no-intent Drowned water execution is integrated at `96c2039`: native controller/fluid impulses and one native travel, bounded pure braking lookahead, selected-cell body/eye water checks and retained move fences. No synthetic velocity, swim intent or navigation state. True-intent swimming and surface/dry transitions remain pending. Source/compile checks do not establish native convergence; see [preauthored scenarios](tools/mineflayer-reference/drowned-water-route-scenarios.md).
 
 Tadpole selected-edge execution is integrated at `d2209b4`: exact native SmoothSwimmingMoveControl parameters, one scoped activity query, real full-XYZ input/travel and unchanged native age/conversion. Old-body removal ends its lease; no automatic replacement binding. Full build passed, but packaged linkage, movement and conversion/cancel behavior remain unrun; see [Tadpole scenarios](tools/mineflayer-reference/tadpole-route-scenarios.md).

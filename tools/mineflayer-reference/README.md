@@ -184,6 +184,14 @@ correctly reports unverified evidence. No live tests are run by catalog generati
 
 ## Recorded live reference outcomes
 
+The local Goal library comparison is separate from native navigation evidence.
+`goal-library.mjs` checks ten coordinate/composite classes in browser-bundled
+QuickJS against the pinned Node implementation, with independent geometric
+assertions. Seventy explicitly listed member keys (61 canonical records) use
+this pure-library contract. GoalFollow hydration, world-raycast goals, the
+corrected GoalBreakBlock wrapper and native route consumption remain separate.
+See [prepared cases](goal-library-scenarios.md).
+
 The shared gather procedure passed on unmodified pinned Mineflayer/Pathfinder and the isolated vanilla 1.21.1 server: ore air, diamond1, pickaxe held; server NBT/block checks independently confirmed it. The identical historical native script produced the same result. The first harness inventory selector missed hotbar slots and was corrected to inspect Inventory NBT.
 
 The exact previously native-tested wall script completed all eight server placements and consumed all stone, but its immediate final inventory assertion failed in Mineflayer; reopening the saved reference world confirmed the blocks and consumption. The gather/craft script also failed its final assertion; saved player data contained axe damage2 and planks7, not the native-tested planks4/sticks8 outcome. These are recorded failed reference procedures, not port regressions or passes. No failed phase was replayed for a better result. Startup also logged an upstream ArmorTrimMaterial PartialReadError; no library schema was silently patched.

@@ -4704,6 +4704,846 @@
       "evidence": [
         "chat-library"
       ]
+    },
+    "mineflayer-pathfinder.goals.Goal.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.Goal.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.Goal.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.Goal.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.y": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalBlock.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.goals": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAll.push": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.goals": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalCompositeAny.push": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.y": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalGetToBlock.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.goal": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalInvert.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.rangeSq": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.y": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNear.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.rangeSq": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalNearXZ.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalXZ.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.hasChanged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.heuristic": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.isEnd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.isValid": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
+    },
+    "mineflayer-pathfinder.goals.GoalY.y": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local pinned Goal fields/predicates and composition only; native route consumption, arrivals, world/entity hydration and cancellation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/goal-library.mjs"
+      ],
+      "evidence": [
+        "goal-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -6500,6 +7340,90 @@
         ]
       },
       "limitations": "One explicit adaptation to historical native performance source: record immediate inventory then await bounded convergence. Immediate stone1 became0 after one physics tick. Original exact-source failure retained; no native rerun or promise-time equality claim. Existing ArmorTrimMaterial and setup movement warnings retained."
+    },
+    "goal-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/goal-library.mjs",
+      "subjects": [
+        "mineflayer-pathfinder.goals.Goal.hasChanged",
+        "mineflayer-pathfinder.goals.Goal.heuristic",
+        "mineflayer-pathfinder.goals.Goal.isEnd",
+        "mineflayer-pathfinder.goals.Goal.isValid",
+        "mineflayer-pathfinder.goals.GoalBlock.constructor",
+        "mineflayer-pathfinder.goals.GoalBlock.hasChanged",
+        "mineflayer-pathfinder.goals.GoalBlock.heuristic",
+        "mineflayer-pathfinder.goals.GoalBlock.isEnd",
+        "mineflayer-pathfinder.goals.GoalBlock.isValid",
+        "mineflayer-pathfinder.goals.GoalBlock.x",
+        "mineflayer-pathfinder.goals.GoalBlock.y",
+        "mineflayer-pathfinder.goals.GoalBlock.z",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.constructor",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.goals",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.hasChanged",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.heuristic",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.isEnd",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.isValid",
+        "mineflayer-pathfinder.goals.GoalCompositeAll.push",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.constructor",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.goals",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.hasChanged",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.heuristic",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.isEnd",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.isValid",
+        "mineflayer-pathfinder.goals.GoalCompositeAny.push",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.constructor",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.hasChanged",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.heuristic",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.isEnd",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.isValid",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.x",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.y",
+        "mineflayer-pathfinder.goals.GoalGetToBlock.z",
+        "mineflayer-pathfinder.goals.GoalInvert.constructor",
+        "mineflayer-pathfinder.goals.GoalInvert.goal",
+        "mineflayer-pathfinder.goals.GoalInvert.hasChanged",
+        "mineflayer-pathfinder.goals.GoalInvert.heuristic",
+        "mineflayer-pathfinder.goals.GoalInvert.isEnd",
+        "mineflayer-pathfinder.goals.GoalInvert.isValid",
+        "mineflayer-pathfinder.goals.GoalNear.constructor",
+        "mineflayer-pathfinder.goals.GoalNear.hasChanged",
+        "mineflayer-pathfinder.goals.GoalNear.heuristic",
+        "mineflayer-pathfinder.goals.GoalNear.isEnd",
+        "mineflayer-pathfinder.goals.GoalNear.isValid",
+        "mineflayer-pathfinder.goals.GoalNear.rangeSq",
+        "mineflayer-pathfinder.goals.GoalNear.x",
+        "mineflayer-pathfinder.goals.GoalNear.y",
+        "mineflayer-pathfinder.goals.GoalNear.z",
+        "mineflayer-pathfinder.goals.GoalNearXZ.constructor",
+        "mineflayer-pathfinder.goals.GoalNearXZ.hasChanged",
+        "mineflayer-pathfinder.goals.GoalNearXZ.heuristic",
+        "mineflayer-pathfinder.goals.GoalNearXZ.isEnd",
+        "mineflayer-pathfinder.goals.GoalNearXZ.isValid",
+        "mineflayer-pathfinder.goals.GoalNearXZ.rangeSq",
+        "mineflayer-pathfinder.goals.GoalNearXZ.x",
+        "mineflayer-pathfinder.goals.GoalNearXZ.z",
+        "mineflayer-pathfinder.goals.GoalXZ.constructor",
+        "mineflayer-pathfinder.goals.GoalXZ.hasChanged",
+        "mineflayer-pathfinder.goals.GoalXZ.heuristic",
+        "mineflayer-pathfinder.goals.GoalXZ.isEnd",
+        "mineflayer-pathfinder.goals.GoalXZ.isValid",
+        "mineflayer-pathfinder.goals.GoalXZ.x",
+        "mineflayer-pathfinder.goals.GoalXZ.z",
+        "mineflayer-pathfinder.goals.GoalY.constructor",
+        "mineflayer-pathfinder.goals.GoalY.hasChanged",
+        "mineflayer-pathfinder.goals.GoalY.heuristic",
+        "mineflayer-pathfinder.goals.GoalY.isEnd",
+        "mineflayer-pathfinder.goals.GoalY.isValid",
+        "mineflayer-pathfinder.goals.GoalY.y"
+      ],
+      "scope": "Ten pinned local Goal classes: coordinate flooring/fields/mutation and predicate/heuristic results, composite list/child identity/push and changed/valid delegation, browser-bundled QuickJS with independent geometric checks.",
+      "result": "passed",
+      "sourceSha256": "f6561bc6d1c081fc01e1e2c0ceb69626b2fc3bf04cd9cc7116ff74aa831fbd26",
+      "report": {
+        "path": "run/mineflayer-reference/goal-library.json",
+        "sha256": "e065c082d3043a311e4fd54a9c17eff7d099fcbe4b5c72ea5f750c225a4a9e12"
+      },
+      "limitations": "No native movement/arrival, Pathfinder consumption, world raycasts or live Entity GoalFollow hydration. Corrected GoalBreakBlock excluded. Initial harness bundle resolution failed before execution; resolveDir corrected."
     }
   },
   "reviewNotes": {
