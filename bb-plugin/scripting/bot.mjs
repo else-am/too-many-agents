@@ -323,6 +323,7 @@ export function createBot(initial) {
       }
       if (source.id === next.body.id) {
         bot.entity = entity;
+        bot.username = name;
         if (oldPosition) entityEvents.push(['move', oldPosition]);
       }
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
