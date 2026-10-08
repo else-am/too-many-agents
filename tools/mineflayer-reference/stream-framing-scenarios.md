@@ -26,3 +26,5 @@ the underlying source cancel callback even when prefetch had already closed it;
 the oracle now accepts either cancellation or prior source closure. Parser
 behavior was unchanged by this harness correction. Evidence retains exact
 source/host/bundle hashes. No game, native producer or runner was exercised.
+
+Cross-layer check: stream-roundtrip.mjs consumed the actual144-byte Java probe output in seven-byte fragments through the actual host parser. Revisions1/2 were acknowledged before script_state_frame_too_large; one request, no replay. This adds no native-world, runner-hydration or death-lifecycle claim.

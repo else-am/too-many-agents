@@ -9687,6 +9687,32 @@
         "sha256": "eda7b1b9f38c91583c045a7ff1ec6799a8292577600175fc5bac3d3f2379db14"
       },
       "limitations": "Version queries only; no native feature implementation, state hydration, world, or packaged runtime initialization claim. Inherited prototype names explicitly return false rather than upstream prototype values."
+    },
+    "stream-framing": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/stream-framing.mjs",
+      "subjects": [],
+      "scope": "Per-line UTF-8 limits, split/malformed bytes, coalesced valid frames, ordered acknowledgement and terminal/EOF handling.",
+      "result": "passed",
+      "sourceSha256": "b39c3b4e5ef7d3c77ccd08e687ace452b1dc823bf04f07e72bc07f14a7e35625",
+      "report": {
+        "path": "run/mineflayer-reference/stream-framing.json",
+        "sha256": "6b03417bf7a66c19052d12d1f6f55d20c79ff661d41b53c9f2ef25cd2d4b6b33"
+      },
+      "limitations": "No native world/runner hydration/packaged lifecycle or throughput claim. Controlled byte source with actual host code."
+    },
+    "stream-roundtrip": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/stream-roundtrip.mjs",
+      "subjects": [],
+      "scope": "Actual Java ScriptStream oversize evidence through actual host parser: accepted revisions precede terminal failure.",
+      "result": "passed",
+      "sourceSha256": "ffd35e16e53b3a0840619c16a46db3735af3a129846a224e24464f06564afd43",
+      "report": {
+        "path": "run/mineflayer-reference/stream-roundtrip.json",
+        "sha256": "4beda68ba926ee6e8b2ce21b5e4e2b304766bc92ffa32a80778d7e4d1c5f8aa8"
+      },
+      "limitations": "No native world/runner hydration/packaged lifecycle or throughput claim. Controlled byte source with actual host code."
     }
   },
   "reviewNotes": {
