@@ -10388,6 +10388,22 @@
         "sha256": "04e63a1053307803ca920790b9d7f99c7f08c6bca9359c1953c5a0124d6b4e78"
       },
       "limitations": "Report preserves separate once-removal identity difference: Node wrapper versus guest original callback. No removeListener event parity, warning/options, defaultMaxListeners validation or native event-source promotion."
+    },
+    "emitter-defaults-local": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/emitter-defaults.mjs",
+      "subjects": [
+        "events.EventEmitter.static.defaultMaxListeners",
+        "events.EventEmitter.static.EventEmitter"
+      ],
+      "scope": "Actual production QuickJS bot constructor versus Node24: valid default limits, independent instance overrides, rejection preserving prior defaults and self alias. Exact error-class difference retained.",
+      "result": "passed",
+      "sourceSha256": "4b010228c03eaac8fdefe2f2ca446be4a6e1dd4542d729af5643955c44f7ec46",
+      "report": {
+        "path": "run/mineflayer-reference/emitter-defaults.json",
+        "sha256": "1d98420ee4ebef53dd8e36b7eb6c1a20b4c50ac910244c459112ccc4959173b5"
+      },
+      "limitations": "Pinned events3 rejects nonnumeric defaults with RangeError; Node24 uses TypeError. Negative/NaN and valid-value behavior agree. No exact error-class parity or member promotion. No warnings, native events or removeListener identity claim."
     }
   },
   "reviewNotes": {
