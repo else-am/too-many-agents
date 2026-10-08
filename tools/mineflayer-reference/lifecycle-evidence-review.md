@@ -11,3 +11,12 @@ These are retained native reports, not new executions. Their tested revisions we
 The separate `cancel-native.json` and `cancel-mining-native.json` record stopped movement/mining and unchanged targets/inventory, but do not embed the executed script. Recover their invocation provenance before using them as script-contract evidence. `cancel-tick-wait-native.json` contains a pending invocation and final native observations, but no terminal tool result; it alone does not prove the guest cancellation result.
 
 Remaining reconciliation: current native world-session/stale-handle safety, cancellation provenance, and distinct lost-reply behavior. The recorded real runner harness covers controlled cancellation and feed shutdown; it does not substitute for native world-session checks. Existing self-death host race probes distinguish known terminal rejections from unknown outcomes, but do not establish every transport failure path.
+
+## Recovered selected-route cancellation
+
+Two additional reports embed complete executed source and successful terminal tool results:
+
+- `route-cancel-air-native.json`: `setGoal(null)` during a native gap jump produced `GoalChanged` and an interrupted native route. The body continued falling, landed, and did not resume the route. Release was confirmed. This file has no separate independent world observation.
+- `route-cancel-dig-native.json`: cancellation on the first completed break retained exactly that break and one durability use. Three remaining blocks stayed intact over twenty ticks, the native route was interrupted, and release was confirmed. A separate native observation is included.
+
+Both are hash-indexed without promoting API members. Revision provenance remains absent. They establish historical selected-route cancellation, distinct from the earlier unproven invocation provenance for direct movement/mining cancellation and from external whole-script cancellation.

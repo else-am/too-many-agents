@@ -4748,6 +4748,43 @@
           "code"
         ]
       }
+    },
+    "historical-route-cancel-air-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/historical-route-cancel-air-native.js",
+      "subjects": [],
+      "scope": "Historical selected-route cancellation. Midair setGoal(null) rejected goto with GoalChanged; native route interrupted, gravity continued to supported landing, no route resumption over subsequent ticks, confirmed release. No separate independent world observation in this report. Tested revision not recorded; not current-build certification or manual-tool cancellation coverage.",
+      "result": "passed",
+      "sourceSha256": "62aeac6c3bd19bdec002f5d91e95ec8a51b3c9e3e34cc6b7d6ab128aa67a1d2d",
+      "report": {
+        "path": "run/mineflayer-reference/route-cancel-air-native.json",
+        "sha256": "094f89650950bb9eda35bc38b390d9280b1957ed1c6742dce8c2a5c18d294bf7",
+        "codePath": [
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      }
+    },
+    "historical-route-cancel-dig-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/historical-route-cancel-dig-native.js",
+      "subjects": [],
+      "scope": "Historical selected-route cancellation. Cancellation after first native block update rejected goto with GoalChanged; one completed break and one tool-durability use retained, remaining three blocks unchanged over twenty ticks, native route interrupted and release confirmed. Independent native observation included. Tested revision not recorded; not current-build certification or manual-tool cancellation coverage.",
+      "result": "passed",
+      "sourceSha256": "4f954685a2f422f51e1963800f907e374d848a8f7ad90e4407f35a868cf5b04c",
+      "report": {
+        "path": "run/mineflayer-reference/route-cancel-dig-native.json",
+        "sha256": "c6226afd32938f74f742b60080c988635307f87086a2fd85b3541a41a2053ccd",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {
