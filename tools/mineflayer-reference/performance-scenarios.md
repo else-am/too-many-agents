@@ -75,9 +75,46 @@ The scripting coordination interval starts before reading the prepared source,
 not at exact instruction receipt. Consequently these are observed workflow
 costs, not a controlled native-physics speedup or a universal latency ratio.
 The useful established result is equal native work/outcome with 18→1 visible
-Minecraft calls. Gathering/crafting is still in progress.
+Minecraft calls. The gathering/crafting pair is recorded below.
 
 [Direct transcript](</Users/scott/.bb/thread-storage/performance-wall-direct-evidence.json>)
 and [script transcript](</Users/scott/.bb/thread-storage/performance-wall-script-evidence-b583fc90.json>)
 retain timestamps, exact code/calls and limitations. The coordinator independently
 confirmed the target blocks and inventory after each arm.
+
+
+## Recorded gather/craft pair — 042cc01
+
+The same Codex model/body, two oak logs and fresh iron axe produced logs0,
+planks4 and sticks8 in both arms. Each axe gained two damage; grid/cursor were
+empty and the menu was closed. No measured retry or command use occurred.
+Fixture preparation, including correcting an empty supply barrel before the
+first arm, is outside the measurements. Independent final verification and
+restoration are recorded by the coordinator separately.
+
+| Measurement | Direct tools | Prepared script |
+| --- | ---: | ---: |
+| Model-visible Minecraft calls | 44 | 1 |
+| Native action requests | 21 | 31 |
+| Game ticks over measured task | 4,704 | 175 within script |
+| Recorded tool/task interval | 235.226 s | 9.450 s for minecraft_run |
+| Script execution | n/a | 8.915 s |
+| Recorded scripting coordination interval | n/a | 14.542 s |
+| Bridge operations | not separately recorded | 63 |
+
+Direct calls were two observations, 21 actions and 21 status checks, with no
+batching or extra polls. Actions comprised two mines, one walk (native pickup),
+one menu open, 16 clicks and one close. The prepared script uses the shared
+crafting queue and its additional native clicks/state barriers. Its higher
+native request count is included, not hidden: the demonstrated saving is fewer
+model/tool round trips, not fewer native actions. Movement endpoints need only
+collect the same real drops and satisfy the task, not match exact coordinates.
+
+As above, instruction receipt timestamps are unavailable. Direct timing includes
+model coordination; scripted coordination starts before reading its prepared
+source. These are one observed pair, not latency distributions or a controlled
+claim that Minecraft simulation itself became faster.
+
+[Direct transcript](</Users/scott/.bb/thread-storage/performance-gather-direct-evidence.json>)
+and [script transcript](</Users/scott/.bb/thread-storage/performance-gather-script-evidence-6b2cbb8c.json>)
+retain exact calls, code, timestamps and output.
