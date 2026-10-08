@@ -3492,8 +3492,14 @@
       "subjects": [
         "prismarine-item.Item"
       ],
-      "scope": "Source-derived wire fixtures and transport checks. Native Java byte probes are separate evidence; do not infer a live reference comparison.",
-      "result": "not-recorded"
+      "scope": "Current source-derived74 fixtures/61 stock decoder matches/13 malformed-wire rejections, registry remapping/prototype keys and actual QuickJS transport. Separate --encode invocation checks host encoder byte roundtrips, invalid inputs and reversed remapping. No native Java encoder or live world claim.",
+      "result": "passed",
+      "testedRevision": "17eead3",
+      "sourceSha256": "8e6bd2ccb07b569574d7092b5db1eb1866b5bf41291c80004ff7ac81a7aec93d",
+      "report": {
+        "path": "run/mineflayer-reference/item-wire-current-result.json",
+        "sha256": "fc31c2d263385704e46c04854aa2b219fb3c78ba485f0cdd5cca2af90d8d3ebc"
+      }
     },
     "window-library": {
       "kind": "library-differential",
@@ -3540,8 +3546,14 @@
         "mineflayer-pathfinder.Pathfinder",
         "mineflayer-pathfinder.goals.Goal"
       ],
-      "scope": "Source/library planning and goal scenarios; no claim that every goal or option is exercised.",
-      "result": "not-recorded"
+      "scope": "Recorded 31 planning scenarios:18 pinned differential worlds and13 contract cases plus real bundled QuickJS route. Exact current harness equals tested b5d9a7c source. Documents native shortcut candidate differences and pinned source corrections; no native route or every goal/option claim.",
+      "result": "passed",
+      "testedRevision": "b5d9a7c",
+      "sourceSha256": "f24de4a682309c1389b2a3c21523d5a69b5cadfd10fedb0e3bab6e0d0f860923",
+      "report": {
+        "path": "run/mineflayer-reference/planning-library-recorded.txt",
+        "sha256": "0ae7109cb1af53404e7afb595582ac0e17f7a30554853c0bd11991f96d923429"
+      }
     },
     "runtime-boundary": {
       "kind": "runtime-boundary",
