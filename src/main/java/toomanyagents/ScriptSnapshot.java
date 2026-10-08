@@ -56,6 +56,7 @@ final class ScriptSnapshot {
         var biomes = new JsonArray();
         var light = new JsonArray();
         var entities = new JsonObject();
+        var nbtBudget = new ScriptNbt.Budget(65_536, 1024 * 1024);
         var biomeRegistry = level.registryAccess().registryOrThrow(Registries.BIOME);
         var position = new BlockPos.MutableBlockPos();
         // x is the fastest-changing coordinate, then z, then y. -1 is unknown,
@@ -80,7 +81,7 @@ final class ScriptSnapshot {
                             if (entity != null) {
                                 // Match the client-visible chunk data, not private container contents.
                                 var tag = entity.getUpdateTag(level.registryAccess());
-                                if (!tag.isEmpty()) entities.add(Integer.toString(index), ScriptNbt.typed(tag));
+                                if (!tag.isEmpty()) entities.add(Integer.toString(index), ScriptNbt.typed(tag, nbtBudget));
                             }
                         }
                     }

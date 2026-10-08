@@ -30,13 +30,14 @@ final class ScriptColumns {
         if (cached != null && previousLevel == level && center.equals(previousCenter)
             && completedAction == previousAction && tick >= previousTick && tick - previousTick < 5) return cached;
         var rows = new JsonObject();
+        var nbtBudget = new ScriptNbt.Budget(262_144, 4 * 1024 * 1024);
         int bytes = 0;
         for (int z = center.z - 2; z <= center.z + 2; z++) {
             for (int x = center.x - 2; x <= center.x + 2; x++) {
                 // getChunkNow never starts a load/generation operation.
                 var chunk = level.getChunkSource().getChunkNow(x, z);
                 if (chunk == null || !chunk.isLightCorrect() || !level.getWorldBorder().isWithinBounds(chunk.getPos())) continue;
-                var row = column(level, chunk);
+                var row = column(level, chunk, nbtBudget);
                 bytes += row.toString().getBytes(StandardCharsets.UTF_8).length;
                 if (bytes > 6 * 1024 * 1024) throw new IllegalStateException("column_snapshot_limit");
                 String key = x + "," + z;
@@ -49,7 +50,7 @@ final class ScriptColumns {
         return cached;
     }
 
-    private static JsonObject column(ServerLevel level, LevelChunk chunk) {
+    private static JsonObject column(ServerLevel level, LevelChunk chunk, ScriptNbt.Budget nbtBudget) {
         int size = 0;
         for (var section : chunk.getSections()) size = Math.addExact(size, section.getSerializedSize());
         if (size > 2 * 1024 * 1024) throw new IllegalStateException("column_wire_limit");
@@ -76,7 +77,7 @@ final class ScriptColumns {
             if (entities.size() >= 4096) throw new IllegalStateException("column_block_entity_limit");
             var p = entity.getBlockPos();
             var record = JsonState.object("x", p.getX() & 15, "y", p.getY(), "z", p.getZ() & 15,
-                "nbt", ScriptNbt.typed(tag));
+                "nbt", ScriptNbt.typed(tag, nbtBudget));
             bytes += record.toString().getBytes(StandardCharsets.UTF_8).length;
             if (bytes > 1024 * 1024) throw new IllegalStateException("column_block_entity_bytes");
             entities.add(record);
