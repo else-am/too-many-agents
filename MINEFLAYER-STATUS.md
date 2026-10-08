@@ -17,6 +17,12 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 - Earlier saved/stopped batches retain their evidence below. The dead disposable record remains after its one archival attempt rejected `body_missing_or_unloaded`; no retry or bypass. Extra usage credits are working.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
+## Latest evidence reconciliation
+
+- [x] Recovered four existing native reports for block/item observations, block-update identity/hydration, and tick/equipment ordering. Exact executed sources are retained in `tools/mineflayer-reference/recorded/observe-*-historical.js`; source/report hashes and embedded-code checks pass in the catalog. No native rerun occurred.
+- [x] Catalog verification reports no missing evidence files or unverified report hashes. Coverage remains 263 supported / 784 pending / 58 inapplicable records; indexing historical observations does not promote member coverage. Those four reports do not retain the packaged revision and do not validate the current build.
+- [ ] Corrected Cod resting-depth fixture and fresh Slime hop/landing script are being prepared, without a new launch authorization. Rabbit/MagmaCube native controller design is assigned separately; implementation remains pending.
+
 ## Implemented
 
 Checked boxes mean the described implementation exists. Verification is listed separately; **a checked group does not mean every member, event or edge case is fully conformant**.
