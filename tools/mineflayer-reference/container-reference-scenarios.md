@@ -36,3 +36,7 @@ All four independent server NBT predicates passed. Client error list empty; the
 existing startup ArmorTrimMaterial PartialReadError remains recorded. The server
 stopped and port25575 was independently unbound. No retry or native invocation.
 Exact source/report and startup log are in thread storage/reference-container.
+
+## Historical source recovery
+
+Exact completed BB call dad8728ab1-i72 (2026-10-07T22:03:37.567Z–22:03:40.217Z) supplies the actual native source, SHA256b8b48e688a4be3f28eb6b9c307c7a11dcb4f3fda6196a093c33179dd675ee5fb, and a result exactly equal to inventory-chest-native.json. It completed23 requests/46 updates with confirmed release. This supersedes the earlier missing-source limitation. Native pre-close mirror and stale-handle checks remain distinct from the reference; whole-source byte equality and JAR identity are not established. Saved independent native inventory confirms stone17/selection6/empty cursor and recent-chat block NBT confirms chest slot1 stone63; those auxiliary producer arguments/timestamps were not recovered. The unchanged inventory.mjs since tested268f8f0 and its20 fixture groups provide the remaining guest orchestration checks. No scenario reran. [Raw recovery](/Users/scott/.bb/thread-storage/thr_xykqkgui57/inventory-chest-provenance-recovery.json).

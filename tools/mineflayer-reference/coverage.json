@@ -7830,6 +7830,126 @@
         "reference-world-queries"
       ],
       "reason": "Pinned differential query fixtures plus exact recovered native known-cache query checks and semantically matching live reference. Native geometry, bounded unknown cells and documented query corrections remain explicit; no arbitrary unloaded-world access or action reach claim."
+    },
+    "mineflayer.Bot.openChest": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.Bot.transfer": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.Bot.closeWindow": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.Chest.close": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.Chest.deposit": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.Chest.withdraw": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.BotEvents.windowOpen": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "mineflayer.BotEvents.windowClose": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/inventory.mjs",
+        "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+        "tools/mineflayer-reference/inventory-chest-common.js"
+      ],
+      "evidence": [
+        "inventory-guest",
+        "native-container-recovered",
+        "reference-container"
+      ],
+      "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
     }
   },
   "schemaVersion": 2,
@@ -8467,7 +8587,14 @@
       "subjects": [
         "mineflayer.Bot.equip",
         "mineflayer.Bot.craft",
-        "mineflayer.Bot.transfer"
+        "mineflayer.Bot.transfer",
+        "mineflayer.Bot.openChest",
+        "mineflayer.Bot.closeWindow",
+        "mineflayer.Chest.close",
+        "mineflayer.Chest.deposit",
+        "mineflayer.Chest.withdraw",
+        "mineflayer.BotEvents.windowOpen",
+        "mineflayer.BotEvents.windowClose"
       ],
       "scope": "20 pinned-source/authoritative Window fixture groups in actual QuickJS: inventory, transfer, equipment, cancellation, known/unknown errors and craft orchestration. Controlled native callbacks, not live inventory proof.",
       "result": "passed",
@@ -9614,8 +9741,17 @@
     "reference-container": {
       "kind": "live-reference",
       "path": "tools/mineflayer-reference/inventory-chest-common.js",
-      "subjects": [],
-      "scope": "One real chest task: synchronous selection, hydrated open, range transfer20, deposit10 merge/split, withdraw7 and close, with server NBT confirmation of chest63/player17/selected pickaxe. No member promotion.",
+      "subjects": [
+        "mineflayer.Bot.openChest",
+        "mineflayer.Bot.transfer",
+        "mineflayer.Bot.closeWindow",
+        "mineflayer.Chest.close",
+        "mineflayer.Chest.deposit",
+        "mineflayer.Chest.withdraw",
+        "mineflayer.BotEvents.windowOpen",
+        "mineflayer.BotEvents.windowClose"
+      ],
+      "scope": "Real chest open, range transfer20, deposit10 merge/split, withdraw7 and close, with server NBT chest63/player17; open/close callbacks see hydrated active window. Semantically paired with exact recovered native source.",
       "result": "passed",
       "sourceSha256": "d5afff1f6aecff0fe26c28e03e2fd48cb0a9c4a4e80cd014b4db85ef9fb373b4",
       "report": {
@@ -9625,7 +9761,7 @@
           "source"
         ]
       },
-      "limitations": "Pre-close inventory is read from the active Window; upstream bot.inventory mirrored only on close. Native stale-handle check omitted as a separate safety contract. Historical native report has no embedded source, so not an exact paired-source run. Existing ArmorTrimMaterial warning retained; no general protocol conformance."
+      "limitations": "Native inventory mirror updates before close; upstream copies it on close. Native stale-handle rejection is separate safety evidence, omitted from common reference script. Historical native artifact identity and auxiliary native producer timestamps are not established. Startup protocol warning retained; not every container or transfer race tested."
     },
     "reference-wall-convergence": {
       "kind": "live-reference",
@@ -9981,6 +10117,36 @@
         ]
       },
       "limitations": "Historical artifact identity not recovered. Initial cursor failure retained in recovery artifact. No rerun; extra native cursor/menu checks are not claimed paired with reference."
+    },
+    "native-container-recovered": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/inventory-chest-native.js",
+      "subjects": [
+        "mineflayer.Bot.openChest",
+        "mineflayer.Bot.transfer",
+        "mineflayer.Bot.closeWindow",
+        "mineflayer.Chest.close",
+        "mineflayer.Chest.deposit",
+        "mineflayer.Chest.withdraw",
+        "mineflayer.BotEvents.windowOpen",
+        "mineflayer.BotEvents.windowClose"
+      ],
+      "scope": "Exact completed BB native chest procedure: hydrated windowOpen, transfer20, deposit10, withdraw7, close once and stale-handle rejection. Parsed result equals saved report; auxiliary native inventory/block NBT support stone17/chest63.",
+      "result": "passed",
+      "sourceSha256": "b8b48e688a4be3f28eb6b9c307c7a11dcb4f3fda6196a093c33179dd675ee5fb",
+      "report": {
+        "path": "run/mineflayer-reference/inventory-chest-provenance-recovered.json",
+        "sha256": "a0004cc47e266a7c0bdbfa6a7c4dad5b2a2a4a6cd55c8973f70a9919784390f7",
+        "codePath": [
+          "exactCall",
+          "rawCompletedEvent",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Source recovered without rerun. Whole native/reference source is not byte-identical. Auxiliary observation producer arguments/timestamps and historical packaged JAR identity not recovered. No automatic mutation/recovery on unknown outcome claimed by this successful run."
     }
   },
   "reviewNotes": {
