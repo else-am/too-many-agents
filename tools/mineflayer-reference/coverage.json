@@ -3549,8 +3549,13 @@
       "subjects": [
         "mineflayer.Bot"
       ],
-      "scope": "Worker isolation, awaited bridge operations, cancellation and execution/output bounds; not gameplay conformance.",
-      "result": "not-recorded"
+      "scope": "Real runner/QuickJS worker: ordered awaited requests, isolation, CPU/deadline/output/request/timer bounds, unknown operations/unawaited completion rejection, cancellation of host operation and state feed, hydrated update acknowledgement and timer semantics. Controlled host callbacks only; no native world/session or gameplay claim.",
+      "result": "passed",
+      "sourceSha256": "f748343a7814448ce1ad60ae8f1b1e322cdbd0e01fc810f7252b619991087ad6",
+      "report": {
+        "path": "run/mineflayer-reference/runtime-boundary-recorded.txt",
+        "sha256": "a280643f4f299c7a286dce850e71cb186f4565fa0764ba6b45643633889ae671"
+      }
     },
     "native-block-observations": {
       "kind": "native-integration",
