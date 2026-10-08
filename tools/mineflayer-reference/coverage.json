@@ -493,13 +493,113 @@
       ],
       "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
       "result": "not-recorded"
+    },
+    "native-direct-follow": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/navigate-direct-follow.js",
+      "subjects": [
+        "mineflayer-pathfinder.Pathfinder.setGoal"
+      ],
+      "scope": "Actual single-node direct cow following, physical range and stationary dynamic hold; no moving-target, cancellation or fallback matrix.",
+      "testedRevision": "aad8063",
+      "result": "passed",
+      "sourceSha256": "8d80c8b5224c806ca6cc40c161d41024df62a0bb2124113c193520344f8686e5",
+      "report": {
+        "path": "run/mineflayer-reference/native-direct-follow-recorded.json",
+        "sha256": "d9964d879c625f8052302cf8c35b579602291d4eafe784b16aa38b17a7e378f8",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
+    },
+    "native-sounds": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-sounds.js",
+      "subjects": [
+        "mineflayer.BotEvents.soundEffectHeard"
+      ],
+      "scope": "Three ordered typed native sound events from body-addressed packets and world sound; no replay, unchanged inventory and unrelated recipient control.",
+      "testedRevision": "aad8063",
+      "result": "passed",
+      "sourceSha256": "237d793c25b9251576ba351e16bd8b60094e81a169434955724ef46590372959",
+      "report": {
+        "path": "run/mineflayer-reference/native-sounds-recorded.json",
+        "sha256": "a23569d22bac75bda17bef31a01e93b36f123c668b51956d3deb95cfdfa63a11",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
+    },
+    "native-presentation": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-presentation.js",
+      "subjects": [
+        "mineflayer.Bot.tablist",
+        "mineflayer.BotEvents.title",
+        "mineflayer.BotEvents.title_clear",
+        "mineflayer.BotEvents.title_times"
+      ],
+      "scope": "Five ordered body-addressed native presentation events and stable tablist identities; unchanged inventory and no replay.",
+      "testedRevision": "4d7e8b9",
+      "result": "passed",
+      "sourceSha256": "019cffdb133a5f22359debe21186ca8554de64d9270809f5a1c960e538aad633",
+      "report": {
+        "path": "run/mineflayer-reference/native-presentation-recorded.json",
+        "sha256": "633d1941d87b923a7152be6a16494e429435ef240e9b3431d2ea2ca5a5b2fbaf",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
+    },
+    "native-creative": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-creative.js",
+      "subjects": [
+        "mineflayer.Bot.creative"
+      ],
+      "scope": "Native component-bearing item write/clear, flyTo arrival/hover, solid-wall obstruction and grounded return; independent native item evidence and exact inventory/mode restoration.",
+      "testedRevision": "4d7e8b9",
+      "result": "passed",
+      "sourceSha256": "ce2b38c79f56317d48cb02a9912f3c467a7140c59345acf0659c7a3430cb8f8a",
+      "report": {
+        "path": "run/mineflayer-reference/native-creative-recorded.json",
+        "sha256": "093ad051984a7aafcd6f723b2ee7a227e052dc66ba3e441548d08a3c69869dea",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
+    },
+    "native-entity-events": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-entity-events.js",
+      "subjects": [
+        "mineflayer.BotEvents.entityHurt",
+        "mineflayer.BotEvents.entityDead",
+        "mineflayer.BotEvents.playerCollect"
+      ],
+      "scope": "Accepted native hurt/death and named item pickup with hydrated stable typed references and original item metadata; no replay. No canceled/immune, XP/arrow or other-Mob coverage.",
+      "testedRevision": "aad8063",
+      "result": "passed",
+      "sourceSha256": "2f8a1e67ec8a12fe948f2e697d90e6cff920f5efcadf16efc26ed411ccc76d95",
+      "report": {
+        "path": "run/mineflayer-reference/native-entity-events-recorded.json",
+        "sha256": "6f502f60e1d1350f7589d0906f421bd4f7365220e69d2056adf3cb462bd98dc1",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
     }
   },
   "reviewNotes": {
     "prismarine-item.Item": "Components/componentMap/removedComponents are source-visible but omitted from declarations; Item.equal ignores components in the pin.",
     "prismarine-windows.Window": "Declarations/docs/runtime disagree on some signatures, layouts and events; windows.mjs separates intended corrections from parity. Drag/double-click throw upstream.",
-    "prismarine-world.WorldSync": "Synchronous getBlock/raycast and numeric getters/events are implemented. Only raycast has library evidence; runtime additions await native verification. Full columns/async storage/client-cache mutation semantics remain pending.",
-    "mineflayer-pathfinder.Pathfinder": "Undeclared source settings include searchRadius, enablePathShortcut and LOSWhenPlacingBlocks. Selected-route native slices passed; shortcut/free motion/partial execution/custom physics/large loaded cache and other behavior remain pending.",
+    "prismarine-world.WorldSync": "Full selected columns and sync/async guest cache APIs are implemented. Native full-height/light/biome/sign/freshness and stable references passed selected flat-world checks; storage remains guest-local. Wider loaded worlds/performance require verification.",
+    "mineflayer-pathfinder.Pathfinder": "Body-aware planning, native selected edges and bounded shortcuts/direct pursuit implemented. Selected native routes and actual single-node direct following passed. Dynamic/cancel/unsupported physics and larger direct candidates remain pending; no full parity claim.",
     "events.EventEmitter": "Inherited instance surface comes from pinned events 3.3.0, not current Node type declarations. Event payloads/ordering need independent native evidence.",
     "prismarine-registry.loader.RegistryPc": "Registry tables and codecs, chunk access/storage, Bedrock-labelled data and source-only helpers require applicability review; none are silently excluded.",
     "mineflayer-pathfinder.goals.GoalBreakBlock": "Pinned declarations extend GoalLookAtBlock, but source extends Goal and wraps this.goal; source isEnd drops its node argument. Inherited declaration promises require review.",

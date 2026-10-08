@@ -95,8 +95,10 @@ erases results previously discussed in a thread. `relatedEvidence` identifies
 relevant suites, **not proof that every member or condition was exercised**.
 Library suites and native procedures without durable reports remain available
 only. Five earlier native reports (Window, raycast, route policy, lifecycle,
-and shapes), plus six later packaged runs (consumption/signs/game, fishing, boat
-controls, sleep, wake, observed events), are indexed as narrow passes after
+and shapes), six later packaged runs (consumption/signs/game, fishing, boat
+controls, sleep, wake, observed events), and five more recent runs (direct
+following, sounds, presentation, creative actions, accepted entity events)
+are indexed as narrow passes after
 checking their executed code against the scenario files. Later reports identify
 the tested revision and retain the independent native summary. They do not
 validate newer source. No full API is promoted. Missing scripts or ignored
