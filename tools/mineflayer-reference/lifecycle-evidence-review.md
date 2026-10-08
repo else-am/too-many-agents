@@ -8,9 +8,27 @@ These are retained native reports, not new executions. Their tested revisions we
 | `stream-departure-native.json` | Streamed execution stopped with `script_no_longer_controls_body`; subsequent dig never started and reopened target remained stone. | Host handling of known body/lease errors changed later; not proof of that later race fix. |
 | `stream-pause-native.json` | Script completed across native pause/resume UI operations, counted 402 physics events, retained Entity identity and confirmed release. | UI responses capture transition states; no precise freeze-duration claim. |
 
-The separate `cancel-native.json` and `cancel-mining-native.json` record stopped movement/mining and unchanged targets/inventory, but do not embed the executed script. Recover their invocation provenance before using them as script-contract evidence. `cancel-tick-wait-native.json` contains a pending invocation and final native observations, but no terminal tool result; it alone does not prove the guest cancellation result.
+The separate `cancel-native.json` and `cancel-mining-native.json` record stopped movement/mining and unchanged targets/inventory, but do not embed the executed script. Candidate invocation provenance is now recovered below, with the native action-ID linkage still missing. `cancel-tick-wait-native.json` contains a pending invocation and final native observations, but no terminal tool result; it alone does not prove the guest cancellation result.
 
 Remaining reconciliation: current native world-session/stale-handle safety, cancellation provenance, and distinct lost-reply behavior. The recorded real runner harness covers controlled cancellation and feed shutdown; it does not substitute for native world-session checks. Existing self-death host race probes distinguish known terminal rejections from unknown outcomes, but do not establish every transport failure path.
+
+## Recovered early manual-stop provenance
+
+Read-only BB history for executor `thr_tp9qyhq6ed` retains three exact tool starts:
+
+- Seq87 / `da430c64e1-i10`: goto(-8,-60,0), then dig(-9,-61,0).
+- Seq180 / `da35e70f99-i8`: dig(4,-60,0), then goto(10,-60,0).
+- Seq283 / `da7d783836-i11`: wait400ticks, then dig(5,-61,0).
+
+Each is immediately followed by a `manual-stop` interruption and an interrupted
+turn completion (seq88/92,181/185,284/288 respectively). Literal code, timestamps
+and those events are preserved in
+`/Users/scott/.bb/thread-storage/early-cancellation-provenance/`. The first two
+match the retained reports' intended phases/target coordinates, but these events
+do not carry the reports' native action IDs. No terminal tool result was found
+for these invocations in this early log segment. Thus exact scripts and turn
+cancellation are established, while invocation-to-native-action linkage and
+guest terminal outcome remain unproven. No new native run or member promotion.
 
 ## Recovered selected-route cancellation
 
