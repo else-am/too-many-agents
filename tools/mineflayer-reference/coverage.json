@@ -3549,7 +3549,7 @@
       "subjects": [
         "mineflayer.Bot"
       ],
-      "scope": "Real runner/QuickJS worker: ordered awaited requests, isolation, CPU/deadline/output/request/timer bounds, unknown operations/unawaited completion rejection, cancellation of host operation and state feed, hydrated update acknowledgement and timer semantics. Controlled host callbacks only; no native world/session or gameplay claim.",
+      "scope": "Real runner/QuickJS worker: ordered awaited operations, host API isolation, CPU/deadline/output/timer bounds, rejection of unawaited completion, cancellation of host operation and state feed, ordered updates resolving guest events and timer semantics. Controlled host callbacks only; no request-count-limit, unknown-outcome recovery, native world/session or gameplay claim.",
       "result": "passed",
       "sourceSha256": "f748343a7814448ce1ad60ae8f1b1e322cdbd0e01fc810f7252b619991087ad6",
       "report": {
