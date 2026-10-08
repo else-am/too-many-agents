@@ -6,11 +6,11 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`0a79f7c`**, body-addressed title/tab-list observations. Java/plugin/package build passed; native packet delivery and mixin startup remain unverified.
-- Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `0536eca763ee233a4387100585b803834c9326d40bd4d030f9545cfb141e844c`.
+- Latest built implementation: **`4d7e8b9`**, body-addressed title/tab-list observations plus a guarded native presentation fixture. Java/plugin/package build passed; native packet delivery and mixin startup remain unverified.
+- Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `a1faa6596915954aa12c0fdbfedc17515e4ea129d68ae989a72160478994d361`.
 - **Tester’s fixed artifact is still `042cc01`**, staged in `run/mods` with SHA-256 `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`. Do not confuse newer `build/libs` with its measurements or reinstall mid-comparison.
 - Latest focused native pass: **`042cc01`**, actual airborne gliding, one body-attached rocket, item consumption, boost/countdown, unchanged unrelated inventory and native landing/release cleanup. The check completed 7/7 requests, 82 updates and 20 bridge operations in 6,331 ms using Codex 6.1 Sol low. Earlier signal, completion, sign, chat, scoreboard and column evidence is linked below.
-- Test JVM `83377` saved/disconnected with all dimensions saved, then stopped. Tester owns `042cc01` JVM `86485` for the required direct-tools versus scripting wall/gather comparison; the direct wall arm is in progress. No other feature tests are assigned.
+- Test JVM `83377` saved/disconnected with all dimensions saved, then stopped. Tester owns `042cc01` JVM `86485` for the required direct-tools versus scripting wall/gather comparison; the wall pair passed and gathering/crafting is in progress. No other feature tests are assigned.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -146,7 +146,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [x] **Catalog refresh:** indexed six exact historical packaged scripts with verified scenario/report hashes, tested revisions and independent native summaries; added recent library candidates and guest registration source locations. No old native test was rerun or API promoted to fully supported.
 - [ ] **Complete evidence reconciliation:** remaining historical runs, individual contract coverage and paired reference evidence still need review. Catalog pending counts remain conformance obligations, not an implementation percentage.
 - [ ] **Paired live reference runs:** reference server is prepared, but Minecraft server EULA acceptance remains unanswered. Do not accept/start it without authorization.
-- [ ] **Performance comparison:** wall-building and gathering/crafting protocols and ready scripts are in [performance-scenarios.md](tools/mineflayer-reference/performance-scenarios.md). Syntax passes; the paired runs are now assigned to the testing coordinator, with no measurements yet. Compare actual successful outcomes/tool counts/time, not theoretical savings.
+- [ ] **Performance comparison:** wall-building and gathering/crafting protocols and ready scripts are in [performance-scenarios.md](tools/mineflayer-reference/performance-scenarios.md). The wall pair passed with identical eight-block outcomes: 18 visible Minecraft calls directly versus one scripted call. Timing/coordination caveats and exact evidence are recorded in the protocol; gathering/crafting remains in progress. Compare actual successful outcomes/tool counts/time, not theoretical savings.
 - [ ] **Final full-scope packaged/persistence validation** after remaining ports. Recent changes have focused verification, not a new exhaustive persistence cycle.
 
 Connection/account setup and Mineflayer's internal packet client are the agreed inapplicable pieces. Multiplayer and arbitrary third-party plugin compatibility are not promised. Other unclear APIs remain pending review rather than automatically excluded. Use [the catalog guide](tools/mineflayer-reference/README.md) and pinned source to find omissions; this grouped checklist is not the complete declaration inventory.

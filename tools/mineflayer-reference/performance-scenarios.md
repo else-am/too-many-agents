@@ -50,3 +50,34 @@ outcome/measurement accuracy is required.
 
 No additional live run has been authorized by creation of this contract. The
 lead coordinates a single later grouped comparison, with clean lifecycle handoff.
+
+## Recorded wall pair — 042cc01
+
+Both arms used Codex 6.1 Sol low and the same body at the actual observed start
+(34.5, -60, 5.5). Independent native checks confirmed all eight stone targets and
+zero remaining stone for both arms, with unchanged position/shield. No retry.
+
+| Measurement | Direct tools | Prepared script |
+| --- | ---: | ---: |
+| Model-visible Minecraft calls | 18 | 1 |
+| Native placement requests | 8 | 8 |
+| Game ticks over measured task | 2,469 | 31 within script |
+| Recorded tool/task interval | 123.557 s | 1.689 s for minecraft_run |
+| Script execution | n/a | 1.225 s |
+| Recorded scripting coordination interval | n/a | 7.721 s |
+| Bridge operations | not separately recorded | 19 |
+
+Direct calls were two observations, eight placements and eight status checks,
+one call per functions.exec invocation; no batches or extra polls. Each native
+placement took one tick. Its interval includes model coordination and context
+compaction, with the first timestamp recorded immediately before observation.
+The scripting coordination interval starts before reading the prepared source,
+not at exact instruction receipt. Consequently these are observed workflow
+costs, not a controlled native-physics speedup or a universal latency ratio.
+The useful established result is equal native work/outcome with 18→1 visible
+Minecraft calls. Gathering/crafting is still in progress.
+
+[Direct transcript](</Users/scott/.bb/thread-storage/performance-wall-direct-evidence.json>)
+and [script transcript](</Users/scott/.bb/thread-storage/performance-wall-script-evidence-b583fc90.json>)
+retain timestamps, exact code/calls and limitations. The coordinator independently
+confirmed the target blocks and inventory after each arm.
