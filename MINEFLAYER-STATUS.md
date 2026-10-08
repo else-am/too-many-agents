@@ -128,7 +128,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 ## Still to implement or finish
 
 - [x] **Healthy strider verification:** corrected clear-weather/dry fixture passed 1.735 blocks of native movement, actual body passenger, release/dismount and unchanged inventory on `c244383` (7/7 requests, 77 updates).
-- [ ] **Remaining vehicle verification:** boost activation, horse jumps, wider rail/bounds and ownership cases remain unverified.
+- [ ] **Remaining vehicle verification:** boost activation, horse jumps, wider rail/bounds and ownership cases remain unverified. Source review confirmed normal saddled Pig/Strider use reaches native boost/durability/conversion. A narrow proxy getter correction now rejects saddle/stick/controller changes before activation; full build passed, native boost/remainder and saddle-loss checks are prepared next.
 - [ ] **Creative wider verification:** permission failures, clearInventory/offhand/persistence, release and cancellation edge cases remain unrun. Controls during another active action retain the existing busy fence.
 - [ ] **Remaining chat sources:** broader message sources and lifecycle/overflow cases remain pending; body speech has no signed player identity.
 - [ ] **World/chunk completion:** native wire/light/biome/event verification, server/guest frame-cost measurements and wider loaded-region coverage. Storage callbacks are guest-local and native persistence remains separate. Missing cells remain unknown. See [column scenarios](tools/mineflayer-reference/columns-native-scenarios.md).

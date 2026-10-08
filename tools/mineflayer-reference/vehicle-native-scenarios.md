@@ -91,3 +91,25 @@ unchanged real passenger identity. Wrong item/seat and an already active boost
 must retain native outcomes. NoAI movement adaptation does not itself grant item
 boost eligibility. Other item paths and constructor-time null body use retain
 ordinary proxy behavior. Build/source checks are not a native boost pass.
+
+## Boost eligibility and native item results
+
+Before the proxy getter correction, source review established that the native
+Mob-controller fallback could permit boost after saddle removal while the same
+body remained aboard. Steering already requires a saddle.
+
+For the next focused native check, use a healthy normal-AI saddled Pig with the
+actual body as first/controller passenger and a real carrot-on-a-stick. Record
+native boost state and item damage before activation. One accepted activation
+must start native boost and spend the native seven durability points; a
+near-broken stick must instead become the native fishing-rod remainder. Preserve
+unrelated components and inventory. No proxy passenger may appear. Native
+creative/enchantment rules remain authoritative, so the durability fixture must
+be survival and unenchanted.
+
+For the distinct invalid case, remove the saddle from that exact mount while
+retaining the passenger and invoke item use once after confirming the changed
+state. No boost or durability change is allowed. Do not infer this from a failed
+mount attempt. Restore the fixture only after a known action outcome. Activation
+does not require an existing steering-control helper, and NoAI is not toggled to
+manufacture native eligibility. This scenario is preauthored, not executed.

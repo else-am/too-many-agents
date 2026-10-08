@@ -40,6 +40,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.animal.horse.AbstractHorse;
+import net.minecraft.world.entity.animal.Pig;
+import net.minecraft.world.entity.monster.Strider;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.ClickType;
@@ -226,7 +228,19 @@ public final class AgentHands extends FakePlayer {
     }
 
     @Override public Entity getControlledVehicle() {
-        return body == null ? super.getControlledVehicle() : body.getControlledVehicle();
+        if (body == null) return super.getControlledVehicle();
+        Entity vehicle = body.getControlledVehicle();
+        if (vehicle instanceof Pig || vehicle instanceof Strider) {
+            // The native Mob-controller fallback omits the Player saddle/stick checks.
+            if (!vehicle.isAlive() || vehicle.isRemoved() || vehicle.level() != body.level()
+                || vehicle.getFirstPassenger() != body || vehicle.getControllingPassenger() != body)
+                return null;
+            if (vehicle instanceof Pig pig && (!pig.isSaddled() || !isHolding(Items.CARROT_ON_A_STICK)))
+                return null;
+            if (vehicle instanceof Strider strider && (!strider.isSaddled() || !isHolding(Items.WARPED_FUNGUS_ON_A_STICK)))
+                return null;
+        }
+        return vehicle;
     }
 
     @Override public boolean isEyeInFluid(TagKey<Fluid> fluid) {
