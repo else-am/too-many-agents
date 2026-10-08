@@ -17,6 +17,9 @@ import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.control.FlyingMoveControl;
+import net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl;
+import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
+import net.minecraft.world.entity.animal.frog.Tadpole;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -60,7 +63,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, SLIME, MAGMA, RABBIT, PARROT }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -107,6 +110,12 @@ public final class ScriptNavigation {
     private float puffWidth, puffHeight, puffEyeHeight;
     private Pose puffPose;
     private Vec3 swimHold;
+    private boolean tadpolePrepared, tadpoleControlTick, tadpoleTravelTick;
+    private PathNavigation tadpoleNavigation;
+    private LivingEntity tadpoleTarget;
+    private Pose tadpolePose;
+    private float tadpoleWidth, tadpoleHeight, tadpoleEyeHeight;
+    private DryStep tadpoleStep;
     private PathNavigation drownedNavigation;
     private LivingEntity drownedTarget;
     private boolean drownedCanFloat, drownedPrepared, drownedTravelTick;
@@ -183,6 +192,11 @@ public final class ScriptNavigation {
             puffPose = mob.getPose();
         }
         swimHold = mob.position();
+        tadpolePrepared = false; tadpoleStep = null;
+        if (physics == Physics.TADPOLE) {
+            tadpoleNavigation = mob.getNavigation(); tadpoleTarget = mob.getTarget(); tadpolePose = mob.getPose();
+            tadpoleWidth = mob.getBbWidth(); tadpoleHeight = mob.getBbHeight(); tadpoleEyeHeight = mob.getEyeHeight();
+        }
         drownedPrepared = false; drownedStep = null; drownedHold = mob.position();
         drownedPolicyVolume = drownedInitialVolume = null;
         if (physics == Physics.DROWNED_WATER) {
@@ -204,7 +218,7 @@ public final class ScriptNavigation {
             int dx = Math.abs(pos.getX() - previous.getX()), dz = Math.abs(pos.getZ() - previous.getZ());
             int dy = pos.getY() - previous.getY();
             boolean parkour = flag(node, "parkour");
-            if ((physics == Physics.FISH || physics == Physics.DROWNED_WATER) && (node.has("direct") || parkour || Math.abs(dy) > 1))
+            if ((fishMode(physics) || physics == Physics.DROWNED_WATER) && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_aquatic_edge");
             if (physics == Physics.PARROT && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_flying_edge");
@@ -256,7 +270,7 @@ public final class ScriptNavigation {
         relevant = mob.getBoundingBox().inflate(0.4, 1, 0.4);
         checkVolume(relevant);
         checkDryVolume(mob.getBoundingBox());
-        if (physics == Physics.FISH || physics == Physics.DROWNED_WATER) requireSubmerged(mob.getBoundingBox());
+        if (fishMode(physics) || physics == Physics.DROWNED_WATER) requireSubmerged(mob.getBoundingBox());
         clearControls();
         movementFailure = null;
         active = true;
@@ -280,7 +294,7 @@ public final class ScriptNavigation {
             requireMode();
             if (!inside(mob.position())) throw error("route_outside_body_box");
             clearInputs();
-            rabbitStep = null; flightStep = null; drownedStep = null;
+            rabbitStep = null; flightStep = null; drownedStep = null; tadpoleStep = null;
             if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
             Frame predicted = null;
             SwimStep swimming = null;
@@ -304,6 +318,9 @@ public final class ScriptNavigation {
                 } else if (returnTo != null) {
                     if (physics == Physics.FISH) {
                         swimming = swimStep(returnTo);
+                        if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
+                    } else if (physics == Physics.TADPOLE) {
+                        prepareTadpole(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (physics == Physics.DROWNED_WATER) {
                         prepareDrownedWater(returnTo);
@@ -331,6 +348,10 @@ public final class ScriptNavigation {
                     if (physics == Physics.FISH) {
                         phase = "swimming";
                         swimming = swimStep(target);
+                        checkArrival = true;
+                    } else if (physics == Physics.TADPOLE) {
+                        phase = "swimming";
+                        prepareTadpole(target);
                         checkArrival = true;
                     } else if (physics == Physics.DROWNED_WATER) {
                         phase = "swimming";
@@ -378,8 +399,15 @@ public final class ScriptNavigation {
                 if (active) prepareDrownedWater(drownedHold);
                 else drownedStep = predictDrownedWater(mob.getDeltaMovement());
             }
+            if (physics == Physics.TADPOLE && tadpoleStep == null) {
+                if (active) prepareTadpole(swimHold);
+                else tadpoleStep = tadpoleTravelStep();
+            }
             // Exactly one native travel on a successful tick, including mining and building waits.
             travel();
+            if (tadpoleStep != null && (mob.position().distanceTo(tadpoleStep.after) > 0.01
+                || mob.getDeltaMovement().distanceTo(tadpoleStep.velocity) > 0.01))
+                throw error("route_tadpole_trajectory_changed");
             if (drownedStep != null && (mob.position().distanceTo(drownedStep.after) > 0.01
                 || mob.getDeltaMovement().distanceTo(drownedStep.velocity) > 0.01))
                 throw error("route_drowned_water_trajectory_changed");
@@ -405,6 +433,8 @@ public final class ScriptNavigation {
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
             if (physics == Physics.PARROT && flightPrepared)
                 throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
+            if (physics == Physics.TADPOLE && tadpolePrepared)
+                throw new IllegalStateException("route_tadpole_prepared_failed: " + failure.getMessage(), failure);
             if (physics == Physics.DROWNED_WATER && drownedPrepared)
                 throw new IllegalStateException("route_drowned_water_prepared_failed: " + failure.getMessage(), failure);
             throw failure;
@@ -413,7 +443,8 @@ public final class ScriptNavigation {
 
     void stop() {
         requireThread();
-        boolean cleanup = (puffState < 0 || ownsPufferfishCleanup())
+        boolean cleanup = (physics != Physics.TADPOLE || ownsTadpoleCleanup())
+            && (puffState < 0 || ownsPufferfishCleanup())
             && (physics != Physics.DROWNED_WATER || ownsDrownedWaterCleanup());
         OWNED.remove(mob, this);
         active = false;
@@ -434,7 +465,7 @@ public final class ScriptNavigation {
         Vec3 raw = direct == null ? Vec3.atBottomCenterOf(integerPosition(nodes.get(index))) : vector(direct);
         if (direct != null && edgeStart.distanceTo(vector(direct.getAsJsonObject("from"))) > 0.2)
             throw error("route_direct_start_changed");
-        if (physics == Physics.FISH || physics == Physics.PARROT) raw = raw.add(0, swimTargetOffset(mob), 0);
+        if (fishMode(physics) || physics == Physics.PARROT) raw = raw.add(0, swimTargetOffset(mob), 0);
         if (physics == Physics.DROWNED_WATER) raw = raw.add(0, 0.5, 0);
         target = raw;
         if (physics == Physics.DROWNED_WATER) {
@@ -443,7 +474,7 @@ public final class ScriptNavigation {
             AABB atSource = drownedInitialVolume.move(source.subtract(edgeStart));
             drownedPolicyVolume = atSource.minmax(atSource.move(raw.subtract(source))).deflate(EPS);
         }
-        double rise = physics == Physics.FISH || physics == Physics.PARROT || physics == Physics.DROWNED_WATER ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
+        double rise = fishMode(physics) || physics == Physics.PARROT || physics == Physics.DROWNED_WATER ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
         relevant = mob.getBoundingBox().minmax(mob.getBoundingBox().move(raw.subtract(edgeStart)))
             .inflate(0.1, 0, 0.1).expandTowards(0, rise + 0.1, 0).expandTowards(0, -1, 0);
         if (direct != null) {
@@ -516,7 +547,7 @@ public final class ScriptNavigation {
         BlockPos desired = reference.relative(direction);
         checkCell(desired);
         if (flag(edit, "jump")) {
-            if (physics == Physics.FISH || physics == Physics.DROWNED_WATER) throw error("route_aquatic_jump_unavailable");
+            if (fishMode(physics) || physics == Physics.DROWNED_WATER) throw error("route_aquatic_jump_unavailable");
             if (physics == Physics.PARROT) throw error("route_flying_jump_placement_unavailable");
             if (!tower) {
                 if (!mob.onGround() || jumpRise(mob) < desired.getY() + 1 - mob.getY()) throw error("route_jump_unavailable");
@@ -571,7 +602,7 @@ public final class ScriptNavigation {
         recordEdit("place", desired, before);
         placeIndex++; tower = false;
         if (edit.has("returnPos")) returnTo = Vec3.atBottomCenterOf(integerPosition(edit.getAsJsonObject("returnPos")))
-            .add(0, physics == Physics.DROWNED_WATER ? 0.5 : physics == Physics.FISH || physics == Physics.PARROT ? swimTargetOffset(mob) : 0, 0);
+            .add(0, physics == Physics.DROWNED_WATER ? 0.5 : fishMode(physics) || physics == Physics.PARROT ? swimTargetOffset(mob) : 0, 0);
     }
 
     private void use(BlockPos pos) {
@@ -1099,6 +1130,63 @@ public final class ScriptNavigation {
             throw error("route_fish_controller_unavailable");
     }
 
+    /** Native preparation, not a copied FishMoveControl or a brain/navigation tick. */
+    private void prepareTadpole(Vec3 goal) {
+        requireMode();
+        if (OWNED.get(mob) != this || !active || !owner.vehicleLeaseActive(lease))
+            throw error("script_no_longer_controls_body");
+        if (tadpoleStep != null) throw error("route_duplicate_tadpole_control");
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
+        double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
+        if (!Double.isFinite(speed) || speed <= 0 || speed > 4) throw error("route_aquatic_speed_unsupported");
+        // Desired acceleration selects input only. The actual limited native
+        // pitch/yaw and complete XYZ input below determine the next movement.
+        Vec3 correction = goal.subtract(pos).scale(0.015).subtract(velocity.scale(0.4))
+            .add(0, fishHadTarget ? -0.005 : 0.005 / 0.9 - 0.005, 0);
+        double length = correction.length();
+        Vec3 heading = length > 1e-12 ? correction.scale(1 / length) : new Vec3(0, 0, 1);
+        double alignment = Math.max(0, mob.getLookAngle().dot(heading));
+        double modifier = Math.clamp(length / (0.01F * speed), 0, 1) * alignment;
+        Vec3 wanted = pos.add(heading);
+        tadpolePrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(wanted.x, wanted.y, wanted.z, modifier);
+        tadpoleControlTick = true;
+        try { controller.tick(); }
+        finally { tadpoleControlTick = false; }
+        requireMode();
+        if (!active || OWNED.get(mob) != this || !owner.vehicleLeaseActive(lease))
+            throw error("script_no_longer_controls_body");
+        if (!pos.equals(mob.position()) || mob.getDeltaMovement().distanceTo(velocity.add(0, 0.005, 0)) > 1e-8)
+            throw error("route_tadpole_preparation_changed");
+        tadpoleStep = tadpoleTravelStep();
+    }
+
+    /** AbstractFish travel with SmoothSwimmingMoveControl's actual full XYZ input. */
+    private DryStep tadpoleTravelStep() {
+        requireMode();
+        Vec3 velocity = mob.getDeltaMovement(), input = new Vec3(mob.xxa, mob.yya, mob.zza);
+        if (!Double.isFinite(input.lengthSqr()) || !Double.isFinite(velocity.lengthSqr()))
+            throw error("route_tadpole_input_invalid");
+        if (input.lengthSqr() >= 1e-7) {
+            if (input.lengthSqr() > 1) input = input.normalize();
+            input = input.scale(0.01F);
+            float radians = mob.getYRot() * ((float) Math.PI / 180), sin = Mth.sin(radians), cos = Mth.cos(radians);
+            velocity = velocity.add(input.x * cos - input.z * sin, input.y, input.z * cos + input.x * sin);
+        }
+        Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
+        Vec3 after = mob.position().add(motion.delta);
+        if (!inside(after) || !withinEdge(after)) throw error("route_aquatic_edge_unexecutable");
+        AABB sweep = mob.getBoundingBox().expandTowards(motion.delta);
+        requireSubmerged(sweep);
+        if (!level.noCollision(mob, fishVolume(sweep))) throw error("route_tadpole_volume_obstructed");
+        if (Math.abs(velocity.y - motion.delta.y) > EPS) throw error("route_aquatic_vertical_collision");
+        Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0, velocity.y,
+            Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0).scale(0.9);
+        if (!fishHadTarget) remaining = remaining.add(0, -0.005, 0);
+        return new DryStep(after, remaining);
+    }
+
     private void steer(Vec3 goal, boolean sprint) {
         requireMode();
         double dx = goal.x - mob.getX(), dz = goal.z - mob.getZ();
@@ -1274,7 +1362,7 @@ public final class ScriptNavigation {
         if (!mob.isAlive() || mob.isRemoved()) throw error("route_body_changed");
         AABB sweep = mob.getBoundingBox().expandTowards(mob.getDeltaMovement()).inflate(0.4, mob.maxUpStep() + 0.1, 0.4);
         checkVolume(sweep);
-        if (physics != Physics.FISH && physics != Physics.DROWNED_WATER && box.get() != null) {
+        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && box.get() != null) {
             BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
             float friction = level.getBlockState(support).getFriction(level, support, mob);
             double acceleration = mob.onGround() ? mob.getSpeed() * (0.21600002F / (friction * friction * friction)) : 0.02F;
@@ -1288,9 +1376,10 @@ public final class ScriptNavigation {
             }
         }
         drownedTravelTick = physics == Physics.DROWNED_WATER;
+        tadpoleTravelTick = physics == Physics.TADPOLE;
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1305,6 +1394,7 @@ public final class ScriptNavigation {
     }
 
     private void clearControls() {
+        if (physics == Physics.TADPOLE && !ownsTadpoleCleanup()) return;
         if (physics == Physics.DROWNED_WATER && !ownsDrownedWaterCleanup()) return;
         if (puffState >= 0 && !ownsPufferfishCleanup()) return;
         if (physics == Physics.PARROT) { clearFlightControls(); return; }
@@ -1322,7 +1412,7 @@ public final class ScriptNavigation {
     }
     private boolean arrived(Vec3 goal) {
         return goal.subtract(mob.position()).horizontalDistance() < 0.12 && Math.abs(goal.y - mob.getY()) < 0.12 && settled()
-            && (physics != Physics.FISH && physics != Physics.PARROT && physics != Physics.DROWNED_WATER || mob.getDeltaMovement().length() <= 0.03);
+            && (!fishMode(physics) && physics != Physics.PARROT && physics != Physics.DROWNED_WATER || mob.getDeltaMovement().length() <= 0.03);
     }
 
     private BlockPos logicalPosition(Vec3 position) {
@@ -1346,7 +1436,7 @@ public final class ScriptNavigation {
         if (physics == Physics.RABBIT) return rabbitArrivedAtNode(node, goal);
         if (!settled() || !logicalPosition(mob.position()).equals(node)
             || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
-        if (physics == Physics.FISH) return arrived(goal);
+        if (fishMode(physics)) return arrived(goal);
         // Only water accepts the whole cell. A ladder may otherwise finish
         // almost a block above its target while still sliding down toward it.
         return level.getFluidState(node).is(FluidTags.WATER) || Math.abs(goal.y - mob.getY()) < 0.12;
@@ -1387,7 +1477,7 @@ public final class ScriptNavigation {
 
     private Vec3 destination(BlockPos node) {
         Vec3 center = Vec3.atBottomCenterOf(node);
-        if (physics == Physics.FISH) return center.add(0, swimTargetOffset(mob), 0);
+        if (fishMode(physics)) return center.add(0, swimTargetOffset(mob), 0);
         if (physics == Physics.DROWNED_WATER) return center.add(0, 0.5, 0);
         if (physics == Physics.PARROT) return flightDestination(node);
         if (waterOrClimb(node)) return center;
@@ -1450,7 +1540,7 @@ public final class ScriptNavigation {
                 && position.y >= Math.floor(Math.min(edgeStart.y, target.y))
                 && position.y < Math.floor(Math.max(edgeStart.y, target.y)) + 1;
         }
-        if ((physics == Physics.FISH || physics == Physics.PARROT) && edgeStart != null && target != null) {
+        if ((fishMode(physics) || physics == Physics.PARROT) && edgeStart != null && target != null) {
             Vec3 edge = target.subtract(edgeStart);
             double t = edge.lengthSqr() == 0 ? 0 : Math.clamp(position.subtract(edgeStart).dot(edge) / edge.lengthSqr(), 0, 1);
             return position.distanceTo(edgeStart.add(edge.scale(t))) <= 0.3;
@@ -1527,9 +1617,10 @@ public final class ScriptNavigation {
             result.addProperty("jumpHeight", 0); result.addProperty("maxJumpDistance", 0); result.addProperty("maxSprintJumpDistance", 0);
             return result;
         }
-        if (mode == Physics.FISH || mode == Physics.DROWNED_WATER) {
+        if (fishMode(mode) || mode == Physics.DROWNED_WATER) {
             JsonObject result = new JsonObject();
-            result.addProperty("physics", mode == Physics.DROWNED_WATER ? "native-drowned-water-post-tick" : "native-fish-submerged-post-tick");
+            result.addProperty("physics", mode == Physics.DROWNED_WATER ? "native-drowned-water-post-tick"
+                : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick" : "native-fish-submerged-post-tick");
             result.addProperty("locomotion", "submerged");
             result.addProperty("swimTargetYOffset", mode == Physics.DROWNED_WATER ? 0.5 : swimTargetOffset(mob));
             result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
@@ -1596,6 +1687,10 @@ public final class ScriptNavigation {
         if ((mob.getClass() == Cod.class || mob.getClass() == Salmon.class || mob.getClass() == TropicalFish.class || puffer)
             && control == AbstractFish.FishMoveControl.class && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER))
             return Physics.FISH;
+        if (mob.getClass() == Tadpole.class && control == SmoothSwimmingMoveControl.class
+            && mob.getNavigation().getClass() == WaterBoundPathNavigation.class
+            && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
+            && tadpoleParameters((SmoothSwimmingMoveControl) mob.getMoveControl())) return Physics.TADPOLE;
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)
             && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class
@@ -1654,6 +1749,13 @@ public final class ScriptNavigation {
                 || mob.getTarget() != drownedTarget || mob.getPose() != drownedPose
                 || mob.getBbWidth() != drownedWidth || mob.getBbHeight() != drownedHeight || mob.getEyeHeight() != drownedEyeHeight)
                 throw error("route_drowned_water_state_changed");
+            requireSubmerged(mob.getBoundingBox());
+        }
+        if (physics == Physics.TADPOLE) {
+            if ((!mob.isNoAi() && !tadpoleTravelTick) || mob.getNavigation() != tadpoleNavigation
+                || tadpoleNavigation.getPath() != null || mob.getTarget() != tadpoleTarget || mob.getPose() != tadpolePose
+                || mob.getBbWidth() != tadpoleWidth || mob.getBbHeight() != tadpoleHeight || mob.getEyeHeight() != tadpoleEyeHeight)
+                throw error("route_tadpole_body_changed");
             requireSubmerged(mob.getBoundingBox());
         }
         if (physics == Physics.FISH) {
@@ -1752,15 +1854,15 @@ public final class ScriptNavigation {
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
             AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
             route.checkVolume(route.physics == Physics.PARROT ? route.flightVolume(checked)
-                : route.physics == Physics.DROWNED_WATER ? route.fishVolume(checked) : checked);
+                : (route.physics == Physics.DROWNED_WATER || route.physics == Physics.TADPOLE) ? route.fishVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
                 if (!route.inside(next)) throw error("route_leaves_body_box");
                 if (!route.withinEdge(next)) throw error("route_leaves_selected_edge");
                 route.checkDryVolume(sweep);
-                if (route.physics == Physics.FISH || route.physics == Physics.DROWNED_WATER) route.requireSubmerged(sweep);
-                if (route.physics == Physics.DROWNED_WATER && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
-                    throw error("route_drowned_water_volume_obstructed");
+                if (fishMode(route.physics) || route.physics == Physics.DROWNED_WATER) route.requireSubmerged(sweep);
+                if ((route.physics == Physics.DROWNED_WATER || route.physics == Physics.TADPOLE) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
+                    throw error(route.physics == Physics.TADPOLE ? "route_tadpole_volume_obstructed" : "route_drowned_water_volume_obstructed");
             }
             return true;
         } catch (RuntimeException failure) {
@@ -1816,6 +1918,33 @@ public final class ScriptNavigation {
             route.requireMode();
             return true;
         } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
+    }
+
+    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.TADPOLE; }
+
+    private static boolean tadpoleParameters(SmoothSwimmingMoveControl control) {
+        return control.maxTurnX == 85 && control.maxTurnY == 10 && control.inWaterSpeedModifier == 0.02F
+            && control.outsideWaterSpeedModifier == 0.1F && control.applyGravity;
+    }
+
+    /** The real navigation remains idle everywhere except this exact controller query. */
+    public static boolean selectedTadpoleControl(Mob body, MoveControl control, PathNavigation navigation) {
+        if (body.level().isClientSide) return false;
+        ScriptNavigation route = OWNED.get(body);
+        if (route == null || !route.active || route.physics != Physics.TADPOLE || !route.tadpoleControlTick
+            || route.controller != control || route.tadpoleNavigation != navigation) return false;
+        try {
+            route.requireThread();
+            if (!route.owner.vehicleLeaseActive(route.lease)) throw error("script_no_longer_controls_body");
+            route.requireMode();
+            return true;
+        } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
+    }
+
+    private boolean ownsTadpoleCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && mob.getNavigation() == tadpoleNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
     }
 
     private static boolean inherits(Class<?> type, String method) {
