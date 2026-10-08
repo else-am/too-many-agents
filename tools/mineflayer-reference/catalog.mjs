@@ -331,6 +331,11 @@ function inherit(owner, visiting = new Set()) {
       const own = declarations.get(key);
       if (own && own.category !== 'documentation-only') {
         (own.baseMembers ??= []).push(entry.key);
+        // typed-emitter is a signature-only cast, not an overriding runtime.
+        if (owner === 'typed-emitter.TypedEventEmitter' && edge.base === 'events.EventEmitter') {
+          own.inheritedFrom = entry.key;
+          own.canonical = entry.canonical ?? entry.key;
+        }
         continue;
       }
       declarations.set(key, { ...entry, key, owner: entry.owner === edge.base ? owner : `${owner}.events`,
@@ -767,6 +772,16 @@ for (const [key, decision] of Object.entries(coverage.entries)) {
     for (const kind of required) if (!reports.some(e => e.kind === kind)) throw new Error(`${key} lacks ${kind} conformance evidence`);
   }
   Object.assign(entry, decision);
+}
+// Inheritance was expanded before evidence decisions were applied. Display the
+// verified canonical decision on aliases without replacing their own sources.
+for (const entry of declarations.values()) {
+  if (!entry.inheritedFrom || entry.inheritanceReview || coverage.entries[entry.key]) continue;
+  const canonical = declarations.get(entry.canonical);
+  if (!canonical) throw new Error(`Missing canonical member: ${entry.key}`);
+  for (const field of ['status', 'verification', 'reason', 'scenarios', 'evidence']) {
+    if (canonical[field] !== undefined) entry[field] = canonical[field];
+  }
 }
 for (const [key, note] of Object.entries(coverage.reviewNotes ?? {})) {
   if (!declarations.has(key)) throw new Error(`Unknown review subject: ${key}`);
