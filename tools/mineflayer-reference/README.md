@@ -128,8 +128,9 @@ the generator permits only the explicitly reviewed native-body and connection ex
 
 Current implementation and native-verification gaps are tracked in
 [the handoff checklist](../../MINEFLAYER-STATUS.md). Recent ports awaiting native
-checks, remaining world/chunk methods, body-versus-player semantics and broader
-Pathfinder execution/lifecycle remain review priorities. Source-only fields and declaration contradictions
+checks, raw entity metadata, broader world/chunk coverage and
+Pathfinder execution/lifecycle remain review priorities. Native Mob/player
+applicability follows the user-confirmed boundary in the checklist. Source-only fields and declaration contradictions
 are in the generated review queues. The shared gather procedure now has an actual live reference pass and historical native outcome match. Wider paired coverage remains incomplete.
 
 ## Reference server (separate, not authorized by catalog generation)
