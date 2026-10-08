@@ -98,9 +98,9 @@ export function installColumns(bot, ChunkColumn) {
     if (!extraInfos) block.entity = undefined;
     return block;
   }
-  function update(view, emit, trackBlocks, localBlocks) {
-    const events = [], changes = [];
-    if (!view) return { events, changes };
+  function update(view, emit, trackBlocks, localBlocks, trackBlockEntities = false) {
+    const events = [], changes = [], blockEntities = [];
+    if (!view) return { events, changes, blockEntities };
     if (dimension !== undefined && dimension !== view.dimension) {
       if (world.async.savingQueue.size || world.async.currentlySaving)
         throw new Error('World dimension changed with unsaved guest columns');
@@ -127,6 +127,11 @@ export function installColumns(bot, ChunkColumn) {
       const encoded = JSON.stringify(row);
       if (old && source?.encoded === encoded) continue;
       const column = ChunkColumn.fromSnapshot(row);
+      if (old && trackBlockEntities) for (const entry of row.blockEntities) {
+        const position = new Vec3(entry.x, entry.y, entry.z);
+        if (JSON.stringify(old.getBlockEntity(position) ?? null) !== JSON.stringify(entry.nbt))
+          blockEntities.push(new Vec3(row.x * 16 + entry.x, entry.y, row.z * 16 + entry.z));
+      }
       if (old && trackBlocks && source?.data !== row.data) {
         for (let i = 0; i < column.sections.length; i++) {
           if (old.minY === column.minY && old.sections?.[i]?.toJson() === column.sections[i].toJson()) continue;
@@ -148,7 +153,7 @@ export function installColumns(bot, ChunkColumn) {
       if (world.async.storageProvider) world.async.queueSaving(row.x, row.z);
       sources.set(id, { encoded, data: row.data });
     }
-    return { events, changes };
+    return { events, changes, blockEntities };
   }
   function patchLocal(blocks) {
     const { min, size, states, biomes, light, entities } = blocks;

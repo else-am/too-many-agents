@@ -3,6 +3,9 @@ package toomanyagents;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.serialization.JsonOps;
 import com.mojang.logging.LogUtils;
 import net.minecraft.commands.CommandSource;
@@ -1471,7 +1474,7 @@ final class GameAccess {
         for (var controller : actions.values()) controller.recordMessage(message);
     }
 
-    private CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> tabComplete(Mob mob, JsonObject args) {
+    private CompletableFuture<Suggestions> tabComplete(Mob mob, JsonObject args) {
         String text = string(args, "text", 4096);
         if (text.codePoints().anyMatch(c -> c < 32 || c == 127)) throw error("invalid_completion_text");
         var current = mob.getServer();
@@ -1482,7 +1485,24 @@ final class GameAccess {
         var reader = new com.mojang.brigadier.StringReader(text);
         if (reader.canRead() && reader.peek() == '/') reader.skip();
         var dispatcher = current.getCommands().getDispatcher();
-        return dispatcher.getCompletionSuggestions(dispatcher.parse(reader, source));
+        var parsed = dispatcher.parse(reader, source);
+        var context = parsed.getContext();
+        var suggestion = context.findSuggestionContext(text.length());
+        var futures = new ArrayList<CompletableFuture<Suggestions>>();
+        var command = context.build(text);
+        int start = Math.min(suggestion.startPos, text.length());
+        // Brigadier's completion loop omits the permission check used when parsing.
+        // Apply it here before invoking providers, including nested argument providers.
+        for (var child : suggestion.parent.getChildren()) {
+            if (!child.canUse(source)) continue;
+            try {
+                futures.add(child.listSuggestions(command, new SuggestionsBuilder(text, start)));
+            } catch (CommandSyntaxException ignored) {
+                // Invalid partial input has no suggestions from this child.
+            }
+        }
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+            .thenApply(ignored -> Suggestions.merge(text, futures.stream().map(CompletableFuture::join).toList()));
     }
 
     private JsonObject scriptChat(Mob mob, JsonObject args) {

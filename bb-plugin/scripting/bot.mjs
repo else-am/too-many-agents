@@ -195,6 +195,20 @@ export function createBot(initial) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
     const changed = [];
     const blocks = next.blocks;
+    const blockEntityPositions = new Map();
+    const trackBlockEntities = streamed && snapshot && bot.listenerCount('blockEntityData') > 0;
+    if (trackBlockEntities) {
+      const { min, size } = blocks.min ? blocks : snapshot.blocks;
+      for (const [key, tag] of Object.entries(blocks.entities)) {
+        const index = Number(key);
+        const position = new Vec3(min[0] + index % size[0], min[1] + Math.floor(index / (size[0] * size[2])), min[2] + Math.floor(index / size[0]) % size[2]);
+        const before = bot.blockAt(position);
+        if (before && JSON.stringify(before.entity ?? null) !== JSON.stringify(tag))
+          blockEntityPositions.set(position.toString(), position);
+      }
+    }
+    const editor = next.hands.signEditor;
+    const openedSign = streamed && editor && editor.sequence !== snapshot?.hands.signEditor?.sequence;
     const trackBlocks = snapshot && [bot, bot.world, bot.world.async].some(emitter => emitter.eventNames()
       .some(name => typeof name === 'string' && name.startsWith('blockUpdate')));
     const oldBlock = (position, state) => {
@@ -226,7 +240,8 @@ export function createBot(initial) {
         }
       }
     }
-    const columnUpdate = columns.update(next.columnView, streamed, trackBlocks, next.blocks);
+    const columnUpdate = columns.update(next.columnView, streamed, trackBlocks, next.blocks, trackBlockEntities);
+    for (const position of columnUpdate.blockEntities) blockEntityPositions.set(position.toString(), position);
     changesFromColumns(columnUpdate.changes, changed);
     columns.patchLocal(next.blocks);
     snapshot = next;
@@ -424,6 +439,8 @@ export function createBot(initial) {
       bot.world.emit('blockUpdate', before, after);
       bot.world.emit(`blockUpdate:${position}`, before, after);
     }
+    for (const position of blockEntityPositions.values()) bot.emit('blockEntityData', bot.blockAt(position));
+    if (openedSign) bot.emit('signOpen', bot.blockAt(new Vec3(editor.position.x, editor.position.y, editor.position.z)));
     if (streamed) {
       for (const event of entityEvents) bot.emit(...event);
       if (next.tick !== lastPhysicsTick) { lastPhysicsTick = next.tick; bot.emit('physicsTick'); }

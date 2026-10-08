@@ -106,7 +106,7 @@ final class AgentHands extends FakePlayer {
     private long nextMeleeAttackTick;
     private net.minecraft.world.entity.projectile.FishingHook scriptFishing;
     private net.minecraft.world.level.block.entity.SignBlockEntity editedSign;
-    private long signEditorExpires;
+    private long signEditorExpires, signEditorSequence;
     private InteractionHand nativeUseHand;
     private ItemStack creativeUseStack = ItemStack.EMPTY;
     private String nativeUseOutcome = "idle";
@@ -696,6 +696,7 @@ final class AgentHands extends FakePlayer {
     public void openTextEdit(net.minecraft.world.level.block.entity.SignBlockEntity sign, boolean front) {
         // Sign ticks cannot find an unlisted FakePlayer; retain the native grant locally.
         editedSign = sign;
+        signEditorSequence++;
         signEditorExpires = level().getGameTime() + 1200;
     }
 
@@ -1280,6 +1281,12 @@ final class AgentHands extends FakePlayer {
     JsonObject scriptSnapshot(ScriptItems items) {
         var result = snapshot();
         result.addProperty("blockInteractionRange", blockInteractionRange());
+        if (editedSign != null && !editedSign.isRemoved() && editedSign.getLevel() == level()
+            && level().getGameTime() <= signEditorExpires) {
+            var position = editedSign.getBlockPos();
+            result.add("signEditor", JsonState.object("sequence", signEditorSequence, "position",
+                JsonState.object("x", position.getX(), "y", position.getY(), "z", position.getZ())));
+        }
         for (var entry : result.getAsJsonArray("inventory")) {
             var item = entry.getAsJsonObject();
             item.addProperty("wire", items.wire(getInventory().getItem(item.get("slot").getAsInt())));
