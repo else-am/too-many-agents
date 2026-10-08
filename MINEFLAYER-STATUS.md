@@ -23,6 +23,8 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 
 ## Latest evidence reconciliation
 
+- [x] Focused isolated live-reference world queries passed once: nearest table, sign extra-info and visibility/occlusion, with server block-type confirmation. Exact source/result hashes are indexed at `reference-world-queries`; protocol decode and setup movement warnings are retained. The historical native report lacks embedded source, so no exact paired-run or full-member claim is made. No native rerun.
+
 - [x] Reviewed ten supplied-component ChatMessage construction/conversion/data contracts against the existing292-case QuickJS report and two builder-network fixtures. Exact scenario/report hashes pass; chat implementation is unchanged. Native chat delivery and actual registry initialization remain separate obligations.
 
 - [x] Linked59 additional present static-table/version members to the existing complete-table QuickJS comparison, including all838 recognized PC version comparisons. Recorded registry implementation hashes still match. No rerun or native gameplay promotion; absent edition-specific fields remain pending.
