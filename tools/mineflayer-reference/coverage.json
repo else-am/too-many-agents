@@ -4999,6 +4999,42 @@
         "path": "run/mineflayer-reference/world-switch-native-572692c.json",
         "sha256": "f954b7ff137c0127db222a94f76011f97b91a42df20eb6ca9b72aadd38d44669"
       }
+    },
+    "fox-native-649cc24": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-fox-649cc24.js",
+      "subjects": [],
+      "scope": "Corrected native awake Fox slab step, approach and one selected stone dig. Physical slab feet -59.5; pickaxe damage1/cobblestone1, no exclusion-cell entry or resets. Eight completed requests; no direct shortcut or other-species claim.",
+      "result": "passed",
+      "testedRevision": "649cc24",
+      "sourceSha256": "5a42b2f1c7926f6f605f0b902b088a60bdf24b2dee335767eeadb62d6a1a2419",
+      "report": {
+        "path": "run/mineflayer-reference/fox-native-649cc24.json",
+        "sha256": "76ebfe53a7646cf0197e262077d61af8991a2c0f5495b0a3a69f5e2202ca118d",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/649cc24-summary.json",
+      "limitations": "Selected native scenario only, not full species/pathfinder coverage. Original failed fixture evidence retained."
+    },
+    "cod-native-649cc24": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-cod-649cc24.js",
+      "subjects": [],
+      "scope": "Fixture start guard failed before any native request. Native Cod capabilities/geometry initialized, but passive sinking moved it from the declared start. No aquatic route was submitted; this does not establish a product failure or traversal pass.",
+      "result": "failed",
+      "testedRevision": "649cc24",
+      "sourceSha256": "f6004b589934564599a8438d5490cea4731a64d6a30b98447d1b223a920dd565",
+      "report": {
+        "path": "run/mineflayer-reference/cod-native-649cc24.json",
+        "sha256": "efd257b0d81ca91abc4e527193f40935c1bfc3651c9836e1db0a86e41f138506",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/649cc24-summary.json",
+      "limitations": "Selected native scenario only, not full species/pathfinder coverage. Original failed fixture evidence retained."
     }
   },
   "reviewNotes": {
