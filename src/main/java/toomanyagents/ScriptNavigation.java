@@ -15,12 +15,14 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Salmon;
 import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.monster.Drowned;
+import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.ClipContext;
@@ -48,7 +50,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, FISH, SLIME }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     private static final double EPS = 1e-6;
     // Method ownership is immutable for a loaded class; body state is not.
@@ -56,7 +58,7 @@ public final class ScriptNavigation {
         @Override protected Boolean computeValue(Class<?> type) {
             try {
                 return type.getMethod("travel", Vec3.class).getDeclaringClass() == (type == Drowned.class ? Drowned.class : LivingEntity.class)
-                    && type.getMethod("jumpFromGround").getDeclaringClass() == LivingEntity.class
+                    && type.getMethod("jumpFromGround").getDeclaringClass() == (type == Slime.class ? Slime.class : LivingEntity.class)
                     && inherits(type, "getJumpPower") && inherits(type, "getFlyingSpeed")
                     && inherits(type, "isAffectedByFluids");
             } catch (ReflectiveOperationException failure) { return false; }
@@ -90,8 +92,15 @@ public final class ScriptNavigation {
     private RuntimeException movementFailure;
     private boolean fishControlTick, fishHadTarget;
     private Vec3 swimHold;
+    private int slimeSize;
 
-    private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint) {}
+    private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
+                         boolean jump, boolean sprint, float wantedYaw, double modifier) {
+        Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint) {
+            this(before, after, beforeVelocity, beforeGround, target, jump, sprint, 0, 1);
+        }
+    }
+    private record HopInput(float yaw, double modifier) {}
     private record SwimStep(Vec3 wanted, double modifier, float speed, float yaw, Vec3 after, Vec3 velocity) {}
     private record Motion(Vec3 delta, boolean ground, boolean wall) {}
 
@@ -120,6 +129,7 @@ public final class ScriptNavigation {
         physics = physics(mob);
         if (physics == Physics.UNSUPPORTED) throw error("route_unsupported_physics");
         controller = mob.getMoveControl();
+        slimeSize = mob instanceof Slime slime ? slime.getSize() : 0;
         fishHadTarget = mob.getTarget() != null;
         swimHold = mob.position();
         if (!inside(mob.position())) throw error("route_outside_body_box");
@@ -137,6 +147,7 @@ public final class ScriptNavigation {
             boolean parkour = flag(node, "parkour");
             if (physics == Physics.FISH && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_aquatic_edge");
+            if (physics == Physics.SLIME && node.has("direct")) throw error("route_unsupported_hopping_direct");
             if (node.has("direct")) {
                 JsonObject segment = node.getAsJsonObject("direct");
                 Vec3 from = vector(segment.getAsJsonObject("from")), to = vector(segment);
@@ -233,7 +244,9 @@ public final class ScriptNavigation {
                         swimming = swimStep(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else {
-                        Vec3 destination = returnTo; returnTo = null;
+                        Vec3 destination = returnTo;
+                        // A hopper may need several native hops to reach an edit stance.
+                        if (physics != Physics.SLIME || arrived(destination)) returnTo = null;
                         plan(destination, false);
                         if (!trajectory.isEmpty()) predicted = followFrame();
                     }
@@ -392,8 +405,17 @@ public final class ScriptNavigation {
             if (!tower) {
                 if (!mob.onGround() || jumpRise(mob) < desired.getY() + 1 - mob.getY()) throw error("route_jump_unavailable");
                 AABB clearance = mob.getBoundingBox().expandTowards(0, jumpRise(mob), 0);
+                if (physics == Physics.SLIME) {
+                    checkVolume(clearance);
+                    checkDryVolume(clearance);
+                    Vec3 apex = mob.position().add(0, jumpRise(mob), 0);
+                    if (!inside(apex) || !withinEdge(apex)) throw error("route_jump_outside_edge");
+                }
                 if (!level.noCollision(mob, clearance)) throw error("route_jump_obstructed");
-                mob.setSprinting(false); mob.jumpFromGround(); tower = true;
+                if (physics == Physics.SLIME) {
+                    tower = hopControl(mob.getYRot(), 0);
+                    if (!tower) phase = "waiting_hop";
+                } else { mob.setSprinting(false); mob.jumpFromGround(); tower = true; }
                 return;
             }
             if (mob.getBoundingBox().minY < desired.getY() + 1 - EPS) {
@@ -505,7 +527,7 @@ public final class ScriptNavigation {
         predictionDeadline = System.nanoTime() + 25_000_000L;
         if (arrived(goal)) return;
         List<Frame> best = simulate(goal, -1, false);
-        if (best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
+        if (physics != Physics.SLIME && best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
             for (boolean sprint : new boolean[]{false, true}) {
                 if (sprint && !sprintAllowed) continue;
                 for (int takeoff = 0; takeoff <= (parkour ? 12 : 5); takeoff++) {
@@ -522,12 +544,45 @@ public final class ScriptNavigation {
         Frame frame = trajectory.get(frameIndex);
         if (mob.position().distanceTo(frame.before) > 0.075 || mob.getDeltaMovement().distanceTo(frame.beforeVelocity) > 0.035
             || mob.onGround() != frame.beforeGround) throw error("route_trajectory_changed");
+        if (physics == Physics.SLIME) {
+            boolean willJump = mob.onGround() && ((Slime.SlimeMoveControl) controller).jumpDelay <= 0 && mob.noJumpDelay == 0;
+            if (willJump != frame.jump) throw error("route_hop_timing_changed");
+            if (hopControl(frame.wantedYaw, frame.modifier) != frame.jump) throw error("route_hop_timing_changed");
+            return frame;
+        }
         steer(frame.target, frame.sprint);
         if (frame.jump) {
             if (!mob.onGround()) throw error("route_takeoff_not_grounded");
             mob.jumpFromGround();
         }
         return frame;
+    }
+
+    /** Consume only the native controller's real request; never write its delay or sample RNG. */
+    private boolean hopControl(float yaw, double modifier) {
+        requireMode();
+        Slime.SlimeMoveControl control = (Slime.SlimeMoveControl) controller;
+        boolean requested = mob.onGround() && control.jumpDelay <= 0;
+        mob.setSprinting(false);
+        control.setDirection(yaw, false);
+        control.setWantedMovement(modifier);
+        control.tick();
+        mob.getJumpControl().tick();
+        boolean jump = requested && mob.onGround() && mob.noJumpDelay == 0;
+        if (jump) mob.jumpFromGround();
+        // Ordinary NoAI aiStep owns cooldown reset/decrement between Post calls.
+        // We do not execute a second aiStep or write its private cooldown.
+        mob.setJumping(false);
+        requireMode();
+        return jump;
+    }
+
+    private static HopInput hopInput(Vec3 pos, Vec3 velocity, Vec3 goal, float yaw) {
+        // Feedback chooses native direction/speed, never an entity velocity.
+        Vec3 toward = goal.subtract(pos).multiply(1, 0, 1).subtract(velocity.multiply(5, 0, 5));
+        float desired = toward.horizontalDistanceSqr() < 1e-8 ? yaw
+            : (float) (Mth.atan2(toward.z, toward.x) * 180 / (float) Math.PI) - 90;
+        return new HopInput(desired, Math.min(1, toward.horizontalDistance() * 4));
     }
 
     /** Select bounded native controller input, then predict its next actual travel.
@@ -606,6 +661,11 @@ public final class ScriptNavigation {
         boolean groundWithoutBlock = ground && supporting == null;
         double baseSpeed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
         double speed = baseSpeed * (sprint ? 1.3 : 1);
+        boolean hopper = physics == Physics.SLIME;
+        int hopDelay = hopper ? ((Slime.SlimeMoveControl) controller).jumpDelay : 0;
+        float yaw = mob.getYRot();
+        boolean hopped = !ground;
+        double initialDistance = pos.distanceTo(goal);
         List<Frame> frames = new ArrayList<>();
         for (int tick = 0; tick < 100; tick++) {
             if (++predictionSteps > 2700 || System.nanoTime() > predictionDeadline) throw error("route_prediction_budget");
@@ -615,6 +675,10 @@ public final class ScriptNavigation {
             Vec3 difference = goal.subtract(pos);
             double distance = difference.horizontalDistance();
             if (distance < 0.12 && Math.abs(difference.y) < 0.12 && ground) return frames;
+            // Stop at the first landing. Only the real controller may sample the
+            // next grounded delay; replan from its observed landed state.
+            if (hopper && hopped && ground)
+                return pos.distanceTo(goal) < initialDistance - 0.02 ? frames : null;
             Vec3 direction = distance < 0.05 ? Vec3.ZERO : new Vec3(difference.x / distance, 0, difference.z / distance);
             BlockPos support = movementSupport(pos, supporting);
             if (!known(support) || !known(BlockPos.containing(pos))) return null;
@@ -628,6 +692,24 @@ public final class ScriptNavigation {
             if (physics == Physics.DROWNED && !ground && distance >= 0.05)
                 velocity = velocity.add(0, -0.008, 0);
             boolean jump = tick == takeoff;
+            HopInput hop = null;
+            if (hopper) {
+                hop = hopInput(pos, velocity, goal, yaw);
+                yaw += Mth.clamp(Mth.wrapDegrees(hop.yaw - yaw), -90, 90);
+                if (yaw < 0) yaw += 360; else if (yaw > 360) yaw -= 360;
+                speed = (float) (hop.modifier * baseSpeed);
+                jump = false;
+                if (ground) {
+                    if (hopDelay-- <= 0) {
+                        // Subsequent NoAI aiStep clears the inactive jump cooldown.
+                        jump = tick > 0 || mob.noJumpDelay == 0;
+                        if (!jump) return null;
+                        hopped = true;
+                    } else speed = 0;
+                }
+                float radians = yaw * ((float) Math.PI / 180);
+                direction = new Vec3(-Mth.sin(radians), 0, Mth.cos(radians));
+            }
             if (jump) {
                 if (!ground) return null;
                 double power = jumpPower(mob, pos, support);
@@ -640,7 +722,7 @@ public final class ScriptNavigation {
             Motion motion = collide(bounds, velocity, ground);
             Vec3 next = pos.add(motion.delta);
             if (!inside(next) || !withinEdge(next)) return null;
-            if (physics == Physics.DROWNED && hasFluid(bounds.expandTowards(motion.delta))) return null;
+            if ((physics == Physics.DROWNED || hopper) && hasFluid(bounds.expandTowards(motion.delta))) return null;
             if (next.y < Math.min(edgeStart.y, goal.y) - 1.1) return null;
             Vec3 remaining = new Vec3(Math.abs(velocity.x - motion.delta.x) > EPS ? 0 : velocity.x,
                 Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
@@ -659,7 +741,9 @@ public final class ScriptNavigation {
             if (factor == 1) factor = level.getBlockState(movementSupport(next, supporting)).getBlock().getSpeedFactor();
             remaining = remaining.multiply(factor * drag, 1, factor * drag);
             remaining = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * 0.98F, remaining.z);
-            frames.add(new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, sprint));
+            frames.add(hopper
+                ? new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, false, hop.yaw, hop.modifier)
+                : new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, sprint));
             bounds = nextBounds; pos = next; velocity = remaining; ground = motion.ground;
             if (motion.wall && motion.delta.horizontalDistanceSqr() < 1e-7 && tick > 15) return null;
         }
@@ -903,7 +987,15 @@ public final class ScriptNavigation {
         result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
         result.addProperty("jumpHeight", rise);
         result.addProperty("canJump", supported && rise > 0);
-        result.addProperty("canSwim", supported && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
+        result.addProperty("canSwim", supported && mode != Physics.SLIME && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
+        if (mode == Physics.SLIME) {
+            double reach = rise > 0 ? hopEnvelope(speed, velocity, power, gravity, width) : 0;
+            result.addProperty("locomotion", "hopping");
+            result.addProperty("maxJumpDistance", reach);
+            result.addProperty("maxSprintJumpDistance", reach);
+            result.addProperty("physics", "native-slime-hop-post-tick");
+            return result;
+        }
         result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED) : 0);
         result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true, mode == Physics.DROWNED) : 0);
         result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
@@ -922,6 +1014,9 @@ public final class ScriptNavigation {
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)) return Physics.ORDINARY;
         if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
+        if (mob.getClass() == Slime.class && control == Slime.SlimeMoveControl.class
+            && mob.getJumpControl().getClass() == JumpControl.class
+            && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable()) return Physics.SLIME;
         if (mob.getClass() == Fox.class && control == Fox.FoxMoveControl.class) {
             Fox fox = (Fox) mob;
             // Exact Fox.canMove predicate; do not clear its native state flags.
@@ -936,6 +1031,7 @@ public final class ScriptNavigation {
         if (movementFailure != null) throw movementFailure;
         if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
+        if (physics == Physics.SLIME && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
         if (physics == Physics.FISH) {
             if ((mob.getTarget() != null) != fishHadTarget) throw error("route_aquatic_target_changed");
@@ -970,7 +1066,8 @@ public final class ScriptNavigation {
     }
 
     private void checkDryVolume(AABB bounds) {
-        if (physics == Physics.DROWNED && hasFluid(bounds)) throw error("route_drowned_requires_dry_ground");
+        if ((physics == Physics.DROWNED || physics == Physics.SLIME) && hasFluid(bounds))
+            throw error(physics == Physics.SLIME ? "route_hop_requires_dry_ground" : "route_drowned_requires_dry_ground");
     }
 
     private boolean hasFluid(AABB bounds) {
@@ -1076,6 +1173,19 @@ public final class ScriptNavigation {
             velocity = (velocity - gravity) * 0.98F * 0.98;
         }
         return Double.isFinite(height) ? Math.min(16, height) : 0;
+    }
+
+    /** Slime has one ground acceleration at takeoff, no running start or sprint impulse. */
+    private static double hopEnvelope(double speed, double initialVelocity, double power, double gravity, double width) {
+        double horizontal = initialVelocity + speed * Math.min(1, speed) * 1.001;
+        double vertical = power, height = 0, distance = 0;
+        for (int tick = 0; tick < 100; tick++) {
+            distance += horizontal; height += vertical;
+            if (height < -1) break;
+            horizontal = horizontal * 0.91F * 0.98 + 0.02F * Math.min(1, speed);
+            vertical = (vertical - gravity) * 0.98F * 0.98;
+        }
+        return Math.min(4, distance + 1 + width);
     }
 
     /** Candidate envelope, not a promise: includes a bounded takeoff approach and body overlap. */
