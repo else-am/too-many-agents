@@ -7950,6 +7950,42 @@
         "reference-container"
       ],
       "reason": "Pinned source/20 authoritative guest fixture groups plus recovered native and real reference chest transfer/lifecycle task. Chest.close delegates to public bot.closeWindow in current source. Native inventory mirror updates earlier than reference and stale handles reject explicitly. Native permissions, quantities and cursor remain authoritative; no arbitrary menu/species/race cross-product claim."
+    },
+    "events.EventEmitter.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Actual production bot constructor in QuickJS compared with Node: independent local instances, static listener counts, and newListener original identity/before-insertion/reentrant order. Synthetic initialization only; native event sources are separate. removeListener wrapper-identity difference is explicitly outside this promotion.",
+      "scenarios": [
+        "tools/mineflayer-reference/emitter-meta.mjs"
+      ],
+      "evidence": [
+        "emitter-meta-local"
+      ]
+    },
+    "events.EventEmitter.static.listenerCount": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Actual production bot constructor in QuickJS compared with Node: independent local instances, static listener counts, and newListener original identity/before-insertion/reentrant order. Synthetic initialization only; native event sources are separate. removeListener wrapper-identity difference is explicitly outside this promotion.",
+      "scenarios": [
+        "tools/mineflayer-reference/emitter-meta.mjs"
+      ],
+      "evidence": [
+        "emitter-meta-local"
+      ]
+    },
+    "events.EventEmitter.events.newListener": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Actual production bot constructor in QuickJS compared with Node: independent local instances, static listener counts, and newListener original identity/before-insertion/reentrant order. Synthetic initialization only; native event sources are separate. removeListener wrapper-identity difference is explicitly outside this promotion.",
+      "scenarios": [
+        "tools/mineflayer-reference/emitter-meta.mjs"
+      ],
+      "evidence": [
+        "emitter-meta-local"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -10335,6 +10371,23 @@
         ]
       },
       "limitations": "Fixture callback only coordinates external removal; not a public agent capability. This does not prove the bot caused the break. Exact native counterpart remains unrun; protocol warning retained; no broad dig promotion."
+    },
+    "emitter-meta-local": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/emitter-meta.mjs",
+      "subjects": [
+        "events.EventEmitter.constructor",
+        "events.EventEmitter.static.listenerCount",
+        "events.EventEmitter.events.newListener"
+      ],
+      "scope": "Local independent constructor state, static counts and newListener callback identity/order in actual production QuickJS versus Node.",
+      "result": "passed",
+      "sourceSha256": "65a859823275019170e9b970cd94670374ffaae2010e28c012ed6b94b391091a",
+      "report": {
+        "path": "run/mineflayer-reference/emitter-meta.json",
+        "sha256": "04e63a1053307803ca920790b9d7f99c7f08c6bca9359c1953c5a0124d6b4e78"
+      },
+      "limitations": "Report preserves separate once-removal identity difference: Node wrapper versus guest original callback. No removeListener event parity, warning/options, defaultMaxListeners validation or native event-source promotion."
     }
   },
   "reviewNotes": {
