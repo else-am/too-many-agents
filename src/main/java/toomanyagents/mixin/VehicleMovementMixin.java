@@ -2,6 +2,7 @@ package toomanyagents.mixin;
 
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.camel.Camel;
+import net.minecraft.world.entity.animal.sniffer.Sniffer;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
@@ -18,8 +19,9 @@ import toomanyagents.ScriptVehicleControls;
 abstract class VehicleMovementMixin {
     @Inject(method = "onSyncedDataUpdated(Lnet/minecraft/network/syncher/EntityDataAccessor;)V",
         at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;refreshDimensions()V"))
-    private void beforeCamelPoseDimensions(EntityDataAccessor<?> key, CallbackInfo callback) {
+    private void beforeReviewedGroundPoseDimensions(EntityDataAccessor<?> key, CallbackInfo callback) {
         if ((Object) this instanceof Camel camel) ScriptNavigation.beforeGroundWrapperDimensions(camel);
+        else if ((Object) this instanceof Sniffer sniffer) ScriptNavigation.beforeGroundWrapperDimensions(sniffer);
     }
 
     @Inject(method = "move", at = @At("HEAD"), cancellable = true)

@@ -7,6 +7,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.effect.MobEffects;
@@ -26,6 +27,7 @@ import net.minecraft.world.entity.animal.frog.Tadpole;
 import net.minecraft.world.entity.animal.frog.Frog;
 import net.minecraft.world.entity.animal.Panda;
 import net.minecraft.world.entity.animal.camel.Camel;
+import net.minecraft.world.entity.animal.sniffer.Sniffer;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -75,7 +77,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, SNIFFER, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -85,7 +87,7 @@ public final class ScriptNavigation {
         @Override protected Boolean computeValue(Class<?> type) {
             try {
                 return type.getMethod("travel", Vec3.class).getDeclaringClass() == (type == Drowned.class ? Drowned.class : type == Camel.class ? Camel.class : LivingEntity.class)
-                    && type.getMethod("jumpFromGround").getDeclaringClass() == (type == Slime.class || type == MagmaCube.class || type == Rabbit.class ? type : LivingEntity.class)
+                    && type.getMethod("jumpFromGround").getDeclaringClass() == (type == Slime.class || type == MagmaCube.class || type == Rabbit.class || type == Sniffer.class ? type : LivingEntity.class)
                     && (type == Rabbit.class || inherits(type, "getJumpPower")) && inherits(type, "getFlyingSpeed")
                     && inherits(type, "isAffectedByFluids");
             } catch (ReflectiveOperationException failure) { return false; }
@@ -146,6 +148,8 @@ public final class ScriptNavigation {
     private Vec3 drownedHold;
     private AABB drownedPolicyVolume, drownedInitialVolume;
     private DryStep drownedStep;
+    private Sniffer.State snifferState;
+    private boolean snifferPrepared;
     private boolean groundBaby;
     private Pose groundPose;
     private PathNavigation groundNavigation;
@@ -164,11 +168,15 @@ public final class ScriptNavigation {
     private boolean hoverTravelTick, beeBaby;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
-                         boolean jump, boolean sprint, float wantedYaw, double modifier) {
+                         boolean jump, boolean sprint, float wantedYaw, double modifier, SnifferControl sniffer) {
+        Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint, float wantedYaw, double modifier) {
+            this(before, after, beforeVelocity, beforeGround, target, jump, sprint, wantedYaw, modifier, null);
+        }
         Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint) {
             this(before, after, beforeVelocity, beforeGround, target, jump, sprint, 0, 1);
         }
     }
+    private record SnifferControl(MoveControl.Operation before, MoveControl.Operation after, boolean kick) {}
     private record HopInput(float yaw, double modifier) {}
     private record SwimStep(Vec3 wanted, double modifier, float speed, float yaw, Vec3 after, Vec3 velocity) {}
     private record Motion(Vec3 delta, boolean ground, boolean wall) {}
@@ -211,6 +219,8 @@ public final class ScriptNavigation {
             rabbitVariant = rabbit.getVariant(); rabbitBaby = rabbit.isBaby();
             rabbitWidth = rabbit.getBbWidth(); rabbitHeight = rabbit.getBbHeight();
         }
+        snifferPrepared = false;
+        if (physics == Physics.SNIFFER) snifferState = ((Sniffer) mob).getState();
         if (groundWrapper(physics)) {
             groundBaby = mob.isBaby(); groundPose = mob.getPose(); groundNavigation = mob.getNavigation();
             groundWidth = mob.getBbWidth(); groundHeight = mob.getBbHeight(); groundEyeHeight = mob.getEyeHeight();
@@ -267,6 +277,7 @@ public final class ScriptNavigation {
                 throw error("route_unsupported_aquatic_edge");
             if (flightMode(physics) && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_flying_edge");
+            if (physics == Physics.SNIFFER && node.has("direct")) throw error("route_unsupported_sniffer_direct");
             if ((slimeHopper(physics) || physics == Physics.RABBIT) && node.has("direct")) throw error("route_unsupported_hopping_direct");
             if (node.has("direct")) {
                 JsonObject segment = node.getAsJsonObject("direct");
@@ -503,6 +514,8 @@ public final class ScriptNavigation {
         } catch (RuntimeException failure) {
             stop();
             // Native timer/animation/RNG preparation is not a replay-safe preflight.
+            if (physics == Physics.SNIFFER && snifferPrepared)
+                throw new IllegalStateException("route_sniffer_prepared_failed: " + failure.getMessage(), failure);
             if (physics == Physics.RABBIT && rabbitPrepared)
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
             if (flightMode(physics) && flightPrepared)
@@ -647,7 +660,13 @@ public final class ScriptNavigation {
                     prepareRabbit(new Vec3(mob.getX(), desired.getY() + 1, mob.getZ()), desired.getY() + 1 - mob.getY());
                     tower = rabbitStep.jump;
                     if (!tower) phase = "waiting_hop";
-                } else { mob.setSprinting(false); mob.jumpFromGround(); tower = true; }
+                } else {
+                    if (physics == Physics.SNIFFER) {
+                        preflightSnifferTower(desired.getY() + 1);
+                        snifferPrepared = true;
+                    }
+                    mob.setSprinting(false); mob.jumpFromGround(); tower = true;
+                }
                 return;
             }
             if (mob.getBoundingBox().minY < desired.getY() + 1 - EPS) {
@@ -795,9 +814,19 @@ public final class ScriptNavigation {
             if (hopControl(frame.wantedYaw, frame.modifier) != frame.jump) throw error("route_hop_timing_changed");
             return frame;
         }
+        if (physics == Physics.SNIFFER && (frame.sniffer == null || controller.operation != frame.sniffer.before))
+            throw error("route_sniffer_control_changed");
         steer(frame.target, frame.sprint);
+        if (physics == Physics.SNIFFER && (controller.operation != frame.sniffer.after
+            || Math.abs(Mth.wrapDegrees(mob.getYRot() - frame.wantedYaw)) > 1e-4
+            || controller.getSpeedModifier() != frame.modifier)) throw error("route_sniffer_control_changed");
         if (frame.jump) {
             if (!mob.onGround()) throw error("route_takeoff_not_grounded");
+            if (physics == Physics.SNIFFER) {
+                Vec3 afterSuper = groundJumpVelocity(mob.getDeltaMovement(), jumpPower(mob, mob.position()), mob.getYRot(), frame.sprint);
+                boolean kick = snifferKick(afterSuper, controller.getSpeedModifier());
+                if (kick != frame.sniffer.kick) throw error("route_sniffer_jump_changed");
+            }
             mob.jumpFromGround();
         }
         return frame;
@@ -1655,6 +1684,7 @@ public final class ScriptNavigation {
 
     private void steer(Vec3 goal, boolean sprint) {
         requireMode();
+        if (physics == Physics.SNIFFER) snifferPrepared = true;
         double dx = goal.x - mob.getX(), dz = goal.z - mob.getZ();
         mob.setSprinting(sprint);
         if (dx * dx + dz * dz < 0.0025) { mob.setSpeed(0); return; }
@@ -1682,6 +1712,8 @@ public final class ScriptNavigation {
         boolean hopper = slimeHopper(physics);
         int hopDelay = hopper ? ((Slime.SlimeMoveControl) controller).jumpDelay : 0;
         float yaw = mob.getYRot();
+        double snifferModifier = physics == Physics.SNIFFER ? controller.getSpeedModifier() : 0;
+        MoveControl.Operation snifferOperation = physics == Physics.SNIFFER ? controller.operation : null;
         boolean hopped = !ground;
         double initialDistance = pos.distanceTo(goal);
         List<Frame> frames = new ArrayList<>();
@@ -1703,6 +1735,30 @@ public final class ScriptNavigation {
             if (hopper && hopped && ground)
                 return pos.distanceTo(goal) < initialDistance - 0.02 ? frames : null;
             Vec3 direction = distance < 0.05 ? Vec3.ZERO : new Vec3(difference.x / distance, 0, difference.z / distance);
+            MoveControl.Operation snifferBeforeOperation = snifferOperation;
+            boolean snifferKick = false;
+            if (physics == Physics.SNIFFER && distance >= 0.05) {
+                // Exact steer -> setWantedPosition -> native MoveControl.tick order.
+                yaw = (float) (Math.atan2(difference.z, difference.x) * 180 / Math.PI - 90);
+                snifferModifier = 1;
+                speed = (float) (baseSpeed * (sprint ? 1.3 : 1));
+                if (snifferOperation != MoveControl.Operation.JUMPING) snifferOperation = MoveControl.Operation.MOVE_TO;
+                if (snifferOperation == MoveControl.Operation.MOVE_TO) {
+                    snifferOperation = MoveControl.Operation.WAIT;
+                    float desiredYaw = (float) (Mth.atan2(difference.z, difference.x) * 180.0F / (float) Math.PI) - 90.0F;
+                    yaw += Mth.clamp(Mth.wrapDegrees(desiredYaw - yaw), -90.0F, 90.0F);
+                    if (yaw < 0) yaw += 360; else if (yaw > 360) yaw -= 360;
+                    BlockPos feet = BlockPos.containing(pos);
+                    checkCell(feet);
+                    BlockState feetState = level.getBlockState(feet);
+                    VoxelShape shape = feetState.getCollisionShape(level, feet);
+                    if (difference.y > mob.maxUpStep() && difference.horizontalDistanceSqr() < Math.max(1.0F, mob.getBbWidth())
+                        || !shape.isEmpty() && pos.y < shape.max(Direction.Axis.Y) + feet.getY()
+                            && !feetState.is(BlockTags.DOORS) && !feetState.is(BlockTags.FENCES))
+                        snifferOperation = MoveControl.Operation.JUMPING;
+                } else if (ground) snifferOperation = MoveControl.Operation.WAIT;
+                direction = forward(yaw);
+            }
             BlockPos support = movementSupport(pos, supporting);
             if (!known(support) || !known(BlockPos.containing(pos))) return null;
             BlockState state = level.getBlockState(support);
@@ -1738,10 +1794,18 @@ public final class ScriptNavigation {
                 if (!ground) return null;
                 double power = jumpPower(mob, pos, support);
                 if (power <= 0 || physics == Physics.MAGMA && boundedHopRise(power, mob.getGravity()) <= 0) return null;
-                velocity = new Vec3(velocity.x, power, velocity.z);
-                if (sprint) velocity = velocity.add(direction.scale(0.2));
+                if (physics == Physics.SNIFFER) {
+                    velocity = groundJumpVelocity(velocity, power, yaw, sprint);
+                    snifferKick = snifferKick(velocity, snifferModifier);
+                    if (snifferKick) velocity = velocity.add(forward(yaw).scale((double) 0.1F));
+                } else {
+                    velocity = new Vec3(velocity.x, power, velocity.z);
+                    if (sprint) velocity = velocity.add(direction.scale(0.2));
+                }
             }
             double acceleration = ground ? speed * (0.21600002F / (friction * friction * friction)) : 0.02F;
+            if (physics == Physics.SNIFFER && ground)
+                acceleration = (float) speed * (0.21600002F / (friction * friction * friction));
             velocity = velocity.add(direction.scale(acceleration * Math.min(1, speed)));
             Motion motion = collide(bounds, velocity, ground);
             Vec3 next = pos.add(motion.delta);
@@ -1767,11 +1831,85 @@ public final class ScriptNavigation {
             remaining = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * 0.98F, remaining.z);
             frames.add(hopper
                 ? new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, false, hop.yaw, hop.modifier)
-                : new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, sprint));
+                : physics == Physics.SNIFFER
+                    ? new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, sprint, yaw, snifferModifier, new SnifferControl(snifferBeforeOperation, snifferOperation, snifferKick))
+                    : new Frame(pos, next, beforeVelocity, beforeGround, goal, jump, sprint));
             bounds = nextBounds; pos = next; velocity = remaining; ground = motion.ground;
             if (motion.wall && motion.delta.horizontalDistanceSqr() < 1e-7 && tick > 15) return null;
         }
         return null;
+    }
+
+    private static Vec3 forward(float yaw) {
+        float radians = yaw * ((float) Math.PI / 180);
+        return new Vec3(-Mth.sin(radians), 0, Mth.cos(radians));
+    }
+
+    /** Native superclass order: jump power, then sprint, before Sniffer's conditional tail. */
+    private static Vec3 groundJumpVelocity(Vec3 velocity, double power, float yaw, boolean sprint) {
+        if (power <= 1e-5F) return velocity;
+        Vec3 result = new Vec3(velocity.x, power, velocity.z);
+        return sprint ? result.add(forward(yaw).scale(0.2)) : result;
+    }
+
+    private static boolean snifferKick(Vec3 afterSuper, double modifier) {
+        return modifier > 0 && afterSuper.horizontalDistanceSqr() < 0.01;
+    }
+
+    /** Pure no-input tower arc. The later native placement and each real move remain separately guarded. */
+    private void preflightSnifferTower(double requiredY) {
+        requireMode();
+        Vec3 position = mob.position();
+        AABB bounds = mob.getBoundingBox();
+        double power = jumpPower(mob, position);
+        if (!(power > 1e-5F)) throw error("route_jump_unavailable");
+        Vec3 velocity = groundJumpVelocity(mob.getDeltaMovement(), power, mob.getYRot(), false);
+        if (snifferKick(velocity, controller.getSpeedModifier()))
+            velocity = velocity.add(forward(mob.getYRot()).scale((double) 0.1F));
+        boolean ground = mob.onGround(), reached = false;
+        BlockPos supporting = mob.mainSupportingBlockPos.orElse(null);
+        boolean groundWithoutBlock = ground && supporting == null;
+        long deadline = System.nanoTime() + 25_000_000L;
+        for (int tick = 0; tick < HOP_FLIGHT_TICKS; tick++) {
+            if (System.nanoTime() > deadline) throw error("route_prediction_budget");
+            if (tick > 0) velocity = small(velocity.scale(0.98));
+            BlockPos support = movementSupport(position, supporting);
+            checkCell(support);
+            float friction = level.getBlockState(support).getFriction(level, support, mob);
+            if (!(friction >= 0.6F && friction <= 1)) throw error("route_sniffer_friction_unsupported");
+            // clearInputs supplies zero native travel input throughout the build wait.
+            Motion motion = collide(bounds, velocity, ground);
+            AABB sweep = bounds.expandTowards(motion.delta);
+            checkDryVolume(sweep);
+            Vec3 next = position.add(motion.delta);
+            if (!inside(next) || !withinEdge(next)) throw error("route_sniffer_tower_outside_edge");
+            reached |= next.y >= requiredY - EPS;
+            Vec3 remaining = new Vec3(Math.abs(velocity.x - motion.delta.x) > EPS ? 0 : velocity.x,
+                Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
+                Math.abs(velocity.z - motion.delta.z) > EPS ? 0 : velocity.z);
+            AABB nextBounds = bounds.move(motion.delta);
+            BlockPos nextSupporting = null;
+            if (motion.ground) {
+                nextSupporting = supportingBlock(nextBounds, next);
+                if (nextSupporting == null && !groundWithoutBlock)
+                    nextSupporting = supportingBlock(nextBounds.move(-motion.delta.x, 0, -motion.delta.z), next);
+            }
+            groundWithoutBlock = motion.ground && nextSupporting == null;
+            supporting = nextSupporting;
+            BlockPos feet = BlockPos.containing(next), below = movementSupport(next, supporting);
+            checkCell(feet); checkCell(below);
+            float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
+            if (factor == 1) factor = level.getBlockState(below).getBlock().getSpeedFactor();
+            double drag = ground ? friction * 0.91F : 0.91F;
+            remaining = remaining.multiply(factor * drag, 1, factor * drag);
+            velocity = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * 0.98F, remaining.z);
+            if (motion.ground) {
+                if (!reached) throw error("route_sniffer_tower_clearance_failed");
+                return;
+            }
+            bounds = nextBounds; position = next; ground = motion.ground;
+        }
+        throw error("route_sniffer_tower_arc_unbounded");
     }
 
     private static BlockPos movementSupport(Vec3 position, BlockPos supporting) {
@@ -2132,9 +2270,9 @@ public final class ScriptNavigation {
                 : mode == Physics.MAGMA ? "native-magma-hop-post-tick" : "native-slime-hop-post-tick");
             return result;
         }
-        result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED) : 0);
-        result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true, mode == Physics.DROWNED) : 0);
-        result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : mode == Physics.PANDA ? "native-panda-ground-post-tick" : mode == Physics.CAMEL ? "native-camel-ground-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
+        result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED, mode == Physics.SNIFFER) : 0);
+        result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true, mode == Physics.DROWNED, mode == Physics.SNIFFER) : 0);
+        result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : mode == Physics.PANDA ? "native-panda-ground-post-tick" : mode == Physics.CAMEL ? "native-camel-ground-post-tick" : mode == Physics.SNIFFER ? "native-sniffer-ground-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
         return result;
     }
 
@@ -2227,7 +2365,7 @@ public final class ScriptNavigation {
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)
             && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class
-            && mob.getClass() != Parrot.class && mob.getClass() != Panda.class && mob.getClass() != Camel.class)
+            && mob.getClass() != Parrot.class && mob.getClass() != Panda.class && mob.getClass() != Camel.class && mob.getClass() != Sniffer.class)
             return Physics.ORDINARY;
         if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
         if ((mob.getClass() == Slime.class || mob.getClass() == MagmaCube.class) && control == Slime.SlimeMoveControl.class
@@ -2244,6 +2382,10 @@ public final class ScriptNavigation {
                 && rabbit.distanceToSqr(rabbit.getTarget()) < 16) return Physics.UNSUPPORTED;
             return boundedHopRise(jumpPower(mob, mob.position()), mob.getGravity()) > 0 ? Physics.RABBIT : Physics.UNSUPPORTED;
         }
+        if (mob.getClass() == Sniffer.class && control == MoveControl.class
+            && mob.getJumpControl().getClass() == JumpControl.class
+            && mob.getNavigation().getClass() == GroundPathNavigation.class
+            && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable() && !mob.isSleeping()) return Physics.SNIFFER;
         if (mob.getClass() == Camel.class && control == Camel.CamelMoveControl.class
             && mob.getJumpControl().getClass() == JumpControl.class
             && mob.getNavigation().getClass() == GroundPathNavigation.class
@@ -2280,10 +2422,11 @@ public final class ScriptNavigation {
             || mob.getBbWidth() != puffWidth || mob.getBbHeight() != puffHeight || mob.getEyeHeight() != puffEyeHeight))
             throw error("route_pufferfish_body_changed");
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
+        if (physics == Physics.SNIFFER && ((Sniffer) mob).getState() != snifferState) throw error("route_sniffer_state_changed");
         if (groundWrapper(physics) && (mob.isBaby() != groundBaby || mob.getPose() != groundPose
             || mob.getNavigation() != groundNavigation || mob.getBbWidth() != groundWidth
             || mob.getBbHeight() != groundHeight || mob.getEyeHeight() != groundEyeHeight))
-            throw error(physics == Physics.PANDA ? "route_panda_body_changed" : "route_camel_body_changed");
+            throw error(physics == Physics.PANDA ? "route_panda_body_changed" : physics == Physics.CAMEL ? "route_camel_body_changed" : "route_sniffer_body_changed");
         if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
         if (flightMode(physics) && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
@@ -2406,7 +2549,7 @@ public final class ScriptNavigation {
     private void checkDryVolume(AABB bounds) {
         if (flightMode(physics)) { requireFlightVolume(bounds); return; }
         if ((physics == Physics.DROWNED || groundWrapper(physics) || slimeHopper(physics) || physics == Physics.RABBIT) && hasFluid(bounds))
-            throw error(groundWrapper(physics) ? (physics == Physics.PANDA ? "route_panda_requires_dry_ground" : "route_camel_requires_dry_ground")
+            throw error(groundWrapper(physics) ? (physics == Physics.PANDA ? "route_panda_requires_dry_ground" : physics == Physics.CAMEL ? "route_camel_requires_dry_ground" : "route_sniffer_requires_dry_ground")
                 : physics == Physics.DROWNED ? "route_drowned_requires_dry_ground" : "route_hop_requires_dry_ground");
     }
 
@@ -2549,17 +2692,18 @@ public final class ScriptNavigation {
             && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
     }
 
-    private static boolean groundWrapper(Physics mode) { return mode == Physics.PANDA || mode == Physics.CAMEL; }
+    private static boolean groundWrapper(Physics mode) { return mode == Physics.PANDA || mode == Physics.CAMEL || mode == Physics.SNIFFER; }
 
-    /** End captured wrapper ownership before native age/pose refresh can reposition it. */
+    /** End captured wrapper ownership before native state/age/pose refresh can reposition it. */
     public static void beforeGroundWrapperDimensions(Mob body) {
-        if ((body.getClass() != Panda.class && body.getClass() != Camel.class) || body.level().isClientSide
+        if ((body.getClass() != Panda.class && body.getClass() != Camel.class && body.getClass() != Sniffer.class) || body.level().isClientSide
             || body.level().getServer() == null || !body.level().getServer().isSameThread()) return;
         ScriptNavigation route = OWNED.get(body);
         if (route == null || !route.active || !groundWrapper(route.physics)
-            || body.isBaby() == route.groundBaby && body.getPose() == route.groundPose) return;
+            || body.isBaby() == route.groundBaby && body.getPose() == route.groundPose
+                && (route.physics != Physics.SNIFFER || ((Sniffer) body).getState() == route.snifferState)) return;
         if (route.movementFailure == null) route.movementFailure = error(route.physics == Physics.PANDA
-            ? "route_panda_age_changed" : "route_camel_dimensions_changed");
+            ? "route_panda_age_changed" : route.physics == Physics.CAMEL ? "route_camel_dimensions_changed" : "route_sniffer_dimensions_changed");
         try {
             if (body.level() == route.level && route.owner.vehicleLeaseActive(route.lease) && route.ownsGroundCleanup()) route.stop();
         } catch (RuntimeException | LinkageError cleanup) {
@@ -2690,14 +2834,18 @@ public final class ScriptNavigation {
     }
 
     /** Candidate envelope, not a promise: includes a bounded takeoff approach and body overlap. */
-    private static double reachEnvelope(double speed, double initialVelocity, double power, double gravity, double width, boolean sprint, boolean drowned) {
+    private static double reachEnvelope(double speed, double initialVelocity, double power, double gravity, double width, boolean sprint, boolean drowned, boolean sniffer) {
         speed *= sprint ? 1.3 : 1;
         // Native forward input equals speed. For supported friction [.6, 1], use
         // the largest ground acceleration and drag as a conservative 12-tick run-up bound.
         double acceleration = speed * Math.min(1, speed) * 1.001;
         double horizontal = initialVelocity;
         for (int i = 0; i < 12; i++) horizontal = (horizontal * 0.98 + acceleration) * 0.91;
-        horizontal = horizontal * 0.98 + acceleration + (sprint ? 0.2 : 0);
+        // Sniffer's conditional kick precedes this tick's travel acceleration.
+        // Bound both branches; do not add an unconditional impulse to a run-up.
+        horizontal = sniffer
+            ? Math.max(horizontal * 0.98 + (sprint ? 0.2 : 0), 0.1 + (double) 0.1F) + acceleration
+            : horizontal * 0.98 + acceleration + (sprint ? 0.2 : 0);
         double vertical = power, height = 0, distance = 0;
         for (int i = 0; i < 100; i++) {
             distance += horizontal; height += vertical;
