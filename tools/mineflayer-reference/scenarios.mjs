@@ -10,6 +10,7 @@ import { startServer, directory } from './server.mjs';
 
 // ProtoDef logs and drops partial packets without emitting a client error.
 // Preserve that diagnostic rather than claiming a clean protocol run.
+const craftTrace = process.argv.includes('--craft-trace');
 const protocolWarnings = [], originalLog = console.log;
 console.log = (...values) => {
   if (typeof values[0] === 'string' && /PartialReadError|^Chunk size is/.test(values[0])
@@ -24,6 +25,25 @@ const bot = mineflayer.createBot({
   host: '127.0.0.1', port: 25575, username: 'Reference', auth: 'offline', version: '1.21.1',
 });
 bot.loadPlugin(pathfinder.pathfinder);
+// Opt-in diagnostics observe packets; they never alter replies or replay clicks.
+const transitions = [];
+let traceActive = false, traceTruncated = false;
+const tracePackets = new Set(['window_click', 'set_slot', 'window_items', 'close_window']);
+function trace(direction, name, data) {
+  if (!craftTrace || !traceActive || !tracePackets.has(name)) return;
+  if (transitions.length >= 512) { traceTruncated = true; return; }
+  const encoded = JSON.stringify(data, (_, value) => typeof value === 'bigint' ? value.toString() : value);
+  if (encoded.length > 65536) { traceTruncated = true; return; }
+  transitions.push({ at: performance.now(), direction, name, data: JSON.parse(encoded) });
+}
+bot._client.on('packet', (data, meta) => trace('received', meta.name, data));
+if (craftTrace) {
+  const write = bot._client.write;
+  bot._client.write = function (name, data) {
+    trace('sent', name, data);
+    return write.call(this, name, data);
+  };
+}
 bot.on('error', error => { clientErrors.push(error.message); console.error(error.message); });
 const abort = new AbortController();
 const timer = setTimeout(() => abort.abort(new Error('Reference scenarios exceeded 120 seconds')), 120_000);
@@ -54,7 +74,7 @@ async function consoleCommands(commands) {
 async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
-  if (process.argv.includes('--building') || process.argv.includes('--craft')) return buildingScenarios();
+  if (process.argv.includes('--building') || process.argv.includes('--craft') || craftTrace) return buildingScenarios();
   await consoleCommands([
     'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
     'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
@@ -134,21 +154,47 @@ async function buildingScenarios() {
         'if data entity Reference Inventory[{id:"minecraft:iron_axe",components:{"minecraft:damage":2}}]'] },
   ];
   for (const suite of suites) {
-    if (process.argv.includes('--craft') && suite.name !== 'gather-craft') continue;
+    if ((process.argv.includes('--craft') || craftTrace) && suite.name !== 'gather-craft') continue;
     await consoleCommands(suite.prepare);
     await bot.waitForTicks(5);
     const source = await readFile(new URL(suite.file, import.meta.url), 'utf8');
     const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
     let result;
+    traceActive = craftTrace;
     try {
       result = await new AsyncFunction('bot', 'goals', 'Movements', 'Vec3', source)
         (bot, pathfinder.goals, pathfinder.Movements, Vec3);
     } catch (error) {
+      if (craftTrace) {
+        // Read the actual server state before disconnect; no recovery mutation.
+        const messages = await consoleCommands(['data get entity Reference']);
+        traceActive = false;
+        const snapshot = () => ({ slots: bot.inventory.slots, cursor: bot.inventory.selectedItem,
+          window: bot.currentWindow?.id ?? null });
+        const sources = {};
+        for (const name of ['craft', 'inventory', 'place_block']) {
+          const bytes = await readFile(new URL(`./node_modules/mineflayer/lib/plugins/${name}.js`, import.meta.url));
+          sources[name] = createHash('sha256').update(bytes).digest('hex');
+        }
+        await writeFile(join(directory, `craft-trace-${Date.now()}.json`), JSON.stringify({
+          source, sourceSha256: createHash('sha256').update(source).digest('hex'), sources,
+          error: String(error), transitions, traceTruncated, observed: snapshot(), serverMessages: messages,
+          clientErrors, protocolWarnings,
+        }, (_, value) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n');
+        throw error;
+      }
       await writeFile(join(directory, `${suite.name}-reference.json`), JSON.stringify({
         scenario: suite.name, backend: 'mineflayer', source, error: String(error),
         serverConfirmed: false, clientErrors, protocolWarnings,
       }, null, 2) + '\n');
       throw error;
+    }
+    traceActive = false;
+    if (craftTrace) {
+      await writeFile(join(directory, `craft-trace-${Date.now()}.json`), JSON.stringify({
+        source, result, transitions, traceTruncated, clientErrors, protocolWarnings,
+      }, (_, value) => typeof value === 'bigint' ? value.toString() : value, 2) + '\n');
+      return;
     }
     const outcome = Object.fromEntries(Object.keys(suite.expected).map(key => [key, result[key]]));
     assert.deepEqual(outcome, suite.expected);

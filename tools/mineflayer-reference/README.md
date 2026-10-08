@@ -198,3 +198,11 @@ are not a gameplay-completion percentage. Catalog guard probes rejected a
 library-only dig claim, a modified report hash and an unavailable report.
 
 Source review of the retained wall/craft failures, including the limits of the available timing evidence: [reference-failure-review.md](reference-failure-review.md). No scenario was rerun for this review.
+
+`node tools/mineflayer-reference/scenarios.mjs --craft-trace` is an opt-in,
+single-attempt diagnosis of the retained gather/craft mismatch. It runs only
+that procedure on the isolated reference fixture, records at most 512 selected
+click/inventory packets (64 KiB each), and reads server entity NBT on failure
+before disconnecting. Timestamped `craft-trace-*.json` files preserve previous
+reports. It does not patch upstream, replay clicks, or by itself establish a
+paired conformance pass. Syntax checked; this diagnostic has not yet run.

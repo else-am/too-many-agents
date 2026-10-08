@@ -49,3 +49,10 @@ retroactive proof of the files used by the historical failed process.
 - `place_block.js`: `6d9941df1725432adb12c3a439de4806077c134e569b3af78a80882bd2737d1b`
 - `craft.js`: `5c896528cf6364642df182b1678884ed1e7bbbc552856c461fe77fdd21c79551`
 - `inventory.js`: `c7c4eb12a4ba606b2abd6ea62701933fd10f3751297590e6b2ee56d78798b4a8`
+
+The installed Mineflayer package was subsequently compared file-for-file with
+the lockfile's npm tarball after verifying its SHA-512 integrity. All packaged
+files matched (4.39.0); no installed-file drift was found. Evidence:
+`/Users/scott/.bb/thread-storage/mineflayer-installed-integrity.json`.
+The opt-in `--craft-trace` harness now records the missing transitions on a future
+single diagnostic execution; it is prepared, not executed evidence.
