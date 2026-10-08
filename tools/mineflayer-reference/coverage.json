@@ -1394,7 +1394,7 @@
   "evidencePolicy": {
     "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 library data/version members can use verified library-differential evidence; the generator rejects this classification for unreviewed/gameplay members. Scenario/report hashes and scope review are required for both.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
