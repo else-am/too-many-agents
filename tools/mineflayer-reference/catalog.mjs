@@ -360,7 +360,9 @@ for (const [id, spec] of Object.entries(coverage.evidence ?? {})) {
   }
   evidence.push(item);
 }
-const exclusions = new Set(['mineflayer.createBot', 'mineflayer.Bot.connect', 'mineflayer.Bot._client']);
+// Reviewed connection-only APIs; end/quit close the socket in the pinned source.
+const exclusions = new Set(['mineflayer.createBot', 'mineflayer.Bot.connect',
+  'mineflayer.Bot.end', 'mineflayer.Bot.quit', 'mineflayer.Bot._client']);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

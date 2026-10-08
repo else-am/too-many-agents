@@ -64,7 +64,9 @@ links to documentation headings. In particular:
 Counts summarize canonical member/event/factory records, including pending
 review; they are **not completion percentages**. Inherited aliases, data-shape
 records, and private/source-only candidates are separately indexed. The only
-current inapplicable entries remain `createBot`, `Bot.connect`, and `Bot._client`.
+current inapplicable entries are `createBot`, `Bot.connect`, `Bot.end`, `Bot.quit`,
+and `Bot._client`. The pinned source defines end/quit as socket disconnection;
+they fall under the plan's connection-API exclusion, not gameplay cancellation.
 Nothing else is silently excluded because it is unimplemented or unclear.
 
 ## Locate current implementation
@@ -121,7 +123,7 @@ attach `evidence` IDs and executable `scenarios` paths, and review the reports.
 The generator requires verified passing **native-integration and live-reference**
 evidence; a library-only pass cannot promote a full native gameplay API. Pending
 members remain pending by default. Applicability changes require explicit review;
-the generator permits only the three existing exclusions.
+the generator permits only those five reviewed connection/internal-client exclusions.
 
 Current implementation and native-verification gaps are tracked in
 [the handoff checklist](../../MINEFLAYER-STATUS.md). Recent ports awaiting native
