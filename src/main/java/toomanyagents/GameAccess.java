@@ -420,11 +420,9 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> {
-            var controller = new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()),
-                request -> scriptChat(mob, request), request -> tabComplete(mob, request));
-            return controller;
-        });
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession,
+            () -> box(mob), () -> player(mob.getServer()),
+            request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
