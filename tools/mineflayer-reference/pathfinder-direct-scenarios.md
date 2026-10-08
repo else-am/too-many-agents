@@ -76,3 +76,27 @@ segments and chains requiring multiple jumps are not established; ordinary
 selected-edge planning remains available. Conservative corridor checks may
 retain valid ordinary edges instead of shortening them. These limits are
 pending work, not a declaration of complete Pathfinder conformance.
+
+Follow-up arrival contracts, authored before correction: a .6-wide body can
+approach a .9-wide cow axially to physical range 1 without the candidate
+inventing .2625 extra collision padding. A diagonal whose actual swept boxes
+remain separate is also eligible; an actual corner overlap still rejects.
+When direct motion is geometrically rejected or safely preflight-rejected,
+ordinary GoalFollow retains its public `isEnd` predicate. A native ordinary
+arrival at x=4.42 beside a target at x=5.5 may satisfy its integer range-1 goal
+without satisfying physical range 1; that is upstream fallback success, not
+NoPath. Direct pursuit continues to require physical range. A stationary
+fallback goal must not issue repeated route requests; unknown outcomes still
+must not produce another mutation.
+
+Follow-up result: four focused groups pass, with actual pinned GoalFollow in
+QuickJS (same memory/stack bounds) and real Block fixtures. The lead's 3:1
+approach direction to a .9-wide cow is eligible at range 1. Exact 45-degree
+range-1 arrival overlaps the real expanded target box and rejects; range 1.5
+is eligible. Ordinary fallback respects `isEnd` after both geometry rejection
+and known native preflight rejection. A dynamic goal may make one new direct
+refinement after ordinary movement reaches a newly eligible origin, then holds
+without request churn. Artifacts: thread-storage
+`pathfinder-pursuit-arrival-probe.mjs` and
+`pathfinder-pursuit-arrival-results.json`. Java is unchanged; native validation
+remains pending.

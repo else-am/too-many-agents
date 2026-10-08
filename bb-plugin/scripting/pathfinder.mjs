@@ -100,8 +100,8 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   function freeGoal() {
     return movements.allowFreeMotion && goal?.entity?.position && Number.isFinite(goal.rangeSq) && goal.rangeSq >= 0;
   }
-  function atGoal() {
-    if (freeGoal()) return bot.entity.position.distanceSquared(goal.entity.position) <= goal.rangeSq;
+  function atGoal(physical = false) {
+    if (physical && freeGoal()) return bot.entity.position.distanceSquared(goal.entity.position) <= goal.rangeSq;
     const point = bot.entity.position.floored();
     const block = bot.blockAt(point);
     if (block && bot.entity.onGround && bot.entity.position.y - point.y > 0.001 && !movements.emptyBlocks.has(block.type))
@@ -202,7 +202,7 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         if (stopRequested || result.result?.stopped) { stop(); return; }
         planned = false;
         search = undefined;
-        if (goal && atGoal()) reachedGoal();
+        if (goal && atGoal(pursuit !== null)) reachedGoal();
         else if (goal && pursuit) {
           if (bot.entity.position.distanceSquared(pursuit.start) < 0.01)
             throw error('NoPath', 'Direct pursuit completed without progress');
@@ -243,7 +243,7 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
       }
     }
     if (route || !goal || !movements || planned) return;
-    if (atGoal()) { reachedGoal(); return; }
+    if (atGoal(!!freeGoal())) { reachedGoal(); return; }
     const version = epoch;
     if (!search && freeGoal() && !directRejected) {
       const from = bot.entity.position.clone(), target = goal.entity.position.clone();
@@ -261,6 +261,9 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         }
       }
     }
+    // Upstream uses physical range only while taking its free-motion branch.
+    // AStar fallback retains the caller's public (usually grid-based) isEnd.
+    if (atGoal()) { reachedGoal(); return; }
     search ??= pathfinder.getPathFromTo(movements, bot.entity.position, goal, { optimizePath: !directRejected });
     const step = search.next();
     if (step.done) { planned = true; return; }

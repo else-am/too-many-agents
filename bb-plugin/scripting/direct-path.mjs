@@ -49,6 +49,23 @@ export function directCandidate(movements, from, to, { jump = false, pursuitEnti
       z >= Math.floor(p.z - r) && z < Math.ceil(p.z + r) &&
       y >= Math.floor(p.y) && y < Math.ceil(p.y + approach.height) ? 1 : 0;
   }
+  if (approach && maxY + height > approach.position.y && minY < approach.position.y + approach.height) {
+    // Exact swept AABB overlap, not a radial goal test or a padded collision
+    // cell. The native predictor checks the real trajectory and moving boxes.
+    const radius = (width + approach.width) / 2;
+    let enter = 0, leave = 1;
+    for (const axis of ['x', 'z']) {
+      const origin = from[axis] - approach.position[axis], delta = to[axis] - from[axis];
+      if (Math.abs(delta) < 1e-12) {
+        if (Math.abs(origin) >= radius) { leave = -1; break; }
+      } else {
+        const a = (-radius - origin) / delta, b = (radius - origin) / delta;
+        enter = Math.max(enter, Math.min(a, b));
+        leave = Math.min(leave, Math.max(a, b));
+      }
+    }
+    if (enter < leave) return null;
+  }
   const checked = new Set();
   function policy(x, y, z) {
     const key = `${x},${y},${z}`;
@@ -66,11 +83,6 @@ export function directCandidate(movements, from, to, { jump = false, pursuitEnti
   const steps = Math.ceil(distance / 0.125);
   for (let i = 0; i <= steps; i++) {
     const t = i / steps, x = from.x + (to.x - from.x) * t, z = from.z + (to.z - from.z) * t;
-    if (approach) {
-      const p = approach.position, radius = half + approach.width / 2 + 0.2625;
-      if (Math.abs(x - p.x) < radius && Math.abs(z - p.z) < radius &&
-          maxY + height > p.y && minY < p.y + approach.height) return null;
-    }
     // The entire possible native arc is surveyed for policy, entities and loading.
     for (let bx = Math.floor(x - half - margin); bx <= Math.floor(x + half + margin); bx++)
       for (let bz = Math.floor(z - half - margin); bz <= Math.floor(z + half + margin); bz++)
