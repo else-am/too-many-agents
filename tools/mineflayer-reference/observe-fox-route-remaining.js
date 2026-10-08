@@ -31,9 +31,9 @@ const movements = new Movements(bot);
 movements.canDig = false; movements.allowSprinting = false;
 movements.allowParkour = false; movements.allow1by1towers = false;
 movements.scafoldingBlocks = []; movements.allowFreeMotion = false;
-movements.exclusionAreasStep.push(block => block.position.equals(excluded) ||
+movements.exclusionAreasStep.push(block => !block.position ? 200 : block.position.equals(excluded) ||
   (block.position.x >= 156 && (block.position.z !== 80 || block.position.y !== -60)) ? 200 : 0);
-movements.exclusionAreasBreak.push(block => block.position.equals(obstacle) ? 0 : 200);
+movements.exclusionAreasBreak.push(block => !block.position ? 200 : block.position.equals(obstacle) ? 0 : 200);
 bot.pathfinder.enablePathShortcut = false;
 bot.pathfinder.setMovements(movements);
 async function arrive(x,y,z,feetY=y) {
@@ -43,7 +43,7 @@ async function arrive(x,y,z,feetY=y) {
     throw new Error('Fox selected route arrival/exclusion differs: '+phase);
 }
 try {
-  await arrive(154,-60,80,-59.5);
+  await arrive(154,-59,80,-59.5);
   const step = body.position.clone();
   phase = 'dig-approach'; await arrive(156,-60,80);
   phase = 'dig'; movements.canDig = true; bot.pathfinder.setMovements(movements);

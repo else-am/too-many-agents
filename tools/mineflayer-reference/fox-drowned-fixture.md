@@ -224,3 +224,13 @@ this new empty disposable record. If switch outcome is unknown do not replay or
 blindly switch back. Body release may be unconfirmed on close; later absence of
 lease/tools must be measured and reported separately. This validates actual world
 switching, not reply loss, self-death, pause behavior or a general lifecycle matrix.
+
+### Packaged 572692c selected results — 2026-10-08
+
+Artifact SHA256 `618680fd0ed1cc915ebc6b04c9fb25c67c975fe84215977cb02862f21d0a344c`, Codex gpt-6.1-sol low. Known held-control navigation rejection passed: native typed `before_start` / `release_manual_controls_before_navigation`, no route sequence started, then clear/continued look succeeded (4 requests, 3 completed, 13 updates, 10 bridge operations). Drowned actual gap/ascent/supported landing/platform/drop passed with native step height 1.0 (8/8 requests; exact timing/counts/trace in summary).
+
+Fox first call stopped before any route on the missing-position exclusion callback. The authorized guarded call then timed out in planning, with 56 empty partial paths and 0 native requests; no step or dig completed. Lead source review identified slab GoalBlock Y -60 as inconsistent with the pinned logical-node convention: required logical Y -59, physical feet -59.5. These are fixture failures; no native physics failure is established. No further Fox call ran. Native slab bottom/waterlogged=false, step height 0.6, observed Fox width0.6/height0.7/eye0.4 and original trace retained.
+
+World-switch selected cancellation passed after new completed look `77b2d822-ca5a-455c-8045-25456f08bc7d`: one guarded switch, terminal `local_player_unavailable`, sentinel log/look absent (1/1 requests, 6 updates, 5 bridge operations). Release unconfirmed; guarded return independently showed same alive empty UUID/binding/position, idle and no pending tools. Both worlds saved, no other-world fixture mutations.
+
+Owned fixture cells/undamaged tool restored, exactly 30 added forced chunks removed, all four new empty disposable bodies archived through supported workflow. ScriptProbe inventory/equipment/selection matched baseline exactly. Final all-dimensions save 00:47:25.206 Phoenix / 07:47:25.206 UTC; exact JVM77764 stopped. No mode/fence/revision matrix, no old passes repeated. Full raw sources/hashes/times/native evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/572692c-summary.json`.
