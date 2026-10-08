@@ -3538,11 +3538,10 @@
       ],
       "scope": "63 deterministic planner scenarios, including 18 differential worlds, 22 body scenarios and actual QuickJS water neighbors. Covers liquid entry/vertical routes, body clearance, policies and no surface flight. No native fish controls, physics or execution proof.",
       "result": "passed",
-      "testedRevision": "2b84bae",
       "sourceSha256": "b68fdcf6a8a402ae0159b555834debba048c89882a971f911b89fd977ddce14b",
       "report": {
         "path": "run/mineflayer-reference/movements-current.txt",
-        "sha256": "3a5b7d11b66111e2b98964e9ba972e0ef2925a866f5bc8876aca824f06908671"
+        "sha256": "cf4c2d9b02c78753f5de827788c65f55a57a63c838d405a43d754c930f9e9194"
       }
     },
     "planning-library": {
@@ -4840,6 +4839,30 @@
       "report": {
         "path": "run/mineflayer-reference/terminal-host-race-current.json",
         "sha256": "df09e4863358f8b58a9cda18436d947482045fa64a8232cdd3c22bcf6dd9a875"
+      }
+    },
+    "fish-planning": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/fish-planning.mjs",
+      "subjects": [],
+      "scope": "Six preauthored real Block/AStar and browser-bundled planner checks: submerged routes, dry bank, special liquid, offset clearance, shallow fluid and policy rejection. Before-change failures retained separately. No native fish execution or all-water conformance.",
+      "result": "passed",
+      "sourceSha256": "32b2f83ba2afe564bfec47d9219164434e0617498570104bed0b0fe2c06db76e",
+      "report": {
+        "path": "run/mineflayer-reference/fish-planning.json",
+        "sha256": "6273482ff1359e12748f8d466d25f0955fe85acb9fbbe3d9321d6bfac60e524e"
+      }
+    },
+    "planning-submerged": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/planning.mjs",
+      "subjects": [],
+      "scope": "Existing 31-scenario planning harness after submerged displayed-path integration; pinned differential and actual QuickJS checks. No new native fish route proof.",
+      "result": "passed",
+      "sourceSha256": "f24de4a682309c1389b2a3c21523d5a69b5cadfd10fedb0e3bab6e0d0f860923",
+      "report": {
+        "path": "run/mineflayer-reference/planning-submerged.txt",
+        "sha256": "cfd3c02dce00bcd71b1b133c3255c6faa1aac6e158b84034ee69778d94f0ed8b"
       }
     }
   },

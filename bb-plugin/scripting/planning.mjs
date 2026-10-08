@@ -122,7 +122,7 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
       if (block && (block.type === water || ((block.type === ladder || block.type === vine) &&
         prefixLength + 1 < path.length && path[prefixLength + 1].y < node.y))) {
         node.x = Math.floor(node.x) + 0.5;
-        node.y = Math.floor(node.y);
+        node.y = Math.floor(node.y) + (queryBot.nativeBody?.locomotion === 'submerged' ? queryBot.nativeBody.swimTargetYOffset : 0);
         node.z = Math.floor(node.z) + 0.5;
         continue;
       }

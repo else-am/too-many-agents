@@ -148,6 +148,7 @@ export class Movements {
   }
 
   _feetY (node) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return node.y + this.bot.nativeBody.swimTargetYOffset
     const block = this.getBlock(node, 0, 0, 0)
     const below = this.getBlock(node, 0, -1, 0)
     if (this.carpets.has(block.type) && block.physical) return block.height
@@ -390,6 +391,7 @@ export class Movements {
   }
 
   getMoveJumpUp (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
 
@@ -441,6 +443,7 @@ export class Movements {
   }
 
   getMoveForward (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, dir.x, 0, dir.z, neighbors)
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
     const blockD = this.getBlock(node, dir.x, -1, dir.z)
@@ -484,6 +487,7 @@ export class Movements {
   }
 
   getMoveDiagonal (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, dir.x, 0, dir.z, neighbors)
     let cost = Math.SQRT2 // move cost
     const toBreak = []
 
@@ -551,6 +555,7 @@ export class Movements {
   }
 
   getMoveDropDown (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
     const blockD = this.getBlock(node, dir.x, -1, dir.z)
@@ -578,6 +583,7 @@ export class Movements {
   }
 
   getMoveDown (node, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, 0, -1, 0, neighbors)
     if (this.getBlock(node, 0, 0, 0).liquid) {
       this._getMoveSwim(node, -1, neighbors)
       return
@@ -603,6 +609,7 @@ export class Movements {
   }
 
   getMoveUp (node, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, 0, 1, 0, neighbors)
     const block1 = this.getBlock(node, 0, 0, 0)
     if (block1.liquid) {
       this._getMoveSwim(node, 1, neighbors)
@@ -652,8 +659,50 @@ export class Movements {
     neighbors.push(new Move(node.x, to.position.y, node.z, node.remainingBlocks, cost, toBreak))
   }
 
+  // Fish targets are above the cell floor. The entire swept body and eyes
+  // must stay in ordinary water; native execution rechecks actual motion.
+  _getSubmergedMove (node, dx, dy, dz, neighbors) {
+    if (!this._capabilities().canSwim) return
+    const offset = this.bot.nativeBody.swimTargetYOffset
+    if (!Number.isFinite(offset) || offset < 0 || offset >= 1) return
+    const { width, height } = this._geometry()
+    const eye = this.bot.entity.eyeHeight ?? height
+    if (!Number.isFinite(eye) || eye < 0) return
+    const minY = node.y + Math.min(0, dy) + offset
+    const maxY = node.y + Math.max(0, dy) + offset + Math.max(height, eye)
+    const minX = node.x + .5 + Math.min(0, dx) - width / 2
+    const maxX = node.x + .5 + Math.max(0, dx) + width / 2
+    const minZ = node.z + .5 + Math.min(0, dz) - width / 2
+    const maxZ = node.z + .5 + Math.max(0, dz) + width / 2
+    const epsilon = 1e-7
+    let cost = Math.hypot(dx, dy, dz) + this.liquidCost
+    for (let y = Math.floor(minY + epsilon); y < Math.ceil(maxY - epsilon); y++) {
+      for (let x = Math.floor(minX + epsilon); x < Math.ceil(maxX - epsilon); x++) {
+        for (let z = Math.floor(minZ + epsilon); z < Math.ceil(maxZ - epsilon); z++) {
+          const b = this.getBlock(new Vec3(x, y, z), 0, 0, 0)
+          if (!b.position || b.type !== this.bot.registry.blocksByName.water.id || !b.safe) return
+          const level = Number(b.getProperties().level)
+          if (!Number.isInteger(level) || level < 0 || level > 15) return
+          const above = this.getBlock(b.position, 0, 1, 0)
+          if (!above.position) return
+          // LiquidBlock maps falling levels to amount 8; FlowingFluid uses
+          // amount / 9 unless another water fluid occupies the cell above.
+          const props = above.getProperties()
+          const waterAbove = above.type === this.bot.registry.blocksByName.water.id ||
+            above.name === 'bubble_column' || props.waterlogged === true
+          const fluidHeight = waterAbove ? 1 : Math.fround((level >= 8 ? 8 : 8 - level) / 9)
+          if (y + fluidHeight + epsilon < Math.min(maxY, y + 1)) return
+          cost += this.safeOrBreak(b, [])
+          if (cost >= 100) return
+        }
+      }
+    }
+    neighbors.push(new Move(node.x + dx, node.y + dy, node.z + dz, node.remainingBlocks, cost))
+  }
+
   // Jump up, down or forward over a 1 block gap
   getMoveParkourForward (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'submerged') return
     const caps = this._capabilities()
     if (!caps.canJump || caps.jumpHeight <= 0) return
     const block0 = this.getBlock(node, 0, -1, 0)
