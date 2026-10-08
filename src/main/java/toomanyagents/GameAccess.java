@@ -1467,6 +1467,25 @@ final class GameAccess {
         }
     }
 
+    void containerOpeners(ScriptContainerOpenersEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()
+            || worldSession.get() == null) return;
+        String currentWorld = world(event.level.getServer());
+        String dimension = event.level.dimension().location().toString();
+        // Menus survive script release and are also opened by physical tools.
+        for (var entry : actions.entrySet()) {
+            var ref = entry.getKey();
+            var controller = entry.getValue();
+            var body = controller.mob;
+            var hands = controller.hands;
+            if (!ref.world().equals(currentWorld) || !ref.dimension().equals(dimension)
+                || !ref.entityUuid().equals(body.getStringUUID()) || hands.visibleBody() != body
+                || event.level.getEntity(body.getUUID()) != body || !hands.isContainerOpener(event.level, event.bounds)
+                || event.players.stream().anyMatch(player -> player == hands)) continue;
+            if (event.ownsContainer.test(hands)) event.players.add(hands);
+        }
+    }
+
     void blockEvent(ScriptBlockEvent event) {
         if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
         for (var controller : actions.values()) controller.recordBlockEvent(event);

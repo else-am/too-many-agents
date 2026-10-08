@@ -127,6 +127,13 @@ public final class AgentHands extends FakePlayer {
 
     Mob visibleBody() { return body; }
 
+    /** Query only: do not sync, open or close a menu during native recounting. */
+    boolean isContainerOpener(ServerLevel level, net.minecraft.world.phys.AABB bounds) {
+        return !closed && body.isAlive() && !body.isRemoved()
+            && body.level() == level && level() == level && !isSpectator()
+            && containerMenu != inventoryMenu && bounds.intersects(getBoundingBox());
+    }
+
     AgentHands(Mob body) { this(body, () -> null); }
 
     AgentHands(Mob body, Supplier<BodyBox> bodyBox) {

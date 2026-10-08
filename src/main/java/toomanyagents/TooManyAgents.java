@@ -97,6 +97,9 @@ public final class TooManyAgents {
         NeoForge.EVENT_BUS.addListener((ScriptBlockEvent event) -> {
             if (game != null) game.blockEvent(event);
         });
+        NeoForge.EVENT_BUS.addListener((ScriptContainerOpenersEvent event) -> {
+            if (game != null) game.containerOpeners(event);
+        });
         NeoForge.EVENT_BUS.addListener((ScriptParticleEvent event) -> {
             if (game != null) game.particleEvent(event);
         });
