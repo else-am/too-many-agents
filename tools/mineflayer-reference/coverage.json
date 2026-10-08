@@ -7800,6 +7800,36 @@
       "evidence": [
         "plugin-helpers-library"
       ]
+    },
+    "mineflayer.Bot.findBlock": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/world-queries.mjs",
+        "tools/mineflayer-reference/recorded/world-queries-view-native.js",
+        "tools/mineflayer-reference/world-queries-common.js"
+      ],
+      "evidence": [
+        "world-queries-library",
+        "native-world-queries-recovered",
+        "reference-world-queries"
+      ],
+      "reason": "Pinned differential query fixtures plus exact recovered native known-cache query checks and semantically matching live reference. Native geometry, bounded unknown cells and documented query corrections remain explicit; no arbitrary unloaded-world access or action reach claim."
+    },
+    "mineflayer.Bot.canSeeBlock": {
+      "status": "supported",
+      "applicability": "applicable",
+      "scenarios": [
+        "tools/mineflayer-reference/world-queries.mjs",
+        "tools/mineflayer-reference/recorded/world-queries-view-native.js",
+        "tools/mineflayer-reference/world-queries-common.js"
+      ],
+      "evidence": [
+        "world-queries-library",
+        "native-world-queries-recovered",
+        "reference-world-queries"
+      ],
+      "reason": "Pinned differential query fixtures plus exact recovered native known-cache query checks and semantically matching live reference. Native geometry, bounded unknown cells and documented query corrections remain explicit; no arbitrary unloaded-world access or action reach claim."
     }
   },
   "schemaVersion": 2,
@@ -8484,7 +8514,8 @@
       "path": "tools/mineflayer-reference/world-queries.mjs",
       "subjects": [
         "mineflayer.Bot.findBlocks",
-        "mineflayer.Bot.canSeeBlock"
+        "mineflayer.Bot.canSeeBlock",
+        "mineflayer.Bot.findBlock"
       ],
       "scope": "91 upstream comparisons,6 explicit fixes and9 bounds in QuickJS64MiB/512KiB. Synthetic typed world observations, not native visibility/cache freshness.",
       "result": "passed",
@@ -9564,8 +9595,11 @@
     "reference-world-queries": {
       "kind": "live-reference",
       "path": "tools/mineflayer-reference/world-queries-common.js",
-      "subjects": [],
-      "scope": "Known nearest-table, sign extra-info and visibility/occlusion subset on an isolated pinned reference server, with independent block-type checks. No member promotion.",
+      "subjects": [
+        "mineflayer.Bot.findBlock",
+        "mineflayer.Bot.canSeeBlock"
+      ],
+      "scope": "Known nearest-table, sign extra-info and visibility/occlusion subset on isolated pinned reference server, with independent block-type checks; semantically matches recovered historical native source.",
       "result": "passed",
       "sourceSha256": "68b05ef6d1201333a10b186def46cef1929380f82f6d87219a8ef99391ede137",
       "report": {
@@ -9575,7 +9609,7 @@
           "source"
         ]
       },
-      "limitations": "Historical native report lacks embedded executed source; no exact paired-run claim. ArmorTrimMaterial decode and setup teleport movement warnings retained. No independent sign NBT check or general protocol conformance."
+      "limitations": "Whole sources differ: native observer additionally opens/closes a menu for cursor view and checks an unknown-cache ray. Native source recovered from exact completed BB event, not inferred from current file. Body geometry and artifact identity are not asserted equal. ArmorTrimMaterial decode/setup warnings retained; no independent sign NBT or general protocol conformance claim."
     },
     "reference-container": {
       "kind": "live-reference",
@@ -9922,6 +9956,31 @@
         "sha256": "36efaf6fda3b62e4d32cff647cfa48ba0631145a4f277a2e70e245373187f4fa"
       },
       "limitations": "Script-local post-injection plugin functions only. Synthetic initialization, no native requests, third-party packages, lifecycle or world conformance claim. Invalid arguments reject in both; error classes intentionally differ (TypeError versus upstream AssertionError)."
+    },
+    "native-world-queries-recovered": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/world-queries-view-native.js",
+      "subjects": [
+        "mineflayer.Bot.findBlock",
+        "mineflayer.Bot.canSeeBlock"
+      ],
+      "scope": "Recovered exact completed native source/result: nearest table, sign with extra-info predicate, visible table/occluded wall, followed by separate cursor/unknown-cell checks. Decoded event result equals original saved report.",
+      "result": "passed",
+      "sourceSha256": "9424d2716c66d31e4e5404b1a4880cd7cdd43891ab52c75f91ae3eda57d32e9b",
+      "report": {
+        "path": "run/mineflayer-reference/world-queries-provenance-recovered.json",
+        "sha256": "2c6f608740a57eb06b147f13cbd55d58f20fdb5c5714fa17bff1761fdb87ae18",
+        "codePath": [
+          "recoveredCalls",
+          1,
+          "rawCompletedEvent",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Historical artifact identity not recovered. Initial cursor failure retained in recovery artifact. No rerun; extra native cursor/menu checks are not claimed paired with reference."
     }
   },
   "reviewNotes": {

@@ -104,3 +104,7 @@ and its port closed. Startup retained an ArmorTrimMaterial decoding warning and
 setup teleport movement warnings; this is not general protocol conformance. The
 historical native report has no embedded executed source, so this new shared
 source is not claimed as an exact paired native/reference execution.
+
+## Recovered native provenance
+
+On 2026-10-08 the exact completed BB event for script7b401431-bb25-4f4f-aa2e-c978c6326120 was recovered; source SHA2569424d2716c66d31e4e5404b1a4880cd7cdd43891ab52c75f91ae3eda57d32e9b. Its parsed result exactly equals world-queries-view-native.json. The table, extra-info sign and known visibility/occlusion checks precede its menu/cursor operations and semantically match the reference subset. Earlier statements that executed native source was unavailable are superseded by this recovery; byte-identical whole programs and artifact identity remain unestablished. The 91-case query implementation is unchanged since tested268f8f0. findBlock and canSeeBlock now have library/native/live-reference evidence; other query methods are not promoted by this subset. The initial cursor failure remains retained, not relabeled. [Raw recovery](/Users/scott/.bb/thread-storage/thr_xykqkgui57/world-queries-provenance-recovery.json).
