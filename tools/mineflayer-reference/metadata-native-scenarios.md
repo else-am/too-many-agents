@@ -89,3 +89,10 @@ real runner and QuickJS: native-empty Item metadata + actual captured three-item
 Slot produced the event-time count 3, then current native-empty metadata reset
 that same metadata object to count 0. Override is limited to playerCollect's
 cause, native droppedItem capture and metadata key 8/type item_stack.
+
+Lead integration (`09b6f0c`): normal full Java/plugin/package build passed with
+the new access transformer; the existing shared item-wire suite passed 74
+fixtures, 61 stock matches and 13 malformed-wire rejections. No client launched.
+`observe-metadata.js` is the prepared real-body flag/default-reset/identity and
+hydrated `entityUpdate` check; syntax parsed only. Packaged/native checks remain
+pending executor availability.
