@@ -40,6 +40,7 @@ final class AgentActions {
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
     private float vehicleLeft, vehicleForward;
+    private ScriptVehicleControls mountedControls;
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -303,10 +304,9 @@ final class AgentActions {
         if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw error("dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
             || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
-        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()) {
-            if (!(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat))
-                throw error("vehicle_controls_not_implemented_for_body");
-            if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()
+            && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
+            requireVehicleController();
         }
         if (mob.isFallFlying() && List.of("walk", "route", "creative_fly").contains(type))
             throw error("land_before_ground_navigation_or_creative_flight");
@@ -585,7 +585,10 @@ final class AgentActions {
                     if (!state.equals("using")) finish(state.equals("completed") ? "completed" : "failed", "consumption_" + state, null);
                 }
                 case "release" -> finish("completed", "released", hands.releaseHeld());
-                case "dismount" -> finish("completed", "dismounted", hands.dismountBody());
+                case "dismount" -> {
+                    clearVehicleControls();
+                    finish("completed", "dismounted", hands.dismountBody());
+                }
                 case "update_sign" -> {
                     if (!args.has("lines") || !args.get("lines").isJsonArray() || args.getAsJsonArray("lines").size() != 4)
                         throw error("invalid_sign_lines");
@@ -612,21 +615,26 @@ final class AgentActions {
                     finish("completed", "hotbar_selected", null);
                 }
                 case "vehicle_control" -> {
-                    if (!(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat))
-                        throw error(mob.isPassenger() ? "vehicle_controls_not_implemented_for_body" : "body_not_mounted");
-                    if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+                    requireVehicleController();
                     float left = (float) Math.clamp(number(args, "left"), -1, 1);
                     float forward = (float) Math.clamp(number(args, "forward"), -1, 1);
-                    controlledBoat = boat;
-                    vehicleLeft = left;
-                    vehicleForward = forward;
+                    if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat) {
+                        controlledBoat = boat;
+                        vehicleLeft = left;
+                        vehicleForward = forward;
+                    } else mountedInput(left, forward);
                     finish("completed", "vehicle_controls_updated", null);
                 }
                 case "control" -> {
                     String control = text(args, "control");
                     if (args.get("state").getAsBoolean()) heldControls.add(control);
                     else heldControls.remove(control);
-                    if (heldControls.isEmpty()) clearControls();
+                    if (mob.isPassenger() && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat)) {
+                        if (heldControls.contains("sneak")) {
+                            clearControls();
+                            hands.dismountBody();
+                        } else if (!heldControls.isEmpty() || mountedControls != null) applyControls();
+                    } else if (heldControls.isEmpty()) clearControls();
                     finish("completed", "control_updated", null);
                 }
                 case "menu_button" -> finish("completed", "menu_button", hands.menuButton(integer(args, "menuId", -1), menuGeneration(), integer(args, "button", -1)));
@@ -720,7 +728,37 @@ final class AgentActions {
         flyStep(delta);
     }
 
+    private void requireVehicleController() {
+        if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat) {
+            if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+        } else {
+            hands.syncBody();
+            ScriptVehicleControls.requireEligible(mob, hands, mob.getVehicle());
+        }
+    }
+
+    private void mountedInput(float left, float forward) {
+        requireVehicleController();
+        if (mountedControls != null && !mountedControls.matches(mob.getVehicle())) {
+            clearControls();
+            throw error("vehicle_control_ownership_changed");
+        }
+        if (mountedControls == null) mountedControls = new ScriptVehicleControls(this, mob.getVehicle(), box, scriptId);
+        mountedControls.input(left, forward, heldControls.contains("jump"), heldControls.contains("sprint"));
+    }
+
+    boolean vehicleLeaseActive(String lease) {
+        expireScript();
+        return lease != null && controlsScript(lease);
+    }
+
+    void failVehicleControls(RuntimeException failure) {
+        try { clearControls(); }
+        finally { if (stateStream != null) stateStream.fail(failure); }
+    }
+
     private void tickVehicleControls() {
+        if (mountedControls != null) mountedControls.poll();
         var boat = controlledBoat;
         if (boat == null) return;
         if (boat.isRemoved() || mob.getVehicle() != boat || boat.getControllingPassenger() != mob) {
@@ -747,6 +785,11 @@ final class AgentActions {
     }
 
     private void clearVehicleControls() {
+        if (mountedControls != null) {
+            var previous = mountedControls;
+            mountedControls = null;
+            previous.close();
+        }
         if (controlledBoat != null && controlledBoat.getControllingPassenger() == mob) {
             controlledBoat.setInput(false, false, false, false);
             controlledBoat.setPaddleState(false, false);
@@ -763,10 +806,13 @@ final class AgentActions {
             return;
         }
         if (mob.isPassenger()) {
-            clearControls();
-            if (stateStream != null) stateStream.fail(error("vehicle_control_ownership_changed"));
+            try {
+                mountedInput((heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0),
+                    (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0));
+            } catch (RuntimeException failure) { failVehicleControls(failure); }
             return;
         }
+        if (mountedControls != null) { failVehicleControls(error("vehicle_control_ownership_changed")); return; }
         mob.setSprinting(heldControls.contains("sprint"));
         mob.setShiftKeyDown(heldControls.contains("sneak"));
         float speed = (float) mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
