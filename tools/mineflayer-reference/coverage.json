@@ -10147,6 +10147,22 @@
         ]
       },
       "limitations": "Source recovered without rerun. Whole native/reference source is not byte-identical. Auxiliary observation producer arguments/timestamps and historical packaged JAR identity not recovered. No automatic mutation/recovery on unknown outcome claimed by this successful run."
+    },
+    "native-wall-recorded": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/performance-wall-native.js",
+      "subjects": [],
+      "scope": "Eight ordinary survival placements and immediate ordered-state block/item checks; exact source byte-identical to original reference procedure. Selected task outcome, not complete placeBlock option/refusal conformance.",
+      "result": "passed",
+      "sourceSha256": "6908c06ea9a4f93964e4f58fcfeb526d872d0f2e2bcb2cc54cca3ef53722ca0d",
+      "report": {
+        "path": "run/mineflayer-reference/performance-wall-native-recorded.json",
+        "sha256": "7fc8566aa997172f6f6a9662554c8a4bf4508d71f7d4cd8ff0655276ce1427b7",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Original identical reference immediate-inventory assertion failed; separate bounded-wait reference converged after one tick. Independent native final world/inventory observation is later, not promise-time evidence. No broader placement or timing parity claim."
     }
   },
   "reviewNotes": {

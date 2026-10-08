@@ -23,3 +23,7 @@ not a rerun of native performance, an exact paired-source claim, or proof that
 upstream and native promise-time inventory visibility are identical. Do not
 promote all placement APIs from this case. Failure stops this run; no protocol
 patches, repeated actions or automatic scenario rerun.
+
+## Paired native provenance review
+
+The retained native code/arguments are byte-identical to the original failed reference source (SHA2566908c06ea9a4f93964e4f58fcfeb526d872d0f2e2bcb2cc54cca3ef53722ca0d). Native run b583fc90 completed eight place actions with eight-item cost and confirmed release. Later independent native markers/NBT verify all eight cells and no remaining stone; they do not establish promise-time observations. The subsequent reference-only bounded inventory wait changes the completion observation, so the original reference failure remains failed. Selected wall outcomes match; placement refusal, other faces/options and broader cancellation are not inferred from this task. [Exact review and raw artifact hashes](/Users/scott/.bb/thread-storage/thr_xykqkgui57/wall-pairing-provenance-review.json).
