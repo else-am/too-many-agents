@@ -30,3 +30,16 @@ Focused scenarios before the port:
 
 Do not rerun earlier gameplay suites for this guest cache port. Native checks
 remain blocked by the other connected game and must use a rebuilt artifact.
+
+Native-frame/storage integration contract (before this follow-up):
+- A guest edits a remote column, queues its in-memory save, and receives a native
+  unload frame before saving. The callback must receive that actual column,
+  never undefined or a replacement at the same coordinates.
+- Native block/light/biome/block-entity changes queue the changed observed column
+  when a guest provider is installed; no default provider or host persistence.
+- A provider that awaits while a newer edit queues the same coordinates must
+  not erase that newer save. waitSaving drains both confirmed versions. Explicit
+  provider failure retains pending work and rejects; there is no automatic retry.
+- Native column events remain deferred until full hydration. A dimension change
+  with unsaved guest columns rejects rather than misrouting old-dimension data
+  to new coordinates. Cross-session guest persistence is not promised.

@@ -7,6 +7,36 @@ import { RaycastIterator } from './world-view.mjs';
 const World = loadWorld();
 export function createColumnWorld() {
   const asyncWorld = new World(null);
+  // Upstream saves by looking up current coordinates later. Native unloads may
+  // remove those coordinates first, so retain the queued column and provider.
+  let saving;
+  asyncWorld.queueSaving = function(chunkX, chunkZ) {
+    this.savingQueue.set(`${chunkX},${chunkZ}`, {
+      chunkX, chunkZ, column: this.getLoadedColumn(chunkX, chunkZ), provider: this.storageProvider,
+    });
+  };
+  asyncWorld.saveNow = async function() {
+    if (saving) { await saving; return; }
+    if (!this.savingQueue.size) return;
+    const batch = [...this.savingQueue];
+    const operation = Promise.resolve().then(async () => {
+      for (const [key, entry] of batch) {
+        await entry.provider.save(entry.chunkX, entry.chunkZ, entry.column);
+        // An edit queued while the callback awaited belongs to a later save.
+        if (this.savingQueue.get(key) === entry) this.savingQueue.delete(key);
+      }
+      for (const [key, { chunkX, chunkZ }] of this.unloadQueue)
+        if (!this.savingQueue.has(key)) this.forceUnloadColumn(key, chunkX, chunkZ);
+      this.emit('doneSaving');
+    });
+    saving = operation;
+    this.finishedSaving = operation;
+    try { await operation; } finally { if (saving === operation) saving = undefined; }
+  };
+  asyncWorld.waitSaving = async function() {
+    while (saving || this.savingQueue.size) await this.saveNow();
+    await this.finishedSaving;
+  };
   // Async World's matcher filters candidates; sync World's matcher selects hits.
   asyncWorld.raycast = async function(from, direction, range, matcher = null) {
     if (![from.x, from.y, from.z, direction.x, direction.y, direction.z, range].every(Number.isFinite) || range < 0)
@@ -72,6 +102,8 @@ export function installColumns(bot, ChunkColumn) {
     const events = [], changes = [];
     if (!view) return { events, changes };
     if (dimension !== undefined && dimension !== view.dimension) {
+      if (world.async.savingQueue.size || world.async.currentlySaving)
+        throw new Error('World dimension changed with unsaved guest columns');
       for (const id of Object.keys(cached())) {
         const [x, z] = id.split(',').map(Number);
         if (emit) events.push(['chunkColumnUnload', new Vec3(x * 16, 0, z * 16)]);
@@ -112,6 +144,8 @@ export function installColumns(bot, ChunkColumn) {
       }
       if (old instanceof ChunkColumn) Object.assign(old, column);
       else { cached()[id] = column; if (emit) events.push(['chunkColumnLoad', new Vec3(row.x * 16, 0, row.z * 16)]); }
+      world.async.unloadQueue.delete(id);
+      if (world.async.storageProvider) world.async.queueSaving(row.x, row.z);
       sources.set(id, { encoded, data: row.data });
     }
     return { events, changes };
@@ -124,12 +158,18 @@ export function installColumns(bot, ChunkColumn) {
       const column = world.getColumnAt(p);
       if (!column) continue;
       const at = local(p);
-      if (column.getBlockStateId(at) !== states[i]) column.setBlockStateId(at, states[i]);
-      if (column.getBiome(at) !== biomes[i]) column.setBiome(at, biomes[i]);
-      if (column.getBlockLight(at) !== (light[i] & 15)) column.setBlockLight(at, light[i] & 15);
-      if (column.getSkyLight(at) !== (light[i] >> 4)) column.setSkyLight(at, light[i] >> 4);
-      if (entities[i]) column.setBlockEntity(at, entities[i]);
-      else column.removeBlockEntity(at);
+      let changed = false;
+      if (column.getBlockStateId(at) !== states[i]) { column.setBlockStateId(at, states[i]); changed = true; }
+      if (column.getBiome(at) !== biomes[i]) { column.setBiome(at, biomes[i]); changed = true; }
+      if (column.getBlockLight(at) !== (light[i] & 15)) { column.setBlockLight(at, light[i] & 15); changed = true; }
+      if (column.getSkyLight(at) !== (light[i] >> 4)) { column.setSkyLight(at, light[i] >> 4); changed = true; }
+      const previous = column.getBlockEntity(at), next = entities[i];
+      if ((previous || next) && JSON.stringify(previous ?? null) !== JSON.stringify(next ?? null)) {
+        if (next) column.setBlockEntity(at, next);
+        else column.removeBlockEntity(at);
+        changed = true;
+      }
+      if (changed) world.async.saveAt(p);
     }
   }
   function bounds() {
