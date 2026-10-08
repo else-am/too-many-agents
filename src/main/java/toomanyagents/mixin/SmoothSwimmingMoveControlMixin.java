@@ -16,6 +16,6 @@ abstract class SmoothSwimmingMoveControlMixin extends MoveControl {
 
     @Redirect(method = "tick", at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/ai/navigation/PathNavigation;isDone()Z"))
     private boolean selectedRouteActivity(PathNavigation navigation) {
-        return !ScriptNavigation.selectedTadpoleControl(mob, this, navigation) && navigation.isDone();
+        return !ScriptNavigation.selectedSmoothSwimControl(mob, this, navigation) && navigation.isDone();
     }
 }

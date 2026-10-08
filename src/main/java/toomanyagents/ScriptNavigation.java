@@ -32,6 +32,7 @@ import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
+import net.minecraft.world.entity.animal.Dolphin;
 import net.minecraft.world.entity.animal.Salmon;
 import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.monster.Drowned;
@@ -66,7 +67,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, DOLPHIN, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -113,12 +114,12 @@ public final class ScriptNavigation {
     private float puffWidth, puffHeight, puffEyeHeight;
     private Pose puffPose;
     private Vec3 swimHold;
-    private boolean tadpolePrepared, tadpoleControlTick, tadpoleTravelTick;
-    private PathNavigation tadpoleNavigation;
-    private LivingEntity tadpoleTarget;
-    private Pose tadpolePose;
-    private float tadpoleWidth, tadpoleHeight, tadpoleEyeHeight;
-    private DryStep tadpoleStep;
+    private boolean smoothPrepared, smoothControlTick, smoothTravelTick;
+    private PathNavigation smoothNavigation;
+    private LivingEntity smoothTarget;
+    private Pose smoothPose;
+    private float smoothWidth, smoothHeight, smoothEyeHeight;
+    private DryStep smoothStep;
     private PathNavigation drownedNavigation;
     private LivingEntity drownedTarget;
     private boolean drownedCanFloat, drownedPrepared, drownedTravelTick;
@@ -200,10 +201,10 @@ public final class ScriptNavigation {
             puffPose = mob.getPose();
         }
         swimHold = mob.position();
-        tadpolePrepared = false; tadpoleStep = null;
-        if (physics == Physics.TADPOLE) {
-            tadpoleNavigation = mob.getNavigation(); tadpoleTarget = mob.getTarget(); tadpolePose = mob.getPose();
-            tadpoleWidth = mob.getBbWidth(); tadpoleHeight = mob.getBbHeight(); tadpoleEyeHeight = mob.getEyeHeight();
+        smoothPrepared = false; smoothStep = null;
+        if (smoothSwimmer(physics)) {
+            smoothNavigation = mob.getNavigation(); smoothTarget = mob.getTarget(); smoothPose = mob.getPose();
+            smoothWidth = mob.getBbWidth(); smoothHeight = mob.getBbHeight(); smoothEyeHeight = mob.getEyeHeight();
         }
         drownedPrepared = false; drownedStep = null; drownedHold = mob.position();
         drownedPolicyVolume = drownedInitialVolume = null;
@@ -302,7 +303,7 @@ public final class ScriptNavigation {
             requireMode();
             if (!inside(mob.position())) throw error("route_outside_body_box");
             clearInputs();
-            rabbitStep = null; flightStep = null; drownedStep = null; tadpoleStep = null;
+            rabbitStep = null; flightStep = null; drownedStep = null; smoothStep = null;
             if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
             Frame predicted = null;
             SwimStep swimming = null;
@@ -327,8 +328,8 @@ public final class ScriptNavigation {
                     if (physics == Physics.FISH) {
                         swimming = swimStep(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
-                    } else if (physics == Physics.TADPOLE) {
-                        prepareTadpole(returnTo);
+                    } else if (smoothSwimmer(physics)) {
+                        prepareSmoothSwim(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (physics == Physics.DROWNED_WATER) {
                         prepareDrownedWater(returnTo);
@@ -357,9 +358,9 @@ public final class ScriptNavigation {
                         phase = "swimming";
                         swimming = swimStep(target);
                         checkArrival = true;
-                    } else if (physics == Physics.TADPOLE) {
+                    } else if (smoothSwimmer(physics)) {
                         phase = "swimming";
-                        prepareTadpole(target);
+                        prepareSmoothSwim(target);
                         checkArrival = true;
                     } else if (physics == Physics.DROWNED_WATER) {
                         phase = "swimming";
@@ -409,15 +410,15 @@ public final class ScriptNavigation {
             }
             if (physics == Physics.ALLAY && flightStep == null) flightStep = predictAllayStep();
             if (physics == Physics.BEE && flightStep == null) flightStep = predictDryStep(mob.getDeltaMovement(), beeFriction());
-            if (physics == Physics.TADPOLE && tadpoleStep == null) {
-                if (active) prepareTadpole(swimHold);
-                else tadpoleStep = tadpoleTravelStep();
+            if (smoothSwimmer(physics) && smoothStep == null) {
+                if (active) prepareSmoothSwim(swimHold);
+                else smoothStep = smoothSwimTravelStep();
             }
             // Exactly one native travel on a successful tick, including mining and building waits.
             travel();
-            if (tadpoleStep != null && (mob.position().distanceTo(tadpoleStep.after) > 0.01
-                || mob.getDeltaMovement().distanceTo(tadpoleStep.velocity) > 0.01))
-                throw error("route_tadpole_trajectory_changed");
+            if (smoothStep != null && (mob.position().distanceTo(smoothStep.after) > 0.01
+                || mob.getDeltaMovement().distanceTo(smoothStep.velocity) > 0.01))
+                throw error(smoothReason("trajectory_changed"));
             if (drownedStep != null && (mob.position().distanceTo(drownedStep.after) > 0.01
                 || mob.getDeltaMovement().distanceTo(drownedStep.velocity) > 0.01))
                 throw error("route_drowned_water_trajectory_changed");
@@ -443,8 +444,8 @@ public final class ScriptNavigation {
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
             if (flightMode(physics) && flightPrepared)
                 throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
-            if (physics == Physics.TADPOLE && tadpolePrepared)
-                throw new IllegalStateException("route_tadpole_prepared_failed: " + failure.getMessage(), failure);
+            if (smoothSwimmer(physics) && smoothPrepared)
+                throw new IllegalStateException(smoothReason("prepared_failed") + ": " + failure.getMessage(), failure);
             if (physics == Physics.DROWNED_WATER && drownedPrepared)
                 throw new IllegalStateException("route_drowned_water_prepared_failed: " + failure.getMessage(), failure);
             throw failure;
@@ -454,7 +455,7 @@ public final class ScriptNavigation {
     void stop() {
         requireThread();
         boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
-            && (physics != Physics.TADPOLE || ownsTadpoleCleanup())
+            && (!smoothSwimmer(physics) || ownsSmoothSwimCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
             && (physics != Physics.DROWNED_WATER || ownsDrownedWaterCleanup());
         OWNED.remove(mob, this);
@@ -1264,11 +1265,11 @@ public final class ScriptNavigation {
     }
 
     /** Native preparation, not a copied FishMoveControl or a brain/navigation tick. */
-    private void prepareTadpole(Vec3 goal) {
+    private void prepareSmoothSwim(Vec3 goal) {
         requireMode();
         if (OWNED.get(mob) != this || !active || !owner.vehicleLeaseActive(lease))
             throw error("script_no_longer_controls_body");
-        if (tadpoleStep != null) throw error("route_duplicate_tadpole_control");
+        if (smoothStep != null) throw error(physics == Physics.DOLPHIN ? "route_duplicate_dolphin_control" : "route_duplicate_tadpole_control");
         Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
         double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
         if (!Double.isFinite(speed) || speed <= 0 || speed > 4) throw error("route_aquatic_speed_unsupported");
@@ -1279,31 +1280,40 @@ public final class ScriptNavigation {
         double length = correction.length();
         Vec3 heading = length > 1e-12 ? correction.scale(1 / length) : new Vec3(0, 0, 1);
         double alignment = Math.max(0, mob.getLookAngle().dot(heading));
-        double modifier = Math.clamp(length / (0.01F * speed), 0, 1) * alignment;
+        double modifier;
+        if (physics == Physics.DOLPHIN) {
+            // Dolphin uses prepared speed (.02F*f1), not AbstractFish's .01F.
+            // With native normalized input its acceleration is .02F*f1*min(f1,1).
+            double requestedSpeed = length <= 0.02F ? Math.sqrt(length / 0.02F) : length / 0.02F;
+            modifier = Math.clamp(requestedSpeed / speed, 0, 1) * alignment;
+        } else modifier = Math.clamp(length / (0.01F * speed), 0, 1) * alignment;
         Vec3 wanted = pos.add(heading);
-        tadpolePrepared = true;
+        smoothPrepared = true;
         mob.setSprinting(false);
         controller.setWantedPosition(wanted.x, wanted.y, wanted.z, modifier);
-        tadpoleControlTick = true;
+        smoothControlTick = true;
         try { controller.tick(); }
-        finally { tadpoleControlTick = false; }
+        finally { smoothControlTick = false; }
         requireMode();
         if (!active || OWNED.get(mob) != this || !owner.vehicleLeaseActive(lease))
             throw error("script_no_longer_controls_body");
         if (!pos.equals(mob.position()) || mob.getDeltaMovement().distanceTo(velocity.add(0, 0.005, 0)) > 1e-8)
-            throw error("route_tadpole_preparation_changed");
-        tadpoleStep = tadpoleTravelStep();
+            throw error(smoothReason("preparation_changed"));
+        smoothStep = smoothSwimTravelStep();
     }
 
-    /** AbstractFish travel with SmoothSwimmingMoveControl's actual full XYZ input. */
-    private DryStep tadpoleTravelStep() {
+    /** Reviewed Tadpole/Dolphin water travel with the real controller's full XYZ input. */
+    private DryStep smoothSwimTravelStep() {
         requireMode();
         Vec3 velocity = mob.getDeltaMovement(), input = new Vec3(mob.xxa, mob.yya, mob.zza);
         if (!Double.isFinite(input.lengthSqr()) || !Double.isFinite(velocity.lengthSqr()))
-            throw error("route_tadpole_input_invalid");
+            throw error(smoothReason("input_invalid"));
+        float acceleration = physics == Physics.DOLPHIN ? mob.getSpeed() : 0.01F;
+        if (!Float.isFinite(acceleration) || acceleration < 0 || acceleration > 4)
+            throw error(smoothReason("input_invalid"));
         if (input.lengthSqr() >= 1e-7) {
             if (input.lengthSqr() > 1) input = input.normalize();
-            input = input.scale(0.01F);
+            input = input.scale(acceleration);
             float radians = mob.getYRot() * ((float) Math.PI / 180), sin = Mth.sin(radians), cos = Mth.cos(radians);
             velocity = velocity.add(input.x * cos - input.z * sin, input.y, input.z * cos + input.x * sin);
         }
@@ -1312,7 +1322,7 @@ public final class ScriptNavigation {
         if (!inside(after) || !withinEdge(after)) throw error("route_aquatic_edge_unexecutable");
         AABB sweep = mob.getBoundingBox().expandTowards(motion.delta);
         requireSubmerged(sweep);
-        if (!level.noCollision(mob, fishVolume(sweep))) throw error("route_tadpole_volume_obstructed");
+        if (!level.noCollision(mob, fishVolume(sweep))) throw error(smoothReason("volume_obstructed"));
         if (Math.abs(velocity.y - motion.delta.y) > EPS) throw error("route_aquatic_vertical_collision");
         Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0, velocity.y,
             Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0).scale(0.9);
@@ -1509,11 +1519,11 @@ public final class ScriptNavigation {
             }
         }
         drownedTravelTick = physics == Physics.DROWNED_WATER;
-        tadpoleTravelTick = physics == Physics.TADPOLE;
+        smoothTravelTick = smoothSwimmer(physics);
         hoverTravelTick = hoverMode(physics);
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; hoverTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; hoverTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1528,7 +1538,7 @@ public final class ScriptNavigation {
     }
 
     private void clearControls() {
-        if (physics == Physics.TADPOLE && !ownsTadpoleCleanup()) return;
+        if (smoothSwimmer(physics) && !ownsSmoothSwimCleanup()) return;
         if (physics == Physics.DROWNED_WATER && !ownsDrownedWaterCleanup()) return;
         if (puffState >= 0 && !ownsPufferfishCleanup()) return;
         if (flightMode(physics)) { clearFlightControls(); return; }
@@ -1537,7 +1547,8 @@ public final class ScriptNavigation {
         if (physics == Physics.FISH) mob.setSpeed(0);
         mob.setSprinting(false);
         mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
-        mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
+        // Dolphin changes inputs only; outer action cancellation retains its existing policy.
+        if (physics != Physics.DOLPHIN) mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
     }
 
     private boolean settled() {
@@ -1755,7 +1766,8 @@ public final class ScriptNavigation {
         if (fishMode(mode) || mode == Physics.DROWNED_WATER) {
             JsonObject result = new JsonObject();
             result.addProperty("physics", mode == Physics.DROWNED_WATER ? "native-drowned-water-post-tick"
-                : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick" : "native-fish-submerged-post-tick");
+                : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick"
+                : mode == Physics.DOLPHIN ? "native-dolphin-submerged-post-tick" : "native-fish-submerged-post-tick");
             result.addProperty("locomotion", "submerged");
             result.addProperty("swimTargetYOffset", mode == Physics.DROWNED_WATER ? 0.5 : swimTargetOffset(mob));
             result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
@@ -1862,10 +1874,11 @@ public final class ScriptNavigation {
         if ((mob.getClass() == Cod.class || mob.getClass() == Salmon.class || mob.getClass() == TropicalFish.class || puffer)
             && control == AbstractFish.FishMoveControl.class && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER))
             return Physics.FISH;
-        if (mob.getClass() == Tadpole.class && control == SmoothSwimmingMoveControl.class
+        if ((mob.getClass() == Tadpole.class || mob.getClass() == Dolphin.class) && control == SmoothSwimmingMoveControl.class
             && mob.getNavigation().getClass() == WaterBoundPathNavigation.class
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
-            && tadpoleParameters((SmoothSwimmingMoveControl) mob.getMoveControl())) return Physics.TADPOLE;
+            && smoothSwimParameters((SmoothSwimmingMoveControl) mob.getMoveControl()))
+            return mob.getClass() == Dolphin.class ? Physics.DOLPHIN : Physics.TADPOLE;
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
         if (control == MoveControl.class && !(mob instanceof Drowned)
             && mob.getClass() != Slime.class && mob.getClass() != MagmaCube.class && mob.getClass() != Rabbit.class
@@ -1930,11 +1943,13 @@ public final class ScriptNavigation {
                 throw error("route_drowned_water_state_changed");
             requireSubmerged(mob.getBoundingBox());
         }
-        if (physics == Physics.TADPOLE) {
-            if ((!mob.isNoAi() && !tadpoleTravelTick) || mob.getNavigation() != tadpoleNavigation
-                || tadpoleNavigation.getPath() != null || mob.getTarget() != tadpoleTarget || mob.getPose() != tadpolePose
-                || mob.getBbWidth() != tadpoleWidth || mob.getBbHeight() != tadpoleHeight || mob.getEyeHeight() != tadpoleEyeHeight)
-                throw error("route_tadpole_body_changed");
+        if (smoothSwimmer(physics)) {
+            if ((!mob.isNoAi() && !smoothTravelTick) || mob.getNavigation() != smoothNavigation
+                || smoothNavigation.getPath() != null || mob.getTarget() != smoothTarget || mob.getPose() != smoothPose
+                || mob.getBbWidth() != smoothWidth || mob.getBbHeight() != smoothHeight || mob.getEyeHeight() != smoothEyeHeight)
+                throw error(smoothReason("body_changed"));
+            if (physics == Physics.DOLPHIN && mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)
+                throw error("route_dolphin_stuck_pending");
             requireSubmerged(mob.getBoundingBox());
         }
         if (physics == Physics.FISH) {
@@ -2055,15 +2070,15 @@ public final class ScriptNavigation {
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
             AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
             route.checkVolume(flightMode(route.physics) ? route.flightVolume(checked)
-                : (route.physics == Physics.DROWNED_WATER || route.physics == Physics.TADPOLE) ? route.fishVolume(checked) : checked);
+                : (route.physics == Physics.DROWNED_WATER || smoothSwimmer(route.physics)) ? route.fishVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
                 if (!route.inside(next)) throw error("route_leaves_body_box");
                 if (!route.withinEdge(next)) throw error("route_leaves_selected_edge");
                 route.checkDryVolume(sweep);
                 if (fishMode(route.physics) || route.physics == Physics.DROWNED_WATER) route.requireSubmerged(sweep);
-                if ((route.physics == Physics.DROWNED_WATER || route.physics == Physics.TADPOLE) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
-                    throw error(route.physics == Physics.TADPOLE ? "route_tadpole_volume_obstructed" : "route_drowned_water_volume_obstructed");
+                if ((route.physics == Physics.DROWNED_WATER || smoothSwimmer(route.physics)) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
+                    throw error(smoothSwimmer(route.physics) ? route.smoothReason("volume_obstructed") : "route_drowned_water_volume_obstructed");
             }
             return true;
         } catch (RuntimeException failure) {
@@ -2140,19 +2155,25 @@ public final class ScriptNavigation {
         } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
     }
 
-    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.TADPOLE; }
+    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || smoothSwimmer(mode); }
 
-    private static boolean tadpoleParameters(SmoothSwimmingMoveControl control) {
+    private static boolean smoothSwimmer(Physics mode) { return mode == Physics.TADPOLE || mode == Physics.DOLPHIN; }
+
+    private String smoothReason(String suffix) {
+        return (physics == Physics.DOLPHIN ? "route_dolphin_" : "route_tadpole_") + suffix;
+    }
+
+    private static boolean smoothSwimParameters(SmoothSwimmingMoveControl control) {
         return control.maxTurnX == 85 && control.maxTurnY == 10 && control.inWaterSpeedModifier == 0.02F
             && control.outsideWaterSpeedModifier == 0.1F && control.applyGravity;
     }
 
     /** The real navigation remains idle everywhere except this exact controller query. */
-    public static boolean selectedTadpoleControl(Mob body, MoveControl control, PathNavigation navigation) {
+    public static boolean selectedSmoothSwimControl(Mob body, MoveControl control, PathNavigation navigation) {
         if (body.level().isClientSide) return false;
         ScriptNavigation route = OWNED.get(body);
-        if (route == null || !route.active || route.physics != Physics.TADPOLE || !route.tadpoleControlTick
-            || route.controller != control || route.tadpoleNavigation != navigation) return false;
+        if (route == null || !route.active || !smoothSwimmer(route.physics) || !route.smoothControlTick
+            || route.controller != control || route.smoothNavigation != navigation) return false;
         try {
             route.requireThread();
             if (!route.owner.vehicleLeaseActive(route.lease)) throw error("script_no_longer_controls_body");
@@ -2161,9 +2182,9 @@ public final class ScriptNavigation {
         } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
     }
 
-    private boolean ownsTadpoleCleanup() {
+    private boolean ownsSmoothSwimCleanup() {
         return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
-            && mob.getNavigation() == tadpoleNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && mob.getNavigation() == smoothNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
             && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
     }
 
