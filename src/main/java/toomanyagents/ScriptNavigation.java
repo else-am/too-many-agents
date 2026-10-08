@@ -29,6 +29,7 @@ import net.minecraft.world.entity.animal.Panda;
 import net.minecraft.world.entity.animal.camel.Camel;
 import net.minecraft.world.entity.animal.sniffer.Sniffer;
 import net.minecraft.world.entity.animal.Turtle;
+import net.minecraft.world.entity.monster.Ghast;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -78,7 +79,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, SNIFFER, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, TURTLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, SNIFFER, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, TURTLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE, GHAST }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -174,6 +175,10 @@ public final class ScriptNavigation {
     private PathNavigation hoverNavigation;
     private Pose hoverPose;
     private boolean hoverTravelTick, beeBaby;
+    private PathNavigation ghastNavigation;
+    private LivingEntity ghastTarget;
+    private Pose ghastPose;
+    private boolean ghastCharging, ghastNoGravity, ghastCanFloat, ghastTravelTick;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
                          boolean jump, boolean sprint, float wantedYaw, double modifier, SnifferControl sniffer) {
@@ -184,6 +189,8 @@ public final class ScriptNavigation {
             this(before, after, beforeVelocity, beforeGround, target, jump, sprint, 0, 1);
         }
     }
+    private record GhastCommand(Vec3 wanted, Vec3 velocity, GhastStep step) {}
+    private record GhastStep(Vec3 after, Vec3 velocity, boolean ground) {}
     private record SnifferControl(MoveControl.Operation before, MoveControl.Operation after, boolean kick) {}
     private record TurtleCommand(boolean active, Vec3 wanted, double modifier, float yaw, float speed, Vec3 preparedVelocity, DryStep step) {}
     private record HopInput(float yaw, double modifier) {}
@@ -239,6 +246,10 @@ public final class ScriptNavigation {
         flightWidth = mob.getBbWidth(); flightHeight = mob.getBbHeight(); flightEyeHeight = mob.getEyeHeight();
         if (hoverMode(physics)) { hoverNavigation = mob.getNavigation(); hoverPose = mob.getPose(); }
         beeBaby = physics == Physics.BEE && mob.isBaby();
+        if (physics == Physics.GHAST) {
+            ghastNavigation = mob.getNavigation(); ghastTarget = mob.getTarget(); ghastPose = mob.getPose();
+            ghastCharging = ((Ghast) mob).isCharging(); ghastNoGravity = mob.isNoGravity(); ghastCanFloat = ghastNavigation.canFloat();
+        }
         fishHadTarget = mob.getTarget() != null;
         puffState = mob.getClass() == Pufferfish.class ? ((Pufferfish) mob).getPuffState() : -1;
         if (puffState >= 0) {
@@ -344,7 +355,8 @@ public final class ScriptNavigation {
         checkVolume(relevant);
         checkDryVolume(mob.getBoundingBox());
         if (fishMode(physics) || physics == Physics.DROWNED_WATER) requireSubmerged(mob.getBoundingBox());
-        if (physics == Physics.TURTLE) { requireMode(); clearInputs(); }
+        if (physics == Physics.GHAST) { requireMode(); clearGhastControls(); }
+        else if (physics == Physics.TURTLE) { requireMode(); clearInputs(); }
         else clearControls();
         movementFailure = null;
         active = true;
@@ -498,6 +510,7 @@ public final class ScriptNavigation {
                 if (active) prepareDrownedSwim(drownedHold);
                 else drownedStep = predictDrownedSwim();
             }
+            if (physics == Physics.GHAST && flightStep == null) flightStep = predictGhastStep(mob.getDeltaMovement());
             if (physics == Physics.ALLAY && flightStep == null) flightStep = predictAllayStep();
             if (physics == Physics.BEE && flightStep == null) flightStep = predictDryStep(mob.getDeltaMovement(), beeFriction());
             if (smoothSwimmer(physics) && smoothStep == null) {
@@ -570,7 +583,7 @@ public final class ScriptNavigation {
 
     void stop() {
         requireThread();
-        boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
+        boolean cleanup = (physics != Physics.GHAST || ownsGhastCleanup()) && (!hoverMode(physics) || ownsHoverCleanup())
             && (!smoothSwimmer(physics) || ownsSmoothSwimCleanup())
             && (physics != Physics.TURTLE || ownsTurtleCleanup())
             && (physics != Physics.GUARDIAN || ownsGuardianCleanup())
@@ -1000,7 +1013,130 @@ public final class ScriptNavigation {
         return new DryStep(after, remaining);
     }
 
+    /** Four pure current-tick pulse directions; no future cooldown/RNG prediction. */
+    private void prepareGhast(Vec3 goal, boolean landing) {
+        requireFlightLease();
+        if (flightStep != null) throw error("route_duplicate_flight_control");
+        Ghast.GhastMoveControl control = (Ghast.GhastMoveControl) controller;
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), toward = goal.subtract(pos);
+        if (!Double.isFinite(velocity.lengthSqr()) || !Double.isFinite(toward.lengthSqr())) throw error("route_ghast_input_invalid");
+        int countdown = control.floatDuration;
+        // Supported landing requires a real downward native move, not zero-motion onGround bookkeeping.
+        if (landing && toward.y <= 0.12) toward = new Vec3(toward.x, Math.min(toward.y, -0.001), toward.z);
+        GhastCommand chosen = null;
+        for (Vec3 direction : new Vec3[]{Vec3.ZERO, toward, velocity.scale(-1), toward.subtract(velocity.scale(4))}) {
+            Vec3 wanted = pos.add(direction.normalize().scale(0.5));
+            Vec3 delta = wanted.subtract(pos);
+            // ceil(length)<=1 means native canReach has no iterations. This is
+            // only a query bound; our full actual movement sweep is checked below.
+            if (!Double.isFinite(delta.lengthSqr()) || delta.length() > 0.5 + EPS || Mth.ceil(delta.length()) > 1)
+                throw error("route_ghast_wanted_limit");
+            Vec3 prepared = countdown <= 0 ? velocity.add(delta.normalize().scale(0.1)) : velocity;
+            GhastStep step = ghastTravelStep(prepared);
+            if (step == null) continue;
+            GhastCommand candidate = new GhastCommand(wanted, prepared, step);
+            if (chosen == null || betterGhast(candidate.step, chosen.step, goal, landing)) chosen = candidate;
+        }
+        if (chosen == null) throw error("route_ghast_edge_unexecutable");
+        requireFlightLease();
+        if (control.floatDuration != countdown) throw error("route_ghast_countdown_changed");
+        flightPrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(chosen.wanted.x, chosen.wanted.y, chosen.wanted.z, 0); // native modifier is ignored
+        controller.tick();
+        requireFlightLease();
+        int increment = control.floatDuration - countdown;
+        if (!pos.equals(mob.position()) || mob.getDeltaMovement().distanceTo(chosen.velocity) > 1e-8
+            || (countdown <= 0 ? increment < 1 || increment > 5 : control.floatDuration != countdown - 1)
+            || controller.operation != MoveControl.Operation.MOVE_TO || mob.xxa != 0 || mob.yya != 0 || mob.zza != 0)
+            throw error("route_ghast_preparation_changed");
+        flightStep = predictGhastStep(mob.getDeltaMovement());
+    }
+
+    private static boolean ghastPositionReached(GhastStep step, Vec3 goal, boolean landing) {
+        return goal.subtract(step.after).horizontalDistance() < 0.12 && Math.abs(goal.y - step.after.y) < 0.12
+            && (!landing || step.ground);
+    }
+
+    private static boolean betterGhast(GhastStep candidate, GhastStep old, Vec3 goal, boolean landing) {
+        boolean near = ghastPositionReached(candidate, goal, landing), oldNear = ghastPositionReached(old, goal, landing);
+        boolean arrived = near && candidate.velocity.length() <= 0.03, oldArrived = oldNear && old.velocity.length() <= 0.03;
+        if (arrived != oldArrived) return arrived;
+        if (near != oldNear) return near;
+        // A velocity penalty outside the arrival band creates a permanent idle
+        // dead zone for a fixed .1 pulse. Inside it, favor actual settling.
+        double score = near ? candidate.velocity.lengthSqr() : candidate.after.distanceToSqr(goal);
+        double oldScore = oldNear ? old.velocity.lengthSqr() : old.after.distanceToSqr(goal);
+        if (score != oldScore) return score < oldScore;
+        return candidate.velocity.lengthSqr() < old.velocity.lengthSqr();
+    }
+
+    private DryStep predictGhastStep(Vec3 velocity) {
+        GhastStep step = ghastTravelStep(velocity);
+        if (step == null) throw error("route_ghast_edge_unexecutable");
+        return new DryStep(step.after, step.velocity);
+    }
+
+    /** FlyingMob dry travel: zero route input, native collision, then XYZ friction drag with no gravity. */
+    private GhastStep ghastTravelStep(Vec3 velocity) {
+        requireMode();
+        if (!Double.isFinite(velocity.lengthSqr()) || mob.xxa != 0 || mob.yya != 0 || mob.zza != 0)
+            throw error("route_ghast_input_invalid");
+        BlockPos oldSupport = mob.getBlockPosBelowThatAffectsMyMovement();
+        checkCell(oldSupport);
+        float drag = 0.91F;
+        if (mob.onGround()) {
+            float friction = level.getBlockState(oldSupport).getFriction(level, oldSupport, mob);
+            if (!Float.isFinite(friction) || friction <= 0 || friction > 1) throw error("route_ghast_friction_unsupported");
+            drag = friction * 0.91F;
+        }
+        // FlyingMob's .1*(.16277137/drag^3) or airborne .02 acceleration
+        // multiplies our actual zero input. The controller pulse is not input acceleration.
+        Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
+        Vec3 after = mob.position().add(motion.delta);
+        if (!inside(after) || !withinEdge(after)) return null;
+        AABB sweep = flightVolume(mob.getBoundingBox().expandTowards(motion.delta));
+        checkVolume(sweep);
+        if (!level.noCollision(mob, sweep)) return null;
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
+            BlockPos.containing(sweep.maxX - EPS, sweep.maxY - EPS, sweep.maxZ - EPS))) {
+            BlockState state = level.getBlockState(pos);
+            if (!state.getFluidState().isEmpty()) return null;
+            if (!ordinaryFlightInsideBlock(state.getBlock())) throw error("route_ghast_block_effect_unsupported");
+        }
+        AABB bounds = mob.getBoundingBox().move(motion.delta);
+        BlockPos support = motion.ground ? supportingBlock(bounds, after) : null;
+        if (motion.ground && support == null && mob.mainSupportingBlockPos.isPresent())
+            support = supportingBlock(bounds.move(-motion.delta.x, 0, -motion.delta.z), after);
+        boolean verticalCollision = velocity.y != motion.delta.y;
+        requireHoverImpact(support, after, verticalCollision, motion.ground);
+        BlockPos feet = BlockPos.containing(after), below = movementSupport(after, support);
+        checkCell(feet); checkCell(below);
+        float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
+        if (factor == 1) factor = level.getBlockState(below).getBlock().getSpeedFactor();
+        if (!Float.isFinite(factor) || factor < 0 || factor > 4) throw error("route_ghast_block_speed_unsupported");
+        Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0,
+            verticalCollision ? 0 : velocity.y, Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0);
+        return new GhastStep(after, remaining.multiply(factor, 1, factor).scale((double) drag), motion.ground);
+    }
+
+    private boolean ownsGhastCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && mob.getNavigation() == ghastNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    private void clearGhastControls() {
+        if (!ownsGhastCleanup()) return;
+        clearInputs();
+        mob.setSprinting(false);
+        controller.setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
+        // No controller tick: preserve cooldown/RNG, native gravity flag and velocity.
+        // Outer AgentActions cleanup retains its existing horizontal-momentum policy.
+    }
+
     private void prepareFlight(Vec3 goal, boolean landing) {
+        if (physics == Physics.GHAST) { prepareGhast(goal, landing); return; }
         if (physics == Physics.ALLAY) { prepareAllayFlight(goal, landing); return; }
         requireFlightLease();
         if (flightStep != null) throw error("route_duplicate_flight_control");
@@ -1050,6 +1186,7 @@ public final class ScriptNavigation {
 
     /** Cleanup uses the original native WAIT branch and never changes velocity. */
     private void clearFlightControls() {
+        if (physics == Physics.GHAST) { clearGhastControls(); return; }
         if (hoverMode(physics)) { clearHoverFlightControls(); return; }
         if (mob.level() != level || mob.isRemoved() || mob.getMoveControl() != controller
             || OWNED.get(mob) != null && OWNED.get(mob) != this
@@ -1143,8 +1280,8 @@ public final class ScriptNavigation {
                 net.minecraft.world.level.BlockGetter.class, Entity.class).getDeclaringClass() != Block.class
                 || ground && block.getClass().getMethod("stepOn", net.minecraft.world.level.Level.class,
                     BlockPos.class, BlockState.class, Entity.class).getDeclaringClass() != Block.class)
-                throw error(physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported");
-        } catch (ReflectiveOperationException failure) { throw error(physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported"); }
+                throw error(physics == Physics.GHAST ? "route_ghast_impact_unsupported" : physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported");
+        } catch (ReflectiveOperationException failure) { throw error(physics == Physics.GHAST ? "route_ghast_impact_unsupported" : physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported"); }
     }
 
     private float beeFriction() {
@@ -2173,7 +2310,7 @@ public final class ScriptNavigation {
         if (!mob.isAlive() || mob.isRemoved()) throw error("route_body_changed");
         AABB sweep = mob.getBoundingBox().expandTowards(mob.getDeltaMovement()).inflate(0.4, mob.maxUpStep() + 0.1, 0.4);
         checkVolume(sweep);
-        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && !hoverMode(physics) && box.get() != null) {
+        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && !hoverMode(physics) && physics != Physics.GHAST && box.get() != null) {
             BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
             float friction = level.getBlockState(support).getFriction(level, support, mob);
             double acceleration = mob.onGround() ? mob.getSpeed() * (0.21600002F / (friction * friction * friction)) : 0.02F;
@@ -2191,9 +2328,10 @@ public final class ScriptNavigation {
         guardianTravelTick = physics == Physics.GUARDIAN;
         turtleTravelTick = physics == Physics.TURTLE;
         hoverTravelTick = hoverMode(physics);
+        ghastTravelTick = physics == Physics.GHAST;
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; guardianTravelTick = false; turtleTravelTick = false; hoverTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; guardianTravelTick = false; turtleTravelTick = false; hoverTravelTick = false; ghastTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -2426,7 +2564,7 @@ public final class ScriptNavigation {
         boolean supported = mode != Physics.UNSUPPORTED;
         if (flightMode(mode)) {
             JsonObject result = new JsonObject();
-            result.addProperty("physics", mode == Physics.BEE ? "native-bee-flight-post-tick"
+            result.addProperty("physics", mode == Physics.GHAST ? "native-ghast-flight-post-tick" : mode == Physics.BEE ? "native-bee-flight-post-tick"
                 : mode == Physics.ALLAY ? "native-allay-flight-post-tick" : "native-parrot-flight-post-tick");
             result.addProperty("locomotion", "flying");
             result.addProperty("canFly", true);
@@ -2486,7 +2624,7 @@ public final class ScriptNavigation {
         return result;
     }
 
-    private static boolean flightMode(Physics mode) { return mode == Physics.PARROT || hoverMode(mode); }
+    private static boolean flightMode(Physics mode) { return mode == Physics.PARROT || mode == Physics.GHAST || hoverMode(mode); }
 
     private static boolean hoverMode(Physics mode) { return mode == Physics.ALLAY || mode == Physics.BEE; }
 
@@ -2544,6 +2682,9 @@ public final class ScriptNavigation {
             return !mob.isSleeping() && !mob.isInWater() && !mob.isInLava()
                 && mob.getNavigation().getClass() == FlyingPathNavigation.class ? Physics.ALLAY : Physics.UNSUPPORTED;
         }
+        if (mob.getClass() == Ghast.class && control == Ghast.GhastMoveControl.class
+            && mob.getNavigation().getClass() == GroundPathNavigation.class && !mob.isSleeping()
+            && !mob.isInWater() && !mob.isInLava()) return Physics.GHAST;
         if (mob.isNoGravity()) return Physics.UNSUPPORTED;
         // Pufferfish adds native contact effects and puff geometry, but shares
         // AbstractFish's controller/travel and WaterAnimal's no-current-push rule.
@@ -2644,6 +2785,10 @@ public final class ScriptNavigation {
         checkDryVolume(mob.getBoundingBox());
         if (flightMode(physics) && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
             || mob.getEyeHeight() != flightEyeHeight)) throw error("route_flight_body_changed");
+        if (physics == Physics.GHAST && ((!mob.isNoAi() && !ghastTravelTick) || mob.getNavigation() != ghastNavigation
+            || ghastNavigation.getPath() != null || ghastNavigation.canFloat() != ghastCanFloat || mob.getTarget() != ghastTarget
+            || ((Ghast) mob).isCharging() != ghastCharging || mob.isNoGravity() != ghastNoGravity || mob.getPose() != ghastPose
+            || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)) throw error("route_ghast_state_changed");
         if (hoverMode(physics) && ((!mob.isNoAi() && !hoverTravelTick) || mob.getNavigation() != hoverNavigation
             || hoverNavigation.getPath() != null || mob.getPose() != hoverPose || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7))
             throw error(physics == Physics.BEE ? "route_bee_state_changed" : "route_allay_state_changed");
@@ -2745,14 +2890,14 @@ public final class ScriptNavigation {
             BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS)))
             if (!level.getFluidState(pos).isEmpty()) throw error("route_flight_requires_dry_volume");
         if (!level.noCollision(mob, volume)) throw error("route_flight_volume_obstructed");
-        if (hoverMode(physics)) {
+        if (hoverMode(physics) || physics == Physics.GHAST) {
             for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(volume.minX, volume.minY, volume.minZ),
                 BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS))) {
                 BlockState state = level.getBlockState(pos);
                 if (physics == Physics.BEE && state.is(net.minecraft.tags.BlockTags.CLIMBABLE))
                     throw error("route_bee_climb_pending");
                 if (!ordinaryFlightInsideBlock(state.getBlock()))
-                    throw error(physics == Physics.BEE ? "route_bee_block_effect_unsupported" : "route_allay_block_effect_unsupported");
+                    throw error(physics == Physics.GHAST ? "route_ghast_block_effect_unsupported" : physics == Physics.BEE ? "route_bee_block_effect_unsupported" : "route_allay_block_effect_unsupported");
             }
         }
     }
