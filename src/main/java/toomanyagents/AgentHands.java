@@ -318,10 +318,26 @@ public final class AgentHands extends FakePlayer {
         return advanceMine();
     }
 
-    JsonObject tickMine() {
+    JsonObject tickMine() { return tickMine(false); }
+
+    JsonObject tickMine(boolean observeRemoval) {
         syncBody();
         if (miningPos == null) throw error("no_active_mining");
         try {
+            checkBlockAccess(miningPos);
+            if (observeRemoval && serverLevel().getBlockState(miningPos).isAir()) {
+                if (!canInteractWithBlock(miningPos, 0)) throw error("block_out_of_reach");
+                if (!clearLine(Vec3.atCenterOf(miningPos))) throw error("block_face_obstructed");
+                var pos = miningPos;
+                var result = miningResult("completed");
+                result.addProperty("detail", "target_removed");
+                result.addProperty("brokenByBody", false);
+                // Stop the established dig without claiming a harvest or invoking destroyBlock.
+                cancelMine();
+                save();
+                if (!serverLevel().getBlockState(pos).isAir()) throw error("mining_target_changed");
+                return result;
+            }
             checkedHit(miningPos, miningFace);
             if (serverLevel().getBlockState(miningPos) != miningState) throw error("mining_target_changed");
             int tick = getServer().getTickCount();
@@ -384,11 +400,17 @@ public final class AgentHands extends FakePlayer {
     void cancelMine() {
         requireThread();
         if (miningPos == null) return;
-        CommonHooks.onLeftClickBlock(this, miningPos, miningFace, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK);
-        serverLevel().destroyBlockProgress(body.getId(), miningPos, -1);
+        var pos = miningPos;
+        var face = miningFace;
+        // Cleanup owns this attempt even if a native hook throws; do not replay it.
         miningPos = null;
         miningState = null;
         miningProgress = 0;
+        try {
+            CommonHooks.onLeftClickBlock(this, pos, face, ServerboundPlayerActionPacket.Action.ABORT_DESTROY_BLOCK);
+        } finally {
+            serverLevel().destroyBlockProgress(body.getId(), pos, -1);
+        }
     }
 
     boolean blockReachable(BlockPos pos) { return blockReachable(pos, null); }

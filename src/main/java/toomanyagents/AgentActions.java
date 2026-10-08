@@ -495,17 +495,18 @@ final class AgentActions {
                     var pos = checkedBlockTarget();
                     if (!mining && !mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
                     Direction face = args.has("face") ? blockFace() : null;
-                    if (!hands.blockReachable(pos, face)) {
+                    if ((!mining || approachTargets) && !hands.blockReachable(pos, face)) {
                         if (mining || !approachTargets) throw error("target_out_of_reach");
                         navigate(Vec3.atCenterOf(pos), true); return;
                     }
                     stopMotion();
                     if (!ignoreLook()) face(Vec3.atCenterOf(pos));
-                    JsonObject result = mining ? hands.tickMine() : hands.beginMine(pos, face);
+                    JsonObject result = mining ? hands.tickMine(!approachTargets) : hands.beginMine(pos, face);
                     mining = true;
                     action.addProperty("phase", "mining");
                     action.add("progress", result.deepCopy());
-                    if ("completed".equals(text(result, "status"))) finish("completed", "mined", result);
+                    if ("completed".equals(text(result, "status")))
+                        finish("completed", result.has("detail") ? text(result, "detail") : "mined", result);
                 }
                 case "place", "interact", "place_entity" -> {
                     if (args.has("entity")) {
