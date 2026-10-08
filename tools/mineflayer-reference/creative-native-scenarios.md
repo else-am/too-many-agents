@@ -58,3 +58,13 @@ lingering flight lease. Do not run an exhaustive trajectory matrix. start/stop
 controls during another active body action retain the existing busy fence.
 
 Flight Java/plugin/package build passed. No native flight test has run. Hover is lease-local and preserves the body's stored gravity setting. Ground navigation requires stopping flight first.
+
+Focused ready script: `observe-creative.js` covers a real component-bearing slot
+write/clear with unchanged unrelated inventory, startFlying/flyTo/hover, a solid
+wall rejection, return and stop. It requires the documented guarded floor/wall,
+creative body and empty slot 9. Syntax checked only; native execution is pending.
+For independent inspection of the transient named sword, capture the native
+creative_slot result/authoritative inventory before clear if feasible; do not
+infer native codec correctness only from the guest's source Item. ClearInventory,
+offhand writes, persistence and full lifecycle matrix remain separate pending
+checks. The fixture does not require deleting or restashing unrelated belongings.
