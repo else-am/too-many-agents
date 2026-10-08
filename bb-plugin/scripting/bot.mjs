@@ -539,6 +539,7 @@ export function createBot(initial) {
       }
     }
     for (const event of next.entityEvents ?? []) {
+      if (event.name === 'forcedMove') { bot.emit('forcedMove'); continue; }
       const subject = bot.entities[event.subject], cause = event.cause == null ? undefined : bot.entities[event.cause];
       bot.emit(event.name, subject, cause);
     }
