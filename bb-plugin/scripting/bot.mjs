@@ -115,6 +115,9 @@ export function createBot(initial) {
     // Adapted from Mineflayer 4.39.0 physics.js; see mineflayer.LICENSE.
     async waitForTicks(ticks) {
       if (ticks <= 0) return;
+      // Count ticks after earlier controls reached native state, not queued frames
+      // from before a synchronous setControlState/activateItem call.
+      await drainControls();
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           bot.removeListener('physicsTick', tickListener);

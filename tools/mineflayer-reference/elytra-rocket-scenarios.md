@@ -22,3 +22,19 @@ acceleration, lifetime, collision and explosion; don't simulate a player boost.
 - Focused live check remains pending with the earlier elytra/creative-flight slice.
   Use a guarded clear flight volume, actual inventory and native rocket attachment
   evidence, then landing/cleanup. Do not infer native success from compilation.
+
+## Control ordering found during the first native check
+
+The initial flight script completed 14 requests but never dispatched elytra/use.
+Its 20-tick airborne wait raced the queued forward/jump controls: the native final
+control position was already falling off the platform while the guest assertion
+still used preceding grounded observations. Release was confirmed and the rocket
+was not consumed. This does not establish flight or boost behavior.
+
+Before changing tick waits, the required behavior is: setControlState followed by
+waitForTicks must acknowledge earlier synchronous controls and their ordered
+state before counting the requested ticks. Failed controls reject the wait; no
+retry or action replay. The ongoing observation stream must remain free to deliver
+frames while controls settle. The rebuilt narrow flight scenario exercises this
+through ordinary controls, then actual gliding and one native boost. Earlier
+passed inventory/movement suites need not be rerun for this ordering fix.
