@@ -54,3 +54,45 @@ remains recorded. Native counterpart and other faces/options remain unverified.
 
 Evidence: /Users/scott/.bb/thread-storage/placement-refusal-corrected/result.json
 and configuration.json, server.log, console.log, source.js in the same directory.
+
+## Native counterpart — prepared, unrun
+
+Review at 8dacd40 found no concrete placement implementation gap:
+AgentActions dispatches place to AgentHands.useBlock, which invokes native
+ServerPlayerGameMode.useItemOn and saves actual hands in finally. The completed
+action includes InteractionResult; bot.action waits for completedActionSequence
+hydration. actions.mjs rejects explicit failed interaction or an unchanged
+requested destination before emitting blockPlaced. These are source facts, not
+runtime evidence.
+
+Use one NEW empty adult bound cow body and a distinct NEW unbound stationary cow
+obstruction. Never use ScriptProbe. Inspect the proposed coordinates, loaded
+columns, body bounds and original cells before setup; do not overwrite old
+fixtures. Body feet48.5/-60/5.5, obstruction48.5/-60/8.5, support48/-61/8,
+destination48/-60/8. Actual body eye position, native reach and a visible support
+UP face must be established. Native NoAI on the obstruction holds the fixture;
+no body reach/geometry/attributes/collision changes are permitted. Give the
+empty disposable body exactly one real stone and equip it through normal tools.
+Record actual native inventories and both entity identities before execution.
+
+Concatenate placement-refusal-native-prefix.js, a newline, then the unchanged
+placement-refusal.js. Substitute only the two exact fresh UUID placeholders.
+Retain the entire executed source/hash before invoking it once through the
+bound Codex test thread. The prefix is a prerequisite check, not another
+placement attempt. The measured suffix is byte-identical to the reference.
+A failed prerequisite or action ends the phase; no automatic retry or repair.
+
+Independently require one NEW native place action ID, completed with detail
+interaction_finished_check_result and a refusal InteractionResult, along with
+unchanged target air, support stone, stone count1, cursor/menu and obstruction.
+A before-start rejection, target_out_of_reach, block_face_obstructed, unknown
+outcome, or missing native ledger does NOT prove entity-obstructed refusal even
+if the public procedure reports a caught error. Retain the actual error class
+and message; they need not equal Node's. Verify script release separately.
+Only after a known terminal outcome restore/remove the owned fixture and archive
+the disposable body through supported operations; preserve evidence on unknown
+outcomes. Save/stop the exact packaged client under the existing lifecycle rules.
+
+The composed program has only been syntax-parsed. Display availability, exact
+packaged artifact authorization and native prerequisite inspection remain
+required. No native call or lifecycle operation was performed in preparation.
