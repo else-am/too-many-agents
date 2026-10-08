@@ -71,6 +71,7 @@ export function createBot(initial) {
   const equipmentKeys = new WeakMap();
   const effectTicks = new WeakMap();
   const playerKeys = new Map();
+  const knownFireworks = new Set();
   let snapshot;
   let lastPhysicsTick;
   const stateWaits = new Set();
@@ -263,6 +264,7 @@ export function createBot(initial) {
         || entity.yaw !== (180 - source.yaw) * Math.PI / 180 || entity.pitch !== -source.pitch * Math.PI / 180;
       const oldPosition = source.id === next.body.id && !fresh && moved ? entity.position.clone() : null;
       const slept = !!entity.isSleeping;
+      const flew = !!entity.elytraFlying;
       const crouched = !!entity.crouching;
       const effectEvents = [];
       const elapsed = source.effectTick - effectTicks.get(entity);
@@ -313,6 +315,7 @@ export function createBot(initial) {
       else if (fresh) entityEvents.push(['entitySpawn', entity]);
       else if (moved) entityEvents.push(['entityMoved', entity]);
       entityEvents.push(...effectEvents);
+      if (!flew && entity.elytraFlying) entityEvents.push(['entityElytraFlew', entity]);
       if ((!fresh && crouched !== !!entity.crouching) || fresh && entity.crouching)
         entityEvents.push([entity.crouching ? 'entityCrouch' : 'entityUncrouch', entity]);
       if (!fresh && slept !== !!entity.isSleeping) {
@@ -337,6 +340,14 @@ export function createBot(initial) {
       entity.vehicle = source.vehicle == null ? null : bot.entities[source.vehicle];
     }
     bot.isSleeping = !!bot.entity.isSleeping;
+    bot.fireworkRocketDuration = 0;
+    if (!bot.entity.elytraFlying) knownFireworks.clear();
+    else for (const source of sources) {
+      if (source.fireworkAttachedTo !== next.body.id || !(source.fireworkTicksRemaining > 0)) continue;
+      bot.fireworkRocketDuration = Math.max(bot.fireworkRocketDuration, source.fireworkTicksRemaining);
+      if (!knownFireworks.has(source.uuid)) entityEvents.push(['usedFirework', source.id]);
+      knownFireworks.add(source.uuid);
+    }
     const previousVehicle = bot.vehicle;
     bot.vehicle = bot.entity.vehicle;
     if (streamed && previousVehicle !== bot.vehicle) {

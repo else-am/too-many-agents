@@ -1,0 +1,52 @@
+# Direct tools versus scripting: small task comparison
+
+This is the performance comparison requested in MINEFLAYER-PLAN.md, not a
+conformance suite. Run each arm once on the same packaged revision, native body,
+Codex model/effort and isolated test world. Prepare/reset fixtures outside the
+measured interval with guarded native commands. Agents may not use commands or
+creative items during either measured task. Record errors and partial outcomes;
+do not retry an unknown mutation or count a failed task as a speed improvement.
+
+Record: model/effort, build/JAR hash, body/permissions/ambient mode, exact starting
+inventory/position, start/end wall time, game ticks, model-visible tool calls,
+native action count and bridge operations where available. Report wall time and
+script execution time separately. Retain actual invocation transcripts; do not
+infer call counts from what an ideal baseline would have done. If direct calls
+are batched in one model turn, record that explicitly. No precision beyond useful
+outcome/measurement accuracy is required.
+
+## Wall
+
+- Native survival body at (34,-60,5.5), dry solid stone floor under the fixture.
+  Hold exactly eight stone blocks. Targets x32..35, y-60..-59, z8 are air; no
+  entities obstruct them. Observe/check remaining inventory independently.
+- Build exactly that four-wide, two-high wall, bottom row first. Both arms start
+  already equipped and place by clicking each immediately lower supporting block
+  with face up. No navigation, commands or extra material creation during task.
+- Direct arm: ordinary minecraft_observe, minecraft_action(place) and action
+  status calls, sequentially confirming completion. End with observation.
+- Script arm: one minecraft_run using performance-wall.js. Source is prepared
+  beforehand, but record the model turn that submits it as part of tool overhead.
+- After each arm independently inspect all eight target blocks and native stone
+  count 0, unchanged unrelated inventory and no other edited blocks. Reset the
+  fixture before the other arm. Don't rerun either success for a better number.
+
+## Gather and craft
+
+- Same dry floor/start position. Hold an ordinary undamaged iron axe. Exactly two
+  oak logs at (33,-60,8)/(33,-59,8); no loose items or preexisting oak logs, oak
+  planks or sticks in inventory. Empty 2x2 crafting grid/cursor, no open container.
+- Mine both logs, approach and collect their actual drops, craft two log→planks
+  operations and two vertical planks→sticks operations. Final inventory: logs0,
+  oak planks4, sticks8; axe cost/drops recorded, no other inputs consumed.
+- Direct arm uses physical mine/walk/pickup/menu/menu_click tools with completion
+  checks and real 2x2 crafting slots/result pickups. Each result pickup performs
+  one native craft; don't fabricate inventory or use scripting to bundle clicks.
+- Script arm uses performance-gather-craft.js in one call. Native recipes, mining,
+  pickup, cursor management and actual ResultSlot outputs still apply.
+- Independently inspect removed log blocks, saved inventory/cursor/grid, axe
+  damage and body position. Compare only successful complete outcomes. If fixture
+  error makes an arm invalid, preserve it and identify that limitation explicitly.
+
+No additional live run has been authorized by creation of this contract. The
+lead coordinates a single later grouped comparison, with clean lifecycle handoff.

@@ -390,7 +390,8 @@ final class AgentHands extends FakePlayer {
             body.startUsingItem(hand);
             if (!body.isUsingItem()) { reconcileNativeUse(); throw error("native_item_use_rejected"); }
             result = InteractionResult.CONSUME;
-        } else if (held.is(Items.FISHING_ROD) && fishing == null) result = castFishingRod(held, hand);
+        } else if (held.is(Items.FIREWORK_ROCKET) && body.isFallFlying()) result = boostWithFirework(held, hand);
+        else if (held.is(Items.FISHING_ROD) && fishing == null) result = castFishingRod(held, hand);
         else result = held.getItem() instanceof BoatItem boat ? useBoat(boat, hand, null)
             : gameMode.useItem(this, level(), held, hand);
         if (result.shouldSwing()) body.swing(hand);
@@ -398,6 +399,21 @@ final class AgentHands extends FakePlayer {
         var response = interaction(result);
         response.addProperty("usingItem", isUsingItem() || body.isUsingItem());
         return response;
+    }
+
+    private InteractionResult boostWithFirework(ItemStack rocketItem, InteractionHand hand) {
+        if (getCooldowns().isOnCooldown(rocketItem.getItem())) return InteractionResult.PASS;
+        var denied = CommonHooks.onItemRightClick(this, hand);
+        if (denied != null) return denied;
+        var rocket = new net.minecraft.world.entity.projectile.FireworkRocketEntity(level(), rocketItem, body);
+        if (!serverLevel().addFreshEntity(rocket)) {
+            rocket.discard();
+            throw error("firework_spawn_rejected");
+        }
+        var item = rocketItem.getItem();
+        rocketItem.consume(1, this);
+        awardStat(net.minecraft.stats.Stats.ITEM_USED.get(item));
+        return InteractionResult.CONSUME;
     }
 
     private InteractionResult castFishingRod(ItemStack rod, InteractionHand hand) {

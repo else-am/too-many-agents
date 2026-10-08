@@ -40,6 +40,11 @@ final class Observations {
         result.addProperty("isInWater", entity.isInWater());
         result.addProperty("isInLava", entity.isInLava());
         result.addProperty("crouching", entity.isShiftKeyDown());
+        if (entity instanceof net.minecraft.world.entity.projectile.FireworkRocketEntity rocket) {
+            var target = rocket.getEntityData().get(net.minecraft.world.entity.projectile.FireworkRocketEntity.DATA_ATTACHED_TO_TARGET);
+            if (target.isPresent()) result.addProperty("fireworkAttachedTo", target.getAsInt());
+            result.addProperty("fireworkTicksRemaining", Math.max(0, rocket.lifetime - rocket.life + 1));
+        }
         if (entity instanceof LivingEntity living) {
             result.addProperty("elytraFlying", living.isFallFlying());
             result.addProperty("health", living.getHealth());
