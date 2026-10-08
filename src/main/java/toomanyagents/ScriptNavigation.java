@@ -529,7 +529,20 @@ public final class ScriptNavigation {
         trajectory.clear(); frameIndex = 0; predictionSteps = 0;
         predictionDeadline = System.nanoTime() + 25_000_000L;
         if (arrived(goal)) return;
-        List<Frame> best = simulate(goal, -1, false);
+        List<Frame> best = null;
+        if (slimeHopper(physics)) {
+            // Native bound bodies can have faster attributes than wild mobs.
+            // Choose input from pure landing predictions before consuming any
+            // real hop delay/RNG; an overshoot is not a completed selected edge.
+            double closest = Double.POSITIVE_INFINITY;
+            for (double scale : new double[]{1, 0.75, 0.5, 0.25, 0.125}) {
+                List<Frame> candidate = simulate(goal, -1, false, scale);
+                if (candidate == null || candidate.isEmpty()) continue;
+                double distance = candidate.getLast().after.distanceToSqr(goal);
+                if (distance < closest) { best = candidate; closest = distance; }
+                if (closest < 0.01) break;
+            }
+        } else best = simulate(goal, -1, false);
         if (!slimeHopper(physics) && best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
             for (boolean sprint : new boolean[]{false, true}) {
                 if (sprint && !sprintAllowed) continue;
@@ -655,6 +668,10 @@ public final class ScriptNavigation {
     }
 
     private List<Frame> simulate(Vec3 goal, int takeoff, boolean sprint) {
+        return simulate(goal, takeoff, sprint, 1);
+    }
+
+    private List<Frame> simulate(Vec3 goal, int takeoff, boolean sprint, double hopScale) {
         if (mob.isInWater() || mob.isInLava() || mob.onClimbable() || mob.isNoGravity() || mob.shouldDiscardFriction()
             || mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return null;
         Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
@@ -702,7 +719,8 @@ public final class ScriptNavigation {
             boolean jump = tick == takeoff;
             HopInput hop = null;
             if (hopper) {
-                hop = hopInput(pos, velocity, goal, yaw);
+                HopInput wanted = hopInput(pos, velocity, goal, yaw);
+                hop = new HopInput(wanted.yaw, wanted.modifier * hopScale);
                 yaw += Mth.clamp(Mth.wrapDegrees(hop.yaw - yaw), -90, 90);
                 if (yaw < 0) yaw += 360; else if (yaw > 360) yaw -= 360;
                 speed = (float) (hop.modifier * baseSpeed);
