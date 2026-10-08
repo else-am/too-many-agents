@@ -118,6 +118,12 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
     for (; prefixLength < path.length; prefixLength++) {
       const node = path[prefixLength];
       if (node.toBreak.length || node.toPlace.length) break;
+      if (queryBot.nativeBody?.locomotion === 'flying') {
+        node.x = Math.floor(node.x) + 0.5;
+        node.y = Math.floor(node.y) + queryBot.nativeBody.flightTargetYOffset;
+        node.z = Math.floor(node.z) + 0.5;
+        continue;
+      }
       const block = queryBot.blockAt(new Vec3(node.x, node.y, node.z));
       if (block && (block.type === water || ((block.type === ladder || block.type === vine) &&
         prefixLength + 1 < path.length && path[prefixLength + 1].y < node.y))) {

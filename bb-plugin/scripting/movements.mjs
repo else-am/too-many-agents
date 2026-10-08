@@ -148,6 +148,7 @@ export class Movements {
   }
 
   _feetY (node) {
+    if (this.bot.nativeBody?.locomotion === 'flying') return node.y + this.bot.nativeBody.flightTargetYOffset
     if (this.bot.nativeBody?.locomotion === 'submerged') return node.y + this.bot.nativeBody.swimTargetYOffset
     const block = this.getBlock(node, 0, 0, 0)
     const below = this.getBlock(node, 0, -1, 0)
@@ -391,7 +392,7 @@ export class Movements {
   }
 
   getMoveJumpUp (node, dir, neighbors) {
-    if (this.bot.nativeBody?.locomotion === 'submerged') return
+    if (['submerged', 'flying'].includes(this.bot.nativeBody?.locomotion)) return
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
 
@@ -443,6 +444,7 @@ export class Movements {
   }
 
   getMoveForward (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'flying') return this._getFlyingMove(node, dir.x, 0, dir.z, neighbors)
     if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, dir.x, 0, dir.z, neighbors)
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
@@ -487,6 +489,7 @@ export class Movements {
   }
 
   getMoveDiagonal (node, dir, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'flying') return this._getFlyingMove(node, dir.x, 0, dir.z, neighbors)
     if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, dir.x, 0, dir.z, neighbors)
     let cost = Math.SQRT2 // move cost
     const toBreak = []
@@ -555,7 +558,7 @@ export class Movements {
   }
 
   getMoveDropDown (node, dir, neighbors) {
-    if (this.bot.nativeBody?.locomotion === 'submerged') return
+    if (['submerged', 'flying'].includes(this.bot.nativeBody?.locomotion)) return
     const destination = new Vec3(node.x + dir.x, node.y, node.z + dir.z)
     const blockC = this.getBlock(node, dir.x, 0, dir.z)
     const blockD = this.getBlock(node, dir.x, -1, dir.z)
@@ -583,6 +586,7 @@ export class Movements {
   }
 
   getMoveDown (node, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'flying') return this._getFlyingMove(node, 0, -1, 0, neighbors)
     if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, 0, -1, 0, neighbors)
     if (this.getBlock(node, 0, 0, 0).liquid) {
       this._getMoveSwim(node, -1, neighbors)
@@ -609,6 +613,7 @@ export class Movements {
   }
 
   getMoveUp (node, neighbors) {
+    if (this.bot.nativeBody?.locomotion === 'flying') return this._getFlyingMove(node, 0, 1, 0, neighbors)
     if (this.bot.nativeBody?.locomotion === 'submerged') return this._getSubmergedMove(node, 0, 1, 0, neighbors)
     const block1 = this.getBlock(node, 0, 0, 0)
     if (block1.liquid) {
@@ -659,6 +664,45 @@ export class Movements {
     neighbors.push(new Move(node.x, to.position.y, node.z, node.remainingBlocks, cost, toBreak))
   }
 
+  // Flight has no support-floor requirement. Swept body/eye volume still
+  // respects shapes, unknown cells, fluids and the caller's movement policies.
+  _getFlyingMove (node, dx, dy, dz, neighbors) {
+    const caps = this.bot.nativeBody
+    const offset = caps.flightTargetYOffset
+    if (caps.canFly !== true || !Number.isFinite(offset) || offset < 0 || offset >= 1) return
+    const { width, height } = this._geometry()
+    const eye = this.bot.entity.eyeHeight ?? height
+    if (!Number.isFinite(eye) || eye < 0) return
+    const minY = node.y + Math.min(0, dy) + offset
+    const maxY = node.y + Math.max(0, dy) + offset + Math.max(height, eye)
+    const minX = node.x + .5 + Math.min(0, dx) - width / 2
+    const maxX = node.x + .5 + Math.max(0, dx) + width / 2
+    const minZ = node.z + .5 + Math.min(0, dz) - width / 2
+    const maxZ = node.z + .5 + Math.max(0, dz) + width / 2
+    const epsilon = 1e-7
+    let cost = Math.hypot(dx, dy, dz)
+    for (let y = Math.floor(minY + epsilon) - 1; y < Math.ceil(maxY - epsilon); y++) {
+      for (let x = Math.floor(minX + epsilon); x < Math.ceil(maxX - epsilon); x++) {
+        for (let z = Math.floor(minZ + epsilon); z < Math.ceil(maxZ - epsilon); z++) {
+          const b = this.getBlock(new Vec3(x, y, z), 0, 0, 0)
+          if (!b.position) return
+          const collision = b.shapes.some(shape => x + shape[0] < maxX - epsilon && x + shape[3] > minX + epsilon &&
+            y + shape[1] < maxY - epsilon && y + shape[4] > minY + epsilon &&
+            z + shape[2] < maxZ - epsilon && z + shape[5] > minZ + epsilon)
+          if (collision) return
+          // The extra lower cell matters only for protruding shapes (fences).
+          if (y < Math.floor(minY + epsilon)) continue
+          if (b.liquid || b.name === 'bubble_column' || b.getProperties().waterlogged === true || !b.safe && !b.shapes.length) return
+          // A partial shape outside the swept volume is traversable; exclusions
+          // and entities still apply, without turning this into a mining edge.
+          cost += this.exclusionStep(b) + this.getNumEntitiesAt(b.position, 0, 0, 0) * this.entityCost
+          if (cost >= 100) return
+        }
+      }
+    }
+    neighbors.push(new Move(node.x + dx, node.y + dy, node.z + dz, node.remainingBlocks, cost))
+  }
+
   // Fish targets are above the cell floor. The entire swept body and eyes
   // must stay in ordinary water; native execution rechecks actual motion.
   _getSubmergedMove (node, dx, dy, dz, neighbors) {
@@ -702,7 +746,7 @@ export class Movements {
 
   // Jump up, down or forward over a 1 block gap
   getMoveParkourForward (node, dir, neighbors) {
-    if (this.bot.nativeBody?.locomotion === 'submerged') return
+    if (['submerged', 'flying'].includes(this.bot.nativeBody?.locomotion)) return
     const caps = this._capabilities()
     if (!caps.canJump || caps.jumpHeight <= 0) return
     const block0 = this.getBlock(node, 0, -1, 0)
