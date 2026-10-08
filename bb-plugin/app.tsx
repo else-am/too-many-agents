@@ -3,11 +3,13 @@ import { createPortal } from "react-dom";
 import * as Menu from "@radix-ui/react-dropdown-menu";
 import {
   definePluginApp,
+  experimental_Icon as Icon,
   experimental_useSidebarThreads,
   experimental_useSidebarThreadActions,
   useBbContext,
   useRealtimeConnectionState,
   useSdk,
+  ThreadTitle,
   type PluginSidebarThread,
 } from "@get-bb/plugin-sdk/app";
 import { isWorldWorkspace } from "./world-workspace.js";
@@ -16,11 +18,24 @@ import "./app.css";
 
 type WorldProject = { id: string; name: string };
 
-function tone(thread: PluginSidebarThread) {
-  if (thread.hasPendingInteraction || thread.indicator === "unread-error" || thread.queuedWork === "failed") return "attention";
-  if (["active", "starting", "stopping", "pending"].includes(thread.status)) return "working";
-  if (thread.isUnread) return "unread";
-  return "idle";
+// The icon and treatment bb's thread list draws for each indicator.
+const indicatorIcons: Partial<Record<PluginSidebarThread["indicator"], [string, string]>> = {
+  "unread-error": ["CircleX", "error"], "queued-failed": ["CircleX", "error"],
+  "waiting-for-input": ["CircleQuestion", "waiting"], "queued-waiting": ["Clock", "waiting"],
+  runtime: ["Loading", "spinning"], workflow: ["Workflow", "working"],
+  "background-agent": ["UserRoundPlus", "working"], "background-command": ["Terminal", "working"],
+  "plan-mode": ["ListTodo", "working"], goal: ["Target", "working"],
+  draft: ["Edit", "draft"], "working-draft": ["Edit", "working"],
+};
+
+function Indicator({ thread }: { thread: PluginSidebarThread }) {
+  const label = thread.indicatorLabel ?? undefined;
+  if (thread.indicator === "unread-success") return <span className="mc-unread-dot" role="img" aria-label={label} />;
+  const icon = indicatorIcons[thread.indicator];
+  if (!icon) return null;
+  const [name, treatment] = icon;
+  return <Icon name={name} aria-label={label}
+    className={`mc-indicator mc-indicator-${treatment}${treatment === "working" ? " animate-shine-icon" : ""}`} />;
 }
 
 function Chevron() {
@@ -41,9 +56,8 @@ function ThreadRow({ thread, close }: { thread: PluginSidebarThread; close: () =
         actions.open(thread.id, { split: event.metaKey || event.ctrlKey });
         close();
       }}>
-      <span className="mc-status" data-tone={tone(thread)} role="img"
-        aria-label={thread.indicatorLabel ?? (thread.isUnread ? "Unread" : "Idle")} />
-      <span className="mc-thread-title" data-unread={thread.isUnread}>{thread.displayTitle}</span>
+      <span className="bb-thread-title mc-thread-title"><ThreadTitle threadId={thread.id} /></span>
+      <Indicator thread={thread} />
     </a>
   </Menu.Item>;
 }
@@ -80,9 +94,6 @@ function WorldCollection({ dock }: { dock: SidebarDock }) {
   }, [dock, worlds, error, sidebar.status]);
   const worldIds = new Set(worlds?.map(world => world.id));
   const threads = sidebar.threads.filter(thread => worldIds.has(thread.projectId) && !thread.isHidden);
-  const attention = threads.some(thread => tone(thread) === "attention");
-  const working = threads.some(thread => tone(thread) === "working");
-  const unread = threads.some(thread => thread.isUnread);
   const projects = (worlds ?? []).map(world => ({
     ...world,
     name: (sidebar.projects.find(project => project.id === world.id)?.name ?? world.name).replace(/^Minecraft:\s*/, ""),
@@ -92,8 +103,6 @@ function WorldCollection({ dock }: { dock: SidebarDock }) {
     <Menu.Trigger className="mc-collection-trigger">
       <span className="mc-world-mark" aria-hidden="true" />
       <span className="mc-collection-label">Minecraft worlds</span>
-      {(attention || working || unread) && <span className="mc-status" data-tone={attention ? "attention" : working ? "working" : "unread"}
-        role="img" aria-label={attention ? "Needs attention" : working ? "Working" : "Unread threads"} />}
       <Chevron />
     </Menu.Trigger>
     <Menu.Portal>
