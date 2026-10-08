@@ -81,7 +81,7 @@ async function scenario() {
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--placement-refusal')) return placementRefusalScenario();
   if (process.argv.includes('--craft-missing')) return missingMaterialsScenario();
-  if (process.argv.includes('--dig-unsuitable-tool') || process.argv.includes('--dig-cancel')) return miningScenario();
+  if (process.argv.includes('--dig-unsuitable-tool') || process.argv.includes('--dig-cancel') || process.argv.includes('--dig-disappearing')) return miningScenario();
   if (process.argv.includes('--equipment') || process.argv.includes('--equipment-common')) return equipmentScenario();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--container')) return containerScenario();
@@ -145,8 +145,9 @@ async function missingMaterialsScenario() {
 
 async function miningScenario() {
   const cancelling = process.argv.includes('--dig-cancel');
-  const scenario = cancelling ? 'dig-cancel' : 'dig-unsuitable-tool';
-  const source = await readFile(new URL(cancelling ? './dig-cancel-common.js' : './dig-unsuitable-tool.js', import.meta.url), 'utf8');
+  const disappearing = process.argv.includes('--dig-disappearing');
+  const scenario = disappearing ? 'dig-disappearing' : cancelling ? 'dig-cancel' : 'dig-unsuitable-tool';
+  const source = await readFile(new URL(disappearing ? './dig-disappearing-common.js' : cancelling ? './dig-cancel-common.js' : './dig-unsuitable-tool.js', import.meta.url), 'utf8');
   const report = { scenario,backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
     source,sourceSha256:createHash('sha256').update(source).digest('hex'),startedAt:new Date().toISOString(),
     clientErrors,protocolWarnings,serverConfirmed:false };
@@ -159,7 +160,10 @@ async function miningScenario() {
     ]);
     await bot.waitForTicks(5);
     report.invokedAt = new Date().toISOString();
-    report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3',source)(bot,Vec3);
+    report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3','removeFixtureTarget',source)(bot,Vec3,async () => {
+      report.fixtureRemovalRequestedAt = new Date().toISOString();
+      report.fixtureRemovalMessages = await consoleCommands(['setblock 60 -60 3 minecraft:air']);
+    });
     const conditions = [`if block 60 -60 3 minecraft:${cancelling ? 'stone' : 'air'}`,'unless data entity Reference Inventory[]',
       'unless entity @e[type=minecraft:item,x=58,y=-60,z=-2,dx=6,dy=6,dz=8]'];
     const markers = conditions.map(() => randomUUID());

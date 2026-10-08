@@ -10316,6 +10316,25 @@
         ]
       },
       "limitations": "One missing-materials2x2 case only; native exact-source counterpart pending. Prior gathering/craft result difference retained; no broad crafting promotion. Existing protocol warning retained."
+    },
+    "reference-dig-disappearance": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/dig-disappearing-common.js",
+      "subjects": [
+        "mineflayer.Bot.dig",
+        "mineflayer.BotEvents.diggingCompleted"
+      ],
+      "scope": "One independently removed active dig target: void completion, one hydrated new-air callback, no abort/item gain or duplicate event across160ticks; three independent server conditions.",
+      "result": "passed",
+      "sourceSha256": "256daa81627b75d157528f30ae6ea1519734d7ec467dee17f1a622688160bc63",
+      "report": {
+        "path": "run/mineflayer-reference/dig-disappearing-reference.json",
+        "sha256": "7bac05c9ede49751060139642652248af8e50d4def48a437ca6f3750f67d9820",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Fixture callback only coordinates external removal; not a public agent capability. This does not prove the bot caused the break. Exact native counterpart remains unrun; protocol warning retained; no broad dig promotion."
     }
   },
   "reviewNotes": {
