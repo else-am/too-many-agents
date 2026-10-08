@@ -109,6 +109,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
           ? error.message
           : `Minecraft returned HTTP ${response.status}`,
         typeof error?.code === "string" ? error.code : undefined,
+        response.status,
       );
     }
     return body.result;

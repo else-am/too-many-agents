@@ -4810,6 +4810,18 @@
         "path": "run/mineflayer-reference/self-death-host-race-recorded.json",
         "sha256": "df09e4863358f8b58a9cda18436d947482045fa64a8232cdd3c22bcf6dd9a875"
       }
+    },
+    "action-start-http-uncertainty": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/action-start-http-uncertainty.mjs",
+      "subjects": [],
+      "scope": "Actual host HTTP decoder, script coordinator and worker/QuickJS with controlled504 callback timeout,503 interruption and502 unstructured failures. Each aborts before guest catch/replacement; exactly one action and scoped release. Pre-fix504 probe reached UNSAFE_CATCH. No native game/network fault injection; structured400 callback_failed phase classification remains under source review.",
+      "result": "passed",
+      "sourceSha256": "06446777c739a83373aa43d958c4e319b750e6e819e3c3530da83ae051edb375",
+      "report": {
+        "path": "run/mineflayer-reference/action-start-http-uncertainty.json",
+        "sha256": "0c40ed718a427c5cce8e98454129ee759468f2bf73dc7476d54e2a501e9b6b1b"
+      }
     }
   },
   "reviewNotes": {

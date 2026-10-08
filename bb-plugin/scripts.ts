@@ -184,7 +184,8 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           if (deferToStream(error)) return waitForStreamAbort(requestSignal);
           // Native pre-start rejection is known. A lost/malformed reply may
           // hide an accepted action: stop the whole script and release its lease.
-          if (error instanceof ApiError && error.code === 'minecraft_action_failed')
+          if (error instanceof ApiError && error.code === 'minecraft_action_failed'
+              && error.httpStatus === 400 && error.nativeCode === 'callback_failed')
             throw Object.assign(new Error(error.message), { code: 'minecraft_action_rejected_before_start' });
           controller.abort(error);
           throw error;

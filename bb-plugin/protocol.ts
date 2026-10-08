@@ -36,6 +36,7 @@ export class ApiError extends Error {
     readonly code: string,
     message: string,
     readonly nativeCode?: string,
+    readonly httpStatus?: number,
   ) {
     super(message);
   }
