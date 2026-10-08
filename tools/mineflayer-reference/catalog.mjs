@@ -470,7 +470,26 @@ const pureBlockContracts = new Set([
   "getSignText",
   "setSignText"
 ].map(name => `prismarine-block.Block.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts]);
+// Supplied Item components/NBT and local calculations only; no inventory mutation.
+const pureItemContracts = new Set([
+  "constructor",
+  "equal",
+  "toNotch",
+  "fromNotch",
+  "currentStackId",
+  "nextStackId",
+  "anvil",
+  "customName",
+  "customLore",
+  "repairCost",
+  "customModel",
+  "enchants",
+  "blocksCanPlaceOn",
+  "blocksCanDestroy",
+  "durabilityUsed",
+  "spawnEggMobName"
+].map(name => `prismarine-item.Item.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

@@ -243,3 +243,9 @@ state and harvest/dig/sign inputs. `digTime` remains an estimate and
 `setSignText` changes only the supplied guest object. Native block acquisition,
 lighting, collision changes, mining duration and sign writes require their own
 evidence; no live-observation field is promoted from this suite.
+
+Sixteen explicit Item local methods/accessors have the recorded2,784-case
+pinned/bundled-QuickJS comparison. Supplied component/NBT conversion and local
+anvil predictions do not authorize inventory edits or prove native byte
+transport, slot hydration, stacking, transfers, native anvil costs or outputs.
+Pinned equality/component-setter quirks remain documented in items.mjs.

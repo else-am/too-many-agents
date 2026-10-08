@@ -2128,13 +2128,205 @@
       "evidence": [
         "block-library"
       ]
+    },
+    "prismarine-item.Item.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.equal": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.toNotch": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.fromNotch": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.currentStackId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.nextStackId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.anvil": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.customName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.customLore": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.repairCost": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.customModel": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.enchants": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.blocksCanPlaceOn": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.blocksCanDestroy": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.durabilityUsed": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
+    },
+    "prismarine-item.Item.spawnEggMobName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local supplied-item conversion/calculation verified in existing2784-case pinned/QuickJS comparison. Native inventory hydration and actions are separate; Item.anvil is only a library prediction.",
+      "scenarios": [
+        "tools/mineflayer-reference/items.mjs"
+      ],
+      "evidence": [
+        "item-library"
+      ]
     }
   },
   "schemaVersion": 2,
   "evidencePolicy": {
     "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block calculations can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block/Item calculations can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
@@ -2162,7 +2354,13 @@
         "prismarine-item.Item"
       ],
       "scope": "Pinned Item registry/component/NBT/anvil scenarios in QuickJS; no native inventory claim.",
-      "result": "not-recorded"
+      "result": "passed",
+      "sourceSha256": "6603b9349d72fdf3a11269b698bb72f08d1020071ade4d3657a7827e128beaa4",
+      "report": {
+        "path": "run/mineflayer-reference/items-library.txt",
+        "sha256": "f01222cd3f539f6c940b14a79ee711b91d69831b4823a023fe8b0b9454ca6857"
+      },
+      "limitations": "Supplied item/component/NBT objects only. Item.anvil is a local prediction, not native applicability/XP/output authority. No slot hydration, native byte codec, stacking/transfer or item mutation authority claim. Pinned component/equality/setter quirks retained."
     },
     "item-wire": {
       "kind": "serialization",
