@@ -73,7 +73,10 @@ upward-facing ordinary piston at (115,-60,67). Inspect those cells and nearby
 power sources first. Preserve existing fixtures rather than overwriting them.
 
 Prepare the note unpowered with air above and a known note/instrument from actual
-native state. Prepare the piston unextended with empty upward movement space.
+native state. With stone below, explicitly set `instrument=basedrum` and inspect
+the settled state; command-default harp may change on a vertical neighbor update.
+The pinned Block property `note` is a numeric string, while the note event uses a
+number; the ready script converts the property for comparison. Prepare the piston unextended with empty upward movement space.
 Prepare the chest within native reach, unobstructed, unpaired, with no other
 viewer. Record original fixture cells/NBT and choose separate inspected adjacent
 power cells that cannot cross-power another fixture.

@@ -6,7 +6,7 @@ if (note?.name !== 'note_block' || piston?.name !== 'piston' || chest?.name !== 
   || piston.getProperties().facing !== 'up' || piston.getProperties().extended
   || chest.getProperties().type !== 'single' || bot.currentWindow || bot.inventory.selectedItem)
   throw new Error('Block-event fixture prerequisites differ');
-const pitch = note.getProperties().note, instrumentName = note.getProperties().instrument;
+const pitch = Number(note.getProperties().note), instrumentName = note.getProperties().instrument;
 const before = JSON.stringify(bot.inventory.slots), start = Date.now(), events = [], errors = [];
 const at = (block, target) => block?.position?.equals(target);
 bot.on('noteHeard', (block, instrument, value) => {

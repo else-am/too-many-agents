@@ -1,6 +1,6 @@
 # Self-death terminal delivery
 
-Preauthored before implementation. Native kill checks remain UNRUN while the tester is unavailable.
+Preauthored before implementation. Native kill checks remain UNRUN; they require a separate disposable bound body and are excluded from the current saved-body observation batch.
 
 - While a script owns an existing living body, register health and death listeners, then wait. Use a separate disposable bound fixture body and cause an actual accepted native death; never kill the saved ScriptProbe body or its inventory. The last authoritative frame must hydrate health <= 0 and alive/isAlive false before health() then exactly one zero-argument death(). No respawn or synthetic health. Event logging must reach the caller before the stream's terminal body_dead error.
 - Include a pending action: its interrupted terminal sequence and verified progress must be in the terminal frame. A listener attempting another mutation must be rejected because the lease/body is dead; notification never restores control. Unknown action outcomes must retain fail-closed behavior.
