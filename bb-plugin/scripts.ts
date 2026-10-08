@@ -46,6 +46,20 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
     let result: unknown;
     let failure: unknown;
     let release = 'not_started';
+    let streaming = false;
+    let terminalReadRejection = false;
+    const deferToStream = (error: unknown) => {
+      if (!streaming || !(error instanceof ApiError) || error.code !== 'minecraft_action_failed'
+          || !['body_missing_or_unloaded', 'script_no_longer_controls_body'].includes(error.nativeCode ?? '')) return false;
+      terminalReadRejection = true;
+      return true;
+    };
+    // The stream's queued frames must reach guest listeners before its terminal
+    // failure aborts this request. The existing deadline/cancel still bounds it.
+    const waitForStreamAbort = (requestSignal: AbortSignal): Promise<never> => new Promise((_, reject) => {
+      if (requestSignal.aborted) { reject(requestSignal.reason); return; }
+      requestSignal.addEventListener('abort', () => reject(requestSignal.reason), { once: true });
+    });
     const call = async (operation: string, values: Record<string, unknown> = {}, callSignal = signal) => {
       bridgeOperations++;
       return object(await worlds.toolCallback(live, { threadId: ctx.threadId, signal: callSignal }, 'script', {
@@ -142,11 +156,12 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       prepareSnapshot(initial);
       heartbeat = (async () => {
         try {
-          while (!signal.aborted) {
+          while (!signal.aborted && !terminalReadRejection) {
             await delay(2000, undefined, { signal });
+            if (terminalReadRejection) break;
             await call('heartbeat');
           }
-        } catch (error) { if (!signal.aborted) controller.abort(error); }
+        } catch (error) { if (!signal.aborted && !deferToStream(error)) controller.abort(error); }
       })();
       const startAction = async (request: Record<string, unknown>, requestSignal: AbortSignal) => {
         if (request.type === 'creative_slot') {
@@ -166,6 +181,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           if (actions.length > 32) actions.shift();
           return action;
         } catch (error) {
+          if (deferToStream(error)) return waitForStreamAbort(requestSignal);
           // Native pre-start rejection is known. A lost/malformed reply may
           // hide an accepted action: stop the whole script and release its lease.
           if (error instanceof ApiError && error.code === 'minecraft_action_failed')
@@ -175,6 +191,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         }
       };
       const awaitAction = async (id: unknown, requestSignal: AbortSignal) => {
+        if (terminalReadRejection) return waitForStreamAbort(requestSignal);
         const record = actions.find(action => action.id === id);
         if (!record) throw new Error('Action does not belong to this execution');
         try {
@@ -185,6 +202,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           observeAction(status);
           return status;
         } catch (error) {
+          if (deferToStream(error)) return waitForStreamAbort(requestSignal);
           // Without the terminal barrier, catching goto must not allow the
           // body to keep working unobserved under a renewed lease.
           controller.abort(error);
@@ -192,6 +210,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         }
       };
       const onRequest = async (operation: string, value: unknown, requestSignal: AbortSignal) => {
+        if (terminalReadRejection) return waitForStreamAbort(requestSignal);
         const request = object(value);
         if (operation === 'startAction') return startAction(request, requestSignal);
         if (operation === 'awaitAction') return awaitAction(request.id, requestSignal);
@@ -200,6 +219,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
           if (!actions.some(action => action.id === request.id)) throw new Error('Action does not belong to this execution');
           try { return await call(operation === 'cancelAction' ? 'cancel' : 'stopRoute', { id: request.id }, requestSignal); }
           catch (error) {
+            if (deferToStream(error)) return waitForStreamAbort(requestSignal);
             // A missing stop acknowledgement must not permit a replacement
             // route to start while the old route might still control the body.
             controller.abort(error);
@@ -217,10 +237,13 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         timeoutMs, signal, onRequest,
         onUpdates: async (send, streamSignal) => {
           bridgeOperations++;
-          await worlds.toolCallback(live, { threadId: ctx.threadId, signal: streamSignal }, 'script', {
-            agentId, arguments: { operation: 'stream', scriptId },
-          }, value => send(prepareSnapshot(object(value))));
-          if (!streamSignal.aborted) throw new Error('Minecraft state stream closed while the script was running');
+          streaming = true;
+          try {
+            await worlds.toolCallback(live, { threadId: ctx.threadId, signal: streamSignal }, 'script', {
+              agentId, arguments: { operation: 'stream', scriptId },
+            }, value => send(prepareSnapshot(object(value))));
+            if (!streamSignal.aborted) throw new Error('Minecraft state stream closed while the script was running');
+          } finally { streaming = false; }
         },
       });
     } catch (error) { failure = error; }

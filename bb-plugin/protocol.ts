@@ -35,6 +35,7 @@ export class ApiError extends Error {
   constructor(
     readonly code: string,
     message: string,
+    readonly nativeCode?: string,
   ) {
     super(message);
   }
