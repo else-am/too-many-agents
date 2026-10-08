@@ -628,6 +628,9 @@ final class GameAccess {
     void nativeUseFinished(net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) {
         var entity = event.getEntity();
         if (!(entity.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
+        var animation = event.getItem().getUseAnimation();
+        if (animation == net.minecraft.world.item.UseAnim.EAT || animation == net.minecraft.world.item.UseAnim.DRINK)
+            entityEvent("entityEat", entity, null, null);
         for (var controller : actions.values()) {
             if (controller.mob == entity) { controller.hands.nativeUseFinished(event); return; }
         }
@@ -1438,6 +1441,24 @@ final class GameAccess {
         for (var controller : actions.values()) {
             if (controller.scripted() && controller.mob.level() == level) controller.recordSound(event, position);
         }
+    }
+
+    void entitySignal(ScriptEntitySignalEvent event) {
+        String name = event.animation ? switch (event.code) {
+            case 0, 3 -> "entitySwingArm";
+            case 4 -> "entityCriticalEffect";
+            case 5 -> "entityMagicCriticalEffect";
+            default -> null;
+        } : switch (event.code) {
+            case 6 -> "entityTaming";
+            case 7 -> "entityTamed";
+            case 8 -> "entityShakingOffWater";
+            case 10 -> "entityEatingGrass";
+            case 55 -> "entityHandSwap";
+            default -> null;
+        };
+        // Damage/death and wake already have native or observed-state sources.
+        if (name != null) entityEvent(name, event.entity, null, null);
     }
 
     void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {

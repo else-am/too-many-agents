@@ -3,7 +3,7 @@
   "minVersion": "0.8",
   "package": "toomanyagents.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["ServerLevelMixin"],
+  "mixins": ["ServerLevelMixin", "ServerChunkCacheMixin"],
   "client": ["KeyboardHandlerMixin", "ScreenMixin"],
   "injectors": { "defaultRequire": 1 }
 }
