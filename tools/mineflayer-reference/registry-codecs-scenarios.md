@@ -69,3 +69,9 @@ Native entry encoding has a 4 MiB binary limit; the guest adds 4096 entries per
 section, 262144 tree nodes, depth64 and 4 Mi UTF-16 string units across stored
 sections. These are distinct bounds. Native codec construction precedes native
 projection bounds and is not an arbitrary-mod code sandbox.
+
+Combined Java/plugin/package build passed on implementation 1bc61ab. The actual
+production guest bundle then loaded at 64 MiB/512 KiB, reporting 8,188,783 bytes
+of memory and 276 ms; this does not exercise createBot or native column hydration.
+JAR SHA256: de454011506d206f32a56ca3d8b89cb6159bdacc4059859bb6653cca1527a22a.
+Native codec bytes, custom-datapack startup and live behavior remain unverified.
