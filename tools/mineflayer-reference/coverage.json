@@ -704,6 +704,570 @@
         "registry-library-current"
       ],
       "applicability": "applicable"
+    },
+    "vec3.Vec3.abs": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.add": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.at": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.clone": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.cross": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.distanceSquared": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.distanceTo": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.divide": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.dot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.equals": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.floor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.floored": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.innerProduct": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.isZero": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.manhattanDistanceTo": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.max": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.min": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.minus": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.modulus": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.multiply": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.norm": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.normalize": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.offset": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.plus": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.round": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.rounded": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.scale": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.scaled": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.set": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.subtract": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.toArray": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.toString": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.translate": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.unit": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.update": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.volume": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.x": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.xy": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.xyDistanceTo": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.xz": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.xzDistanceTo": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.xzy": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.y": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.yz": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.yzDistanceTo": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
+    },
+    "vec3.Vec3.z": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure caller-supplied vector contract; unchanged pinned implementation compared across host and actual bundled QuickJS. Native Entity coordinates remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/vectors.mjs"
+      ],
+      "evidence": [
+        "vectors-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -1654,6 +2218,67 @@
       },
       "limitations": "NBT-induced termination only, not accepted damage/drops; release acknowledgement unconfirmed; dead record archival rejected and was not retried.",
       "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
+    },
+    "vectors-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/vectors.mjs",
+      "subjects": [
+        "vec3.Vec3.abs",
+        "vec3.Vec3.add",
+        "vec3.Vec3.at",
+        "vec3.Vec3.clone",
+        "vec3.Vec3.constructor",
+        "vec3.Vec3.cross",
+        "vec3.Vec3.distanceSquared",
+        "vec3.Vec3.distanceTo",
+        "vec3.Vec3.divide",
+        "vec3.Vec3.dot",
+        "vec3.Vec3.equals",
+        "vec3.Vec3.floor",
+        "vec3.Vec3.floored",
+        "vec3.Vec3.innerProduct",
+        "vec3.Vec3.isZero",
+        "vec3.Vec3.manhattanDistanceTo",
+        "vec3.Vec3.max",
+        "vec3.Vec3.min",
+        "vec3.Vec3.minus",
+        "vec3.Vec3.modulus",
+        "vec3.Vec3.multiply",
+        "vec3.Vec3.norm",
+        "vec3.Vec3.normalize",
+        "vec3.Vec3.offset",
+        "vec3.Vec3.plus",
+        "vec3.Vec3.round",
+        "vec3.Vec3.rounded",
+        "vec3.Vec3.scale",
+        "vec3.Vec3.scaled",
+        "vec3.Vec3.set",
+        "vec3.Vec3.subtract",
+        "vec3.Vec3.toArray",
+        "vec3.Vec3.toString",
+        "vec3.Vec3.translate",
+        "vec3.Vec3.unit",
+        "vec3.Vec3.update",
+        "vec3.Vec3.volume",
+        "vec3.Vec3.x",
+        "vec3.Vec3.xy",
+        "vec3.Vec3.xyDistanceTo",
+        "vec3.Vec3.xz",
+        "vec3.Vec3.xzDistanceTo",
+        "vec3.Vec3.xzy",
+        "vec3.Vec3.y",
+        "vec3.Vec3.yz",
+        "vec3.Vec3.yzDistanceTo",
+        "vec3.Vec3.z"
+      ],
+      "scope": "Pinned vec3 0.1.10 host versus bundled QuickJS: values, local mutation, returned identity, coordinate fields and special numeric results.",
+      "result": "passed",
+      "sourceSha256": "18e9bdbc54ac3e7bb36ff2df68f79b4e8d8ec73056e39e91961cc10924c285b0",
+      "report": {
+        "path": "run/mineflayer-reference/vectors-library.json",
+        "sha256": "4e851371cc774a454fe79c49455e0c6fd7fba48ceb5139657a150ac273881287"
+      },
+      "limitations": "Vector values, local mutation, return identity and runtime portability only; no native observation or movement claim."
     }
   },
   "reviewNotes": {

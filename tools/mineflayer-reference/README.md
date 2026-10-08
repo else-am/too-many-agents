@@ -215,3 +215,5 @@ The last check intentionally ends with `body_dead`; its passing contract is the
 retained hydrated callback order, not successful script return. Release and
 archival limitations remain attached. These links do not promote whole APIs or
 substitute for missing reference evidence.
+
+The explicit Vec3 member list has a recorded 288-case host/bundled-QuickJS comparison (`vectors.mjs`), including local mutations, returned identity and special numeric results. Native coordinates, movement, class-wide coverage and the package helper are separate; no native members were promoted from it.
