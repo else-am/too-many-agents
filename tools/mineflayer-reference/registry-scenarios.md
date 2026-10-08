@@ -34,5 +34,7 @@ five comparison operators plus both version helpers match for 838 known names.
 The actual QuickJS 64MiB/512KiB check passed at about 7.23MiB used for this isolated
 registry fixture. Its 2.77MB bundle has zero external imports and no runtime
 minecraft-data loader. This is not the memory measurement of an initialized
-production bot with 25 full native columns. The root combined build/load remains
-required after integration; live dynamic data methods remain pending above.
+production bot with 25 full native columns. The combined Java/plugin/package build passed at `11ea771`. The actual production
+guest bundle also loaded within QuickJS at 64 MiB / 512 KiB, using about 8.15 MiB before
+bot initialization (279ms measured). No initialized columns/native snapshot
+claim follows from that load. Dynamic data methods remain pending above.
