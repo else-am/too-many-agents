@@ -4035,8 +4035,14 @@
         "mineflayer.Bot.writeBook",
         "mineflayer.Bot.signBook"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "17 real-source comparisons, compatible-stack correction and20 queue/error/bounds scenarios in QuickJS64MiB/512KiB. Controlled private-IO fixture, not a native book write.",
+      "result": "passed",
+      "testedRevision": "268f8f0",
+      "sourceSha256": "eb2310304e3083911891186905c5593da5d469a6c3a06cf97d6c1d0f26574807",
+      "report": {
+        "path": "run/mineflayer-reference/books-current.txt",
+        "sha256": "7d05864c4a4275b6382686308f3ff3cad0c8727883dc33b2fc39a496875a6bb5"
+      }
     },
     "world-queries-library": {
       "kind": "library-differential",
@@ -4045,8 +4051,14 @@
         "mineflayer.Bot.findBlocks",
         "mineflayer.Bot.canSeeBlock"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "91 upstream comparisons,6 explicit fixes and9 bounds in QuickJS64MiB/512KiB. Synthetic typed world observations, not native visibility/cache freshness.",
+      "result": "passed",
+      "testedRevision": "268f8f0",
+      "sourceSha256": "e732349a9f9a9184fac74961fbc83b36b6ae66372c39cea257923c15967bb9ea",
+      "report": {
+        "path": "run/mineflayer-reference/world-queries-current.txt",
+        "sha256": "76705142b556b9f941e035ec301bafe1227c77611c29a02c1e28dd61e4b2f37a"
+      }
     },
     "explosion-library": {
       "kind": "library-differential",
@@ -4054,8 +4066,14 @@
       "subjects": [
         "mineflayer.Bot.getExplosionDamages"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "18 pinned comparisons and6 correction/bound checks in QuickJS. Damage estimates only; no actual native explosion damage validation.",
+      "result": "passed",
+      "testedRevision": "268f8f0",
+      "sourceSha256": "0d2a7eadabc8faad15fb1784ab9758595beb271f5b45768f7bb6f76e91133339",
+      "report": {
+        "path": "run/mineflayer-reference/explosion-current.txt",
+        "sha256": "b5726139e539e382500504af5ebc79bad117775a76c5d8c64a766aba09415df6"
+      }
     },
     "boss-bars-library": {
       "kind": "library-differential",
@@ -4063,8 +4081,14 @@
       "subjects": [
         "mineflayer.BossBar"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "56 reference cases,8 flag corrections and snapshot identity/lifecycle in QuickJS. Object/adapter semantics only; independent native boss packets are separately recorded.",
+      "result": "passed",
+      "testedRevision": "268f8f0",
+      "sourceSha256": "bc1b25aa4d2d666617eedef9797118ec8d0791f89f5bba4cd917eef19182df7e",
+      "report": {
+        "path": "run/mineflayer-reference/boss-bars-current.txt",
+        "sha256": "7a1757c16d5d6834a129f915f7f6f7cc2a69a361d18ffe76e55455bf8b2b29d0"
+      }
     },
     "native-direct-follow": {
       "kind": "native-integration",
