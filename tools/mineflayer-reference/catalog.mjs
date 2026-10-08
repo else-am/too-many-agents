@@ -505,7 +505,10 @@ for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
   if (!['supported', 'pending', 'inapplicable'].includes(decision.status)) throw new Error(`Invalid coverage status: ${key}`);
-  if (decision.status === 'inapplicable' && (!exclusions.has(key) || !decision.reason)) throw new Error(`Unreviewed scope exclusion: ${key}`);
+  // This Java Edition pin cannot instantiate the dependency's Bedrock-only class.
+  // Keep PCChunk and shared APIs as independent applicable obligations.
+  const otherEdition = entry.owner === 'prismarine-chunk.BedrockChunk';
+  if (decision.status === 'inapplicable' && ((!exclusions.has(key) && !otherEdition) || !decision.reason)) throw new Error(`Unreviewed scope exclusion: ${key}`);
   if (decision.status === 'supported') {
     if (!decision.scenarios?.length || !decision.evidence?.length) throw new Error(`Supported API needs scenarios/evidence: ${key}`);
     if ((decision.applicability ?? entry.applicability) !== 'applicable') throw new Error(`Applicability needs review: ${key}`);

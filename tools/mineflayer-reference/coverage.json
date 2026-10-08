@@ -2560,6 +2560,182 @@
       "evidence": [
         "entity-library"
       ]
+    },
+    "prismarine-chunk.BedrockChunk.addBlockEntity": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.blockEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.chunkVersion": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.constructor": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.diskDecodeBlockEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.diskDecodeEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.diskEncodeBlockEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.diskEncodeEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.entities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBiome": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBiomeId": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBlock": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBlockLight": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBlocks": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getBlockStateId": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getSection": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getSectionAtIndex": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.getSkyLight": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.loadBiomes": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.loadEntities": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.loadHeights": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.loadLegacyBiomes": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.maxCY": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.minCY": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkDecode": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkDecodeNoCache": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkDecodeSubChunk": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkDecodeSubChunkNoCache": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkEncode": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkEncodeNoCache": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkEncodeSubChunk": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.networkEncodeSubChunkNoCache": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.newSection": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setBiome": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setBiomeId": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setBlock": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setBlockLight": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setBlockStateId": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.setSkyLight": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.writeBiomes": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.writeHeightMap": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.writeLegacyBiomes": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.x": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-chunk.BedrockChunk.z": {
+      "status": "inapplicable",
+      "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
     }
   },
   "schemaVersion": 2,

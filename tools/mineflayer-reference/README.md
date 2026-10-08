@@ -66,6 +66,10 @@ Counts summarize canonical member/event/factory records, including pending
 review; they are **not completion percentages**. Inherited aliases, data-shape
 records, and private/source-only candidates are separately indexed. The only
 Reviewed exclusions cover connection/account/socket methods, the internal packet client and resource-pack negotiation. The user also chose native Mob mechanics: self-player metadata, hunger/saturation, player respawn and the client player-physics predictor/toggle are inapplicable. Actual body identity, health, item use, motion and dominant-hand settings remain applicable. Exact keys and source reasons are in coverage.json.
+The dependency also declares a separate BedrockChunk class. Its 44 own members
+are inapplicable to the Java Edition 1.21.1 pin; PCChunk and shared APIs remain
+independent obligations. This follows the upstream pc/bedrock factory split and
+the selected PC1.18 implementation used for 1.21.1.
 Nothing else is silently excluded because it is unimplemented or unclear.
 
 ## Locate current implementation
