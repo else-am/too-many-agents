@@ -4459,6 +4459,28 @@
           "code"
         ]
       }
+    },
+    "vehicle-boost-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-vehicle-boost.js",
+      "subjects": [
+        "mineflayer.Bot.activateItem",
+        "mineflayer.Bot.moveVehicle",
+        "mineflayer.Bot.mount",
+        "mineflayer.Bot.dismount"
+      ],
+      "scope": "Packaged3d4043d Pig: saddle removed while mounted before any active boost or steering helper; use caused no boost/item cost. Restored saddle, one native boost duration335, carrot-stick damage0to7 and2.75blocks movement; actual sole body passenger, controls cleared/dismount/unrelated inventory preserved. No near-break conversion, other-family boost or velocity multiplier claim.",
+      "testedRevision": "3d4043d",
+      "result": "passed",
+      "sourceSha256": "e9254c00916c5923501a13ab3d58f0c3fddc7a0662702b270e9693be636a3fde",
+      "report": {
+        "path": "run/mineflayer-reference/vehicle-boost-native-recorded.json",
+        "sha256": "d66fcc7c97759af8edebce941d14d742f301b70addabb15a04e23a97b9a4023e",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {
