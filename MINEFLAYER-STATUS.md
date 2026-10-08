@@ -6,10 +6,11 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`042cc01`**, ordering tick waits after preceding native controls. Native-body elytra flight/rockets and actual boost-duration observations passed the focused native check.
-- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`.
+- Latest built implementation: **`0a79f7c`**, body-addressed title/tab-list observations. Java/plugin/package build passed; native packet delivery and mixin startup remain unverified.
+- Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `0536eca763ee233a4387100585b803834c9326d40bd4d030f9545cfb141e844c`.
+- **Tester’s fixed artifact is still `042cc01`**, staged in `run/mods` with SHA-256 `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`. Do not confuse newer `build/libs` with its measurements or reinstall mid-comparison.
 - Latest focused native pass: **`042cc01`**, actual airborne gliding, one body-attached rocket, item consumption, boost/countdown, unchanged unrelated inventory and native landing/release cleanup. The check completed 7/7 requests, 82 updates and 20 bridge operations in 6,331 ms using Codex 6.1 Sol low. Earlier signal, completion, sign, chat, scoreboard and column evidence is linked below.
-- Test JVM `83377` saved/disconnected with all dimensions saved, then stopped. Tester is assigned the required direct-tools versus scripting wall/gather comparison on this same fixed artifact. No other feature tests are assigned.
+- Test JVM `83377` saved/disconnected with all dimensions saved, then stopped. Tester owns `042cc01` JVM `86485` for the required direct-tools versus scripting wall/gather comparison; the direct wall arm is in progress. No other feature tests are assigned.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
