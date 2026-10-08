@@ -10232,6 +10232,27 @@
         ]
       },
       "limitations": "No open-container case or full-inventory toss behavior. Separate failed container procedure retained. Native execution of this exact common source remains pending; existing protocol warning retained."
+    },
+    "reference-dig-unsuitable-tool": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/dig-unsuitable-tool.js",
+      "subjects": [
+        "mineflayer.Bot.dig",
+        "mineflayer.Bot.canDigBlock",
+        "mineflayer.Bot.digTime",
+        "mineflayer.BotEvents.diggingCompleted"
+      ],
+      "scope": "One reachable stone mined with empty hand: void completion, hydrated new-air event and cleared target, no harvest or replay, three independent server checks.",
+      "result": "passed",
+      "sourceSha256": "af8fca3a2f5ceca44efb53d53c066a29703da7149c0d77887ae64b076a9166c1",
+      "report": {
+        "path": "run/mineflayer-reference/dig-unsuitable-tool-reference.json",
+        "sha256": "6d4930b1e8ac7522817eae64606922e3c7b8f4880ebf2624b75a23dc7f866f2b",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Reference only; no cancellation/unbreakable/full-tool matrix or native counterpart. Timer equality not required. Existing protocol and setup teleport warnings retained."
     }
   },
   "reviewNotes": {

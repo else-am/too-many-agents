@@ -92,3 +92,37 @@ source is ready for a future native fixture with identical ordinary inventory;
 no native execution or broad equip/unequip conformance claim follows from this
 reference pass. Full inventory and other equipment destinations remain separate
 coverage requirements, not exclusions.
+
+## Unsuitable harvest tool — preauthored
+
+New isolated reference fixture: empty survival inventory and hand, grounded at
+60.5/-60/0.5, stone target60/-60/3 above stone floor. Clear air, dry, no effects,
+no nearby item entities in the fixture box. One public dig(target,true,NORTH)
+call must resolve void and expose air plus one diggingCompleted(newBlock) callback
+with cleared target fields. Empty hand is an unsuitable harvest tool for stone,
+not a prohibition on breaking it. No cobblestone/item yield may be invented.
+Record digTime estimate and elapsed time but do not require matching timers.
+After ten observation ticks verify no event replay/inventory gain; independently
+confirm target air, empty inventory and no item entities in the fixture box.
+Stop at first failure, retain source/error, no retry or second dig. Native
+counterpart remains pending; this checks a distinct plan requirement.
+
+Unsuitable-tool reference result: first invocation PASS, estimated7500ms and
+actual7502ms (timing recorded, not a compatibility tolerance). Void result,
+one new-air completion event with cleared target fields, finite lastDigTime,
+empty inventory and no replay after ten ticks. Three independent server checks
+confirmed air, empty inventory and no item entities in the fixture. All dimensions
+saved; process exited0 and port25575 unbound. Source/result/log retained under
+/Users/scott/.bb/thread-storage/dig-unsuitable-reference/. Existing protocol and
+setup teleport warnings are preserved, not a clean-protocol claim.
+
+Native counterpart remains unrun. Use the same source on a fresh empty adult
+bound body after independent dry/grounded/health/reach/NORTH-face and loaded-cell
+inspection at the declared coordinates. Never clear ScriptProbe's inventory.
+Record the exact new body's identity outside the common procedure and verify its
+own completed mine action, target air and no dropped item independently. Actual
+AgentHands.beginMine/advanceMine use native destroy progress, and finishMine
+calls gameMode.destroyBlock for harvest rules; this source review identifies no
+missing no-harvest branch, but cannot establish runtime behavior. Do not require
+player timing or change native attributes. No cancellation, retry, extra dig or
+unrelated loot cleanup is part of the measured procedure.
