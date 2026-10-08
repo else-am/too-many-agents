@@ -1546,6 +1546,114 @@
         ]
       },
       "limitations": "One scripted opener only; physical-tool retained menus, coexisting viewers and double chests are not established."
+    },
+    "world-unload-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-world-unload-native.js",
+      "subjects": [
+        "prismarine-world.WorldSync.unloadColumn",
+        "prismarine-world.WorldSync.getColumn"
+      ],
+      "scope": "Guest unload makes World getters unknown; separate native observation retained; same column restored.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "453a23b76a35aa1fdc58992efc820502036d7d4a9e96e6f795929a77b58549ba",
+      "report": {
+        "path": "run/mineflayer-reference/world-unload-native.json",
+        "sha256": "810f0426dfe1768daa2cd6eda3de08873d9a96e2e43a85d6964c8b725e662720",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "Guest cache contract only; no native chunk unload or force loading.",
+      "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
+    },
+    "horse-window-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-horse-window-native.js",
+      "subjects": [
+        "mineflayer.Bot.openEntity"
+      ],
+      "scope": "Native HorseWindow saddle pickup and exact return, close and sneak release.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "29b76160ddd2afbc6790ed427e07ed5e578a224d7593c5a50b9933a1be624a9f",
+      "report": {
+        "path": "run/mineflayer-reference/horse-window-native.json",
+        "sha256": "37a80786e4a1d5ceff54ec1972cb25f717dd2d20b9e6eed1143ed7d509bb2e8a",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "One horse/saddle fixture; not mounted inventory opening or all mount species.",
+      "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
+    },
+    "command-block-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-command-block-native.js",
+      "subjects": [
+        "mineflayer.Bot.setCommandBlock"
+      ],
+      "scope": "Inactive impulse/conditional-chain edits and queued default restore through finish drain.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "bfa942ee72cd8644c0d9477ea4e9f9ba94505cff2231d93ea1831341e74f2f21",
+      "report": {
+        "path": "run/mineflayer-reference/command-block-native.json",
+        "sha256": "f67aeb8c0201142bfab4347841ac3e4edd38884ef063e8c623906d45cea046f8",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "Final native NBT independently confirmed; no command execution, power, or independent transient command NBT.",
+      "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
+    },
+    "bossbar-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-bossbar-native.js",
+      "subjects": [
+        "mineflayer.Bot.bossBars",
+        "mineflayer.BotEvents.bossBarCreated",
+        "mineflayer.BotEvents.bossBarUpdated",
+        "mineflayer.BotEvents.bossBarDeleted"
+      ],
+      "scope": "Native Wither creation, styled rename, removal with hydrated stable objects.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "e571ae14d5e12913a0c87f69f3245c931e8f21a8d747b97983049913bafb9339",
+      "report": {
+        "path": "run/mineflayer-reference/bossbar-native.json",
+        "sha256": "7c93f24ba84d83ad4f402ea17476c07cbcef67c2f5e9e881defafed6c1d6ee7c",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "Selected nearby Wither only; not all visibility/recipient paths.",
+      "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
+    },
+    "self-death-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-self-death-native.js",
+      "subjects": [
+        "mineflayer.BotEvents.death"
+      ],
+      "scope": "Disposable bound cow Health-only NBT merge; hydrated health then one zero-argument death before expected body_dead.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "4b569c0ca98a181486cfcfdb14d59dcceb56a34e5a3e8a8da4c4b5f2cca7f0fb",
+      "report": {
+        "path": "run/mineflayer-reference/self-death-native.json",
+        "sha256": "2d5cc0809df3873b555876e682ed348772b2f6fde1272130829f6255d7c2bf42",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "NBT-induced termination only, not accepted damage/drops; release acknowledgement unconfirmed; dead record archival rejected and was not retried.",
+      "independentSummary": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json"
     }
   },
   "reviewNotes": {

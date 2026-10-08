@@ -206,3 +206,11 @@ click/inventory packets (64 KiB each), and reads server entity NBT on failure
 before disconnecting. Timestamped `craft-trace-*.json` files preserve previous
 reports. It does not patch upstream, replay clicks, or by itself establish a
 paired conformance pass. One diagnostic run reproduced the mismatch with 49 complete transitions; see the source review for the demonstrated prediction/resynchronization ordering. The server saved and stopped normally.
+
+Five selected `b21ce69` runs are now indexed with exact executed-source and raw
+report hashes: guest World unload, HorseWindow saddle round trip, inactive
+command editing, native boss bars, and disposable NBT-induced terminal death.
+The last check intentionally ends with `body_dead`; its passing contract is the
+retained hydrated callback order, not successful script return. Release and
+archival limitations remain attached. These links do not promote whole APIs or
+substitute for missing reference evidence.
