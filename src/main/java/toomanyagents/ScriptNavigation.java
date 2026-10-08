@@ -13,6 +13,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.control.FlyingMoveControl;
@@ -20,6 +21,7 @@ import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.animal.Parrot;
+import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
 import net.minecraft.world.entity.animal.Salmon;
@@ -99,6 +101,9 @@ public final class ScriptNavigation {
     private MoveControl controller;
     private RuntimeException movementFailure;
     private boolean fishControlTick, fishHadTarget;
+    private int puffState = -1;
+    private float puffWidth, puffHeight, puffEyeHeight;
+    private Pose puffPose;
     private Vec3 swimHold;
     private int slimeSize;
     private Rabbit.Variant rabbitVariant;
@@ -162,6 +167,11 @@ public final class ScriptNavigation {
         flightPrepared = flightLanding = false; flightStep = null; flightHold = mob.position();
         flightWidth = mob.getBbWidth(); flightHeight = mob.getBbHeight(); flightEyeHeight = mob.getEyeHeight();
         fishHadTarget = mob.getTarget() != null;
+        puffState = mob.getClass() == Pufferfish.class ? ((Pufferfish) mob).getPuffState() : -1;
+        if (puffState >= 0) {
+            puffWidth = mob.getBbWidth(); puffHeight = mob.getBbHeight(); puffEyeHeight = mob.getEyeHeight();
+            puffPose = mob.getPose();
+        }
         swimHold = mob.position();
         if (!inside(mob.position())) throw error("route_outside_body_box");
         Vec3 start = vector(request.getAsJsonObject("start"));
@@ -370,8 +380,10 @@ public final class ScriptNavigation {
 
     void stop() {
         requireThread();
+        boolean cleanup = puffState < 0 || ownsPufferfishCleanup();
         OWNED.remove(mob, this);
         active = false;
+        if (!cleanup) { mining = null; trajectory.clear(); return; }
         try { hands.cancelMine(); }
         finally {
             mining = null; trajectory.clear(); clearControls();
@@ -1091,6 +1103,7 @@ public final class ScriptNavigation {
     }
 
     private void clearControls() {
+        if (puffState >= 0 && !ownsPufferfishCleanup()) return;
         if (physics == Physics.PARROT) { clearFlightControls(); return; }
         clearInputs();
         if (physics == Physics.RABBIT) { mob.getJumpControl().tick(); mob.setJumping(false); }
@@ -1358,9 +1371,11 @@ public final class ScriptNavigation {
             return Physics.UNSUPPORTED;
         }
         if (mob.isNoGravity()) return Physics.UNSUPPORTED;
-        // These three concrete native classes share AbstractFish's controller,
-        // travel/aiStep and WaterAnimal's no-current-push behavior.
-        if ((mob.getClass() == Cod.class || mob.getClass() == Salmon.class || mob.getClass() == TropicalFish.class)
+        // Pufferfish adds native contact effects and puff geometry, but shares
+        // AbstractFish's controller/travel and WaterAnimal's no-current-push rule.
+        boolean puffer = mob.getClass() == Pufferfish.class && ((Pufferfish) mob).getPuffState() >= 0
+            && ((Pufferfish) mob).getPuffState() <= 2;
+        if ((mob.getClass() == Cod.class || mob.getClass() == Salmon.class || mob.getClass() == TropicalFish.class || puffer)
             && control == AbstractFish.FishMoveControl.class && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER))
             return Physics.FISH;
         if (!GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
@@ -1396,6 +1411,9 @@ public final class ScriptNavigation {
     private void requireMode() {
         if (movementFailure != null) throw movementFailure;
         if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
+        if (puffState >= 0 && (((Pufferfish) mob).getPuffState() != puffState || mob.getPose() != puffPose
+            || mob.getBbWidth() != puffWidth || mob.getBbHeight() != puffHeight || mob.getEyeHeight() != puffEyeHeight))
+            throw error("route_pufferfish_body_changed");
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
         if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
@@ -1517,6 +1535,35 @@ public final class ScriptNavigation {
         if (movementFailure == null) movementFailure = failure;
         try { clearControls(); }
         catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+    }
+
+    private boolean ownsPufferfishCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    /** Before native puff refreshDimensions, which may reposition through setPos rather than move. */
+    public static void beforePufferfishSizeChange(Pufferfish fish) {
+        if (fish.level().isClientSide || fish.level().getServer() == null || !fish.level().getServer().isSameThread()) return;
+        ScriptNavigation route = OWNED.get(fish);
+        if (route == null || !route.active || route.physics != Physics.FISH || route.puffState < 0
+            || fish.getPuffState() == route.puffState) return;
+        RuntimeException failure = error("route_pufferfish_puff_changed");
+        if (route.movementFailure == null) route.movementFailure = failure;
+        try {
+            // Expiry may already clean up this route. Never clear a replacement
+            // body/controller/lease while allowing native metadata to proceed.
+            if (fish.level() == route.level && route.owner.vehicleLeaseActive(route.lease)
+                && route.ownsPufferfishCleanup()) route.stop();
+        } catch (RuntimeException cleanup) {
+            if (cleanup != route.movementFailure) route.movementFailure.addSuppressed(cleanup);
+        } finally {
+            OWNED.remove(fish, route);
+            route.active = false;
+        }
+        // The next action tick reports the retained failure. Native puff/size
+        // effects now proceed outside route ownership; no rollback or retry.
     }
 
     /** Used only at FishMoveControl's isDone query, during our explicit tick. */
