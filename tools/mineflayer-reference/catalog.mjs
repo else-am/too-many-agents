@@ -362,7 +362,12 @@ for (const [id, spec] of Object.entries(coverage.evidence ?? {})) {
 }
 // Reviewed connection-only APIs; end/quit close the socket in the pinned source.
 const exclusions = new Set(['mineflayer.createBot', 'mineflayer.Bot.connect',
-  'mineflayer.Bot.end', 'mineflayer.Bot.quit', 'mineflayer.Bot._client']);
+  'mineflayer.Bot.end', 'mineflayer.Bot.quit', 'mineflayer.Bot._client',
+  // User confirmed native Mob mechanics without a substitute player/predictor.
+  'mineflayer.Bot.player', 'mineflayer.Bot.food', 'mineflayer.Bot.foodSaturation',
+  'mineflayer.Bot.respawn', 'mineflayer.Bot.physics', 'mineflayer.Bot.physicsEnabled',
+  'mineflayer.Bot.acceptResourcePack', 'mineflayer.Bot.denyResourcePack',
+  'mineflayer.BotEvents.resourcePack']);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

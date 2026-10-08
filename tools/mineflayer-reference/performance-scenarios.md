@@ -128,3 +128,14 @@ include agent startup, preparation to invoke the tool, result inspection and
 reporting; they are broader than either tool duration or script execution.
 [Combined evidence and clean handback](</Users/scott/.bb/thread-storage/thr_xykqkgui57/performance-042cc01-summary.json>)
 include independently checked native results and transcript-count verification.
+
+## Authorized live reference comparison
+
+After the user's EULA acceptance, run the exact prepared wall and gather/craft
+sources on pinned Mineflayer 4.39.0 + Pathfinder 2.4.5 against the disposable
+1.21.1 loopback server. Use the same dry survival fixtures and starting items;
+compare meaningful outputs to the recorded native 042cc01 results, excluding
+positions, ticks and time. Check the eight wall blocks and zero stone, then
+removed logs, four planks/eight sticks and axe wear through independent server
+commands. These reference runs do not repeat or replace native measurements.
+Retain upstream decode warnings rather than patching its libraries silently.

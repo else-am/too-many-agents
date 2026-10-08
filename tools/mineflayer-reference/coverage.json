@@ -20,6 +20,42 @@
     "mineflayer.Bot.quit": {
       "status": "inapplicable",
       "reason": "Pinned documentation/source define Minecraft socket disconnection. Server connection APIs are outside the agreed native-body scope; a script has no independent socket and must not disconnect the shared game or BB."
+    },
+    "mineflayer.Bot.player": {
+      "status": "inapplicable",
+      "reason": "User chose an actual native Mob, not a substitute player. The pinned self-player field refers to its own Player entity/player-list entry; no such native record exists. Actual bot.entity and observed nearby players remain available."
+    },
+    "mineflayer.Bot.food": {
+      "status": "inapplicable",
+      "reason": "User explicitly chose native Mob behavior without player hunger mechanics. Do not present the interaction proxy FoodData as Mob hunger."
+    },
+    "mineflayer.Bot.foodSaturation": {
+      "status": "inapplicable",
+      "reason": "User explicitly chose native Mob behavior without player hunger/saturation mechanics."
+    },
+    "mineflayer.Bot.respawn": {
+      "status": "inapplicable",
+      "reason": "User chose native Mob behavior without player respawn or replacement-body mechanics; the pinned method requests PlayerList respawn for a network Player."
+    },
+    "mineflayer.Bot.physics": {
+      "status": "inapplicable",
+      "reason": "Pinned field is the local player movement predictor. Native Mob physics is authoritative; no client player-physics object or arbitrary predictor mutation applies."
+    },
+    "mineflayer.Bot.physicsEnabled": {
+      "status": "inapplicable",
+      "reason": "Pinned flag toggles the local player predictor. It must not freeze native Mob gravity/collision or disable execution safeguards."
+    },
+    "mineflayer.Bot.acceptResourcePack": {
+      "status": "inapplicable",
+      "reason": "Connection resource-pack negotiation is outside the agreed connection API scope. No independent Mob renderer/connection exists; do not acknowledge a pack as loaded or alter the shared client."
+    },
+    "mineflayer.Bot.denyResourcePack": {
+      "status": "inapplicable",
+      "reason": "Connection resource-pack negotiation is outside the agreed connection API scope; no independent Mob connection receives a request."
+    },
+    "mineflayer.BotEvents.resourcePack": {
+      "status": "inapplicable",
+      "reason": "Connection-only resource-pack request event; no independent Mob connection exists. Do not fabricate a shared-client request."
     }
   },
   "schemaVersion": 2,
@@ -27,7 +63,7 @@
     "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
     "supported": "Requires verified passing native-integration and live-reference evidence. All current native requirements remain pending.",
-    "referenceServer": "No live reference run is recorded; Minecraft EULA acceptance remains unanswered.",
+    "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
   "evidence": {
@@ -255,20 +291,40 @@
         "mineflayer.Bot.dig",
         "mineflayer-pathfinder.Pathfinder"
       ],
-      "scope": "Shared gather procedure; needs a native fixture/harness and independent ore/inventory checks. Availability is not a passing run.",
-      "result": "not-recorded"
+      "scope": "Exact shared gather procedure: synchronous ore lookup, navigation, equip/dig void returns, real ore removal/diamond possession and held pickaxe; independent server/body evidence. One fixture, not full option/edge conformance.",
+      "result": "passed",
+      "sourceSha256": "ab1128809a9c6a9a2077723382fdc9a021e8e3945de9f4cf8eb99049a3187d0d",
+      "report": {
+        "path": "run/mineflayer-reference/gather-native.json",
+        "sha256": "3c782008f08cdf6980c9dd0801d9cb596f2158d576ec085e27812e641673aa5c",
+        "codePath": [
+          "tool",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Native report is historical, not current HEAD. Reference uses unpatched pinned libraries; startup logged an ArmorTrimMaterial PartialReadError. No component/recipe protocol conformance inferred."
     },
     "reference-gather": {
       "kind": "live-reference",
-      "path": "tools/mineflayer-reference/scenarios.mjs",
+      "path": "tools/mineflayer-reference/gather.js",
       "subjects": [
         "mineflayer.Bot.findBlock",
         "mineflayer.Bot.equip",
         "mineflayer.Bot.dig",
         "mineflayer-pathfinder.Pathfinder"
       ],
-      "scope": "Server harness for gather.js with independent server checks. Not run; requires explicit EULA acceptance. Catalog generation never invokes it.",
-      "result": "not-recorded"
+      "scope": "Exact shared gather procedure: synchronous ore lookup, navigation, equip/dig void returns, real ore removal/diamond possession and held pickaxe; independent server/body evidence. One fixture, not full option/edge conformance.",
+      "result": "passed",
+      "sourceSha256": "ab1128809a9c6a9a2077723382fdc9a021e8e3945de9f4cf8eb99049a3187d0d",
+      "report": {
+        "path": "run/mineflayer-reference/gather-reference.json",
+        "sha256": "bcae3478c26cf77ec78218c876318b042a5d9c22c6bfbde2fb8a75f9afd3e58f",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Native report is historical, not current HEAD. Reference uses unpatched pinned libraries; startup logged an ArmorTrimMaterial PartialReadError. No component/recipe protocol conformance inferred."
     },
     "native-navigation-shapes": {
       "kind": "native-integration",
@@ -601,6 +657,41 @@
         ]
       },
       "limitations": "Historical packaged run; not current HEAD, paired live-reference, or whole-member conformance. Exact invocation and independent native summary retained in the ignored report."
+    },
+    "reference-wall": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/performance-wall.js",
+      "subjects": [
+        "mineflayer.Bot.placeBlock"
+      ],
+      "scope": "Wall material consumption differs; independent saved outcome retained; not a passing paired comparison.",
+      "result": "failed",
+      "sourceSha256": "6908c06ea9a4f93964e4f58fcfeb526d872d0f2e2bcb2cc54cca3ef53722ca0d",
+      "report": {
+        "path": "run/mineflayer-reference/wall-reference-failed.json",
+        "sha256": "3976a81ecf220e7205f709136783311ea9c6c0cb0a38d6e7c907b125d1ce71d7",
+        "codePath": [
+          "source"
+        ]
+      }
+    },
+    "reference-gather-craft": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/performance-gather-craft.js",
+      "subjects": [
+        "mineflayer.Bot.craft",
+        "mineflayer.Bot.dig"
+      ],
+      "scope": "Gather/craft final state differs; independent saved outcome retained; not a passing paired comparison.",
+      "result": "failed",
+      "sourceSha256": "b4c8048839a1ac716c01fe2de18be18b96b96718ed0916a4f07e0da8e401e665",
+      "report": {
+        "path": "run/mineflayer-reference/gather-craft-reference-failed.json",
+        "sha256": "9b0a1dfb06871ab5af95db089d10baab6690ed92675cdd626fc7b9f654c384f0",
+        "codePath": [
+          "source"
+        ]
+      }
     }
   },
   "reviewNotes": {

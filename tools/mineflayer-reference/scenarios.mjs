@@ -1,20 +1,30 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import mineflayer from 'mineflayer';
 import pathfinder from 'mineflayer-pathfinder';
+import { Vec3 } from 'vec3';
 import { startServer, directory } from './server.mjs';
 
+// ProtoDef logs and drops partial packets without emitting a client error.
+// Preserve that diagnostic rather than claiming a clean protocol run.
+const protocolWarnings = [], originalLog = console.log;
+console.log = (...values) => {
+  if (typeof values[0] === 'string' && /PartialReadError|^Chunk size is/.test(values[0])
+    && protocolWarnings.length < 16) protocolWarnings.push(values[0].slice(0, 4000));
+  originalLog(...values);
+};
 const server = await startServer({ onLine: line => {
   if (/ERROR|WARN|Done \(/.test(line)) console.log(line);
 } });
+const clientErrors = [];
 const bot = mineflayer.createBot({
   host: '127.0.0.1', port: 25575, username: 'Reference', auth: 'offline', version: '1.21.1',
 });
 bot.loadPlugin(pathfinder.pathfinder);
-bot.on('error', error => console.error(error.message));
+bot.on('error', error => { clientErrors.push(error.message); console.error(error.message); });
 const abort = new AbortController();
 const timer = setTimeout(() => abort.abort(new Error('Reference scenarios exceeded 120 seconds')), 120_000);
 
@@ -44,6 +54,7 @@ async function consoleCommands(commands) {
 async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
+  if (process.argv.includes('--building') || process.argv.includes('--craft')) return buildingScenarios();
   await consoleCommands([
     'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
     'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
@@ -64,13 +75,96 @@ async function scenario() {
   const itemMarker = randomUUID();
   const messages = await consoleCommands([
     `execute if block 5 -60 0 minecraft:air run say ${blockMarker}`,
-    `execute if items entity Reference inventory.* minecraft:diamond run say ${itemMarker}`,
+    `execute if data entity Reference Inventory[{id:"minecraft:diamond",count:1}] run say ${itemMarker}`,
   ]);
   assert(messages.some(message => message.includes(blockMarker)), 'Server must confirm ore removal');
   assert(messages.some(message => message.includes(itemMarker)), 'Server must confirm diamond possession');
-  const report = { scenario: 'gather', backend: 'mineflayer', elapsedMs: Math.round(performance.now() - started), result, serverConfirmed: true };
+  const report = { scenario: 'gather', backend: 'mineflayer', minecraft: '1.21.1',
+    mineflayer: '4.39.0', pathfinder: '2.4.5', source,
+    sourceSha256: createHash('sha256').update(source).digest('hex'),
+    elapsedMs: Math.round(performance.now() - started), result,
+    serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function buildingScenarios() {
+  if (process.argv.includes('--craft')) {
+    // Read the previous wall attempt before resetting anything. That script
+    // reached its final inventory assertion before the last slot update.
+    const conditions = [...[-60, -59].flatMap(y => [32, 33, 34, 35].map(x =>
+      `if block ${x} ${y} 8 minecraft:stone`)),
+      'unless data entity Reference Inventory[{id:"minecraft:stone"}]'];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition, i) =>
+      `execute ${condition} run say ${markers[i]}`));
+    const serverConfirmed = markers.every(marker => messages.some(message => message.includes(marker)));
+    await writeFile(join(directory, 'wall-saved-observation.json'), JSON.stringify({
+      serverConfirmed, conditions, markers, messages,
+      scriptError: 'Wall material consumption differs',
+      limitation: 'Independent saved-world outcome; the earlier reference script failed its immediate inventory assertion.'
+    }, null, 2) + '\n');
+    assert(serverConfirmed, 'Saved reference wall must independently match all eight placements and consumption');
+  }
+  await consoleCommands([
+    'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
+    'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
+    'tp Reference 34.5 -60 5.5',
+    'fill 24 -61 0 44 -61 16 minecraft:stone',
+    'fill 24 -60 0 44 -53 16 minecraft:air',
+    'kill @e[type=minecraft:item]', 'gamemode survival Reference',
+  ]);
+  const suites = [
+    { name: 'wall', file: 'performance-wall.js',
+      prepare: ['clear Reference', 'item replace entity Reference hotbar.0 with minecraft:stone 8'],
+      expected: { placed: 8, remaining: 0 },
+      conditions: [
+        ...[-60, -59].flatMap(y => [32, 33, 34, 35].map(x => `if block ${x} ${y} 8 minecraft:stone`)),
+        'unless data entity Reference Inventory[{id:"minecraft:stone"}]',
+      ] },
+    { name: 'gather-craft', file: 'performance-gather-craft.js',
+      prepare: ['clear Reference', 'item replace entity Reference hotbar.0 with minecraft:iron_axe',
+        'fill 32 -60 8 35 -59 8 minecraft:air',
+        'setblock 33 -60 8 minecraft:oak_log', 'setblock 33 -59 8 minecraft:oak_log'],
+      expected: { logs: 0, planks: 4, sticks: 8, axeDamage: 2 },
+      conditions: ['if block 33 -60 8 minecraft:air', 'if block 33 -59 8 minecraft:air',
+        'unless data entity Reference Inventory[{id:"minecraft:oak_log"}]',
+        'if data entity Reference Inventory[{id:"minecraft:oak_planks",count:4}]',
+        'if data entity Reference Inventory[{id:"minecraft:stick",count:8}]',
+        'if data entity Reference Inventory[{id:"minecraft:iron_axe",components:{"minecraft:damage":2}}]'] },
+  ];
+  for (const suite of suites) {
+    if (process.argv.includes('--craft') && suite.name !== 'gather-craft') continue;
+    await consoleCommands(suite.prepare);
+    await bot.waitForTicks(5);
+    const source = await readFile(new URL(suite.file, import.meta.url), 'utf8');
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    let result;
+    try {
+      result = await new AsyncFunction('bot', 'goals', 'Movements', 'Vec3', source)
+        (bot, pathfinder.goals, pathfinder.Movements, Vec3);
+    } catch (error) {
+      await writeFile(join(directory, `${suite.name}-reference.json`), JSON.stringify({
+        scenario: suite.name, backend: 'mineflayer', source, error: String(error),
+        serverConfirmed: false, clientErrors, protocolWarnings,
+      }, null, 2) + '\n');
+      throw error;
+    }
+    const outcome = Object.fromEntries(Object.keys(suite.expected).map(key => [key, result[key]]));
+    assert.deepEqual(outcome, suite.expected);
+    const markers = suite.conditions.map(() => randomUUID());
+    const messages = await consoleCommands(suite.conditions.map((condition, index) =>
+      `execute ${condition} run say ${markers[index]}`));
+    assert(markers.every(marker => messages.some(message => message.includes(marker))),
+      `Server must independently confirm ${suite.name}`);
+    const report = { scenario: suite.name, backend: 'mineflayer', minecraft: '1.21.1',
+      mineflayer: '4.39.0', pathfinder: '2.4.5', source,
+      sourceSha256: createHash('sha256').update(source).digest('hex'),
+      result, outcome, serverConfirmed: true, confirmations: { markers, messages }, clientErrors, protocolWarnings,
+      limitations: ['Compare outcomes, not native-player coordinates or timing. No protocol schema patches.'] };
+    await writeFile(join(directory, `${suite.name}-reference.json`), JSON.stringify(report, null, 2) + '\n');
+    console.log(JSON.stringify({ scenario: suite.name, outcome, serverConfirmed: true }));
+  }
 }
 
 try {
@@ -83,4 +177,5 @@ try {
   abort.abort(new Error('Reference scenarios stopped'));
   bot.quit();
   await server.stop();
+  console.log = originalLog;
 }

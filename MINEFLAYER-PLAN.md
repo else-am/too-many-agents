@@ -17,6 +17,7 @@ Give Minecraft agents one unified, Mineflayer-compatible JavaScript API, includi
 - Compatibility means agents can use the familiar API correctly, not exact reproduction of every upstream behavior. The user clarified that minor differences in coordinates, routes, timing and other incidental details are acceptable. Verify meaningful task outcomes with appropriate tolerances; do not spend effort matching irrelevant numerical precision or upstream quirks. Wrong targets, lost items, false success, broken ownership and continued actions after cancellation remain correctness failures.
 - Keep convenience extensions distinguishable from upstream methods. For example, do not silently make `bot.dig()` navigate if upstream requires the caller to approach first.
 - Scripts retain the body's permissions and physical limitations. Survival inventory, tools, reach, and timing still matter; scripting does not grant commands, teleportation, or unrestricted world editing.
+- The user confirmed keeping native Mob behavior: do not add player hunger/saturation, player respawn or a substitute player body. Health, death and immunity remain native observations/behavior; player-only mechanics are not prerequisites for this port.
 
 ## Architecture
 

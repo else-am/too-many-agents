@@ -64,9 +64,7 @@ links to documentation headings. In particular:
 Counts summarize canonical member/event/factory records, including pending
 review; they are **not completion percentages**. Inherited aliases, data-shape
 records, and private/source-only candidates are separately indexed. The only
-current inapplicable entries are `createBot`, `Bot.connect`, `Bot.end`, `Bot.quit`,
-and `Bot._client`. The pinned source defines end/quit as socket disconnection;
-they fall under the plan's connection-API exclusion, not gameplay cancellation.
+Reviewed exclusions cover connection/account/socket methods, the internal packet client and resource-pack negotiation. The user also chose native Mob mechanics: self-player metadata, hunger/saturation, player respawn and the client player-physics predictor/toggle are inapplicable. Actual body identity, health, item use, motion and dominant-hand settings remain applicable. Exact keys and source reasons are in coverage.json.
 Nothing else is silently excluded because it is unimplemented or unclear.
 
 ## Locate current implementation
@@ -123,13 +121,13 @@ attach `evidence` IDs and executable `scenarios` paths, and review the reports.
 The generator requires verified passing **native-integration and live-reference**
 evidence; a library-only pass cannot promote a full native gameplay API. Pending
 members remain pending by default. Applicability changes require explicit review;
-the generator permits only those five reviewed connection/internal-client exclusions.
+the generator permits only the explicitly reviewed native-body and connection exclusions.
 
 Current implementation and native-verification gaps are tracked in
 [the handoff checklist](../../MINEFLAYER-STATUS.md). Recent ports awaiting native
 checks, remaining world/chunk methods, body-versus-player semantics and broader
 Pathfinder execution/lifecycle remain review priorities. Source-only fields and declaration contradictions
-are in the generated review queues. Paired live-reference runs remain absent.
+are in the generated review queues. The shared gather procedure now has an actual live reference pass and historical native outcome match. Wider paired coverage remains incomplete.
 
 ## Reference server (separate, not authorized by catalog generation)
 
@@ -139,8 +137,7 @@ and `npm --prefix tools/mineflayer-reference run prepare` prepare the harness.
 Preparation downloads the official server, checks its SHA-1, and preserves an
 existing EULA choice; otherwise it writes `eula=false`.
 
-Do not start it until the user accepts [Minecraft's EULA](https://www.minecraft.net/en-us/eula)
-and sets `eula=true` in `run/mineflayer-reference/eula.txt`. The authorized
+The user explicitly accepted [Minecraft's EULA](https://www.minecraft.net/en-us/eula) in this thread on October 7, 2026; the local prepared `eula.txt` records that choice. New environments still require an actual accepted EULA file before startup. The authorized
 `npm --prefix tools/mineflayer-reference run check` command starts its own server
 on `127.0.0.1:25575`, uses offline authentication and a disposable world, executes
 `gather.js`, independently checks server block/inventory state, writes
@@ -164,3 +161,11 @@ UUIDs. Re-observe and deliberately prepare prerequisites before any future run.
 Some scripts require coordinated native changes while listeners wait. Reports
 remain under ignored `run/mineflayer-reference/`; another checkout without them
 correctly reports unverified evidence. No live tests are run by catalog generation.
+
+## Recorded live reference outcomes
+
+The shared gather procedure passed on unmodified pinned Mineflayer/Pathfinder and the isolated vanilla 1.21.1 server: ore air, diamond1, pickaxe held; server NBT/block checks independently confirmed it. The identical historical native script produced the same result. The first harness inventory selector missed hotbar slots and was corrected to inspect Inventory NBT.
+
+The exact previously native-tested wall script completed all eight server placements and consumed all stone, but its immediate final inventory assertion failed in Mineflayer; reopening the saved reference world confirmed the blocks and consumption. The gather/craft script also failed its final assertion; saved player data contained axe damage2 and planks7, not the native-tested planks4/sticks8 outcome. These are recorded failed reference procedures, not port regressions or passes. No failed phase was replayed for a better result. Startup also logged an upstream ArmorTrimMaterial PartialReadError; no library schema was silently patched.
+
+`npm run check -- --building` requests both prepared building procedures. `--craft` first independently inspects the preceding saved wall attempt, then runs only the unreached craft procedure. The reports retain exact source and limitations. These flags are fixture-specific, not automatic retries.
