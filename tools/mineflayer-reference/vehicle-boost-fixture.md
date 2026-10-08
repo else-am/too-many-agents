@@ -65,3 +65,8 @@ restore known equipment/selection/belongings; preserve actual boost cost.
 Source review: /Users/scott/.bb/thread-storage/thr_6qrtxjgv3m/vehicle-boost-review-0322b48.md.
 No production edits, extra native API/dev hook or vehicle-native-scenarios.md
 section change belongs to this preparation.
+
+
+## Selected live result (3d4043d)
+
+Packaged 3d4043d PASS: negative unsaddled mounted native PASS with boost0/damage0; positive after gated saddle restore totalboost335/damage7, sole actualbody rider and 2.7471-block motion. Damaged named stick preserved in result barrel; original belongings restored. Evidence vehicle-boost-evidence-92ce0990.json. All dimensions saved; exact PID16206 stopped. Full evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/3d4043d-summary.json`.

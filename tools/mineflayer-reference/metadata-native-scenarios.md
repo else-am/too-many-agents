@@ -135,3 +135,8 @@ repeat that proof. The own-body case checks duplicate suppression and
 authoritative inventory gain. This proposed reuse is specifically validation
 of the new event-time metadata overlay, not a general collection rerun.
 No live run, new collection script or production edit was made here.
+
+
+## Selected live result (3d4043d)
+
+Packaged 3d4043d PASS: genuinely absent initial flag key -> native sneak2 -> retained default0; stable Entity/metadata, hydrated callbacks, no replay/inventory changes. Exact evidence metadata-default-evidence-9b2a7e37.json. All dimensions saved; exact PID16206 stopped. Full evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/3d4043d-summary.json`.

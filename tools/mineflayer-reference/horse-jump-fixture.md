@@ -86,3 +86,8 @@ infer native success merely from a jump animation or a successful control reques
 This script's normal success explicitly clears inputs/dismounts; a failed call
 must be diagnosed from its retained state before any separately authorized cleanup.
 No speed, velocity, jump scale, teleport or health manipulation occurs in the script.
+
+
+## Selected live result (3d4043d)
+
+Packaged 3d4043d PASS: fresh normal-AI saddled Horse49c1d7be-e76a-4fa3-a87c-d85066386f1d, grounded hold12 then native release/ascent1.976798/descent/supported landing, sole actualbody rider; ordinary dismount/health/inventory preserved. Native final Health53, OnGround1, saddle/tame retained/noPassengers; transient native passenger snapshot not captured. Evidence horse-jump-evidence-b6d46870.json. All dimensions saved; exact PID16206 stopped. Full evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/3d4043d-summary.json`.

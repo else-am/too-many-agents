@@ -4666,6 +4666,28 @@
           "code"
         ]
       }
+    },
+    "horse-jump-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/horse-jump-3d4043d.js",
+      "subjects": [
+        "mineflayer.Bot.setControlState",
+        "mineflayer.Bot.moveVehicle",
+        "mineflayer.Bot.mount",
+        "mineflayer.Bot.dismount"
+      ],
+      "scope": "Packaged 3d4043d: one fresh saddled horse, grounded 12-tick charge, native release/ascent/descent/supported landing and dismount; rise 1.9768 blocks. Guest trace shows sole body rider; native final health/ground/saddle/no passengers confirmed. No transient independent passenger capture or other horse-family trajectory claim.",
+      "testedRevision": "3d4043d",
+      "result": "passed",
+      "sourceSha256": "856a8c884fa83a7223c45e006fbc3b9465d59368fb39fb0089ad2dc2a9a967b7",
+      "report": {
+        "path": "run/mineflayer-reference/horse-jump-native-recorded.json",
+        "sha256": "8de3e21ac0f1939816346fb7decbb5d134d71eceef8665bf7ec6b319d3242d0b",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {

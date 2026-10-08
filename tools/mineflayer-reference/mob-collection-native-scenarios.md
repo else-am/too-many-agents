@@ -67,3 +67,8 @@ Native HandItems, removed tagged drops and body inventory confirmed the results.
 bot.username was ScriptProbe, matching the native body's name. The script used
 2 completed requests, 34 updates and 8 bridge operations (1755 ms script,
 2266 ms tool). No XP/arrow, other-species or overflow cases ran.
+
+
+## Selected live result (3d4043d)
+
+Packaged 3d4043d PASS closes new raw-metadata dependency: Fox captured original named paper1 and own-body duplicate suppression/hydrated gain; exactly2 callbacks. Native Fox HandItems/body inventory verified. Evidence mob-collection-evidence-65b2bc53.json. All dimensions saved; exact PID16206 stopped. Full evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/3d4043d-summary.json`.
