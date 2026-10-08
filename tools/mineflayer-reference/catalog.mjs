@@ -366,6 +366,7 @@ const exclusions = new Set(['mineflayer.createBot', 'mineflayer.Bot.connect',
   // User confirmed native Mob mechanics without a substitute player/predictor.
   'mineflayer.Bot.player', 'mineflayer.Bot.food', 'mineflayer.Bot.foodSaturation',
   'mineflayer.Bot.respawn', 'mineflayer.Bot.physics', 'mineflayer.Bot.physicsEnabled',
+  'mineflayer.Bot.jumpQueued', 'mineflayer.Bot.jumpTicks',
   'mineflayer.Bot.acceptResourcePack', 'mineflayer.Bot.denyResourcePack',
   'mineflayer.BotEvents.resourcePack']);
 // Reviewed PC1.21.1 data contracts: no native observation or action is involved.

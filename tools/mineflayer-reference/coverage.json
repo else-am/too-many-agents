@@ -1844,6 +1844,14 @@
       "evidence": [
         "chat-library"
       ]
+    },
+    "mineflayer.Bot.jumpQueued": {
+      "status": "inapplicable",
+      "reason": "User chose native Mob behavior without a player physics predictor. This is prismarine-physics PlayerState pending-jump latch, copied from/to bot during local player simulation; native Mob jumping remains controlled through setControlState, not a synthetic predictor field. Source: mineflayer/lib/plugins/physics.js:25\u201326,253; prismarine-physics/index.js:721\u2013741,818\u2013819,864\u2013865."
+    },
+    "mineflayer.Bot.jumpTicks": {
+      "status": "inapplicable",
+      "reason": "User chose native Mob behavior without a player physics predictor. This is prismarine-physics PlayerState autojump cooldown, copied from/to bot during local player simulation; native Mob jumping remains controlled through setControlState, not a synthetic predictor field. Source: mineflayer/lib/plugins/physics.js:25\u201326,253; prismarine-physics/index.js:721\u2013741,818\u2013819,864\u2013865."
     }
   },
   "schemaVersion": 2,
