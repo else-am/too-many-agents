@@ -63,3 +63,12 @@ The native gate rejects absent bodies, inactive scripts and anything other than
 the current completed look. The fixture sends six actual packets to the existing
 proxy and one negative-control title to a temporary unregistered FakePlayer. It
 neither moves the body nor opens a screen. Both send overloads are exercised.
+
+
+Focused packaged result: implementation `4d7e8b9` started without mixin errors.
+The guarded fixture sent six packets plus the unrelated-recipient negative
+control after new completed look `6d4829fd...`. The exact guest script passed:
+five events in native order, hydrated stable tab-list/ChatMessages, no replay and
+unchanged inventory. One request, 10 updates, five bridge operations; invocation
+2026-10-08 02:23:41.526–02:23:42.597 UTC. Wider lifecycle cases remain unrun.
+[Guest evidence](</Users/scott/.bb/thread-storage/presentation-evidence-dfdc3716.json>).
