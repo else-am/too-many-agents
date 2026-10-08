@@ -54,8 +54,9 @@ The installed Mineflayer package was subsequently compared file-for-file with
 the lockfile's npm tarball after verifying its SHA-512 integrity. All packaged
 files matched (4.39.0); no installed-file drift was found. Evidence:
 `/Users/scott/.bb/thread-storage/mineflayer-installed-integrity.json`.
-The opt-in `--craft-trace` harness now records the missing transitions on a future
-single diagnostic execution; it is prepared, not executed evidence.
+The opt-in `--craft-trace` harness was then used for the single diagnostic
+execution below. Its failed report is indexed as `reference-craft-diagnostic`
+with scenario, executed-source and report integrity checks.
 
 ## Executed diagnostic: 2026-10-08 05:49 UTC
 

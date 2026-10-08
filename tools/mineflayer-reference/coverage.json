@@ -3443,6 +3443,25 @@
         ]
       },
       "limitations": "One fixed note fixture; not instrument or event-source cross-product."
+    },
+    "reference-craft-diagnostic": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/performance-gather-craft.js",
+      "subjects": [
+        "mineflayer.Bot.craft",
+        "mineflayer.Bot.dig"
+      ],
+      "scope": "One source-fingerprinted diagnostic of the shared gather/craft procedure. Failed final assertion with 49 retained click/inventory transitions; demonstrates reference prediction/resynchronization interleaving, not a passing equivalence comparison.",
+      "result": "failed",
+      "sourceSha256": "b4c8048839a1ac716c01fe2de18be18b96b96718ed0916a4f07e0da8e401e665",
+      "report": {
+        "path": "run/mineflayer-reference/craft-trace-1791438550854.json",
+        "sha256": "f01ddabc7521726df1ca8e17360522fd72501329f0eee441f1199c01b9498a70",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "No upstream patch, native rerun or click retry. Final full-window packet includes grid/cursor; independent player NBT establishes storage only. Does not establish the exact sequence of the older reference failure."
     }
   },
   "reviewNotes": {
@@ -3463,6 +3482,7 @@
     "mineflayer.BotEvents.itemDrop": "Implemented for changed nonempty native dropped-item Slots after hydration, not arbitrary firework/display item_stack metadata. Initial state is silent and current observations win over captured event records. Full build passed; native verification pending.",
     "mineflayer.BotEvents.forcedMove": "Implemented accepted native teleport overloads, same-level dimension transitions and affected active passengers at 11ea771. RandomTeleport trial/rollback is atomic; nested operations do not duplicate events, no-op/ordinary motion does not invent correction packets. Existing bounded queue and captured lease enforce scope; zero-argument callback follows full hydration. Full build passed; packaged mixin/live delivery pending. See forced-move-scenarios.md.",
     "prismarine-world.World": "Bounded source audit at 39853c1: the selected prismarine-world/src/world.js is directly bundled by columns.mjs, retaining all public async methods, storage/generator callbacks and sync reference. Overrides are guest-local save queue retention/draining and corrected bounded ray geometry. Providers have no host filesystem/native world authority. No absent public method established; source review does not establish every runtime path. See world-cache-scenarios.md. Audit79990c1 found public sync reads resurrecting a guest-unloaded column through bot.blockAt fallback. b21ce69 routes World reads through its own column cache, leaving bot.blockAt native observations separate. Full build passed; runtime check is prepared.",
-    "prismarine-entity.Entity.count": "For native ExperienceOrb only, observations now expose getValue() as count and type orb, matching the pinned experience-orb spawn handler. Native internal merged count is deliberately not used. See entity-events-native-scenarios.md. Subsequently verified on packaged52ca8d0: actual native Value7/Count3 yielded public count7/type orb, stable identity. Pickup is still unverified; see registry-orb-native."
+    "prismarine-entity.Entity.count": "For native ExperienceOrb only, observations now expose getValue() as count and type orb, matching the pinned experience-orb spawn handler. Native internal merged count is deliberately not used. See entity-events-native-scenarios.md. Subsequently verified on packaged52ca8d0: actual native Value7/Count3 yielded public count7/type orb, stable identity. Pickup is still unverified; see registry-orb-native.",
+    "mineflayer.Bot.craft": "Native output authority and ordered action barriers intentionally differ from pinned optimistic slot writes. The retained reference-craft-diagnostic failed with an actual output-pickup/resynchronization interleaving; see reference-failure-review.md. Preserve this failure and compare the documented task outcome, not the upstream defect. Full member coverage remains pending."
   }
 }
