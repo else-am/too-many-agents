@@ -2736,13 +2736,541 @@
     "prismarine-chunk.BedrockChunk.z": {
       "status": "inapplicable",
       "reason": "Bedrock-only Chunk class from prismarine-chunk/types/index.d.ts:107\u2013215. The agreed Minecraft Java Edition1.21.1 pin selects src/pc/1.18/ChunkColumn.js (chunks.mjs); upstream src/index.js separates pc and bedrock factories. Corresponding PCChunk/shared APIs remain independently applicable."
+    },
+    "prismarine-windows.Window.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.findItemRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.findItemsRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.findItemRangeName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.findInventoryItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.findContainerItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.firstEmptySlotRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.lastEmptySlotRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.firstEmptyHotbarSlot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.firstEmptyContainerSlot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.firstEmptyInventorySlot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.sumRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.countRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.itemsRange": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.count": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.containerCount": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.items": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.containerItems": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.emptySlotCount": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.transactionRequiresConfirmation": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.updateSlot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptOutsideWindowClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptInventoryClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptNonInventorySwapAreaClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptSwapAreaLeftClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptSwapAreaRightClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.acceptCraftingClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.fillAndDump": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.fillSlotsWithItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.fillSlotWithItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.splitSlot": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.fillSlotWithSelectedItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.swapSelectedItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.clear": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.mouseClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.shiftClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.numberClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.middleClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.dropClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.dropSelectedItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.dumpItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.dragClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
+    },
+    "prismarine-windows.Window.doubleClick": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Synchronous local Window model over supplied Items, exercised directly or through click dispatch in the existing216-case differential and20-correction suite. This is not an authoritative native click; close/deposit/withdraw and observed slot data remain separate. Modes5/6 preserve explicit unsupported behavior.",
+      "scenarios": [
+        "tools/mineflayer-reference/windows.mjs"
+      ],
+      "evidence": [
+        "window-library"
+      ]
     }
   },
   "schemaVersion": 2,
   "evidencePolicy": {
     "results": "Recorded passed and failed outcomes require matching scenario/report hashes. Missing or changed artifacts become unverified; verified failures remain failed. not-recorded means executable indexed without a durable run.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block/Item calculations, local Entity accessors and guest EventEmitter registration/dispatch can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block/Item calculations, local Entity accessors and guest EventEmitter registration/dispatch and the synchronous local Window model can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
@@ -2795,8 +3323,13 @@
         "prismarine-windows.WindowsExports",
         "events.EventEmitter"
       ],
-      "scope": "Window layouts/queries/clicks/events in QuickJS; named upstream corrections checked separately. No authoritative native click proof.",
-      "result": "not-recorded"
+      "scope": "Existing216 pinned Window differential scenarios plus20 documented/native-source corrections in bundled QuickJS. Local layouts, queries, click simulation, component preservation and local slot callbacks; no native menu mutation or permission evidence.",
+      "result": "passed",
+      "sourceSha256": "7750db109017bebc56c54cbdfafdba1abf2c54728fdda23bb60b7c591e64bd64",
+      "report": {
+        "path": "run/mineflayer-reference/windows-library.txt",
+        "sha256": "c1a2fcfc2253ccd71a37f398fcf1cbe1f60eab1092f498b2f6d66c2dd0f232d0"
+      }
     },
     "raycast-library": {
       "kind": "library-differential",

@@ -272,3 +272,10 @@ emit, off, removeAllListeners, setMaxListeners, prependOnceListener and
 getMaxListeners. This verifies local listener behavior, including symbols and
 unhandled error emission. It does not verify any Minecraft event producer or
 promote static emitter helpers or unexercised methods.
+
+The Window suite records 216 differential scenarios and 20 explicit correction
+cases in QuickJS. Reviewed synchronous local-model methods (queries, local slot
+updates and click simulation) use that library evidence. Native close/deposit/
+withdraw, menu generation, slot predicates and observed contents remain separate.
+Calling a local Window method does not submit a server click or prove inventory
+mutation. Modes 5/6 retain the pinned implementation's unsupported failures.

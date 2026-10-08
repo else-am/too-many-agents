@@ -500,7 +500,54 @@ const pureEmitterContracts = new Set([
   'rawListeners', 'emit', 'off', 'removeAllListeners', 'setMaxListeners',
   'prependOnceListener', 'getMaxListeners',
 ].map(name => `events.EventEmitter.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts]);
+// Window's synchronous local model is separate from native inventory operations.
+const pureWindowContracts = new Set([
+  "constructor",
+  "findItemRange",
+  "findItemsRange",
+  "findItemRangeName",
+  "findInventoryItem",
+  "findContainerItem",
+  "firstEmptySlotRange",
+  "lastEmptySlotRange",
+  "firstEmptyHotbarSlot",
+  "firstEmptyContainerSlot",
+  "firstEmptyInventorySlot",
+  "sumRange",
+  "countRange",
+  "itemsRange",
+  "count",
+  "containerCount",
+  "items",
+  "containerItems",
+  "emptySlotCount",
+  "transactionRequiresConfirmation",
+  "updateSlot",
+  "acceptClick",
+  "acceptOutsideWindowClick",
+  "acceptInventoryClick",
+  "acceptNonInventorySwapAreaClick",
+  "acceptSwapAreaLeftClick",
+  "acceptSwapAreaRightClick",
+  "acceptCraftingClick",
+  "fillAndDump",
+  "fillSlotsWithItem",
+  "fillSlotWithItem",
+  "splitSlot",
+  "fillSlotWithSelectedItem",
+  "swapSelectedItem",
+  "clear",
+  "mouseClick",
+  "shiftClick",
+  "numberClick",
+  "middleClick",
+  "dropClick",
+  "dropSelectedItem",
+  "dumpItem",
+  "dragClick",
+  "doubleClick"
+].map(name => `prismarine-windows.Window.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
