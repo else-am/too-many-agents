@@ -1,3 +1,5 @@
+import { createChunkClass } from './chunks.mjs';
+import { installColumns } from './columns.mjs';
 import { installBossBars } from './boss-bars.mjs';
 import { installScoreboards } from './scoreboard.mjs';
 import { installExplosion } from './explosion.mjs';
@@ -43,7 +45,19 @@ export function createBot(initial) {
     items: Object.fromEntries(data.itemsArray.map(item => [item.id, item])),
     entitiesByName: Object.fromEntries(data.entitiesArray.map(entity => [entity.name, entity])),
   };
+  const biomeNames = initial.itemRegistries.references['minecraft:worldgen/biome'];
+  if (biomeNames) {
+    const byName = Object.fromEntries(data.biomesArray.map(biome => [biome.name, biome]));
+    registry.biomesArray = biomeNames.map((name, id) => {
+      const biome = byName[name?.replace(/^minecraft:/, '')];
+      if (!biome) throw new Error(`Unsupported native biome registry entry: ${name}`);
+      return { ...biome, id };
+    });
+  }
+  registry.biomes = Object.fromEntries(registry.biomesArray.map(biome => [biome.id, biome]));
+  registry.biomesByName = Object.fromEntries(registry.biomesArray.map(biome => [biome.name, biome]));
   const Block = createBlockClass(registry);
+  const ChunkColumn = createChunkClass(registry, Block);
   const Item = createItemClass(registry);
   const ChatMessage = createChatMessageClass(registry);
   const Entity = createEntityClass(registry, { Item, ChatMessage });
@@ -79,10 +93,12 @@ export function createBot(initial) {
       const p = position.floored();
       const { min, size, states } = snapshot.blocks;
       const x = p.x - min[0], y = p.y - min[1], z = p.z - min[2];
-      if (x < 0 || y < 0 || z < 0 || x >= size[0] || y >= size[1] || z >= size[2]) return null;
+      if (x < 0 || y < 0 || z < 0 || x >= size[0] || y >= size[1] || z >= size[2]) return columns.getBlock(p, extraInfos);
       const index = (y * size[2] + z) * size[0] + x;
       const stateId = states[index];
       if (stateId === -1) return null;
+      const complete = columns.getBlock(p, extraInfos);
+      if (complete) return complete;
       const block = Block.fromStateId(stateId, snapshot.blocks.biomes[index]);
       block.position = p;
       block.light = snapshot.blocks.light[index] & 15;
@@ -134,7 +150,10 @@ export function createBot(initial) {
   const bossBars = installBossBars(bot, ChatMessage);
   Object.defineProperty(bot, 'heldItem', { get: () => bot.inventory.slots[36 + bot.quickBarSlot] });
   bot.world = createWorldView(position => bot.blockAt(position));
+  const columns = installColumns(bot, ChunkColumn);
   installWorldQueries(bot, { getLoadedBounds() {
+    const full = columns.bounds();
+    if (full) return full;
     const { min, size } = snapshot.blocks;
     return { min: new Vec3(...min), max: new Vec3(...min.map((value, axis) => value + size[axis])) };
   } });
@@ -158,6 +177,10 @@ export function createBot(initial) {
   async function waitForActionState(result) {
     if (snapshot.completedActionSequence < result.sequence)
       await new Promise(resolve => { stateWaits.add({ sequence: result.sequence, resolve }); });
+  }
+  function changesFromColumns(incoming, changed) {
+    const seen = new Set(changed.map(([, p]) => p.toString()));
+    for (const entry of incoming) if (!seen.has(entry[1].toString())) changed.push(entry);
   }
   function update(next, streamed = false) {
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
@@ -194,6 +217,9 @@ export function createBot(initial) {
         }
       }
     }
+    const columnUpdate = columns.update(next.columnView, streamed, trackBlocks, next.blocks);
+    changesFromColumns(columnUpdate.changes, changed);
+    columns.patchLocal(next.blocks);
     snapshot = next;
     bot.nativeBody = next.nativeBody;
     const present = new Set();
@@ -381,6 +407,7 @@ export function createBot(initial) {
     for (const event of stateEvents) bot.emit(...event);
     for (const event of scoreEvents) bot.emit(...event);
     for (const event of bossEvents) bot.emit(...event);
+    for (const event of columnUpdate.events) { bot.world.emit(...event); bot.emit(...event); }
     for (const [before, position] of changed) {
       const after = bot.blockAt(position);
       bot.world.emit('blockUpdate', before, after);
@@ -456,5 +483,5 @@ export function createBot(initial) {
   installRecipeQueries(bot, recipeFactory);
   installExplosion(bot);
   return { bot, Vec3, goals, Movements, Block, Item, Entity, ChatMessage,
-    BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
+    ChunkColumn, BossBar: bossBars.BossBar, MessageBuilder: ChatMessage.MessageBuilder, ...recipeFactory, update, drainControls };
 }

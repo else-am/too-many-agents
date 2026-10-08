@@ -64,6 +64,7 @@ final class AgentActions {
     private Supplier<JsonObject> stateSnapshot;
     private long snapshotRevision;
     private long actionSequence, completedActionSequence;
+    ScriptColumns columns;
 
     AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
                  java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete) {
@@ -92,6 +93,7 @@ final class AgentActions {
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
         scriptId = id;
+        columns = new ScriptColumns();
         lastScriptId = id;
         snapshotRevision = 0;
         scriptDeadline = System.nanoTime() + timeoutMs * 1_000_000L;
@@ -118,6 +120,7 @@ final class AgentActions {
 
     void releaseScript() {
         scriptId = null;
+        columns = null;
         creativeFlying = false;
         stopElytraFlight();
         messages.clear(); messageSize = 0;
@@ -324,6 +327,7 @@ final class AgentActions {
 
     void close(String reason) {
         scriptId = null;
+        columns = null;
         creativeFlying = false;
         stopElytraFlight();
         clearControls();

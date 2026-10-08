@@ -11,6 +11,8 @@ import net.minecraft.world.level.block.Block;
 /** A bounded, loaded-only block view, copied on the server thread. */
 final class ScriptSnapshot {
     private JsonObject previousBlocks;
+    private JsonObject previousColumns;
+    private String previousDimension;
 
     JsonObject frame(JsonObject snapshot) {
         var blocks = snapshot.getAsJsonObject("blocks");
@@ -32,6 +34,19 @@ final class ScriptSnapshot {
                 snapshot.add("blocks", JsonState.object("changes", changes, "entities", blocks.get("entities")));
         }
         previousBlocks = blocks;
+        var view = snapshot.getAsJsonObject("columnView");
+        var columns = view.getAsJsonObject("columns");
+        if (previousColumns != null && view.get("dimension").getAsString().equals(previousDimension)) {
+            var changedColumns = new JsonObject();
+            var removed = new JsonArray();
+            for (var entry : columns.entrySet())
+                if (!entry.getValue().equals(previousColumns.get(entry.getKey()))) changedColumns.add(entry.getKey(), entry.getValue());
+            for (var key : previousColumns.keySet()) if (!columns.has(key)) removed.add(key);
+            snapshot.add("columnView", JsonState.object("changes", changedColumns, "removed", removed,
+                "minY", view.get("minY"), "worldHeight", view.get("worldHeight"), "dimension", view.get("dimension")));
+        }
+        previousColumns = columns;
+        previousDimension = view.get("dimension").getAsString();
         return snapshot;
     }
 
@@ -56,7 +71,8 @@ final class ScriptSnapshot {
                         int index = states.size();
                         var state = level.getBlockState(position);
                         states.add(Block.getId(state));
-                        biomes.add(biomeRegistry.getId(level.getBiome(position).value()));
+                        // The chunk API exposes the transmitted quart biome palette.
+                        biomes.add(biomeRegistry.getId(level.getNoiseBiome(x >> 2, y >> 2, z >> 2).value()));
                         light.add(level.getBrightness(LightLayer.BLOCK, position)
                             | level.getBrightness(LightLayer.SKY, position) << 4);
                         if (state.hasBlockEntity()) {

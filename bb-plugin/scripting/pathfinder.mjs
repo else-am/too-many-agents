@@ -110,15 +110,39 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
 
   function runRoute(nodes) {
     let count = 0, edits = 0;
-    while (count < Math.min(nodes.length, 128)) {
-      const next = nodes[count].toBreak.length + nodes[count].toPlace.length;
-      if (edits + next > 128) break;
-      edits += next; count++;
+    const padding = Math.ceil(bot.entity.width / 2) + 2;
+    const top = Math.ceil(bot.entity.height) + 2;
+    let low = bot.entity.position.floored(), high = low.clone();
+    function extend(point, min, max) {
+      min.x = Math.min(min.x, Math.floor(point.x)); min.y = Math.min(min.y, Math.floor(point.y)); min.z = Math.min(min.z, Math.floor(point.z));
+      max.x = Math.max(max.x, Math.floor(point.x)); max.y = Math.max(max.y, Math.floor(point.y)); max.z = Math.max(max.z, Math.floor(point.z));
     }
-    if (!count) { stop(error('NoPath', 'A single route edge exceeds the native edit limit')); return; }
+    while (count < Math.min(nodes.length, 128)) {
+      const node = nodes[count], next = node.toBreak.length + node.toPlace.length;
+      if (edits + next > 128) break;
+      const min = low.clone(), max = high.clone();
+      extend(node, min, max);
+      for (const point of node.toBreak) extend(point, min, max);
+      for (const point of node.toPlace) {
+        extend(point, min, max);
+        extend({ x: point.x + (point.dx ?? 0), y: point.y + (point.dy ?? 0), z: point.z + (point.dz ?? 0) }, min, max);
+      }
+      const cells = (max.x - min.x + padding * 2 + 1) * (max.y - min.y + top + 3) * (max.z - min.z + padding * 2 + 1);
+      if (cells > 65536) break;
+      low = min; high = max; edits += next; count++;
+    }
+    if (!count) { stop(error('NoPath', 'A single route edge exceeds the native snapshot/edit limit')); return; }
+    const min = [low.x - padding, low.y - 2, low.z - padding];
+    const size = [high.x - low.x + padding * 2 + 1, high.y - low.y + top + 3, high.z - low.z + padding * 2 + 1];
+    const states = [];
+    for (let y = min[1]; y < min[1] + size[1]; y++) for (let z = min[2]; z < min[2] + size[2]; z++) for (let x = min[0]; x < min[0] + size[0]; x++) {
+      const position = new Vec3(x, y, z);
+      const state = bot.world?.getBlockStateId ? bot.world.getBlockStateId(position) : bot.blockAt(position, false)?.stateId;
+      states.push(state ?? -1);
+    }
+    const blocks = { min, size, states };
     const active = { epoch, id: null, cancelled: false, terminal: false, stopSent: false, control: null };
     route = active;
-    const { blocks } = snapshot();
     const scaffold = movements.getScaffoldingItem();
     const selected = nodes.slice(0, count).map(node => ({
       ...node,

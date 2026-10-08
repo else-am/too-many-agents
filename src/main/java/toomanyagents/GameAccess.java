@@ -765,6 +765,7 @@ final class GameAccess {
         snapshot.add("nativeBody", ScriptNavigation.capabilities(mob));
         snapshot.add("action", controller.status(""));
         snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
+        snapshot.add("columnView", controller.columns.snapshot(level, mob, controller.completedActionSequence()));
         snapshot.addProperty("minY", mob.level().getMinBuildHeight());
         snapshot.addProperty("height", mob.level().getHeight());
         snapshot.addProperty("revision", controller.nextSnapshotRevision());

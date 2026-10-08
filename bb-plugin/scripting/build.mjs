@@ -1,4 +1,6 @@
 import { build } from 'esbuild';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 import minecraftData from 'minecraft-data';
 import { fileURLToPath } from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
@@ -12,7 +14,7 @@ const featureTable = Object.fromEntries(features.map(({ name }) => [name, regist
 const data = JSON.stringify({
   featureTable,
   protocolVersion: registry.version.version, majorVersion: registry.version.majorVersion,
-  blocksArray: registry.blocksArray, itemsArray: registry.itemsArray,
+  blocksArray: registry.blocksArray, itemsArray: registry.itemsArray, biomesArray: registry.biomesArray,
   blockCollisionShapes: registry.blockCollisionShapes,
   materials: registry.materials, effectsByName: registry.effectsByName,
   enchantmentsByName: registry.enchantmentsByName, language: registry.language,
@@ -22,6 +24,7 @@ const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./state.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./chunks.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./movements-LICENSE.txt', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./planning.LICENSE', import.meta.url), 'utf8'));
@@ -37,7 +40,7 @@ licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'u
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
 licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
-for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events']) {
+for (const name of ['mineflayer-pathfinder', 'minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
   let license;
@@ -56,6 +59,8 @@ await build({
   outfile: fileURLToPath(new URL('../dist/scripting/bot.js', import.meta.url)),
   bundle: true, platform: 'browser', format: 'iife', globalName: 'MinecraftBot', target: 'es2022',
   legalComments: 'eof', keepNames: true,
+  alias: { buffer: require.resolve('buffer/') },
+  inject: [fileURLToPath(new URL('./buffer-inject.mjs', import.meta.url))],
   plugins: [{ name: 'minecraft-version-data', setup(build) {
     build.onResolve({ filter: /^minecraft-item-transport$/ }, () => ({ path: 'revive', namespace: 'minecraft-item-transport' }));
     build.onLoad({ filter: /.*/, namespace: 'minecraft-item-transport' }, () => ({ contents: `export const decodeItemTransport = ${decodeItemTransport.toString()}; export const encodeItemTransport = ${encodeItemTransport.toString()};`, loader: 'js' }));

@@ -65,7 +65,7 @@ final class ScriptItems {
         result.add("components", names(BuiltInRegistries.DATA_COMPONENT_TYPE));
         var references = new JsonObject();
         var needed = Set.of("enchantment", "potion", "mob_effect", "attribute", "block", "sound_event",
-            "instrument", "trim_material", "trim_pattern", "armor_material", "banner_pattern", "jukebox_song");
+            "instrument", "trim_material", "trim_pattern", "armor_material", "banner_pattern", "jukebox_song", "worldgen/biome");
         level.registryAccess().registries().forEach(entry -> {
             if (entry.key().location().getNamespace().equals("minecraft") && needed.contains(entry.key().location().getPath()))
                 references.add(entry.key().location().toString(), names(entry.value()));
