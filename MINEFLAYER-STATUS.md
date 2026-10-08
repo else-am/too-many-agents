@@ -6,10 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`0d972c0`**, adding native-body elytra rockets and actual boost-duration observations. Flight/boost verification is assigned; wider animation/status types remain unverified.
-- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `60471b31b674f49d75f7d7126dcff5cf01ef2c3acf27e9f9e57b1a27a977b028`.
+- Latest built implementation: **`042cc01`**, ordering tick waits after preceding native controls. Native-body elytra rockets and actual boost-duration observations are implemented; flight/boost verification is assigned.
+- Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`.
 - Latest focused native pass: **`53dadd0`**, two actual arm swings, one hydrated apple-consumption event and a natural landing particle. Completion permission filtering and sign events passed on `35e8a4f`. Previous chat/scoreboard checks passed on `53dd7ca`, columns on `26aea35`; earlier evidence is linked below.
-- Test JVM `70727` on `53dadd0` saved/disconnected with all dimensions saved, then stopped. Tester owns packaged `0d972c0`, JVM `78120`. Its first flight check stopped before takeoff; setup/control timing is under investigation, with no gliding or rocket outcome claimed. The completed signal check completed 7/7 requests, 100 updates and 17 bridge operations in 5,580 ms using Codex 6.1 Sol low.
+- Test JVM `70727` on `53dadd0` saved/disconnected with all dimensions saved, then stopped. Tester is saving/stopping `0d972c0` JVM `78120`, then owns the narrow rebuilt `042cc01` check. The first flight check stopped before flight/use: tick waits raced queued controls. Fourteen requests completed, the rocket remained intact and release was confirmed. No flight/boost outcome is claimed; the ordering fix compiles and awaits that focused check. The completed signal check completed 7/7 requests, 100 updates and 17 bridge operations in 5,580 ms using Codex 6.1 Sol low.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -21,7 +21,7 @@ Checked boxes mean the described implementation exists. Verification is listed s
 - [x] One `minecraft_run` call executes async JavaScript, loops and sequences against an existing native body.
 - [x] Isolated QuickJS worker, bounded memory/CPU/deadline/output; no guest filesystem, network, credentials or Node module loader.
 - [x] Thread/body/world ownership, expiring control lease, cancellation and cleanup; unknown outcomes abort without automatic replay.
-- [x] Ordered state stream; action promises wait for their authoritative state. Tick waits and synchronous control draining.
+- [x] Ordered state stream; action promises wait for their authoritative state. Tick waits and synchronous control draining. Positive tick waits now drain preceding controls before counting frames; focused rebuilt verification is pending.
 - [x] Stable Entity/Vec3 references, inventory/windows, held/equipped items and observed vehicle/passenger relationships.
 - [x] Typed Block, Item, Window, Entity, ChatMessage/MessageBuilder, Recipe/RecipeItem and Vec3 objects; component/NBT transport.
 - [x] Player lists and UUID/name mapping; stable game state; time, health, oxygen, weather, XP and version feature queries.
