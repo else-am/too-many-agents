@@ -135,6 +135,10 @@ export function createBot(initial) {
       });
     },
   });
+  // A stable view of observed Mob state; assignments cannot fake native settings.
+  Object.defineProperty(bot, 'settings', { enumerable: true, value: Object.freeze({
+    get mainHand() { return snapshot?.body.mainHand; },
+  }) });
   installEntityQueries(bot);
   bot._playerFromUUID = uuid => Object.values(bot.players).find(player => player.uuid === uuid);
   const updateState = installState(bot, data.featureTable);
@@ -198,6 +202,7 @@ export function createBot(initial) {
   const tablistKeys = {};
   bot.tablist = { header: new ChatMessage(''), footer: new ChatMessage('') };
   function update(next, streamed = false) {
+    if (!['left', 'right'].includes(next.body.mainHand)) throw new Error('Missing native body mainHand');
     if (snapshot && next.revision <= snapshot.revision) throw new Error('Minecraft state arrived out of order');
     for (const key of ['header', 'footer']) {
       const value = next.hands.tablist?.[key] ?? '';

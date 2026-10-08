@@ -425,6 +425,16 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return active.done;
   };
   const heldControls = { forward: false, back: false, left: false, right: false, jump: false, sprint: false, sneak: false };
+  bot.setSettings = options => {
+    need(options !== null && typeof options === 'object' && !Array.isArray(options),
+      'InvalidSettings', 'Settings must be an object');
+    const keys = Reflect.ownKeys(options);
+    need(keys.every(key => key === 'mainHand'), 'UnsupportedSetting', 'Only native mainHand settings are available');
+    if (keys.length === 0) return;
+    const mainHand = options.mainHand;
+    need(mainHand === 'left' || mainHand === 'right', 'InvalidMainHand', 'mainHand must be left or right');
+    control({ type: 'set_settings', settings: { mainHand } });
+  };
   bot.setControlState = (name, state) => {
     need(Object.hasOwn(heldControls, name) && typeof state === 'boolean', 'InvalidControl', 'Expected a control name and boolean state');
     if (heldControls[name] === state) return;

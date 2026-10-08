@@ -200,6 +200,11 @@ public final class AgentHands extends FakePlayer {
 
     @Override public MinecraftServer getServer() { return serverLevel().getServer(); }
 
+    // Dominant arm belongs to the visible body, not the Player-shaped proxy.
+    @Override public net.minecraft.world.entity.HumanoidArm getMainArm() {
+        return body == null ? super.getMainArm() : body.getMainArm();
+    }
+
     // Native held-item use sees the real rider without adding a proxy passenger.
     @Override public Entity getVehicle() {
         return body == null ? super.getVehicle() : body.getVehicle();

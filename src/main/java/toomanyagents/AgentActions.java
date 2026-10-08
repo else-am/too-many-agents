@@ -22,7 +22,7 @@ import java.util.function.Supplier;
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
-    private static final Set<String> SCRIPT_TYPES = Set.of("route", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
+    private static final Set<String> SCRIPT_TYPES = Set.of("route", "set_settings", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
     private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
     private final java.util.function.Function<JsonObject, JsonObject> chatAction;
     private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
@@ -317,6 +317,7 @@ final class AgentActions {
         if (type.equals("set_command_block") && (!request.has("command") || !request.get("command").isJsonPrimitive()
             || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
             throw error("invalid_command_block_command");
+        if (type.equals("set_settings")) mainHandSetting(request);
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
@@ -610,6 +611,11 @@ final class AgentActions {
                 }
                 case "menu_close" -> finish("completed", "menu_closed", approachTargets ? hands.closeMenu()
                     : hands.closeMenu(integer(args, "menuId", -1), menuGeneration()));
+                case "set_settings" -> {
+                    String mainHand = mainHandSetting(args);
+                    if (mainHand != null) mob.setLeftHanded(mainHand.equals("left"));
+                    finish("completed", "settings_updated", null);
+                }
                 case "select_hotbar" -> {
                     hands.selectHotbar(integer(args, "slot", -1));
                     finish("completed", "hotbar_selected", null);
@@ -726,6 +732,17 @@ final class AgentActions {
         var delta = new Vec3(input.x * Math.cos(yaw) - input.z * Math.sin(yaw), input.y,
             input.z * Math.cos(yaw) + input.x * Math.sin(yaw)).scale(heldControls.contains("sprint") ? 0.2 : 0.1);
         flyStep(delta);
+    }
+
+    private static String mainHandSetting(JsonObject request) {
+        if (!request.has("settings") || !request.get("settings").isJsonObject()) throw error("invalid_settings");
+        var settings = request.getAsJsonObject("settings");
+        if (settings.keySet().stream().anyMatch(key -> !key.equals("mainHand"))) throw error("unsupported_setting");
+        if (!settings.has("mainHand")) return null;
+        var hand = settings.get("mainHand");
+        if (!hand.isJsonPrimitive() || !hand.getAsJsonPrimitive().isString()
+            || !(hand.getAsString().equals("left") || hand.getAsString().equals("right"))) throw error("invalid_main_hand");
+        return hand.getAsString();
     }
 
     private void requireVehicleController() {
