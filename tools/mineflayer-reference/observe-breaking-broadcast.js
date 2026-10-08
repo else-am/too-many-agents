@@ -31,7 +31,7 @@ function inspect(kind, block, breaker, stage) {
     ends++;
     if (!progress || block.name !== 'air') fail('End preceded progress or authoritative removal');
   }
-  if (events.length < 16 || kind === 'end')
+  if (events.length < 16 || kind === 'end' && ends === 1)
     events.push({kind,stage,name:block.name,stateId:block.stateId,breakerUuid:breaker?.uuid});
 }
 const progressing = (block, stage, breaker) => inspect('progress',block,breaker,stage);
