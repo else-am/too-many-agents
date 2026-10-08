@@ -5,6 +5,7 @@ import minecraftData from 'minecraft-data';
 import { fileURLToPath } from 'node:url';
 import { readFile, writeFile } from 'node:fs/promises';
 import { decodeItemTransport, encodeItemTransport } from './item-wire.mjs';
+import { selectRegistryData } from './registry-data.mjs';
 
 const registry = minecraftData('1.21.1');
 const features = JSON.parse(await readFile(new URL('../node_modules/minecraft-data/minecraft-data/data/pc/common/features.json', import.meta.url), 'utf8'));
@@ -12,13 +13,9 @@ const featureTable = Object.fromEntries(features.map(({ name }) => [name, regist
 // Only this game's data belongs in the guest. Do not ship every historical
 // Minecraft protocol or give the guest a Node module loader.
 const data = JSON.stringify({
+  ...selectRegistryData(minecraftData),
   featureTable,
   protocolVersion: registry.version.version, majorVersion: registry.version.majorVersion,
-  blocksArray: registry.blocksArray, itemsArray: registry.itemsArray, biomesArray: registry.biomesArray, particlesArray: registry.particlesArray,
-  blockCollisionShapes: registry.blockCollisionShapes,
-  materials: registry.materials, effectsByName: registry.effectsByName,
-  enchantmentsByName: registry.enchantmentsByName, language: registry.language,
-  entitiesArray: registry.entitiesArray, recipes: registry.recipes, instruments: registry.instruments,
 });
 const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));

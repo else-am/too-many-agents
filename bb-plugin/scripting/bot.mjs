@@ -25,6 +25,7 @@ import { installActions } from './actions.mjs';
 import { installEntityQueries } from './entity-queries.mjs';
 import { installChatPatterns } from './chat-patterns.mjs';
 import { installBlockEvents } from './block-events.mjs';
+import { createRegistry } from './registry.mjs';
 
 const goals = { ...upstreamGoals,
   GoalBreakBlock: class GoalBreakBlock extends upstreamGoals.GoalBreakBlock {
@@ -81,16 +82,8 @@ function sameMetadata(a, b) {
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
 export function createBot(initial) {
-  const registry = {
-    ...data,
-    chatFormattingById: initial.chatFormattingById ?? {},
-    blocksArray: data.blocksArray, itemsArray: data.itemsArray,
-    blocksByName: Object.fromEntries(data.blocksArray.map(block => [block.name, block])),
-    itemsByName: Object.fromEntries(data.itemsArray.map(item => [item.name, item])),
-    blocks: Object.fromEntries(data.blocksArray.map(block => [block.id, block])),
-    items: Object.fromEntries(data.itemsArray.map(item => [item.id, item])),
-    entitiesByName: Object.fromEntries(data.entitiesArray.map(entity => [entity.name, entity])),
-  };
+  const registry = createRegistry(data);
+  registry.chatFormattingById = initial.chatFormattingById ?? {};
   const biomeNames = initial.itemRegistries.references['minecraft:worldgen/biome'];
   if (biomeNames) {
     const byName = Object.fromEntries(data.biomesArray.map(biome => [biome.name, biome]));
@@ -104,8 +97,6 @@ export function createBot(initial) {
   registry.biomesByName = Object.fromEntries(registry.biomesArray.map(biome => [biome.name, biome]));
   const Block = createBlockClass(registry);
   const ChunkColumn = createChunkClass(registry, Block);
-  registry.particles = Object.fromEntries(data.particlesArray.map(particle => [particle.id, particle]));
-  registry.particlesByName = Object.fromEntries(data.particlesArray.map(particle => [particle.name, particle]));
   const Particle = createParticleClass(registry);
   const Item = createItemClass(registry);
   const ChatMessage = createChatMessageClass(registry);
