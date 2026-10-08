@@ -73,3 +73,9 @@ The prepared observer now accepts only the independently settled bottom start,
 changes the initial water sample/lower policy bound accordingly, and preserves
 capabilities/full-volume checks, up destination-56, detour, down destination-58,
 all physical arrival assertions and original failed evidence. Syntax only; unrun.
+
+## 39580f7 actual result — 2026-10-08
+
+Fixed packaged SHA256 `2b220ede6ce0bd69f27773406b1ddf4e7aff538ef987086562b6b8334c93bc59`, Codex gpt-6.1-sol low, exact UUID-derived source `9ea6db24d9eb44edca13d23072de11821821c6f6096252e6c14f98f2f8d669f1` once. FAIL native up route_fish_controller_unavailable node0/4 after2ticks; small native upward movement stayed submerged; detour/down unrun. Settled-bottom20updates/30native-ticks setup passed with0requests. Requests 2/2 completed, updates6, bridge operations5, tool elapsed898ms, release `confirmed`. Exact invocation timestamps/literal source/partial trace/native action/NBT/items in `/Users/scott/.bb/thread-storage/thr_xykqkgui57/39580f7-cod-route-result.json` and `39580f7-summary.json`. No retry, assertion chase, source repair or native attributes/counter changes.
+
+Both new empty healthy bodies supported-archived, only created cells and35added forced chunks restored/querynone. ScriptProbe full inventory/equipment/selection/carried unchanged. All dimensions saved01:23:57.947Phoenix/08:23:57.947UTC; exact test JVM33947 stopped. No current lifecycle owner.

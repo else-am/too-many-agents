@@ -47,3 +47,9 @@ affected case without retry/recovery/error-handler mutation. No edit/cancel/mode
 size-change, fluid, other hopping species or random-pause matrix. Archive only
 this new known-empty valid body through supported workflow, restore only owned
 cells/added forced chunks, save all dimensions and stop exact test JVM.
+
+## 39580f7 actual result — 2026-10-08
+
+Fixed packaged SHA256 `2b220ede6ce0bd69f27773406b1ddf4e7aff538ef987086562b6b8334c93bc59`, Codex gpt-6.1-sol low, exact UUID-derived source `3eedfa6eb2685b3f9e61f18ab1af753d5cb3e39c175387751cc2d63605ef6785` once. FAIL native horizontalhop route_edge_unexecutable node0/2 at13ticks; genuine airbornehop/landing partialposition240.16029568286612,-60,110.4475535504597; step/drop unrun. Requests 2/2 completed, updates17, bridge operations5, tool elapsed1522ms, release `confirmed`. Exact invocation timestamps/literal source/partial trace/native action/NBT/items in `/Users/scott/.bb/thread-storage/thr_xykqkgui57/39580f7-slime-route-execution.json` and `39580f7-summary.json`. No retry, assertion chase, source repair or native attributes/counter changes.
+
+Both new empty healthy bodies supported-archived, only created cells and35added forced chunks restored/querynone. ScriptProbe full inventory/equipment/selection/carried unchanged. All dimensions saved01:23:57.947Phoenix/08:23:57.947UTC; exact test JVM33947 stopped. No current lifecycle owner.
