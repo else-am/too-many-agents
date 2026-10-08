@@ -33,3 +33,21 @@ future affected run. The distance fence and executor check remain unchanged. As 
 additional read-only check rejects stale origins before route construction or
 cleanup, using the existing typed before-start error. No retry or physical
 correction is introduced; multi-route success remains unverified.
+
+## Bounded known-origin replan contract
+
+Preauthored before guest change oncf74bfc. When the typed before-start origin
+rejection proves no route preparation/cleanup/acceptance occurred, Pathfinder
+may discard that plan and search once from a newer authoritative physics tick.
+The old nodes and origin are not resent. One such replan is allowed per setGoal;
+a second origin rejection terminates. Cancellation, stop, replaced goals,
+unknown replies, terminal native failures and post-preparation exceptions never
+enter this branch. Reentrant callbacks retain the epoch/goal fences.
+
+`pathfinder-start-drift.mjs` uses the actual browser-bundled planner, pinned
+Blocks and controlled transport replies to distinguish one fresh-plan success,
+second-rejection termination, unknown outcome, cancellation during reset and
+stop before rejection. Its pre-change run reaches the intended recovery
+assertion and fails; it is not a native or complete QuickJS/HTTP test. A future
+Cod native run must independently retain actual rejection coordinates and the
+new accepted action ledger; no success is inferred from the controlled replies.

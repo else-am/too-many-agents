@@ -6439,6 +6439,19 @@
       },
       "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-summary.json",
       "limitations": "Selected scenario, not full species/API conformance. Original failures and partial outcomes retained; no unknown replay."
+    },
+    "pathfinder-start-drift": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/pathfinder-start-drift.mjs",
+      "subjects": [],
+      "scope": "Five controlled transport cases against actual browser-bundled planner and pinned Blocks: one newer-tick replan, bounded second rejection, unknown error, callback cancellation, stop. No native producer/HTTP/QuickJS proof.",
+      "result": "passed",
+      "sourceSha256": "b4c4effebb97469e3375d3d26eaf62cf8ce2e31b71d622930dcffb88a1c430b2",
+      "report": {
+        "path": "run/mineflayer-reference/pathfinder-start-drift.json",
+        "sha256": "b57b071a9030ce17f30331fce9435d384b7d7847f10c826fb1be0543c9d4cb03"
+      },
+      "limitations": "Known rejection provenance is source-reviewed in AgentActions; native Cod consecutive-route result remains unrun. No member promoted."
     }
   },
   "reviewNotes": {

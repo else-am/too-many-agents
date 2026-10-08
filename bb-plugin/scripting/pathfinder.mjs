@@ -21,6 +21,8 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   let planned = false;
   let lastFailure;
   let directRejected = false;
+  let startReplanned = false;
+  let replanAfterTick = null;
   const { getExecutionPath } = installPlanning(bot, pathfinder, { canShortcut });
 
   Object.defineProperties(pathfinder, {
@@ -29,6 +31,8 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   });
   pathfinder.setGoal = (next, isDynamic = false) => {
     directRejected = false;
+    startReplanned = false;
+    replanAfterTick = null;
     goal = next;
     dynamic = isDynamic;
     const version = ++epoch;
@@ -213,6 +217,15 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         }
       } catch (failure) {
         active.terminal = true;
+        // This typed rejection precedes native preparation and owns no action.
+        // Rebuild once from a newer observation; never resend the stale nodes.
+        if (active.id === null && !active.cancelled && active.epoch === epoch && !stopRequested && !startReplanned
+            && failure.phase === 'before_start' && failure.detail?.startsWith('route_start_changed: ')) {
+          startReplanned = true;
+          replanAfterTick = snapshot().tick;
+          reset('start_changed');
+          return;
+        }
         if (!active.cancelled && active.epoch === epoch) {
           path = [];
           bot.emit('path_reset', 'execution_error');
@@ -243,6 +256,10 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
       }
     }
     if (route || !goal || !movements || planned) return;
+    if (replanAfterTick !== null) {
+      if (snapshot().tick <= replanAfterTick) return;
+      replanAfterTick = null;
+    }
     if (atGoal(!!freeGoal())) { reachedGoal(); return; }
     const version = epoch;
     if (!search && freeGoal() && !directRejected) {
