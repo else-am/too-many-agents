@@ -286,3 +286,13 @@ transparent, diggable, material, harvestTools, drops and isWaterlogged. These
 pinned-state mappings are recorded separately from native state acquisition,
 position, light and NBT. The suite's mutation case also preserves the PC
 getHash stub's undefined result; this is not a Bedrock hash implementation.
+
+The static-data reconciliation also links 59 present Block/Item/Entity/Particle/Window,
+collision-shape/tint and Version members to that same complete-table report. The
+three registry implementation hashes still match its recorded revision. Version
+operators were compared across all 838 recognized PC names and invalid names;
+other fields are compared as complete serialized tables. These are minecraft-data
+reference descriptions, not live prismarine object state or native physics,
+inventory, menu, particle or rendering behavior. Edition-specific optional fields
+absent from the selected tables were not promoted by this review. Data-shape
+coverage is tracked separately from canonical gameplay-record counts.

@@ -3876,6 +3876,714 @@
       "evidence": [
         "registry-library-current"
       ]
+    },
+    "minecraft-data.MinecraftData.Block.boundingBox": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.defaultState": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.diggable": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.drops": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.emitLight": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.filterLight": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.hardness": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.harvestTools": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.material": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.maxStateId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.minStateId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.resistance": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.stackSize": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.states": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Block.transparent": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.enchantCategories": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.maxDurability": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.repairWith": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Item.stackSize": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.category": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.height": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.internalId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.metadataKeys": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.type": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Entity.width": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Particle.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Particle.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Window.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Window.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Window.openedWith": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Window.properties": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Window.slots": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.BlockCollisionShapes.blocks": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.BlockCollisionShapes.shapes": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Tints.constant": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Tints.foliage": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Tints.grass": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Tints.redstone": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Tints.water": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Present field of a selected PC1.21.1 reference table. The existing QuickJS comparison compares every complete static table against pinned minecraft-data and checks canonical index identity. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.['<']": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.['<=']": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.['==']": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.['>']": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.['>=']": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.dataVersion": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.majorVersion": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.minecraftVersion": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.releaseType": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.type": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Version.version": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 version metadata and ordering functions. The existing QuickJS comparison checks serialized version fields, all five operators across 838 recognized PC versions, and invalid-name RangeError behavior. No native block/entity/item/menu/particle state, gameplay permission, live collision or client rendering claim. Optional edition-specific fields absent from these tables remain separately pending.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -4847,7 +5555,15 @@
         "minecraft-data.MinecraftData.Effect",
         "minecraft-data.MinecraftData.Enchantment",
         "minecraft-data.MinecraftData.Food",
-        "minecraft-data.MinecraftData.Instrument"
+        "minecraft-data.MinecraftData.Instrument",
+        "minecraft-data.MinecraftData.Block",
+        "minecraft-data.MinecraftData.Item",
+        "minecraft-data.MinecraftData.Entity",
+        "minecraft-data.MinecraftData.Particle",
+        "minecraft-data.MinecraftData.Window",
+        "minecraft-data.MinecraftData.BlockCollisionShapes",
+        "minecraft-data.MinecraftData.Tints",
+        "minecraft-data.MinecraftData.Version"
       ],
       "scope": "Exhaustive selected PC1.21.1 static-data equality, shared table/index references and all recognized version comparisons. Excludes native biome overrides, feature installation and dynamic codecs.",
       "testedRevision": "cbb5e22",

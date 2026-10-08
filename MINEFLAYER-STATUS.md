@@ -22,6 +22,8 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 
 ## Latest evidence reconciliation
 
+- [x] Linked59 additional present static-table/version members to the existing complete-table QuickJS comparison, including all838 recognized PC version comparisons. Recorded registry implementation hashes still match. No rerun or native gameplay promotion; absent edition-specific fields remain pending.
+
 - [x] Recovered four existing native reports for block/item observations, block-update identity/hydration, and tick/equipment ordering. Exact executed sources are retained in `tools/mineflayer-reference/recorded/observe-*-historical.js`; source/report hashes and embedded-code checks pass in the catalog. No native rerun occurred.
 - [x] Catalog verification reports no missing evidence files or unverified report hashes. Coverage remains 265 supported / 782 pending / 58 inapplicable records; indexing historical observations does not promote member coverage. The six-case flight graph report and exact failed39580f7 Cod/Slime runs are also indexed; all source/report hashes match, without changing member status. Two EventEmitter aliases are separately verified by exact upstream function identity to the already-exercised on/off implementations. Those four reports do not retain the packaged revision and do not validate the current build.
 - [ ] Corrected Cod resting-depth and fresh Slime hop/slab/drop scripts failed natively on39580f7; exact sources/results are indexed. Their affected rebuilt checks are assigned on7fd4922. MagmaCube implementation is integrated/built but native verification is pending. Rabbit native timing adaptation is integrated; its observer is being prepared without execution.
