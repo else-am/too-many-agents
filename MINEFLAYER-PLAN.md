@@ -38,7 +38,7 @@ Each awaited action resolves on actual completion or reports failure. Longer scr
 
 Mineflayer also exposes immediately readable properties and synchronous queries. The runner therefore needs a local view of relevant blocks, entities, inventory, and other state, supplied by Java. Define initialization, updates, freshness, and unloaded-state behavior explicitly. Java validates mutations against the current world rather than trusting a cached observation. Do not make upstream synchronous methods asynchronous merely because the transport is HTTP.
 
-The implemented observation path combines a per-frame 33×17×33 local view with complete, already-loaded columns in a 5×5 area around the body. Wider columns refresh within five ticks and on completed actions or chunk changes; updates patch stable guest columns before events and promise completion. Missing columns stay unknown, and waiting does not force terrain loading. Native wire correctness and frame cost still require live validation; remaining World APIs stay in scope.
+The implemented observation path combines a per-frame 33×17×33 local view with complete, already-loaded columns in a 5×5 area around the body. Wider columns refresh within five ticks and on completed actions or chunk changes; updates patch stable guest columns before events and promise completion. Missing columns stay unknown, and waiting does not force terrain loading. Selected native wire, light, biome and freshness checks passed in the flat test world; worst-case frame cost and wider coverage remain unverified. Remaining World APIs stay in scope.
 
 Continuous state uses one authenticated HTTP stream per script, with a bounded queue and ordered frames produced on the owning game thread. After initialization this stream is the sole source of state changes. Action promises wait until the stream includes their native completion sequence, so their return cannot overtake inventory, entity, or block events. Tick waits count the same physics events, with bounded guest timers for timeouts. Block deltas reduce repeated data; snapshot revisions detect ordering failures. Delivery into QuickJS is acknowledged and subject to the same execution limits as the script. Stream loss stops execution; it does not trigger a reconnect or replay.
 
@@ -121,7 +121,7 @@ Use a new `feat/mineflayer-api` branch in an isolated worktree. Preserve unrelat
 | In-world AI smoke checks and simple scripts | Codex, Luna, low reasoning. |
 | In-world multi-step tasks and recovery | Codex, 6.1 Sol, low reasoning. |
 | BB implementation children | Astra, low through high according to complexity; medium for ordinary API work, high for difficult navigation/lifecycle work. |
-| Focused verification children | Astra, low or medium as appropriate. |
+| Focused native verification coordinator | Codex, 6.1 Sol, low or medium; tests run alongside implementation. |
 
 All in-world AI test agents must use Codex. Resolve exact model identifiers against the installed catalog when execution begins; do not silently substitute another provider or reinterpret these preferences as settings for implementation children.
 
