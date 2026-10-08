@@ -6484,6 +6484,22 @@
         ]
       },
       "limitations": "Pre-close inventory is read from the active Window; upstream bot.inventory mirrored only on close. Native stale-handle check omitted as a separate safety contract. Historical native report has no embedded source, so not an exact paired-source run. Existing ArmorTrimMaterial warning retained; no general protocol conformance."
+    },
+    "reference-wall-convergence": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/wall-convergence.js",
+      "subjects": [],
+      "scope": "Eight survival placements with block-promise checks and at most40 physics ticks for inventory convergence; independent server checks of all blocks and material consumption. No member promotion.",
+      "result": "passed",
+      "sourceSha256": "6b344fa3922bc12a55613530680a5159983c992719609f19dc2cceb41be4a905",
+      "report": {
+        "path": "run/mineflayer-reference/wall-convergence-reference.json",
+        "sha256": "c88de1d112370fda12146b60d570e3f666c329a32d8b1bcde5339680ecdf8fa7",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "One explicit adaptation to historical native performance source: record immediate inventory then await bounded convergence. Immediate stone1 became0 after one physics tick. Original exact-source failure retained; no native rerun or promise-time equality claim. Existing ArmorTrimMaterial and setup movement warnings retained."
     }
   },
   "reviewNotes": {

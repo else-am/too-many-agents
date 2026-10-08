@@ -76,6 +76,7 @@ async function scenario() {
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--container')) return containerScenario();
+  if (process.argv.includes('--wall-convergence')) return wallConvergenceScenario();
   if (process.argv.includes('--building') || process.argv.includes('--craft') || craftTrace) return buildingScenarios();
   await consoleCommands([
     'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
@@ -108,6 +109,41 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function wallConvergenceScenario() {
+  await consoleCommands([
+    'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
+    'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
+    'fill 24 -61 0 44 -61 16 minecraft:stone',
+    'fill 24 -60 0 44 -53 16 minecraft:air',
+    'tp Reference 34.5 -60.0 5.5', 'gamemode survival Reference', 'clear Reference',
+    'item replace entity Reference hotbar.0 with minecraft:stone 8',
+  ]);
+  await bot.waitForTicks(5);
+  bot.setQuickBarSlot(0);
+  const source = await readFile(new URL('./wall-convergence.js', import.meta.url), 'utf8');
+  const report = { scenario:'wall-convergence', backend:'mineflayer', minecraft:'1.21.1',
+    mineflayer:'4.39.0', source, sourceSha256:createHash('sha256').update(source).digest('hex'),
+    startedAt:new Date().toISOString(), clientErrors, protocolWarnings };
+  try {
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    report.result = await new AsyncFunction('bot','Vec3',source)(bot,Vec3);
+    const conditions = [
+      ...[-60,-59].flatMap(y => [32,33,34,35].map(x => `if block ${x} ${y} 8 minecraft:stone`)),
+      'unless data entity Reference Inventory[{id:"minecraft:stone"}]',
+    ];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition,i) => `execute ${condition} run say ${markers[i]}`));
+    report.confirmations = { conditions, markers, messages };
+    report.serverConfirmed = markers.every(marker => messages.some(message => message.includes(marker)));
+    assert(report.serverConfirmed, 'Server must confirm all eight wall blocks and material consumption');
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'wall-convergence-reference.json'),JSON.stringify(report,null,2)+'\n');
+  }
+  console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
 
 async function containerScenario() {

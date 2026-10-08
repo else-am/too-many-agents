@@ -190,6 +190,13 @@ The exact previously native-tested wall script completed all eight server placem
 
 `npm run check -- --building` requests both prepared building procedures. `--craft` first independently inspects the preceding saved wall attempt, then runs only the unreached craft procedure. The reports retain exact source and limitations. These flags are fixture-specific, not automatic retries.
 
+The separately preauthored `--wall-convergence` check passed once: eight blocks,
+immediate inventory stone1, then stone0 after one physics tick, with independent
+server confirmation. Its explicit bounded inventory wait distinguishes block
+completion from inventory synchronization; the original exact-source failure
+remains recorded. No native wall rerun or promise-time equality is claimed.
+See [scenario](wall-reference-scenarios.md) and [diagnosis](reference-failure-review.md).
+
 The selected registry codec comparison is recorded separately from native runs.
 It checks pinned import projections and corrects invalid exports using the real
 packet codec in QuickJS; Java capture/custom-datapack startup remains unverified.

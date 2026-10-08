@@ -90,3 +90,21 @@ sequence, nor turn either failed procedure into a pass. The port's existing
 native result inspection and per-action ordered-state barriers intentionally
 avoid this failure. Do not replace them with upstream optimistic slot writes.
 No causal connection to the startup ArmorTrimMaterial warning was established.
+
+## Focused wall convergence: 2026-10-08 09:55 UTC
+
+The preauthored `--wall-convergence` check ran once on the unmodified pin. It
+retained all eight placement calls and block assertions, recorded the immediate
+stone count, then allowed at most40 physics ticks for inventory convergence.
+At placement-promise completion the count was1; after one physics tick it was0.
+All eight blocks and absence of inventory stone were independently confirmed
+by the server. Position stayed (34.5,-60,5.5), with no menu or cursor item.
+
+This run directly establishes the distinction between block completion and
+inventory visibility. It does not retroactively prove the older packet sequence,
+erase its failure, or establish identical native/upstream promise-time state.
+The native wall was not rerun. Literal source, absolute timestamps, server
+confirmations and warnings are retained in `wall-convergence-reference.json`
+and `/Users/scott/.bb/thread-storage/reference-wall-convergence/`.
+The measured source completed in1950ms/36ticks; these reference timings are not
+a new native performance comparison. The server stopped and port25575 closed.
