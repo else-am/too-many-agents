@@ -5,8 +5,15 @@ const entity = bot.entity, metadata = entity.metadata;
 if (!entity.onGround || entity.isSleeping || entity.crouching || bot.vehicle ||
     bot.currentWindow || bot.inventory.selectedItem || Object.values(bot.controlState).some(Boolean))
   throw new Error('Metadata fixture prerequisites differ');
-const before = JSON.stringify(bot.inventory.slots), events = [], errors = [];
+const before = JSON.stringify(bot.inventory.slots), events = [], updates = [], errors = [];
 const start = Date.now();
+bot.on('entityUpdate', target => {
+  if (target !== entity) return;
+  if (bot.entity !== entity || entity.metadata !== metadata ||
+      (Object.hasOwn(metadata, 0) && !!(metadata[0] & 2) !== entity.crouching))
+    errors.push('entityUpdate did not see hydrated flags and stable identity');
+  updates.push({ flags: metadata[0], crouching: entity.crouching });
+});
 const observe = (kind, target) => {
   if (target !== entity) return;
   const flags = metadata[0];
@@ -32,5 +39,8 @@ if (bot.entity !== entity || entity.metadata !== metadata || !Object.hasOwn(meta
 if (JSON.stringify(bot.inventory.slots) !== before || bot.controlState.sneak ||
     bot.currentWindow || bot.inventory.selectedItem)
   throw new Error('Metadata check cleanup or inventory differs');
-return { start, end: Date.now(), events, retainedFlagKey: true, stableMetadata: true,
+const crouchUpdate = updates.findIndex(row => row.crouching && (row.flags & 2));
+if (crouchUpdate < 0 || !updates.slice(crouchUpdate + 1).some(row => !row.crouching && !(row.flags & 2)))
+  throw new Error('Metadata entityUpdate transition missing: ' + JSON.stringify(updates));
+return { start, end: Date.now(), events, updates, retainedFlagKey: true, stableMetadata: true,
   keys: Object.keys(metadata), inventoryUnchanged: true };
