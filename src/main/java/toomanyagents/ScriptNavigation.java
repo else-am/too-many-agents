@@ -16,6 +16,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.entity.ai.control.LookControl;
 import net.minecraft.world.entity.ai.control.FlyingMoveControl;
 import net.minecraft.world.entity.ai.control.SmoothSwimmingMoveControl;
 import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
@@ -40,6 +41,8 @@ import net.minecraft.world.entity.animal.Dolphin;
 import net.minecraft.world.entity.animal.Salmon;
 import net.minecraft.world.entity.animal.TropicalFish;
 import net.minecraft.world.entity.monster.Drowned;
+import net.minecraft.world.entity.monster.Guardian;
+import net.minecraft.world.entity.monster.ElderGuardian;
 import net.minecraft.world.entity.monster.Slime;
 import net.minecraft.world.entity.monster.MagmaCube;
 import net.minecraft.world.item.BlockItem;
@@ -71,7 +74,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -125,6 +128,15 @@ public final class ScriptNavigation {
     private Pose smoothPose;
     private float smoothWidth, smoothHeight, smoothEyeHeight;
     private DryStep smoothStep;
+    private PathNavigation guardianNavigation;
+    private LookControl guardianLook;
+    private LivingEntity guardianTarget;
+    private Pose guardianPose;
+    private float guardianWidth, guardianHeight, guardianEyeHeight;
+    private boolean guardianCanFloat, guardianBeam, guardianMoving, guardianPrepared, guardianControlTick, guardianTravelTick;
+    private DryStep guardianStep;
+    private record GuardianCommand(boolean active, Vec3 wanted, double modifier, float yaw, float speed,
+                                   Vec3 preparedVelocity, DryStep step) {}
     private PathNavigation drownedNavigation;
     private LivingEntity drownedTarget;
     private boolean drownedCanFloat, drownedPrepared, drownedTravelTick, drownedControlTick, drownedSearching;
@@ -220,6 +232,13 @@ public final class ScriptNavigation {
         if (smoothSwimmer(physics)) {
             smoothNavigation = mob.getNavigation(); smoothTarget = mob.getTarget(); smoothPose = mob.getPose();
             smoothWidth = mob.getBbWidth(); smoothHeight = mob.getBbHeight(); smoothEyeHeight = mob.getEyeHeight();
+        }
+        guardianPrepared = false; guardianStep = null;
+        if (physics == Physics.GUARDIAN) {
+            Guardian guardian = (Guardian) mob;
+            guardianNavigation = mob.getNavigation(); guardianLook = mob.getLookControl(); guardianTarget = mob.getTarget();
+            guardianPose = mob.getPose(); guardianWidth = mob.getBbWidth(); guardianHeight = mob.getBbHeight(); guardianEyeHeight = mob.getEyeHeight();
+            guardianCanFloat = guardianNavigation.canFloat(); guardianBeam = guardian.hasActiveAttackTarget(); guardianMoving = guardian.isMoving();
         }
         drownedPrepared = false; drownedStep = null; drownedHold = mob.position();
         drownedPolicyVolume = drownedInitialVolume = null;
@@ -319,7 +338,7 @@ public final class ScriptNavigation {
             requireMode();
             if (!inside(mob.position())) throw error("route_outside_body_box");
             clearInputs();
-            rabbitStep = null; flightStep = null; drownedStep = null; smoothStep = null;
+            rabbitStep = null; flightStep = null; drownedStep = null; smoothStep = null; guardianStep = null;
             if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
             Frame predicted = null;
             SwimStep swimming = null;
@@ -346,6 +365,9 @@ public final class ScriptNavigation {
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (smoothSwimmer(physics)) {
                         prepareSmoothSwim(returnTo);
+                        if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
+                    } else if (physics == Physics.GUARDIAN) {
+                        prepareGuardian(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (physics == Physics.DROWNED_SWIM) {
                         prepareDrownedSwim(returnTo);
@@ -380,6 +402,10 @@ public final class ScriptNavigation {
                     } else if (smoothSwimmer(physics)) {
                         phase = "swimming";
                         prepareSmoothSwim(target);
+                        checkArrival = true;
+                    } else if (physics == Physics.GUARDIAN) {
+                        phase = "swimming";
+                        prepareGuardian(target);
                         checkArrival = true;
                     } else if (physics == Physics.DROWNED_SWIM) {
                         phase = "swimming";
@@ -441,8 +467,17 @@ public final class ScriptNavigation {
                 if (active) prepareSmoothSwim(swimHold);
                 else smoothStep = smoothSwimTravelStep();
             }
+            if (physics == Physics.GUARDIAN && guardianStep == null) {
+                if (active) prepareGuardian(swimHold);
+                else {
+                    guardianStep = guardianTravelStep(mob.getDeltaMovement(), mob.getSpeed(), mob.getYRot(), ((Guardian) mob).isMoving());
+                    if (guardianStep == null) throw error("route_guardian_edge_unexecutable");
+                }
+            }
             // Exactly one native travel on a successful tick, including mining and building waits.
             travel();
+            if (guardianStep != null && (mob.position().distanceTo(guardianStep.after) > 0.01
+                || mob.getDeltaMovement().distanceTo(guardianStep.velocity) > 0.01)) throw error("route_guardian_trajectory_changed");
             if (smoothStep != null && (mob.position().distanceTo(smoothStep.after) > 0.01
                 || mob.getDeltaMovement().distanceTo(smoothStep.velocity) > 0.01))
                 throw error(smoothReason("trajectory_changed"));
@@ -471,6 +506,8 @@ public final class ScriptNavigation {
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
             if (flightMode(physics) && flightPrepared)
                 throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
+            if (physics == Physics.GUARDIAN && guardianPrepared)
+                throw new IllegalStateException("route_guardian_prepared_failed: " + failure.getMessage(), failure);
             if (smoothSwimmer(physics) && smoothPrepared)
                 throw new IllegalStateException(smoothReason("prepared_failed") + ": " + failure.getMessage(), failure);
             if (physics == Physics.DROWNED_SWIM && drownedPrepared)
@@ -485,6 +522,7 @@ public final class ScriptNavigation {
         requireThread();
         boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
             && (!smoothSwimmer(physics) || ownsSmoothSwimCleanup())
+            && (physics != Physics.GUARDIAN || ownsGuardianCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
             && (!drownedWaterMode(physics) || ownsDrownedWaterCleanup())
             && (physics != Physics.PANDA || ownsPandaCleanup());
@@ -1377,6 +1415,172 @@ public final class ScriptNavigation {
             throw error("route_fish_controller_unavailable");
     }
 
+    /** Nine pure candidates at most; only the selected native branch is executed. */
+    private void prepareGuardian(Vec3 goal) {
+        requireGuardianLease();
+        if (guardianStep != null) throw error("route_duplicate_guardian_control");
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
+        float oldSpeed = mob.getSpeed();
+        double baseSpeed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
+        if (!Double.isFinite(baseSpeed) || baseSpeed <= 0 || baseSpeed > 4 || !Float.isFinite(oldSpeed) || oldSpeed < 0 || oldSpeed > 4
+            || !Double.isFinite(velocity.lengthSqr()) || !Double.isFinite(goal.distanceToSqr(pos))) throw error("route_guardian_input_invalid");
+        Vec3 correction = goal.subtract(pos).scale(0.015).subtract(velocity.scale(0.4));
+        double horizontal = correction.horizontalDistance();
+        double wantedSpeed = Math.max(horizontal, Math.abs(correction.y)) / 0.1;
+        double modifier = Math.clamp((wantedSpeed - 0.875 * oldSpeed) / (0.125 * baseSpeed), 0, 1);
+        double heading = horizontal > 1e-10 ? Math.atan2(correction.z, correction.x) * 180 / Math.PI - 90 : mob.getYRot();
+        double wave = Math.sin((double) (mob.tickCount + mob.getId()) * 0.5) * 0.05;
+        double compensation = Math.atan2(wave, Math.max(1e-9, horizontal)) * 180 / Math.PI;
+        GuardianCommand chosen = guardianCommand(false, heading, 0, correction.y, baseSpeed);
+        double score = chosen == null ? Double.POSITIVE_INFINITY : guardianScore(chosen, goal);
+        for (double yaw : new double[]{heading, heading + compensation}) {
+            for (double input : new double[]{modifier, 0, 0.5, 1}) {
+                GuardianCommand candidate = guardianCommand(true, yaw, input, correction.y, baseSpeed);
+                if (candidate == null) continue;
+                double candidateScore = guardianScore(candidate, goal);
+                if (candidateScore < score) { chosen = candidate; score = candidateScore; }
+            }
+        }
+        if (chosen == null) throw error("route_guardian_edge_unexecutable");
+        requireGuardianLease();
+        guardianPrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(chosen.wanted.x, chosen.wanted.y, chosen.wanted.z, chosen.modifier);
+        guardianControlTick = chosen.active;
+        try { controller.tick(); }
+        finally { guardianControlTick = false; }
+        guardianMoving = chosen.active;
+        requireGuardianLease();
+        if (!pos.equals(mob.position()) || Math.abs(mob.getSpeed() - chosen.speed) > 1e-6
+            || Math.abs(Mth.wrapDegrees(mob.getYRot() - chosen.yaw)) > 1e-4
+            || mob.getDeltaMovement().distanceTo(chosen.preparedVelocity) > 1e-8
+            || Math.abs(mob.zza - chosen.speed) > 1e-6 || mob.xxa != 0 || mob.yya != 0)
+            throw error("route_guardian_preparation_changed");
+        // Recheck actual prepared state before authorizing physical travel.
+        guardianStep = guardianTravelStep(mob.getDeltaMovement(), mob.getSpeed(), mob.getYRot(), ((Guardian) mob).isMoving());
+        if (guardianStep == null) throw error("route_guardian_edge_unexecutable");
+    }
+
+    private GuardianCommand guardianCommand(boolean moving, double wantedYaw, double modifier, double vertical, double baseSpeed) {
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), wanted = pos;
+        float speed = 0, yaw = mob.getYRot();
+        if (moving) {
+            speed = Mth.lerp(0.125F, mob.getSpeed(), (float) (modifier * baseSpeed));
+            // Choose wanted Y using the actual yaw-dependent native oscillation.
+            float aimed = guardianYaw(yaw, (float) wantedYaw);
+            double radians = (double) (aimed * (float) (Math.PI / 180));
+            double verticalWave = Math.sin((double) (mob.tickCount + mob.getId()) * 0.75) * 0.05
+                * (Math.sin(radians) + Math.cos(radians)) * 0.25;
+            double up = speed > 1e-8 ? Math.clamp((vertical - verticalWave) / (speed * 0.1), -0.999, 0.999) : 0;
+            double horizontal = Math.sqrt(1 - up * up), angle = wantedYaw * Math.PI / 180;
+            wanted = pos.add(-Math.sin(angle) * horizontal, up, Math.cos(angle) * horizontal);
+            Vec3 delta = wanted.subtract(pos);
+            if (!Double.isFinite(delta.lengthSqr()) || delta.lengthSqr() < 1e-12 || delta.lengthSqr() > 1.000001)
+                throw error("route_guardian_input_invalid");
+            float nativeWanted = (float) (Mth.atan2(delta.z, delta.x) * 180.0F / (float) Math.PI) - 90.0F;
+            yaw = guardianYaw(yaw, nativeWanted);
+            radians = (double) (yaw * (float) (Math.PI / 180));
+            double sin = Math.sin(radians), cos = Math.cos(radians);
+            double wave = Math.sin((double) (mob.tickCount + mob.getId()) * 0.5) * 0.05;
+            verticalWave = Math.sin((double) (mob.tickCount + mob.getId()) * 0.75) * 0.05;
+            velocity = velocity.add(wave * cos, verticalWave * (sin + cos) * 0.25 + (double) speed * (delta.y / delta.length()) * 0.1, wave * sin);
+        }
+        DryStep step = guardianTravelStep(velocity, speed, yaw, moving);
+        return step == null ? null : new GuardianCommand(moving, wanted, modifier, yaw, speed, velocity, step);
+    }
+
+    /** MoveControl.rotlerp's native wrapping, without mutating its controller. */
+    private static float guardianYaw(float current, float wanted) {
+        float yaw = current + Mth.clamp(Mth.wrapDegrees(wanted - current), -90, 90);
+        if (yaw < 0) yaw += 360;
+        else if (yaw > 360) yaw -= 360;
+        return yaw;
+    }
+
+    private double guardianScore(GuardianCommand command, Vec3 goal) {
+        Vec3 toward = goal.subtract(command.step.after);
+        double score = toward.lengthSqr() + command.step.velocity.lengthSqr() * 4;
+        double horizontal = toward.horizontalDistance();
+        if (horizontal > 1e-8) {
+            double yaw = command.yaw * Math.PI / 180;
+            double facing = (-Math.sin(yaw) * toward.x + Math.cos(yaw) * toward.z) / horizontal;
+            // Idle cannot turn. Reward native heading progress away from arrival.
+            score += 0.05 * Math.min(1, horizontal * horizontal) * (1 - facing);
+        }
+        return score;
+    }
+
+    private DryStep guardianTravelStep(Vec3 prepared, float speed, float yaw, boolean moving) {
+        requireMode();
+        if (!Double.isFinite(prepared.lengthSqr()) || !Float.isFinite(speed) || speed < 0 || speed > 4 || !Float.isFinite(yaw))
+            throw error("route_guardian_input_invalid");
+        Vec3 velocity = prepared;
+        if ((double) speed * speed >= 1e-7) {
+            double acceleration = Math.min(1, speed) * (double) 0.1F;
+            float radians = yaw * ((float) Math.PI / 180);
+            velocity = velocity.add(-acceleration * Mth.sin(radians), 0, acceleration * Mth.cos(radians));
+        }
+        Vec3 prospective = mob.position().add(velocity);
+        if (!inside(prospective) || !withinEdge(prospective)) return null;
+        AABB sweep = fishVolume(mob.getBoundingBox().expandTowards(velocity));
+        // Invalid candidate geometry is not selected. Changed/unknown cells
+        // still throw immediately; no mutation or retry has occurred here.
+        checkVolume(sweep.expandTowards(0, 1, 0));
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
+            BlockPos.containing(sweep.maxX - EPS, sweep.maxY - EPS, sweep.maxZ - EPS))) {
+            var state = level.getBlockState(pos);
+            var fluid = state.getFluidState();
+            if (!state.is(Blocks.WATER) || !fluid.is(FluidTags.WATER)
+                || pos.getY() + fluid.getHeight(level, pos) + EPS < Math.min(sweep.maxY, pos.getY() + 1)) return null;
+        }
+        if (!level.noCollision(mob, sweep)) return null;
+        Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
+        if (Math.abs(velocity.y - motion.delta.y) > EPS) return null;
+        Vec3 after = mob.position().add(motion.delta);
+        if (!inside(after) || !withinEdge(after)) return null;
+        Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0, velocity.y,
+            Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0).scale(0.9);
+        if (!moving && guardianTarget == null) remaining = remaining.add(0, -0.005, 0);
+        return new DryStep(after, remaining);
+    }
+
+    private void requireGuardianLease() {
+        requireMode();
+        if (!active || OWNED.get(mob) != this || !owner.vehicleLeaseActive(lease)) throw error("script_no_longer_controls_body");
+    }
+
+    /** Only this exact active native preparation borrows selected-route activity. */
+    public static boolean selectedGuardianControl(Guardian body, MoveControl control, PathNavigation navigation) {
+        if (body.level().isClientSide) return false;
+        ScriptNavigation route = OWNED.get(body);
+        if (route == null || route.physics != Physics.GUARDIAN || !route.guardianControlTick
+            || route.controller != control || route.guardianNavigation != navigation) return false;
+        try { route.requireThread(); route.requireGuardianLease(); return true; }
+        catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
+    }
+
+    private boolean ownsGuardianCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller && mob.getLookControl() == guardianLook
+            && mob.getNavigation() == guardianNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    private void clearGuardianControls() {
+        if (!ownsGuardianCleanup()) return;
+        guardianControlTick = false;
+        clearInputs();
+        mob.setSprinting(false);
+        controller.setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
+        // With the original navigation stopped, the native idle branch clears
+        // moving/speed without sinusoids, look changes or physical travel.
+        if (((Guardian) mob).isMoving() || mob.getSpeed() != 0) {
+            guardianPrepared = true;
+            controller.tick();
+        }
+        guardianMoving = ((Guardian) mob).isMoving();
+        if (guardianMoving || mob.getSpeed() != 0) throw error("route_guardian_idle_failed");
+    }
+
     /** Native preparation, not a copied FishMoveControl or a brain/navigation tick. */
     private void prepareSmoothSwim(Vec3 goal) {
         requireMode();
@@ -1638,10 +1842,11 @@ public final class ScriptNavigation {
         }
         drownedTravelTick = drownedWaterMode(physics);
         smoothTravelTick = smoothSwimmer(physics);
+        guardianTravelTick = physics == Physics.GUARDIAN;
         hoverTravelTick = hoverMode(physics);
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; hoverTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; guardianTravelTick = false; hoverTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1650,13 +1855,14 @@ public final class ScriptNavigation {
     private void clearInputs() {
         mob.getNavigation().stop();
         mob.setXxa(0); mob.setYya(0); mob.setZza(0);
-        if (physics != Physics.FISH) mob.setSpeed(0);
+        if (physics != Physics.FISH && physics != Physics.GUARDIAN) mob.setSpeed(0);
         if (physics != Physics.RABBIT) mob.getJumpControl().tick();
         mob.setJumping(false);
     }
 
     private void clearControls() {
         if (physics == Physics.PANDA && !ownsPandaCleanup()) return;
+        if (physics == Physics.GUARDIAN) { clearGuardianControls(); return; }
         if (smoothSwimmer(physics) && !ownsSmoothSwimCleanup()) return;
         if (drownedWaterMode(physics) && !ownsDrownedWaterCleanup()) return;
         if (puffState >= 0 && !ownsPufferfishCleanup()) return;
@@ -1888,6 +2094,7 @@ public final class ScriptNavigation {
                 : mode == Physics.DROWNED_SWIM ? "native-drowned-true-intent-post-tick"
                 : mode == Physics.AXOLOTL ? "native-axolotl-submerged-post-tick"
                 : mode == Physics.FROG ? "native-frog-submerged-post-tick"
+                : mode == Physics.GUARDIAN ? "native-guardian-submerged-post-tick"
                 : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick"
                 : mode == Physics.DOLPHIN ? "native-dolphin-submerged-post-tick" : "native-fish-submerged-post-tick");
             result.addProperty("locomotion", "submerged");
@@ -2001,6 +2208,9 @@ public final class ScriptNavigation {
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
             && smoothSwimParameters((SmoothSwimmingMoveControl) mob.getMoveControl()))
             return mob.getClass() == Dolphin.class ? Physics.DOLPHIN : Physics.TADPOLE;
+        if ((mob.getClass() == Guardian.class || mob.getClass() == ElderGuardian.class) && control == Guardian.GuardianMoveControl.class
+            && mob.getNavigation().getClass() == WaterBoundPathNavigation.class && mob.getLookControl().getClass() == LookControl.class
+            && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()) return Physics.GUARDIAN;
         if (mob.getClass() == Frog.class && control == SmoothSwimmingMoveControl.class
             && mob.getNavigation().getClass() == Frog.FrogPathNavigation.class && mob.getPose() == Pose.STANDING
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
@@ -2103,6 +2313,15 @@ public final class ScriptNavigation {
             if (physics == Physics.FROG && smoothNavigation.canFloat() != frogCanFloat) throw error("route_frog_state_changed");
             if ((physics == Physics.DOLPHIN || physics == Physics.AXOLOTL || physics == Physics.FROG) && mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)
                 throw error(smoothReason("stuck_pending"));
+            requireSubmerged(mob.getBoundingBox());
+        }
+        if (physics == Physics.GUARDIAN) {
+            Guardian guardian = (Guardian) mob;
+            if ((!mob.isNoAi() && !guardianTravelTick) || mob.getNavigation() != guardianNavigation || guardianNavigation.getPath() != null
+                || guardianNavigation.canFloat() != guardianCanFloat || mob.getLookControl() != guardianLook || mob.getTarget() != guardianTarget
+                || guardian.hasActiveAttackTarget() != guardianBeam || guardian.isMoving() != guardianMoving || mob.getPose() != guardianPose
+                || mob.getBbWidth() != guardianWidth || mob.getBbHeight() != guardianHeight || mob.getEyeHeight() != guardianEyeHeight
+                || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7) throw error("route_guardian_state_changed");
             requireSubmerged(mob.getBoundingBox());
         }
         if (physics == Physics.FISH) {
@@ -2224,15 +2443,16 @@ public final class ScriptNavigation {
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
             AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
             route.checkVolume(flightMode(route.physics) ? route.flightVolume(checked)
-                : (drownedWaterMode(route.physics) || smoothSwimmer(route.physics)) ? route.fishVolume(checked) : checked);
+                : (drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN) ? route.fishVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
                 if (!route.inside(next)) throw error("route_leaves_body_box");
                 if (!route.withinEdge(next)) throw error("route_leaves_selected_edge");
                 route.checkDryVolume(sweep);
                 if (fishMode(route.physics) || route.physics == Physics.DROWNED_WATER) route.requireSubmerged(sweep);
-                if ((drownedWaterMode(route.physics) || smoothSwimmer(route.physics)) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
-                    throw error(smoothSwimmer(route.physics) ? route.smoothReason("volume_obstructed")
+                if ((drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
+                    throw error(route.physics == Physics.GUARDIAN ? "route_guardian_volume_obstructed"
+                        : smoothSwimmer(route.physics) ? route.smoothReason("volume_obstructed")
                         : route.physics == Physics.DROWNED_SWIM ? "route_drowned_swim_volume_obstructed" : "route_drowned_water_volume_obstructed");
             }
             return true;
@@ -2353,7 +2573,7 @@ public final class ScriptNavigation {
         } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
     }
 
-    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.DROWNED_SWIM || smoothSwimmer(mode); }
+    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.DROWNED_SWIM || mode == Physics.GUARDIAN || smoothSwimmer(mode); }
 
     private static boolean drownedWaterMode(Physics mode) { return mode == Physics.DROWNED_WATER || mode == Physics.DROWNED_SWIM; }
 
