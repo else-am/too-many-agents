@@ -10172,13 +10172,31 @@
       "result": "failed",
       "sourceSha256": "b25831d250add2064c35437e301ff3b29d92ac0228afe5f93536bc545ca98ce0",
       "report": {
-        "path": "run/mineflayer-reference/placement-refusal-reference.json",
+        "path": "run/mineflayer-reference/placement-refusal-setup-failure.json",
         "sha256": "75985ebe0fa6e973861be62f073ace74fa53f1fe9f2376cc45bc76af6f2f7769",
         "codePath": [
           "source"
         ]
       },
       "limitations": "Reference-only setup failure; not a product defect or native/refusal check. No retry. Startup protocol and teleport warnings retained."
+    },
+    "reference-placement-refusal": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/placement-refusal.js",
+      "subjects": [
+        "mineflayer.Bot.placeBlock"
+      ],
+      "scope": "One entity-obstructed top-face refusal: one rejected call, no blockPlaced event or item cost, unchanged inventory and independent server confirmation.",
+      "result": "passed",
+      "sourceSha256": "b25831d250add2064c35437e301ff3b29d92ac0228afe5f93536bc545ca98ce0",
+      "report": {
+        "path": "run/mineflayer-reference/placement-refusal-reference.json",
+        "sha256": "88577d39e9b46371b45d7eb46884a2df4a8bd1ae7c7c055c7fab9fb55b43363e",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Reference only; native counterpart and other placement faces/options remain pending. Existing ArmorTrimMaterial protocol warning retained. Temporary spawn-animals setting restored byte-for-byte."
     }
   },
   "reviewNotes": {

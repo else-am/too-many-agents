@@ -38,3 +38,19 @@ The harness now rejects this incompatible configuration before launching. No
 configuration was changed, and this failed setup was not replayed. A future
 run needs an explicit temporary isolated-server setting with restoration, then
 the first measured refusal attempt; keep this original failure artifact.
+
+## First measured refusal result
+
+2026-10-08T11:13:03.183Z: after temporarily enabling animal spawning in the
+isolated reference server, the unchanged public procedure ran once. It rejected
+with `Server refused to place stone at (48, -60, 8): the block is still air`
+in 156ms. No blockPlaced event, item cost or inventory change occurred. Four
+independent server conditions confirmed air, support stone, retained stone and
+live tagged obstruction. The cow was removed, all dimensions saved, the owned
+server exited and port25575 was unbound. Original server.properties bytes were
+restored exactly. The earlier setup failure remains separately indexed; no
+measured placement was replayed. Existing ArmorTrimMaterial protocol warning
+remains recorded. Native counterpart and other faces/options remain unverified.
+
+Evidence: /Users/scott/.bb/thread-storage/placement-refusal-corrected/result.json
+and configuration.json, server.log, console.log, source.js in the same directory.
