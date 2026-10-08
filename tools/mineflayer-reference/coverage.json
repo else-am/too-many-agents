@@ -10163,6 +10163,22 @@
         ]
       },
       "limitations": "Original identical reference immediate-inventory assertion failed; separate bounded-wait reference converged after one tick. Independent native final world/inventory observation is later, not promise-time evidence. No broader placement or timing parity claim."
+    },
+    "reference-placement-refusal-setup": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/placement-refusal.js",
+      "subjects": [],
+      "scope": "Setup stopped before measured placement: summoned cow was discarded by spawn-animals=false. No placement/refusal outcome.",
+      "result": "failed",
+      "sourceSha256": "b25831d250add2064c35437e301ff3b29d92ac0228afe5f93536bc545ca98ce0",
+      "report": {
+        "path": "run/mineflayer-reference/placement-refusal-reference.json",
+        "sha256": "75985ebe0fa6e973861be62f073ace74fa53f1fe9f2376cc45bc76af6f2f7769",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Reference-only setup failure; not a product defect or native/refusal check. No retry. Startup protocol and teleport warnings retained."
     }
   },
   "reviewNotes": {

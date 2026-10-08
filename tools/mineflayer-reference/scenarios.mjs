@@ -11,6 +11,11 @@ import { startServer, directory } from './server.mjs';
 // ProtoDef logs and drops partial packets without emitting a client error.
 // Preserve that diagnostic rather than claiming a clean protocol run.
 const craftTrace = process.argv.includes('--craft-trace');
+if (process.argv.includes('--placement-refusal')) {
+  const properties = await readFile(join(directory, 'server.properties'), 'utf8');
+  assert(/^spawn-animals=true\s*$/m.test(properties),
+    'Placement refusal requires spawn-animals=true in the isolated reference server; false discards even summoned cows');
+}
 const protocolWarnings = [], originalLog = console.log;
 console.log = (...values) => {
   if (typeof values[0] === 'string' && /PartialReadError|^Chunk size is/.test(values[0])
@@ -74,6 +79,7 @@ async function consoleCommands(commands) {
 async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
+  if (process.argv.includes('--placement-refusal')) return placementRefusalScenario();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--container')) return containerScenario();
   if (process.argv.includes('--wall-convergence')) return wallConvergenceScenario();
@@ -109,6 +115,44 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function placementRefusalScenario() {
+  const source = await readFile(new URL('./placement-refusal.js', import.meta.url), 'utf8');
+  const report = { scenario:'placement-refusal',backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
+    source,sourceSha256:createHash('sha256').update(source).digest('hex'),startedAt:new Date().toISOString(),
+    clientErrors,protocolWarnings,serverConfirmed:false };
+  try {
+    await consoleCommands([
+      'gamerule doDaylightCycle false','gamerule doWeatherCycle false','time set day','weather clear',
+      'fill 44 -61 3 53 -61 12 minecraft:stone','fill 44 -60 3 53 -54 12 minecraft:air',
+      'kill @e[tag=tma_placement_refusal]','tp Reference 48.5 -60.0 5.5',
+      'gamemode survival Reference','clear Reference',
+      'item replace entity Reference hotbar.0 with minecraft:stone 1',
+      'summon minecraft:cow 48.5 -60.0 8.5 {Tags:["tma_placement_refusal"],NoAI:1b,PersistenceRequired:1b}',
+    ]);
+    bot.setQuickBarSlot(0);
+    await bot.waitForTicks(5);
+    const cow = Object.values(bot.entities).find(entity => entity.name === 'cow' && entity.position.distanceTo(new Vec3(48.5,-60,8.5)) < .1);
+    assert(cow && cow.width > 0 && cow.height > 0, 'Stationary cow must occupy the intended destination');
+    report.obstruction = {id:cow.id,position:cow.position,width:cow.width,height:cow.height};
+    report.invokedAt = new Date().toISOString();
+    report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3',source)(bot,Vec3);
+    const conditions = ['if block 48 -60 8 minecraft:air','if block 48 -61 8 minecraft:stone',
+      'if data entity Reference Inventory[{id:"minecraft:stone",count:1}]',
+      'if entity @e[type=minecraft:cow,tag=tma_placement_refusal,x=48,y=-60,z=8,dx=1,dy=1,dz=1,limit=1]'];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition,index) => `execute ${condition} run say ${markers[index]}`));
+    report.confirmations = {conditions,markers,messages};
+    assert(markers.every(marker => messages.some(message => message.includes(marker))), 'Server refusal outcome must match');
+    report.serverConfirmed = true;
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'placement-refusal-reference.json'),JSON.stringify(report,null,2)+'\n');
+    if (!abort.signal.aborted) await consoleCommands(['kill @e[tag=tma_placement_refusal]']);
+  }
+  console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
 
 async function wallConvergenceScenario() {
