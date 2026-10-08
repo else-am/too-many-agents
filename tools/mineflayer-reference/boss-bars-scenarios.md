@@ -24,3 +24,13 @@ Check creation/removal at observation boundary and native event visibility.
 Compare End arena presence with actual validPlayer predicate; verify a custom bar
 assigned only to Dev is not leaked. Empty snapshots must remove old bars. All
 native reads run on server thread. Bound event records and encoded title bytes.
+
+
+## Packaged selected result: b21ce69
+
+Bossbar PASS: exact observe-bossbar.js once; three NEW completed look gates preceded create/styled rename/remove of exact Wither7b826d0d-de3e-46ef-85ea-66b0e0d31ac0. Exactly3 events, shared stable BossBar/list/title style hydrated, no replay/inventory change. Native first/renamed NBT and final absence recorded; temporary Easy restored to original Peaceful.3requests,39updates,10bridge operations,tool2542ms/script1960ms.
+
+Executor Codex gpt-6.1-sol low; artifact SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Exact source hashes, absolute call timestamps, raw/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json`.

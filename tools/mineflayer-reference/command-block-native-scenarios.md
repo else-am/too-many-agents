@@ -29,3 +29,13 @@ Focused guarded-world fixture when installation is available:
   unknown replies must not replay the edit.
 
 Native checks remain unrun. No command-block minecart API is invented.
+
+
+## Packaged selected result: b21ce69
+
+Inactive command block PASS: exact observe-command-block.js once, impulse/default then chain conditional then queued empty/default restoration completed at script finish. Native final NBT Command empty/auto0/powered0/TrackOutput0/SuccessCount0 and north unconditional impulse confirmed; no execution. Transient blockEntity payload absent, so no independent transient edited-NBT claim.3requests,10updates,9bridge operations,1060ms. Original survival restored; only temporary command block removed.
+
+Executor Codex gpt-6.1-sol low; artifact SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Exact source hashes, absolute call timestamps, raw/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json`.

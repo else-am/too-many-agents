@@ -124,3 +124,13 @@ known rejection codes while streaming and awaits runner frame acknowledgements;
 runner.mjs:44–55,74–94,117–121 preserves callback logs on failure, exposed by
 scripts.ts:262–271. This preparation covers one terminal wait; interrupted
 mining/route mutation progress is not claimed by it. Native execution is UNRUN.
+
+
+## Packaged selected result: b21ce69
+
+Selected terminal delivery PASS: UUID-only substitution in exact observe-self-death.js, new empty normal bound cow a94da934-0059-4270-9178-b54f9da459b3/agent60c380cd-a780-4539-a887-e519757c162c/thread thr_t3ikwpnxwu. One Health-only native merge after NEW completed look. Retained health0 sequence3 then exactlyone valid zero-argument death sequence4 with stable/hydrated Entity before expected body_dead. Native same UUID Health0/DeathTime4/Invulnerable1/binding retained, followed by absence.1completed request,8updates,5bridge operations,1048ms; no later scriptmutation/replay. Scoped release acknowledgement unconfirmed; later bodyLoadedfalse/bodyLosttrue/pendingWorldTools0. Supported archive attempted once and rejected body_missing_or_unloaded: dead record/thread retained without bypass. This proves NBT-induced terminal delivery only; combat/damage/drop/interrupted-action matrices remain untested. ScriptProbe health20/possessions untouched.
+
+Executor Codex gpt-6.1-sol low; artifact SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Exact source hashes, absolute call timestamps, raw/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json`.

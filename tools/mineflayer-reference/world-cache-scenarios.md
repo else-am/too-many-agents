@@ -49,3 +49,13 @@ Native-frame/storage integration contract (before this follow-up):
 - Native column events remain deferred until full hydration. A dimension change
   with unsaved guest columns rejects rather than misrouting old-dimension data
   to new coordinates. Cross-session guest persistence is not promised.
+
+
+## Packaged selected result: b21ce69
+
+World unload PASS: exact observe-world-unload.js once, callback unknown and all cache getters null, separate bot.blockAt retained, same column restored; zero native requests/updates,3bridge operations,609ms.
+
+Executor Codex gpt-6.1-sol low; artifact SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Exact source hashes, absolute call timestamps, raw/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json`.

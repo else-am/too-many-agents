@@ -26,3 +26,13 @@ interaction into an inventory request when native behavior would mount/feed.
 
 Mounted inventory via the player's separate inventory command remains pending;
 this slice enables the existing native sneak-interaction path.
+
+
+## Packaged selected result: b21ce69
+
+Horse window PASS: exact observe-horse-window.js once, genuine HorseWindow inventoryStart2/38slots, saddle1 typed cursor pickup/return, native SaddleItem1 before/after; inventory unchanged, sneak released/menu closed/unmounted.6requests,19updates,15bridge operations,1537ms.
+
+Executor Codex gpt-6.1-sol low; artifact SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Exact source hashes, absolute call timestamps, raw/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21ce69-summary.json`.
