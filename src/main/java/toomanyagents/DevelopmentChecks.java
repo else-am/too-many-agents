@@ -77,6 +77,30 @@ final class DevelopmentChecks {
         return snapshot();
     }
 
+    static JsonObject presentation(AgentHands recipient) {
+        var level = recipient.serverLevel();
+        requireDevelopment(level);
+        var component = net.minecraft.network.chat.Component.literal("Native header")
+            .withStyle(net.minecraft.ChatFormatting.GOLD);
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundTabListPacket(component,
+            net.minecraft.network.chat.Component.literal("Native footer")));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
+            net.minecraft.network.chat.Component.translatable("chat.type.text",
+                net.minecraft.network.chat.Component.literal("Fixture"), net.minecraft.network.chat.Component.literal("Title"))));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(
+            net.minecraft.network.chat.Component.literal("Native subtitle")), null);
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(-1, 40, 5));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket(
+            net.minecraft.network.chat.Component.literal("Native action bar")));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundClearTitlesPacket(true));
+        var unrelated = new net.neoforged.neoforge.common.util.FakePlayer(level,
+            new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "FixtureControl"));
+        unrelated.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
+            net.minecraft.network.chat.Component.literal("Wrong recipient")));
+        return JsonState.object("bodyUuid", recipient.visibleBody().getStringUUID(),
+            "nativePackets", 6, "negativeControlPackets", 1, "tick", level.getGameTime());
+    }
+
     static void tick(MinecraftServer server) {
         var run = active;
         if (run == null || run.level.getServer() != server) return;

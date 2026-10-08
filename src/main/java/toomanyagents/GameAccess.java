@@ -518,6 +518,21 @@ final class GameAccess {
                     if(fixture==null || !fixture.getPersistentData().getBoolean("too_many_agents_development_fixture"))throw error("development_fixture_missing");
                     yield snapshot;
                 }
+                case "presentation" -> {
+                    var uuid = UUID.fromString(string(request, "bodyUuid", 36));
+                    var entity = human.serverLevel().getEntity(uuid);
+                    if (!(entity instanceof Mob mob)) throw error("development_body_missing");
+                    var ref = new Body(mob.getStringUUID(), world(current), mob.level().dimension().location().toString());
+                    var controller = actions.get(ref);
+                    if (controller == null || !controller.scripted()) throw error("development_script_not_active");
+                    var latest = controller.status("");
+                    String readyId = string(request, "readyAction", 36);
+                    if (!latest.has("id") || !readyId.equals(latest.get("id").getAsString())
+                        || !"look".equals(latest.get("type").getAsString())
+                        || !"completed".equals(latest.get("status").getAsString()))
+                        throw error("development_listener_not_ready");
+                    yield DevelopmentChecks.presentation(controller.hands);
+                }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
                 default -> throw error("unknown_development_action");
             };

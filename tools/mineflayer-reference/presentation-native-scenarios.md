@@ -37,3 +37,29 @@ in this pinned NeoForge version, so intercepting each does not double-deliver.
 Validation so far: Java 21 compilation, plugin typecheck/bundle and packaged JAR
 build pass. No native presentation fixture or game launch has run on this change.
 The existing performance comparison stays on its previously fixed artifact.
+
+Native fixture delivery will use a guarded `dev presentation --json` action in
+only the isolated development world. It requires the exact body's currently
+completed look-action ID while its script lease is active. The guest installs
+listeners before that look; the coordinator observes its new ID before delivery.
+Send actual native packets through both no-op connection overloads, plus one
+negative-control packet to an unregistered unrelated FakePlayer. Do not emit
+anything to the human client or mutate blocks/inventory. Preserve timing and
+known/unknown outcome rules; no automatic repeated delivery.
+
+Ready guest script: `observe-presentation.js`. It installs listeners before its
+look, waits at most 1200 ticks, checks native order, shared ChatMessage identities,
+fully hydrated tab-list text, five-tick no-replay behavior and unchanged inventory.
+It has only been syntax-checked, not executed.
+
+Coordinator command (substitute the newly observed exact UUID/action ID):
+
+```sh
+python3 tools/agents.py --game-dir run dev presentation \
+  --json '{"bodyUuid":"BODY_UUID","readyAction":"NEW_LOOK_UUID"}'
+```
+
+The native gate rejects absent bodies, inactive scripts and anything other than
+the current completed look. The fixture sends six actual packets to the existing
+proxy and one negative-control title to a temporary unregistered FakePlayer. It
+neither moves the body nor opens a screen. Both send overloads are exercised.
