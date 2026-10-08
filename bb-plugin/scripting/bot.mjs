@@ -452,6 +452,11 @@ export function createBot(initial) {
     for (const sound of next.sounds ?? []) {
       bot.emit('soundEffectHeard', sound.name, vector(sound.position), sound.volume, sound.pitch);
     }
+    for (const particle of next.particles ?? []) {
+      const type = registry.particlesByName[particle.name];
+      if (!type) throw new Error(`Unknown native particle type: ${particle.name}`);
+      bot.emit('particle', Particle.fromNetwork({ ...particle, particle: { type: type.id } }));
+    }
     for (const entry of next.messages ?? []) {
       const message = new ChatMessage(entry.message);
       const sender = entry.sender ?? null;

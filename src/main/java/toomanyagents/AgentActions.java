@@ -35,6 +35,7 @@ final class AgentActions {
     private int entityEventSize;
     private record PendingSound(net.neoforged.neoforge.event.PlayLevelSoundEvent event, Vec3 position, Vec3 listener) {}
     private final ArrayDeque<PendingSound> sounds = new ArrayDeque<>();
+    private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
     private boolean creativeFlying;
     private boolean ownsElytraFlight;
     private final Set<String> heldControls = new HashSet<>();
@@ -92,6 +93,7 @@ final class AgentActions {
         messages.clear(); messageSize = 0;
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
+        particles.clear();
         scriptId = id;
         columns = new ScriptColumns();
         lastScriptId = id;
@@ -126,6 +128,7 @@ final class AgentActions {
         messages.clear(); messageSize = 0;
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
+        particles.clear();
         clearControls();
         cancel("");
         if (stateStream != null) stateStream.finish();
@@ -174,6 +177,19 @@ final class AgentActions {
         var result = new JsonArray();
         for (var event : entityEvents) if (event.accepted().getAsBoolean()) result.add(event.data());
         entityEvents.clear(); entityEventSize = 0;
+        return result;
+    }
+
+    void recordParticle(JsonObject event) {
+        if (!scripted()) return;
+        if (particles.size() >= 256) { failObservation("script_particle_event_overflow"); return; }
+        particles.addLast(event);
+    }
+
+    JsonArray drainParticles() {
+        var result = new JsonArray();
+        particles.forEach(result::add);
+        particles.clear();
         return result;
     }
 

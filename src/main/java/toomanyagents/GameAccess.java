@@ -759,6 +759,7 @@ final class GameAccess {
         snapshot.add("messages", controller.drainMessages());
         snapshot.add("entityEvents", controller.drainEntityEvents());
         snapshot.add("sounds", controller.drainSounds());
+        snapshot.add("particles", controller.drainParticles());
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
         for (var value : snapshot.getAsJsonArray("entities")) {
             var observed = value.getAsJsonObject();
@@ -1409,6 +1410,22 @@ final class GameAccess {
         result.addProperty("position", position);
         if (sender != null) result.addProperty("sender", sender.toString());
         return result;
+    }
+
+    void particleEvent(ScriptParticleEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        var type = BuiltInRegistries.PARTICLE_TYPE.getKey(event.options.getType());
+        var position = event.position;
+        var data = JsonState.object("name", type.getNamespace().equals("minecraft") ? type.getPath() : type.toString(),
+            "x", position.x, "y", position.y, "z", position.z,
+            "offsetX", event.offset.x, "offsetY", event.offset.y, "offsetZ", event.offset.z,
+            "amount", event.count, "velocityOffset", event.speed, "longDistance", event.longDistance);
+        for (var controller : actions.values()) {
+            if (!controller.scripted() || controller.mob.level() != event.level
+                || event.recipient != null && event.recipient != controller.hands) continue;
+            if (controller.mob.blockPosition().closerToCenterThan(position, event.longDistance ? 512 : 32))
+                controller.recordParticle(data);
+        }
     }
 
     void soundEvent(net.neoforged.neoforge.event.PlayLevelSoundEvent event) {

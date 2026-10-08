@@ -91,6 +91,9 @@ public final class TooManyAgents {
             });
         NeoForge.EVENT_BUS.addListener(this::despawn);
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
+        NeoForge.EVENT_BUS.addListener((ScriptParticleEvent event) -> {
+            if (game != null) game.particleEvent(event);
+        });
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.NORMAL, true,
             (net.neoforged.neoforge.event.PlayLevelSoundEvent event) -> {
             if (game != null) game.soundEvent(event);
