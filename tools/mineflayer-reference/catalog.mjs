@@ -458,7 +458,19 @@ const pureRecipeContracts = new Set([
   "RecipeItem.id",
   "RecipeItem.metadata"
 ].map(name => `prismarine-recipe.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts]);
+// Calculations/local NBT transforms over supplied block data, not live world reads.
+const pureBlockContracts = new Set([
+  "constructor",
+  "fromStateId",
+  "fromProperties",
+  "fromString",
+  "getProperties",
+  "canHarvest",
+  "digTime",
+  "getSignText",
+  "setSignText"
+].map(name => `prismarine-block.Block.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

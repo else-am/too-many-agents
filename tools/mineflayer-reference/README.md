@@ -236,3 +236,10 @@ The existing suite's recorded run passed6,136 comparisons across all1,470 pinned
 recipes/782 result IDs and six independent source corrections in QuickJS.
 Actual `bot.craft`, hydrated inventory queries, server recipe books and custom
 datapacks are not promoted from this static-data evidence.
+
+Nine explicit Block constructors/calculations/local sign-NBT methods have the
+recorded29,675-case pinned/bundled-QuickJS comparison, including every static
+state and harvest/dig/sign inputs. `digTime` remains an estimate and
+`setSignText` changes only the supplied guest object. Native block acquisition,
+lighting, collision changes, mining duration and sign writes require their own
+evidence; no live-observation field is promoted from this suite.
