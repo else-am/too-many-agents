@@ -6,10 +6,10 @@ Updated October 7, 2026. **The full port is not complete. There is still impleme
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`042cc01`**, ordering tick waits after preceding native controls. Native-body elytra rockets and actual boost-duration observations are implemented; flight/boost verification is assigned.
+- Latest built implementation: **`042cc01`**, ordering tick waits after preceding native controls. Native-body elytra flight/rockets and actual boost-duration observations passed the focused native check.
 - Artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`.
-- Latest focused native pass: **`53dadd0`**, two actual arm swings, one hydrated apple-consumption event and a natural landing particle. Completion permission filtering and sign events passed on `35e8a4f`. Previous chat/scoreboard checks passed on `53dd7ca`, columns on `26aea35`; earlier evidence is linked below.
-- Test JVM `70727` on `53dadd0` saved/disconnected with all dimensions saved, then stopped. Tester is saving/stopping `0d972c0` JVM `78120`, then owns the narrow rebuilt `042cc01` check. The first flight check stopped before flight/use: tick waits raced queued controls. Fourteen requests completed, the rocket remained intact and release was confirmed. No flight/boost outcome is claimed; the ordering fix compiles and awaits that focused check. The completed signal check completed 7/7 requests, 100 updates and 17 bridge operations in 5,580 ms using Codex 6.1 Sol low.
+- Latest focused native pass: **`042cc01`**, actual airborne gliding, one body-attached rocket, item consumption, boost/countdown, unchanged unrelated inventory and native landing/release cleanup. The check completed 7/7 requests, 82 updates and 20 bridge operations in 6,331 ms using Codex 6.1 Sol low. Earlier signal, completion, sign, chat, scoreboard and column evidence is linked below.
+- Test JVM `83377` saved/disconnected with all dimensions saved, then stopped. Tester is assigned the required direct-tools versus scripting wall/gather comparison on this same fixed artifact. No other feature tests are assigned.
 - Minecraft 1.21.1; Mineflayer 4.39.0; Pathfinder 2.4.5. Exact dependencies and source revisions: [upstream.json](tools/mineflayer-reference/upstream.json).
 
 ## Implemented
@@ -21,7 +21,7 @@ Checked boxes mean the described implementation exists. Verification is listed s
 - [x] One `minecraft_run` call executes async JavaScript, loops and sequences against an existing native body.
 - [x] Isolated QuickJS worker, bounded memory/CPU/deadline/output; no guest filesystem, network, credentials or Node module loader.
 - [x] Thread/body/world ownership, expiring control lease, cancellation and cleanup; unknown outcomes abort without automatic replay.
-- [x] Ordered state stream; action promises wait for their authoritative state. Tick waits and synchronous control draining. Positive tick waits now drain preceding controls before counting frames; focused rebuilt verification is pending.
+- [x] Ordered state stream; action promises wait for their authoritative state. Tick waits and synchronous control draining. Positive tick waits now drain preceding controls before counting frames; rebuilt native takeoff passed.
 - [x] Stable Entity/Vec3 references, inventory/windows, held/equipped items and observed vehicle/passenger relationships.
 - [x] Typed Block, Item, Window, Entity, ChatMessage/MessageBuilder, Recipe/RecipeItem and Vec3 objects; component/NBT transport.
 - [x] Player lists and UUID/name mapping; stable game state; time, health, oxygen, weather, XP and version feature queries.
@@ -73,6 +73,8 @@ These are focused results, not proof of the whole API.
 
 Key evidence (local BB thread storage):
 
+- [Native elytra/rocket, control ordering and cleanup](</Users/scott/.bb/thread-storage/thr_xykqkgui57/042cc01-summary.json>)
+
 - [Essential packaged workflows](</Users/scott/.bb/thread-storage/thr_xykqkgui57/packaged-essential-summary.json>)
 - [Persistence, combat and entity placement](</Users/scott/.bb/thread-storage/thr_xykqkgui57/combat-focused-summary.json>)
 - [Movement, jump, eating and shield use](</Users/scott/.bb/thread-storage/thr_xykqkgui57/eede028-focused-summary.json>)
@@ -99,8 +101,8 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [x] **Boat steering implementation:** `moveVehicle` and manual inputs use the native boat controller, enforce controlling-seat ownership and clear inputs on release. Java/plugin/package build passed.
 - [ ] **Vehicle steering verification and other mounts:** basic boat movement/turning/release passed; boundary and passenger-ownership edge cases remain unverified. Horses, pigs, striders and minecarts remain implementation work.
 - [x] **Creative inventory implementation:** setInventorySlot/clearSlot/clearInventory use the existing operation queue, trusted component wire encoding, actual native slots and authoritative completion. Java/plugin/package build and 74 literal wire encoding fixtures passed; native checks remain unrun. Slot 0 rejects as a native output slot; slot 45 supports native offhand.
-- [x] **Elytra flight implementation:** async elytraFly starts actual living-body gliding, preserves momentum through ordinary action completion, exposes water/flight state, and clears script-owned gliding on release. Java/plugin/package build passed. Native flight verification and special travel profiles remain pending; rocket integration is listed below.
-- [x] **Native elytra rocket implementation:** activating a held rocket while gliding creates the native rocket attached to the actual body, with native item cost, physics and lifetime. Observations provide actual remaining boost ticks, usedFirework and entityElytraFlew events. Java/plugin/package build passed; flight/boost validation remains pending.
+- [x] **Elytra flight implementation:** async elytraFly starts actual living-body gliding, preserves momentum through ordinary action completion, exposes water/flight state, and clears script-owned gliding on release. Java/plugin/package build passed. Native airborne gliding and scoped release passed on `042cc01`; special travel profiles remain pending.
+- [x] **Native elytra rocket implementation:** activating a held rocket while gliding creates the native rocket attached to the actual body, with native item cost, physics and lifetime. Observations provide actual remaining boost ticks, usedFirework and entityElytraFlew events. Java/plugin/package build and the focused `042cc01` check passed: native attachment to the actual body, one rocket consumed, one event, boost/countdown and landing/release cleanup. Offhand, creative, multiple-rocket and failure edge cases remain unverified.
 - [x] **Creative flight implementation:** startFlying/stopFlying/flyTo, bounded native collision steps, manual vertical input and scoped hover state; no persistent NoGravity edit. Java/plugin/package build passed; native checks remain unrun.
 - [ ] **Creative native verification:** inventory permission/components/clear/persistence, flight collision/hover/release and cancellation remain unrun. Controls during another active action retain the existing busy fence.
 - [x] **Bed/sleep/wake implementation:** actual body sleep, native bed occupancy, wake, parsed bed metadata and sleep/wake events; full build passed.
@@ -142,7 +144,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [x] **Catalog refresh:** indexed six exact historical packaged scripts with verified scenario/report hashes, tested revisions and independent native summaries; added recent library candidates and guest registration source locations. No old native test was rerun or API promoted to fully supported.
 - [ ] **Complete evidence reconciliation:** remaining historical runs, individual contract coverage and paired reference evidence still need review. Catalog pending counts remain conformance obligations, not an implementation percentage.
 - [ ] **Paired live reference runs:** reference server is prepared, but Minecraft server EULA acceptance remains unanswered. Do not accept/start it without authorization.
-- [ ] **Performance comparison:** wall-building and gathering/crafting protocols and ready scripts are in [performance-scenarios.md](tools/mineflayer-reference/performance-scenarios.md). Syntax passes; neither measured arm has run. Compare actual successful outcomes/tool counts/time, not theoretical savings.
+- [ ] **Performance comparison:** wall-building and gathering/crafting protocols and ready scripts are in [performance-scenarios.md](tools/mineflayer-reference/performance-scenarios.md). Syntax passes; the paired runs are now assigned to the testing coordinator, with no measurements yet. Compare actual successful outcomes/tool counts/time, not theoretical savings.
 - [ ] **Final full-scope packaged/persistence validation** after remaining ports. Recent changes have focused verification, not a new exhaustive persistence cycle.
 
 Connection/account setup and Mineflayer's internal packet client are the agreed inapplicable pieces. Multiplayer and arbitrary third-party plugin compatibility are not promised. Other unclear APIs remain pending review rather than automatically excluded. Use [the catalog guide](tools/mineflayer-reference/README.md) and pinned source to find omissions; this grouped checklist is not the complete declaration inventory.
