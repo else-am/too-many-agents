@@ -10273,6 +10273,29 @@
         ]
       },
       "limitations": "Reference only. Native active-action cancellation requires independent action ledger and remains unrun for this exact source. No replacement-dig/unknown-reply coverage promotion; existing protocol warning retained."
+    },
+    "native-equipment-recovered": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/inventory-equipment-native.js",
+      "subjects": [
+        "mineflayer.Bot.equip",
+        "mineflayer.Bot.unequip"
+      ],
+      "scope": "Recovered exact native call: split/reassembly, chest Item shield/head equip, head/offhand unequip, numeric sword hand name/damage7, finish-drained hotbar6; independent saved inventory supports final contents.",
+      "result": "passed",
+      "sourceSha256": "19fb487c3ed2edadf41a1d71695af347c14d594f46fa5067d9467493bcf12675",
+      "report": {
+        "path": "run/mineflayer-reference/equipment-provenance-recovered.json",
+        "sha256": "f19964bbe2da475ad5d8429348d78f5d70b6bab2fe32a9ec422b04aa43aad0f8",
+        "codePath": [
+          "rawCompletedEvent",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Native source differs from original failed reference only by trailing newline. New passing ordinary reference shares only selected outcomes; native call did not assert void returns, ordinary numeric offhand, hand unequip or whole component equality. Auxiliary observation provenance and packaged artifact identity unavailable. No member promotion."
     }
   },
   "reviewNotes": {

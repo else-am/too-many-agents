@@ -151,3 +151,16 @@ and server log: /Users/scott/.bb/thread-storage/dig-cancel-reference/. Existing
 protocol warning retained. Native counterpart remains unrun; no replacement-dig
 or unknown-outcome claim. The harness helper was renamed miningScenario after
 execution for clarity; the recorded measured source is unchanged.
+
+Historical native equipment provenance recovered without rerun: exact completed
+BB call2e13080f, 2026-10-07T22:04:23.765Z–22:04:25.656Z,16/16requests32updates35ops,
+1794ms script/1880ms tool with release confirmed. Exact code is retained in
+recorded/inventory-equipment-native.js; it differs from the failed original
+reference only by one trailing newline. Passed native chest Item head/offhand,
+both unequips and numeric sword hand/damage7. Independent saved tick5467 inventory
+supports final item counts/components/equipment/selection, but auxiliary producer
+arguments/time and tested JAR identity were not recovered. Common ordinary
+reference adds numeric offhand, hand unequip, void results and whole component
+assertions that this native call did NOT establish. Do not promote these gaps or
+reinterpret the original reference failure. Full raw events/source/results:
+/Users/scott/.bb/thread-storage/thr_xykqkgui57/equipment-provenance-recovery.json.
