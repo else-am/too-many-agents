@@ -26,6 +26,8 @@ import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.animal.Parrot;
+import net.minecraft.world.entity.animal.allay.Allay;
+import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.entity.animal.AbstractFish;
 import net.minecraft.world.entity.animal.Cod;
@@ -63,7 +65,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -133,6 +135,9 @@ public final class ScriptNavigation {
     private Vec3 flightHold;
     private boolean flightPrepared, flightLanding;
     private float flightWidth, flightHeight, flightEyeHeight;
+    private PathNavigation allayNavigation;
+    private Pose allayPose;
+    private boolean allayTravelTick;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
                          boolean jump, boolean sprint, float wantedYaw, double modifier) {
@@ -185,6 +190,7 @@ public final class ScriptNavigation {
         rabbitPrepared = false; rabbitStep = null;
         flightPrepared = flightLanding = false; flightStep = null; flightHold = mob.position();
         flightWidth = mob.getBbWidth(); flightHeight = mob.getBbHeight(); flightEyeHeight = mob.getEyeHeight();
+        if (physics == Physics.ALLAY) { allayNavigation = mob.getNavigation(); allayPose = mob.getPose(); }
         fishHadTarget = mob.getTarget() != null;
         puffState = mob.getClass() == Pufferfish.class ? ((Pufferfish) mob).getPuffState() : -1;
         if (puffState >= 0) {
@@ -220,7 +226,7 @@ public final class ScriptNavigation {
             boolean parkour = flag(node, "parkour");
             if ((fishMode(physics) || physics == Physics.DROWNED_WATER) && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_aquatic_edge");
-            if (physics == Physics.PARROT && (node.has("direct") || parkour || Math.abs(dy) > 1))
+            if (flightMode(physics) && (node.has("direct") || parkour || Math.abs(dy) > 1))
                 throw error("route_unsupported_flying_edge");
             if ((slimeHopper(physics) || physics == Physics.RABBIT) && node.has("direct")) throw error("route_unsupported_hopping_direct");
             if (node.has("direct")) {
@@ -325,7 +331,7 @@ public final class ScriptNavigation {
                     } else if (physics == Physics.DROWNED_WATER) {
                         prepareDrownedWater(returnTo);
                         if (arrived(returnTo)) { drownedHold = returnTo; returnTo = null; }
-                    } else if (physics == Physics.PARROT) {
+                    } else if (flightMode(physics)) {
                         if (arrived(returnTo)) { flightHold = returnTo; returnTo = null; }
                         else prepareFlight(returnTo, false);
                     } else if (physics == Physics.RABBIT) {
@@ -357,7 +363,7 @@ public final class ScriptNavigation {
                         phase = "swimming";
                         prepareDrownedWater(target);
                         checkArrival = true;
-                    } else if (physics == Physics.PARROT) {
+                    } else if (flightMode(physics)) {
                         phase = flightLanding ? "landing" : "flying";
                         prepareFlight(target, flightLanding);
                         checkArrival = true;
@@ -394,11 +400,12 @@ public final class ScriptNavigation {
                 if (swimming == null) swimming = swimStep(swimHold);
                 swimControl(swimming);
             }
-            if (physics == Physics.PARROT && active && flightStep == null) prepareFlight(flightHold, false);
+            if (flightMode(physics) && active && flightStep == null) prepareFlight(flightHold, false);
             if (physics == Physics.DROWNED_WATER && drownedStep == null) {
                 if (active) prepareDrownedWater(drownedHold);
                 else drownedStep = predictDrownedWater(mob.getDeltaMovement());
             }
+            if (physics == Physics.ALLAY && flightStep == null) flightStep = predictAllayStep();
             if (physics == Physics.TADPOLE && tadpoleStep == null) {
                 if (active) prepareTadpole(swimHold);
                 else tadpoleStep = tadpoleTravelStep();
@@ -431,7 +438,7 @@ public final class ScriptNavigation {
             // Native timer/animation/RNG preparation is not a replay-safe preflight.
             if (physics == Physics.RABBIT && rabbitPrepared)
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
-            if (physics == Physics.PARROT && flightPrepared)
+            if (flightMode(physics) && flightPrepared)
                 throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
             if (physics == Physics.TADPOLE && tadpolePrepared)
                 throw new IllegalStateException("route_tadpole_prepared_failed: " + failure.getMessage(), failure);
@@ -443,7 +450,8 @@ public final class ScriptNavigation {
 
     void stop() {
         requireThread();
-        boolean cleanup = (physics != Physics.TADPOLE || ownsTadpoleCleanup())
+        boolean cleanup = (physics != Physics.ALLAY || ownsAllayCleanup())
+            && (physics != Physics.TADPOLE || ownsTadpoleCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
             && (physics != Physics.DROWNED_WATER || ownsDrownedWaterCleanup());
         OWNED.remove(mob, this);
@@ -465,7 +473,7 @@ public final class ScriptNavigation {
         Vec3 raw = direct == null ? Vec3.atBottomCenterOf(integerPosition(nodes.get(index))) : vector(direct);
         if (direct != null && edgeStart.distanceTo(vector(direct.getAsJsonObject("from"))) > 0.2)
             throw error("route_direct_start_changed");
-        if (fishMode(physics) || physics == Physics.PARROT) raw = raw.add(0, swimTargetOffset(mob), 0);
+        if (fishMode(physics) || flightMode(physics)) raw = raw.add(0, swimTargetOffset(mob), 0);
         if (physics == Physics.DROWNED_WATER) raw = raw.add(0, 0.5, 0);
         target = raw;
         if (physics == Physics.DROWNED_WATER) {
@@ -474,7 +482,7 @@ public final class ScriptNavigation {
             AABB atSource = drownedInitialVolume.move(source.subtract(edgeStart));
             drownedPolicyVolume = atSource.minmax(atSource.move(raw.subtract(source))).deflate(EPS);
         }
-        double rise = fishMode(physics) || physics == Physics.PARROT || physics == Physics.DROWNED_WATER ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
+        double rise = fishMode(physics) || flightMode(physics) || physics == Physics.DROWNED_WATER ? 0 : physics == Physics.MAGMA || physics == Physics.RABBIT ? jumpRise(mob) : Math.min(4, jumpRise(mob));
         relevant = mob.getBoundingBox().minmax(mob.getBoundingBox().move(raw.subtract(edgeStart)))
             .inflate(0.1, 0, 0.1).expandTowards(0, rise + 0.1, 0).expandTowards(0, -1, 0);
         if (direct != null) {
@@ -484,7 +492,7 @@ public final class ScriptNavigation {
                 Math.min(from.z, raw.z) - half, Math.max(from.x, raw.x) + half,
                 direct.get("maxY").getAsDouble() + mob.getBbHeight(), Math.max(from.z, raw.z) + half);
         }
-        if (physics == Physics.PARROT) relevant = flightVolume(relevant);
+        if (flightMode(physics)) relevant = flightVolume(relevant);
         checkVolume(relevant);
         for (String key : List.of("toBreak", "toPlace")) for (JsonElement entry : nodes.get(index).getAsJsonArray(key)) {
             BlockPos pos = integerPosition(entry.getAsJsonObject());
@@ -548,7 +556,7 @@ public final class ScriptNavigation {
         checkCell(desired);
         if (flag(edit, "jump")) {
             if (fishMode(physics) || physics == Physics.DROWNED_WATER) throw error("route_aquatic_jump_unavailable");
-            if (physics == Physics.PARROT) throw error("route_flying_jump_placement_unavailable");
+            if (flightMode(physics)) throw error("route_flying_jump_placement_unavailable");
             if (!tower) {
                 if (!mob.onGround() || jumpRise(mob) < desired.getY() + 1 - mob.getY()) throw error("route_jump_unavailable");
                 AABB clearance = mob.getBoundingBox().expandTowards(0, jumpRise(mob), 0);
@@ -602,7 +610,7 @@ public final class ScriptNavigation {
         recordEdit("place", desired, before);
         placeIndex++; tower = false;
         if (edit.has("returnPos")) returnTo = Vec3.atBottomCenterOf(integerPosition(edit.getAsJsonObject("returnPos")))
-            .add(0, physics == Physics.DROWNED_WATER ? 0.5 : fishMode(physics) || physics == Physics.PARROT ? swimTargetOffset(mob) : 0, 0);
+            .add(0, physics == Physics.DROWNED_WATER ? 0.5 : fishMode(physics) || flightMode(physics) ? swimTargetOffset(mob) : 0, 0);
     }
 
     private void use(BlockPos pos) {
@@ -822,7 +830,7 @@ public final class ScriptNavigation {
         }
         Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
         Vec3 after = pos.add(motion.delta);
-        if (!inside(after) || !withinEdge(after)) throw error(physics == Physics.PARROT ? "route_flight_edge_unexecutable" : "route_rabbit_edge_unexecutable");
+        if (!inside(after) || !withinEdge(after)) throw error(flightMode(physics) ? "route_flight_edge_unexecutable" : "route_rabbit_edge_unexecutable");
         checkDryVolume(mob.getBoundingBox().expandTowards(motion.delta));
         Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0,
             Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
@@ -842,6 +850,7 @@ public final class ScriptNavigation {
     }
 
     private void prepareFlight(Vec3 goal, boolean landing) {
+        if (physics == Physics.ALLAY) { prepareAllayFlight(goal, landing); return; }
         requireFlightLease();
         if (flightStep != null) throw error("route_duplicate_flight_control");
         Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), difference = goal.subtract(pos);
@@ -890,6 +899,7 @@ public final class ScriptNavigation {
 
     /** Cleanup uses the original native WAIT branch and never changes velocity. */
     private void clearFlightControls() {
+        if (physics == Physics.ALLAY) { clearAllayFlightControls(); return; }
         if (mob.level() != level || mob.isRemoved() || mob.getMoveControl() != controller
             || OWNED.get(mob) != null && OWNED.get(mob) != this
             || owner.currentScriptId() != null && !lease.equals(owner.currentScriptId())) return;
@@ -902,6 +912,103 @@ public final class ScriptNavigation {
         }
         controller.tick(); // native WAIT clears noGravity (hoversInPlace=false)
         if (mob.isNoGravity()) throw error("route_flight_gravity_not_released");
+    }
+
+    /** Allay's native acceleration differs from LivingEntity/Parrot dry travel. */
+    private void prepareAllayFlight(Vec3 goal, boolean landing) {
+        requireFlightLease();
+        if (flightStep != null) throw error("route_duplicate_flight_control");
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), difference = goal.subtract(pos);
+        double speed = mob.getAttributeValue(mob.onGround() ? Attributes.MOVEMENT_SPEED : Attributes.FLYING_SPEED);
+        if (mob.isSprinting() && mob.onGround()) speed /= 1.3;
+        if (!Double.isFinite(speed) || speed <= 0 || speed > 4) throw error("route_flight_speed_unsupported");
+        Vec3 horizontal = difference.multiply(0.02, 0, 0.02).subtract(velocity.multiply(0.35, 0, 0.35));
+        double vertical = difference.y * 0.02 - velocity.y * 0.35;
+        if (landing && difference.y <= 0.12) vertical = Math.min(vertical, -0.001);
+        double desired = Math.max(horizontal.horizontalDistance(), Math.abs(vertical));
+        // Actual forward/Y input and moveRelative acceleration both use speed.
+        // Keep their combined length below one; the predictor reads actual input.
+        double modifier = Math.clamp(Math.sqrt(desired) / speed, 0, Math.min(1, 0.5 / speed));
+        Vec3 wanted = pos;
+        if (desired > 1e-5) {
+            double length = horizontal.horizontalDistance();
+            Vec3 heading = length > 1e-12 ? horizontal.scale(1 / length)
+                : new Vec3(Mth.sin(mob.getYRot() * ((float) Math.PI / 180)), 0, -Mth.cos(mob.getYRot() * ((float) Math.PI / 180)));
+            wanted = pos.add(heading.x, vertical > 0 ? 1 : -1, heading.z);
+        }
+        flightPrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(wanted.x, wanted.y, wanted.z, modifier);
+        controller.tick();
+        requireFlightLease();
+        if (!mob.isNoGravity() || !mob.position().equals(pos) || !mob.getDeltaMovement().equals(velocity))
+            throw error("route_flight_preparation_changed");
+        flightStep = predictAllayStep();
+    }
+
+    private DryStep predictAllayStep() {
+        requireMode();
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement(), input = new Vec3(mob.xxa, mob.yya, mob.zza);
+        float speed = mob.getSpeed();
+        if (!Float.isFinite(speed) || speed < 0 || speed > 4 || !Double.isFinite(input.lengthSqr())
+            || !Double.isFinite(velocity.lengthSqr())) throw error("route_allay_input_invalid");
+        if (input.lengthSqr() >= 1e-7) {
+            if (input.lengthSqr() > 1) input = input.normalize();
+            input = input.scale(speed);
+            float radians = mob.getYRot() * ((float) Math.PI / 180), sin = Mth.sin(radians), cos = Mth.cos(radians);
+            velocity = velocity.add(input.x * cos - input.z * sin, input.y, input.z * cos + input.x * sin);
+        }
+        Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
+        Vec3 after = pos.add(motion.delta);
+        if (!inside(after) || !withinEdge(after)) throw error("route_flight_edge_unexecutable");
+        requireFlightVolume(mob.getBoundingBox().expandTowards(motion.delta));
+        AABB bounds = mob.getBoundingBox().move(motion.delta);
+        BlockPos support = motion.ground ? supportingBlock(bounds, after) : null;
+        if (motion.ground && support == null && mob.mainSupportingBlockPos.isPresent())
+            support = supportingBlock(bounds.move(-motion.delta.x, 0, -motion.delta.z), after);
+        BlockPos legacy = BlockPos.containing(after.x, after.y - (double) 0.2F, after.z);
+        if (support != null) {
+            checkCell(support);
+            legacy = level.getBlockState(support).collisionExtendsVertically(level, support, mob)
+                ? support : support.atY(legacy.getY());
+        }
+        checkCell(legacy);
+        Block block = level.getBlockState(legacy).getBlock();
+        boolean verticalCollision = velocity.y != motion.delta.y;
+        try {
+            if (verticalCollision && block.getClass().getMethod("updateEntityAfterFallOn",
+                net.minecraft.world.level.BlockGetter.class, Entity.class).getDeclaringClass() != Block.class
+                || motion.ground && block.getClass().getMethod("stepOn", net.minecraft.world.level.Level.class,
+                    BlockPos.class, BlockState.class, Entity.class).getDeclaringClass() != Block.class)
+                throw error("route_allay_impact_unsupported");
+        } catch (ReflectiveOperationException failure) { throw error("route_allay_impact_unsupported"); }
+        BlockPos feet = BlockPos.containing(after), below = movementSupport(after, support);
+        checkCell(feet); checkCell(below);
+        float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
+        if (factor == 1) factor = level.getBlockState(below).getBlock().getSpeedFactor();
+        if (!Float.isFinite(factor) || factor < 0 || factor > 4) throw error("route_allay_block_speed_unsupported");
+        Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0,
+            verticalCollision ? 0 : velocity.y, Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0);
+        return new DryStep(after, remaining.multiply(factor, 1, factor).scale(0.91F));
+    }
+
+    private boolean ownsAllayCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && mob.getNavigation() == allayNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    /** Hover WAIT intentionally retains noGravity and actual momentum. */
+    private void clearAllayFlightControls() {
+        if (!ownsAllayCleanup()) return;
+        mob.getNavigation().stop();
+        mob.setXxa(0); mob.setYya(0); mob.setZza(0); mob.setSpeed(0);
+        mob.getJumpControl().tick(); mob.setJumping(false); mob.setSprinting(false);
+        if (controller.hasWanted()) {
+            controller.setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
+            controller.tick();
+        }
+        controller.tick();
     }
 
     private void requireRabbitLease() {
@@ -1362,7 +1469,7 @@ public final class ScriptNavigation {
         if (!mob.isAlive() || mob.isRemoved()) throw error("route_body_changed");
         AABB sweep = mob.getBoundingBox().expandTowards(mob.getDeltaMovement()).inflate(0.4, mob.maxUpStep() + 0.1, 0.4);
         checkVolume(sweep);
-        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && box.get() != null) {
+        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && physics != Physics.ALLAY && box.get() != null) {
             BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
             float friction = level.getBlockState(support).getFriction(level, support, mob);
             double acceleration = mob.onGround() ? mob.getSpeed() * (0.21600002F / (friction * friction * friction)) : 0.02F;
@@ -1377,9 +1484,10 @@ public final class ScriptNavigation {
         }
         drownedTravelTick = physics == Physics.DROWNED_WATER;
         tadpoleTravelTick = physics == Physics.TADPOLE;
+        allayTravelTick = physics == Physics.ALLAY;
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; allayTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1397,7 +1505,7 @@ public final class ScriptNavigation {
         if (physics == Physics.TADPOLE && !ownsTadpoleCleanup()) return;
         if (physics == Physics.DROWNED_WATER && !ownsDrownedWaterCleanup()) return;
         if (puffState >= 0 && !ownsPufferfishCleanup()) return;
-        if (physics == Physics.PARROT) { clearFlightControls(); return; }
+        if (flightMode(physics)) { clearFlightControls(); return; }
         clearInputs();
         if (physics == Physics.RABBIT) { mob.getJumpControl().tick(); mob.setJumping(false); }
         if (physics == Physics.FISH) mob.setSpeed(0);
@@ -1408,11 +1516,11 @@ public final class ScriptNavigation {
 
     private boolean settled() {
         return mob.onGround() || mob.isInWater() || mob.onClimbable()
-            || physics == Physics.PARROT && mob.getDeltaMovement().length() <= 0.03;
+            || flightMode(physics) && mob.getDeltaMovement().length() <= 0.03;
     }
     private boolean arrived(Vec3 goal) {
         return goal.subtract(mob.position()).horizontalDistance() < 0.12 && Math.abs(goal.y - mob.getY()) < 0.12 && settled()
-            && (!fishMode(physics) && physics != Physics.PARROT && physics != Physics.DROWNED_WATER || mob.getDeltaMovement().length() <= 0.03);
+            && (!fishMode(physics) && !flightMode(physics) && physics != Physics.DROWNED_WATER || mob.getDeltaMovement().length() <= 0.03);
     }
 
     private BlockPos logicalPosition(Vec3 position) {
@@ -1428,7 +1536,7 @@ public final class ScriptNavigation {
     private boolean arrivedAtNode(Vec3 goal) {
         if (direct != null) return arrived(goal);
         BlockPos node = integerPosition(nodes.get(index));
-        if (physics == Physics.PARROT)
+        if (flightMode(physics))
             return BlockPos.containing(mob.position()).equals(node) && arrived(goal) && (!flightLanding || mob.onGround());
         if (physics == Physics.DROWNED_WATER)
             return BlockPos.containing(mob.position()).equals(node) && goal.subtract(mob.position()).horizontalDistance() < 0.12
@@ -1479,7 +1587,7 @@ public final class ScriptNavigation {
         Vec3 center = Vec3.atBottomCenterOf(node);
         if (fishMode(physics)) return center.add(0, swimTargetOffset(mob), 0);
         if (physics == Physics.DROWNED_WATER) return center.add(0, 0.5, 0);
-        if (physics == Physics.PARROT) return flightDestination(node);
+        if (flightMode(physics)) return flightDestination(node);
         if (waterOrClimb(node)) return center;
         double y = node.getY() - 1;
         boolean supported = false;
@@ -1540,7 +1648,7 @@ public final class ScriptNavigation {
                 && position.y >= Math.floor(Math.min(edgeStart.y, target.y))
                 && position.y < Math.floor(Math.max(edgeStart.y, target.y)) + 1;
         }
-        if ((fishMode(physics) || physics == Physics.PARROT) && edgeStart != null && target != null) {
+        if ((fishMode(physics) || flightMode(physics)) && edgeStart != null && target != null) {
             Vec3 edge = target.subtract(edgeStart);
             double t = edge.lengthSqr() == 0 ? 0 : Math.clamp(position.subtract(edgeStart).dot(edge) / edge.lengthSqr(), 0, 1);
             return position.distanceTo(edgeStart.add(edge.scale(t))) <= 0.3;
@@ -1606,9 +1714,9 @@ public final class ScriptNavigation {
     static JsonObject capabilities(Mob mob) {
         Physics mode = physics(mob);
         boolean supported = mode != Physics.UNSUPPORTED;
-        if (mode == Physics.PARROT) {
+        if (flightMode(mode)) {
             JsonObject result = new JsonObject();
-            result.addProperty("physics", "native-parrot-flight-post-tick");
+            result.addProperty("physics", mode == Physics.ALLAY ? "native-allay-flight-post-tick" : "native-parrot-flight-post-tick");
             result.addProperty("locomotion", "flying");
             result.addProperty("canFly", true);
             result.addProperty("flightTargetYOffset", swimTargetOffset(mob));
@@ -1661,6 +1769,15 @@ public final class ScriptNavigation {
         return result;
     }
 
+    private static boolean flightMode(Physics mode) { return mode == Physics.PARROT || mode == Physics.ALLAY; }
+
+    /** Identity only: cleanup must still recognize a released native hover body. */
+    static boolean reviewedAllayFlightBody(Mob mob) {
+        if (mob.getClass() != Allay.class || mob.getMoveControl().getClass() != FlyingMoveControl.class) return false;
+        FlyingMoveControl control = (FlyingMoveControl) mob.getMoveControl();
+        return control.maxTurn == 20 && control.hoversInPlace;
+    }
+
     /** Stable native controller identity for outer input cleanup; no route/state mutation. */
     static boolean reviewedParrotFlightBody(Mob mob) {
         if (mob.getClass() != Parrot.class || mob.getMoveControl().getClass() != FlyingMoveControl.class) return false;
@@ -1678,6 +1795,10 @@ public final class ScriptNavigation {
                 && !mob.onClimbable() && !mob.hasEffect(MobEffects.LEVITATION) && !mob.hasEffect(MobEffects.SLOW_FALLING))
                 return Physics.PARROT;
             return Physics.UNSUPPORTED;
+        }
+        if (reviewedAllayFlightBody(mob)) {
+            return !mob.isSleeping() && !mob.isInWater() && !mob.isInLava()
+                && mob.getNavigation().getClass() == FlyingPathNavigation.class ? Physics.ALLAY : Physics.UNSUPPORTED;
         }
         if (mob.isNoGravity()) return Physics.UNSUPPORTED;
         // Pufferfish adds native contact effects and puff geometry, but shares
@@ -1735,8 +1856,11 @@ public final class ScriptNavigation {
         if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
         if (slimeHopper(physics) && ((Slime) mob).getSize() != slimeSize) throw error("route_hop_size_changed");
         checkDryVolume(mob.getBoundingBox());
-        if (physics == Physics.PARROT && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
+        if (flightMode(physics) && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
             || mob.getEyeHeight() != flightEyeHeight)) throw error("route_flight_body_changed");
+        if (physics == Physics.ALLAY && ((!mob.isNoAi() && !allayTravelTick) || mob.getNavigation() != allayNavigation
+            || allayNavigation.getPath() != null || mob.getPose() != allayPose || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7))
+            throw error("route_allay_state_changed");
         if (physics == Physics.RABBIT) {
             Rabbit rabbit = (Rabbit) mob;
             if (rabbit.getVariant() != rabbitVariant || rabbit.isBaby() != rabbitBaby
@@ -1807,10 +1931,29 @@ public final class ScriptNavigation {
             BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS)))
             if (!level.getFluidState(pos).isEmpty()) throw error("route_flight_requires_dry_volume");
         if (!level.noCollision(mob, volume)) throw error("route_flight_volume_obstructed");
+        if (physics == Physics.ALLAY) {
+            for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(volume.minX, volume.minY, volume.minZ),
+                BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS))) {
+                if (!ordinaryAllayInsideBlock(level.getBlockState(pos).getBlock()))
+                    throw error("route_allay_block_effect_unsupported");
+            }
+        }
+    }
+
+    private static boolean ordinaryAllayInsideBlock(Block block) {
+        // entityInside is protected on BlockBehaviour; inspect declarations,
+        // not public-method lookup, and never invoke a callback speculatively.
+        for (Class<?> type = block.getClass(); type != null; type = type.getSuperclass()) {
+            try {
+                type.getDeclaredMethod("entityInside", BlockState.class, net.minecraft.world.level.Level.class, BlockPos.class, Entity.class);
+                return type == net.minecraft.world.level.block.state.BlockBehaviour.class;
+            } catch (NoSuchMethodException ignored) { }
+        }
+        return false;
     }
 
     private void checkDryVolume(AABB bounds) {
-        if (physics == Physics.PARROT) { requireFlightVolume(bounds); return; }
+        if (flightMode(physics)) { requireFlightVolume(bounds); return; }
         if ((physics == Physics.DROWNED || slimeHopper(physics) || physics == Physics.RABBIT) && hasFluid(bounds))
             throw error(physics == Physics.DROWNED ? "route_drowned_requires_dry_ground" : "route_hop_requires_dry_ground");
     }
@@ -1853,7 +1996,7 @@ public final class ScriptNavigation {
                 throw error("route_move_limit");
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
             AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
-            route.checkVolume(route.physics == Physics.PARROT ? route.flightVolume(checked)
+            route.checkVolume(flightMode(route.physics) ? route.flightVolume(checked)
                 : (route.physics == Physics.DROWNED_WATER || route.physics == Physics.TADPOLE) ? route.fishVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
