@@ -23,3 +23,11 @@ Focused evidence: generated FishMoveControl bytecode confirms the exact Abstract
 ##39580f7 controller mismatch diagnosis
 
 Settled Cod reached native route tick2 and failed route_fish_controller_unavailable. Tiny horizontal feedback has nonzero squared length above1e-12, but Vec3.normalize returns ZERO below length1e-4. The wanted target therefore becomes exactly vertical. Generated FishMoveControl.tick only updates yaw when d0 or d2 is nonzero; swimStep incorrectly updated yaw unconditionally. The correction preserves current yaw in that same zero-horizontal branch, without relaxing controller/trajectory tolerances or changing physical input. The observed second vertical impulse0.02140625 also matches native speed0.1640625 with a vertical unit direction. No route replay occurred. The existing settled Cod scenario is the required rebuilt end-to-end validation; convergence and later detour/down remain unverified.
+
+7fd4922 completed the four-node Cod ascent, then rejected the next route with
+route_start_changed. The retained response lacks detour start arguments and
+request-time native position; later bottom NBT only proves subsequent ordinary
+sinking. Do not infer the exact drift or weaken the .2 start fence from that
+observation. The rejection now includes requested and actual positions for a
+future affected run. Its terminal error behavior and execution safeguards are
+unchanged; no retry or physical correction is introduced.

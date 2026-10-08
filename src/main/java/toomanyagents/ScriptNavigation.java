@@ -157,7 +157,8 @@ public final class ScriptNavigation {
         swimHold = mob.position();
         if (!inside(mob.position())) throw error("route_outside_body_box");
         Vec3 start = vector(request.getAsJsonObject("start"));
-        if (mob.position().distanceTo(start) > 0.2) throw error("route_start_changed");
+        if (mob.position().distanceTo(start) > 0.2)
+            throw error("route_start_changed: requested=" + start + ", actual=" + mob.position());
         JsonArray raw = request.getAsJsonArray("nodes");
         if (raw == null || raw.size() > MAX_NODES) throw error("route_node_limit");
         int changes = 0;
