@@ -5472,6 +5472,55 @@
       },
       "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/649cc24-summary.json",
       "limitations": "Selected native scenario only, not full species/pathfinder coverage. Original failed fixture evidence retained."
+    },
+    "cod-native-39580f7": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-cod-39580f7.js",
+      "subjects": [],
+      "scope": "Settled fully submerged Cod began its first upward edge, then failed route_fish_controller_unavailable at tick2; detour/down unrun. Native controller yaw mismatch diagnosed separately; no corrected-runtime claim.",
+      "result": "failed",
+      "testedRevision": "39580f7",
+      "sourceSha256": "9ea6db24d9eb44edca13d23072de11821821c6f6096252e6c14f98f2f8d669f1",
+      "report": {
+        "path": "run/mineflayer-reference/cod-native-39580f7.json",
+        "sha256": "bf1cbe9b0fcc6910f55b03ab55b79648d2270a47e7af399132b2258a86053ba0",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/39580f7-summary.json",
+      "limitations": "Exact failed execution retained. Both released; no replay. No broad species or API conformance claim."
+    },
+    "slime-native-39580f7": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-slime-39580f7.js",
+      "subjects": [],
+      "scope": "Native size-one Slime hopped and landed but overshot its first endpoint, then failed route_edge_unexecutable; step/drop unrun. Native movement attributes and RNG unchanged; no corrected-runtime claim.",
+      "result": "failed",
+      "testedRevision": "39580f7",
+      "sourceSha256": "3eedfa6eb2685b3f9e61f18ab1af753d5cb3e39c175387751cc2d63605ef6785",
+      "report": {
+        "path": "run/mineflayer-reference/slime-native-39580f7.json",
+        "sha256": "c3f37e792a936792556ea9dc6a52378dfec3a2cc1b5eb262486c7019e1d30548",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/39580f7-summary.json",
+      "limitations": "Exact failed execution retained. Both released; no replay. No broad species or API conformance claim."
+    },
+    "flight-planning": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/flight-planning.mjs",
+      "subjects": [],
+      "scope": "Six preauthored real Block/AStar browser-bundled graph checks: 3D floorless routes, offset roof, diagonal collision, fluid, unknown/excluded cells and capability guards. Executed in host Node, not a new QuickJS flight scenario. No native controller, gravity cleanup or arrival proof.",
+      "result": "passed",
+      "testedRevision": "6e75d5d",
+      "sourceSha256": "f6ba77f215788d74323514f1d12802640e52e90202e4f28e185a1cec4759ac6a",
+      "report": {
+        "path": "run/mineflayer-reference/flight-planning-after.json",
+        "sha256": "2c9c3707067627c49e82f08d873e1f5715b5e4430b88efc3d433cf2e110a7984"
+      }
     }
   },
   "reviewNotes": {
