@@ -176,14 +176,16 @@ const checks = [
       assert(result.path.every(n => n.x < 1000 && n.toBreak.length === 0));
     } finally { fakeTime = false; }
   }],
-  ['shortcut request requires a synchronous capability', api => {
+  ['shortcut candidates work without a hook; an optional restriction must be synchronous', api => {
     const f = setup(api); f.bot.pathfinder.enablePathShortcut = true;
-    assert.throws(() => f.bot.pathfinder.getPathTo(f.bot.pathfinder.movements, goal(5)), /canShortcut/);
+    const result = f.bot.pathfinder.getPathTo(f.bot.pathfinder.movements, goal(5));
+    assert.equal(result.status, 'success'); assert.equal(result.path.length, 1);
+    // Geometry selects a candidate; Java still owns native trajectory feasibility.
     assert.equal(f.bot.pathfinder.getPathFromTo(f.bot.pathfinder.movements, f.bot.entity.position, goal(5), { optimizePath: false }).next().value.result.status, 'success');
     api.installPlanning(f.bot, f.bot.pathfinder, { canShortcut: () => Promise.resolve(true) });
     assert.throws(() => f.bot.pathfinder.getPathTo(f.bot.pathfinder.movements, goal(5)), /synchronous|boolean/);
   }],
-  ['authoritative shortcut hook matches actual upstream player physics on flat ground', api => {
+  ['additional shortcut restriction matches actual upstream player physics on flat ground', api => {
     const expected = setup(null), actual = setup(api);
     for (const f of [expected, actual]) f.bot.pathfinder.enablePathShortcut = true;
     api.installPlanning(actual.bot, actual.bot.pathfinder, { canShortcut: (a, b) => new Physics(actual.bot).canStraightLineBetween(a, b) });
@@ -200,16 +202,26 @@ const checks = [
     assert.equal(calls[0][0].x, 3.5);
     calls.length = 0; queryMovements.exclusionAreasStep.push(() => 0);
     const result = f.bot.pathfinder.getPathFromTo(queryMovements, pos(3.5, 0, 0.5), goal(7)).next().value.result;
-    assert.equal(calls.length, 0); assert.equal(result.path.length, 4);
+    assert(calls.length > 0); assert.equal(result.path.length, 1);
+    // A zero-cost callback is not a barrier. Pinned upstream disables all
+    // shortcutting merely because its installed callback list is nonempty.
+    const reference = setup(null); reference.bot.pathfinder.enablePathShortcut = true;
+    reference.bot.pathfinder.movements.exclusionAreasStep.push(() => 0);
+    const pinned = reference.bot.pathfinder.getPathFromTo(reference.bot.pathfinder.movements,
+      pos(3.5, 0, 0.5), goal(7)).next().value.result;
+    assert.equal(pinned.path.length, 4);
   }],
-  ['start-node classification belongs to the queried movements', api => {
+  ['hypothetical slab start uses physical support rather than current body or emptyBlocks', api => {
     const results = [];
     for (const impl of [api, null]) {
-      const f = setup(impl); f.set(0, 0, 0, 'stone_slab', { type: 'bottom', waterlogged: false }); f.bot.entity.position.y = 0.5;
+      const f = setup(impl); f.set(0, 0, 0, 'stone_slab', { type: 'bottom', waterlogged: false });
+      f.bot.entity.position = pos(10, 4, 0.5); f.bot.entity.onGround = false;
       const query = new (impl?.Movements ?? upstream.Movements)(f.bot); query.emptyBlocks.add(registry.blocksByName.stone_slab.id);
-      results.push(f.bot.pathfinder.getPathFromTo(query, f.bot.entity.position, goal(0), { timeout: 0 }).next().value.astarContext.bestNode.data.y);
+      results.push(f.bot.pathfinder.getPathFromTo(query, pos(0.5, 0.5, 0.5), goal(0), { timeout: 0 }).next().value.astarContext.bestNode.data.y);
     }
-    assert.deepEqual(results, [0, 1]); // Correct explicit-policy behavior versus pinned global-policy bug.
+    // Policy metadata cannot erase the real slab collision surface. Pinned
+    // upstream instead classifies this queried start using the actual body's onGround.
+    assert.deepEqual(results, [1, 0]);
   }],
   ['shortcutting never skips queued dig/place actions or raw suffixes', api => {
     const f = setup(api); f.bot.pathfinder.enablePathShortcut = true;
@@ -343,5 +355,7 @@ try {
 } finally { evaluated.error?.dispose(); evaluated.value?.dispose(); vm.dispose(); runtime.dispose(); }
 console.log(JSON.stringify({ status: 'passed', scenarios: passed, differentialWorlds: worlds.length + shapeWorlds.length,
   contractScenarios: checks.length, correctedUpstreamDefects: ['mutable partial search nodes', 'global query policies/origin', 'shortcut action loss'],
+  intentionalShortcutDifferences: ['native geometry candidates without an external hook', 'zero-cost callbacks permit shortcuts',
+    'queried collision support is independent of current onGround and emptyBlocks'],
   quickjsRoute: 'passed with captured host clock', bundleBytes: guestBundle.outputFiles[0].contents.length,
   limitation: 'Planning only. No native route execution, live game, or server conformance tested.' }, null, 2));
