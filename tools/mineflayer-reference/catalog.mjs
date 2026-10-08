@@ -400,7 +400,47 @@ const pureChatContracts = new Set([
   'append', 'clone', 'getText', 'length', 'parse', 'toAnsi', 'toHTML', 'toMotd',
   'toString', 'valueOf',
 ].map(name => `prismarine-chat.ChatMessage.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts]);
+const pureBuilderContracts = new Set([
+  "addExtra",
+  "addWith",
+  "fromString",
+  "resetFormatting",
+  "setBold",
+  "setClickEvent",
+  "setColor",
+  "setFont",
+  "setHoverEvent",
+  "setInsertion",
+  "setItalic",
+  "setKeybind",
+  "setObfuscated",
+  "setScore",
+  "setSelector",
+  "setStrikethrough",
+  "setText",
+  "setTranslate",
+  "setUnderlined",
+  "toJSON",
+  "toString",
+  "bold",
+  "clickEvent",
+  "color",
+  "extra",
+  "font",
+  "hoverEvent",
+  "insertion",
+  "italic",
+  "keybind",
+  "obfuscated",
+  "score",
+  "selector",
+  "strikethrough",
+  "text",
+  "translate",
+  "underlined",
+  "with"
+].map(name => `prismarine-chat.MessageBuilder.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

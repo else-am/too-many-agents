@@ -223,3 +223,10 @@ pure-library contract. The recorded existing suite passed292 comparisons plus
 two builder-network fixtures in bundled QuickJS. Their synthetic component and
 format inputs do not prove native chat reception, permissions, or registry
 hydration. Other ChatMessage/MessageBuilder members remain separately reviewed.
+
+The same recorded chat run covers38 explicitly reviewed MessageBuilder methods
+and local fields: setter chaining/priority, formatting reset, extras/translation
+parameters, hover variants, legacy string parsing, and JSON/string output.
+This establishes generated component data, not that a native client executes a
+click action, resolves a selector, or renders every format. `fromNetwork` remains
+separate because it fills an upstream declaration/source gap.
