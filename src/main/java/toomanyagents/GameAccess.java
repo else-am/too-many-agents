@@ -834,6 +834,7 @@ final class GameAccess {
                 if (operation.equals("begin")) {
                     snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
                     snapshot.add("chatFormattingById", ScriptEntities.chatFormatting((ServerLevel) mob.level()));
+                    snapshot.add("registryCodecs", ScriptRegistryData.snapshot((ServerLevel) mob.level()));
                 }
                 yield snapshot;
             }
