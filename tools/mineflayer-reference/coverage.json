@@ -2320,6 +2320,90 @@
       "evidence": [
         "item-library"
       ]
+    },
+    "prismarine-entity.Entity.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.setEquipment": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.getCustomName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.getDroppedItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.heldItem": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.mobType": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "prismarine-entity.Entity.objectType": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Local Entity constructor/accessor over supplied fields, equipment and metadata. Existing1396-case pinned/QuickJS comparison verifies local behavior and shared classes; native entity observations, collection and equipment mutation remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -2831,8 +2915,13 @@
       "subjects": [
         "prismarine-entity.Entity"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "1396 pinned Entity comparisons in bundled QuickJS64MiB: local constructors, aliases, equipment/accessors, supplied metadata and all1333 dropped Item IDs with injected class identity. Includes one local EventEmitter case; no native hydration/event delivery claim.",
+      "result": "passed",
+      "sourceSha256": "cfa426207292345a95a77edbd121b66065aeaa95b8333e800c7b22e0672bb03e",
+      "report": {
+        "path": "run/mineflayer-reference/entities-library.txt",
+        "sha256": "9786de39f84e4096e340242fa420bdeb075b2dd2b33a4ba001c3c4c8ff63d748"
+      }
     },
     "inventory-guest": {
       "kind": "library-differential",

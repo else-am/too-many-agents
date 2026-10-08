@@ -489,7 +489,12 @@ const pureItemContracts = new Set([
   "durabilityUsed",
   "spawnEggMobName"
 ].map(name => `prismarine-item.Item.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts]);
+// Local Entity construction/accessors only; native observation fields are separate.
+const pureEntityContracts = new Set([
+  'constructor', 'setEquipment', 'getCustomName', 'getDroppedItem',
+  'heldItem', 'mobType', 'objectType',
+].map(name => `prismarine-entity.Entity.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

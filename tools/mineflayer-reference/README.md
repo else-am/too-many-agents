@@ -253,3 +253,11 @@ pinned/bundled-QuickJS comparison. Supplied component/NBT conversion and local
 anvil predictions do not authorize inventory edits or prove native byte
 transport, slot hydration, stacking, transfers, native anvil costs or outputs.
 Pinned equality/component-setter quirks remain documented in items.mjs.
+
+Seven local Entity contracts (constructor, setEquipment, getCustomName,
+getDroppedItem, heldItem, mobType and objectType) have an explicit pure-library
+classification. The recorded existing suite passed1,396 comparisons, including
+all1,333 dropped Item IDs and shared Item/ChatMessage identity in QuickJS64MiB.
+Supplying metadata to this suite does not establish native metadata acquisition,
+collection-event timing or real equipment changes. Native Entity fields and
+event delivery remain separate obligations.
