@@ -69,3 +69,16 @@ match messages in order, remove by returned ID/name, and confirm retired records
 are absent. Delivery/parse behavior must remain unchanged. This is a documented
 surface correction, not a claim that the pinned runtime exposes this field.
 No new native fixture is needed for the inspection-only field.
+
+
+Packaged inspection — a6d9474 (2026-10-08): exact
+`observe-pattern-inspection.js` ran once with Codex gpt-6.1-sol low. Three default
+patterns, legacy description/regex identity, parsed two-pattern matching,
+one-shot retirement and ID removal passed. Inventory stayed unchanged;
+initial snapshot supplied 25 columns and restored right main hand. This used
+script-local `messagestr` emissions, not native chat transport. Zero physical
+requests/updates, three bridge operations; script 456 ms. Source SHA256
+`fc2ec570c41015473d5be0aeec438033007e117447e414617340d1442276a769`.
+Raw result: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/pattern-inspection-evidence-a39643f9.json`.
+Reopened native inventory/equipment/selection matched the previous saved state.
+All dimensions saved, then exact packaged JVM 95862 stopped.
