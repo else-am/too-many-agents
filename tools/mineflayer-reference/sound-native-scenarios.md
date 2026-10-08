@@ -61,3 +61,12 @@ unchanged inventory. Position tolerance allows the native packet's 1/8-block
 quantization. No mutation is sent to the human UI. Native execution is pending.
 
 Proxy packet addition and guarded fixture compile with Java 21. Guest script syntax and Python CLI compilation pass; combined packaging and native execution remain pending.
+
+
+Packaged native `aad8063` focused fixture passed: three ordered sound events
+(far targeted position, actual-body entity, nearby world note), shared Vec3
+positions, expected volume/pitch, no replay and unchanged inventory. One request,
+17 updates, five bridge operations; invocation 2026-10-08 02:38:40.682–02:38:42.171 UTC.
+The native fixture also sent an unrelated-proxy negative control.
+[Guest evidence](</Users/scott/.bb/thread-storage/sounds-evidence-7608a9b5.json>).
+Wider native range/modification/cancellation/lifecycle combinations remain unrun.

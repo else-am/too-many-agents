@@ -100,3 +100,16 @@ without request churn. Artifacts: thread-storage
 `pathfinder-pursuit-arrival-probe.mjs` and
 `pathfinder-pursuit-arrival-results.json`. Java is unchanged; native validation
 remains pending.
+
+
+Packaged native `aad8063` focused result: straight and diagonal routes each
+executed one actual native node (54/40 ticks), with four requests total. The
+prepared script then used the wrong custom-name accessor and stopped before
+following; this was a test error, not a failed native follow. The corrected
+follow-only script passed one native node/22 ticks, no fallback, and ten ticks
+of stationary dynamic hold. Two requests, 37 updates, six bridge operations;
+inventory unchanged. No successful route was rerun. Broader native cases remain
+pending. Existing planning harness was updated only for deliberate changed
+contracts; its single run passed all 31 scenarios.
+[Shortcuts](</Users/scott/.bb/thread-storage/navigation-direct-evidence-21448fc8.json>)
+and [follow](</Users/scott/.bb/thread-storage/navigation-follow-evidence-8a295ae9.json>).
