@@ -31,3 +31,23 @@ need separate native sources; this slice does not claim coverage of those paths.
 Java/plugin/package build passed. Native cases remain unrun. The per-script
 queue is bounded to 256 same-dimension sound candidates between snapshots;
 range filtering uses finalized native event fields at delivery.
+
+## Proxy-addressed sound packets (contract before implementation)
+
+Extend the existing body-only packet hook to positional and entity sound packets.
+These packets are already addressed to this proxy: retain their native position,
+name, volume and pitch without a second distance filter. Entity sounds resolve
+only against this proxy's current server level; a missing entity produces no
+fabricated position. Registered vanilla names match the world-sound path;
+inline/custom names retain their resource location.
+
+Keep both sources in one bounded ordered queue. Deferred world events still
+honor later native cancellation/modification; packet values are already final.
+Ignore other recipients, drain once, clear on script release/claim, and explicitly
+fail malformed/nonfinite observations or overflow. No client sound playback or
+human history is read. Global level-event/client-only sources remain pending.
+
+One later grouped native fixture should send positional and entity packets to
+this exact proxy (both overloads), and an unrelated recipient negative control.
+Verify typed positions/names and one delivery each, no replay; do not rerun earlier
+successful workflows to validate this addition. Native packet checks are unrun.

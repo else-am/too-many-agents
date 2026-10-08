@@ -33,8 +33,7 @@ final class AgentActions {
     private record PendingEntityEvent(JsonObject data, java.util.function.BooleanSupplier accepted) {}
     private final ArrayDeque<PendingEntityEvent> entityEvents = new ArrayDeque<>();
     private int entityEventSize;
-    private record PendingSound(net.neoforged.neoforge.event.PlayLevelSoundEvent event, Vec3 position, Vec3 listener) {}
-    private final ArrayDeque<PendingSound> sounds = new ArrayDeque<>();
+    private final ArrayDeque<Supplier<JsonObject>> sounds = new ArrayDeque<>();
     private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
     private boolean creativeFlying;
     private boolean ownsElytraFlight;
@@ -79,6 +78,7 @@ final class AgentActions {
         hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
             overlay ? "game_info" : "system", null));
         hands.presentationSink = this::recordMessage;
+        hands.soundSink = this::recordSound;
         ambient = new AmbientBehavior(mob);
     }
 
@@ -198,26 +198,54 @@ final class AgentActions {
         if (!scripted()) return;
         if (sounds.size() >= 256) { failObservation("script_sound_event_overflow"); return; }
         // Keep the event until snapshot time, after later listeners can cancel or modify it.
-        sounds.addLast(new PendingSound(event, position, mob.position()));
+        var listener = mob.position();
+        sounds.addLast(() -> {
+            if (event.isCanceled() || event.getSound() == null) return null;
+            float volume = event.getNewVolume(), pitch = event.getNewPitch();
+            float range = event.getSound().value().getRange(volume);
+            if (!Float.isFinite(volume) || !Float.isFinite(pitch) || !Float.isFinite(range))
+                throw error("script_invalid_sound_event");
+            if (range <= 0 || listener.distanceToSqr(position) >= (double) range * range) return null;
+            return soundRecord(event.getSound(), position, volume, pitch);
+        });
+    }
+
+    private void recordSound(net.minecraft.network.protocol.Packet<?> packet) {
+        if (!scripted()) return;
+        if (sounds.size() >= 256) { failObservation("script_sound_event_overflow"); return; }
+        JsonObject value;
+        try {
+            if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket sound) {
+                value = soundRecord(sound.getSound(), new Vec3(sound.getX(), sound.getY(), sound.getZ()),
+                    sound.getVolume(), sound.getPitch());
+            } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket sound) {
+                var entity = mob.level().getEntity(sound.getId());
+                if (entity == null) return;
+                value = soundRecord(sound.getSound(), entity.position(), sound.getVolume(), sound.getPitch());
+            } else return;
+        } catch (RuntimeException malformed) {
+            failObservation("script_invalid_sound_event"); return;
+        }
+        // Native recipient selection already happened; do not range-filter targeted packets again.
+        sounds.addLast(() -> value);
+    }
+
+    private static JsonObject soundRecord(net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,
+                                          Vec3 position, float volume, float pitch) {
+        if (!Float.isFinite(volume) || !Float.isFinite(pitch) || !Double.isFinite(position.x)
+            || !Double.isFinite(position.y) || !Double.isFinite(position.z)) throw error("script_invalid_sound_event");
+        var location = sound.value().getLocation();
+        String name = sound.unwrapKey().isPresent() && location.getNamespace().equals("minecraft")
+            ? location.getPath() : location.toString();
+        return JsonState.object("name", name, "position", JsonState.object("x", position.x, "y", position.y, "z", position.z),
+            "volume", volume, "pitch", pitch);
     }
 
     JsonArray drainSounds() {
         var result = new JsonArray();
         while (!sounds.isEmpty()) {
-            var pending = sounds.removeFirst();
-            var event = pending.event();
-            if (event.isCanceled() || event.getSound() == null) continue;
-            var sound = event.getSound().value();
-            float volume = event.getNewVolume(), pitch = event.getNewPitch(), range = sound.getRange(volume);
-            if (!Float.isFinite(volume) || !Float.isFinite(pitch) || !Float.isFinite(range))
-                throw error("script_invalid_sound_event");
-            if (range <= 0 || pending.listener().distanceToSqr(pending.position()) >= (double) range * range) continue;
-            var location = sound.getLocation();
-            String name = event.getSound().unwrapKey().isPresent() && location.getNamespace().equals("minecraft")
-                ? location.getPath() : location.toString();
-            var position = pending.position();
-            result.add(JsonState.object("name", name, "position", JsonState.object("x", position.x, "y", position.y, "z", position.z),
-                "volume", volume, "pitch", pitch));
+            var value = sounds.removeFirst().get();
+            if (value != null) result.add(value);
         }
         return result;
     }

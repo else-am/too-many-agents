@@ -94,6 +94,7 @@ public final class AgentHands extends FakePlayer {
     java.util.function.BiConsumer<Component, Boolean> messageSink;
     Consumer<Entity> collectSink;
     Consumer<JsonObject> presentationSink;
+    Consumer<net.minecraft.network.protocol.Packet<?>> soundSink;
     private JsonObject tablist = JsonState.object("header", "", "footer", "");
     private final Mob body;
     private final Supplier<BodyBox> bodyBox;
@@ -146,8 +147,15 @@ public final class AgentHands extends FakePlayer {
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
-            || packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket)) return;
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket)) return;
         requireThread();
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket) {
+            if (soundSink != null) soundSink.accept(packet);
+            return;
+        }
         if (packet instanceof net.minecraft.network.protocol.game.ClientboundTabListPacket value) {
             var next = new JsonObject();
             next.add("header", componentJson(value.header()));
