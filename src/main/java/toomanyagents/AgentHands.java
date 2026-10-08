@@ -200,6 +200,15 @@ public final class AgentHands extends FakePlayer {
 
     @Override public MinecraftServer getServer() { return serverLevel().getServer(); }
 
+    // Native held-item use sees the real rider without adding a proxy passenger.
+    @Override public Entity getVehicle() {
+        return body == null ? super.getVehicle() : body.getVehicle();
+    }
+
+    @Override public Entity getControlledVehicle() {
+        return body == null ? super.getControlledVehicle() : body.getControlledVehicle();
+    }
+
     @Override public boolean isEyeInFluid(TagKey<Fluid> fluid) {
         return body == null ? super.isEyeInFluid(fluid) : body.isEyeInFluid(fluid);
     }

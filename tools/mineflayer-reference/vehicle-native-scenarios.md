@@ -78,3 +78,16 @@ velocity, assign cart velocity, or change the real passenger. This is native
 body input compatibility, not player trajectory parity. Horse flight likewise
 retains the real Mob controller’s native airborne acceleration. Native boost
 activation, species trajectories and mixin runtime behavior remain live checks.
+
+## Native mounted item context (before integration)
+
+The interaction proxy's read-only getVehicle/getControlledVehicle queries should
+delegate to its visible body. FoodOnAStickItem.use checks both isPassenger and
+getControlledVehicle before native boost and native item damage/conversion; the
+proxy itself must never be inserted into the passenger list. Retain Minecraft's
+actual controller predicate, including no boost when it reports no controller.
+Verify one boost/item-cost on an ordinary eligible saddled pig or strider and
+unchanged real passenger identity. Wrong item/seat and an already active boost
+must retain native outcomes. NoAI movement adaptation does not itself grant item
+boost eligibility. Other item paths and constructor-time null body use retain
+ordinary proxy behavior. Build/source checks are not a native boost pass.
