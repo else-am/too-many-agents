@@ -4438,6 +4438,27 @@
           "code"
         ]
       }
+    },
+    "metadata-collection-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-mob-collection.js",
+      "subjects": [
+        "prismarine-entity.Entity.metadata",
+        "prismarine-entity.Entity.getDroppedItem",
+        "mineflayer.BotEvents.playerCollect"
+      ],
+      "scope": "Packaged3d4043d actual Fox and body pickups after the raw metadata port: original named Item count1, typed stable entities, Fox retained item and body inventory hydrated before callback, exactlyone each/no replay/unrelated belongings unchanged. Does not cover all pickup sources.",
+      "testedRevision": "3d4043d",
+      "result": "passed",
+      "sourceSha256": "e106541a9505a1809d10e1826fa3b3284da11608b7d1516fa89c68047d64fa83",
+      "report": {
+        "path": "run/mineflayer-reference/metadata-collection-native-recorded.json",
+        "sha256": "5794054d3cc8513d8eb616d5664b26d28925abb3843649b71be2135fd55d8356",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {
