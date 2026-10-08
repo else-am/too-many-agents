@@ -3884,6 +3884,27 @@
         ]
       },
       "limitations": "No upstream patch, native rerun or click retry. Final full-window packet includes grid/cursor; independent player NBT establishes storage only. Does not establish the exact sequence of the older reference failure."
+    },
+    "metadata-default-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-metadata-default.js",
+      "subjects": [
+        "prismarine-entity.Entity.metadata",
+        "mineflayer.BotEvents.entityUpdate",
+        "mineflayer.BotEvents.entityCrouch",
+        "mineflayer.BotEvents.entityUncrouch"
+      ],
+      "scope": "Packaged3d4043d native shared flags initially absent, then sneak2 and default0 retained on same Entity/metadata objects; hydrated callbacks and no replay, inventory unchanged. Two completed control requests; no arbitrary serializer or collection claim.",
+      "result": "passed",
+      "sourceSha256": "673dc85236156b4dc6df67be451ba96a63a2407972f49a77b7890a6dc988b3b4",
+      "report": {
+        "path": "run/mineflayer-reference/metadata-default-native-recorded.json",
+        "sha256": "83016fb838092caf72bd02b644bf31a8aaf85cf354c4de1370c2ae1b4365ac11",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {
