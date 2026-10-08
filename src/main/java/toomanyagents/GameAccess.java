@@ -518,7 +518,7 @@ final class GameAccess {
                     if(fixture==null || !fixture.getPersistentData().getBoolean("too_many_agents_development_fixture"))throw error("development_fixture_missing");
                     yield snapshot;
                 }
-                case "presentation" -> {
+                case "presentation", "sounds" -> {
                     var uuid = UUID.fromString(string(request, "bodyUuid", 36));
                     var entity = human.serverLevel().getEntity(uuid);
                     if (!(entity instanceof Mob mob)) throw error("development_body_missing");
@@ -531,7 +531,8 @@ final class GameAccess {
                         || !"look".equals(latest.get("type").getAsString())
                         || !"completed".equals(latest.get("status").getAsString()))
                         throw error("development_listener_not_ready");
-                    yield DevelopmentChecks.presentation(controller.hands);
+                    yield action.equals("presentation") ? DevelopmentChecks.presentation(controller.hands)
+                        : DevelopmentChecks.sounds(controller.hands);
                 }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
                 default -> throw error("unknown_development_action");

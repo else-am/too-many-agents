@@ -29,7 +29,7 @@ def main():
     settings.add_argument('id')
     settings.add_argument('settings', help='JSON object of changed settings')
     dev = commands.add_parser('dev', help='Opt-in isolated development world checks')
-    dev.add_argument('operation', choices=['status', 'native-checks', 'pov', 'save', 'presentation'])
+    dev.add_argument('operation', choices=['status', 'native-checks', 'pov', 'save', 'presentation', 'sounds'])
     dev.add_argument('--json', default='{}', help='Guarded development fixture arguments')
     spawn = commands.add_parser('spawn')
     spawn.add_argument('--provider', help='Native BB provider ID; omit to use BB defaults')

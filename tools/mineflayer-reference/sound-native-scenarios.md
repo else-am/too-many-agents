@@ -51,3 +51,11 @@ One later grouped native fixture should send positional and entity packets to
 this exact proxy (both overloads), and an unrelated recipient negative control.
 Verify typed positions/names and one delivery each, no replay; do not rerun earlier
 successful workflows to validate this addition. Native packet checks are unrun.
+
+Ready focused script: `observe-sounds.js`. The guarded `dev sounds` operation uses
+exactly the same active-body/new-completed-look gate as the presentation fixture.
+It sends two native packets (far positional and actual-body entity source), plays
+one native nearby world note, and sends an unrelated-proxy negative control.
+The script checks shared Vec3 values, native order/volume/pitch, no replay and
+unchanged inventory. Position tolerance allows the native packet's 1/8-block
+quantization. No mutation is sent to the human UI. Native execution is pending.
