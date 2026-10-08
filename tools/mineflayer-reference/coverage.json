@@ -1852,13 +1852,181 @@
     "mineflayer.Bot.jumpTicks": {
       "status": "inapplicable",
       "reason": "User chose native Mob behavior without a player physics predictor. This is prismarine-physics PlayerState autojump cooldown, copied from/to bot during local player simulation; native Mob jumping remains controlled through setControlState, not a synthetic predictor field. Source: mineflayer/lib/plugins/physics.js:25\u201326,253; prismarine-physics/index.js:721\u2013741,818\u2013819,864\u2013865."
+    },
+    "prismarine-recipe.Recipe.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.delta": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.find": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.ingredients": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.inShape": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.outShape": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.requiresTable": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.Recipe.result": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.clone": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.constructor": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.count": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.fromEnum": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
+    },
+    "prismarine-recipe.RecipeItem.metadata": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Recipe data transformation and lookup over supplied tables. Existing 6136-case pinned/QuickJS comparison covers all1470 recipes plus independently specified source corrections; native crafting is separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/recipes.mjs"
+      ],
+      "evidence": [
+        "recipe-library"
+      ]
     }
   },
   "schemaVersion": 2,
   "evidencePolicy": {
     "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder members can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
@@ -2274,7 +2442,13 @@
         "prismarine-recipe.Recipe"
       ],
       "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "result": "passed",
+      "sourceSha256": "7f06dffa3828502cd969e958c3c477db7ddc95598248f14519e901fb4a820bfa",
+      "report": {
+        "path": "run/mineflayer-reference/recipes-library.txt",
+        "sha256": "9e53d4196d2d15b2018d7f50a05e7b48122d43bccd6ac09627dcf82b29eb4e5d"
+      },
+      "limitations": "Static pinned recipe data and supplied synthetic inventories only. Six explicit source corrections retain their independent fixtures. No native craft result, actual inventory hydration, recipe book or custom datapack claim."
     },
     "chat-library": {
       "kind": "library-differential",

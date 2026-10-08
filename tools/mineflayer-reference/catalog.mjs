@@ -441,7 +441,24 @@ const pureBuilderContracts = new Set([
   "underlined",
   "with"
 ].map(name => `prismarine-chat.MessageBuilder.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts]);
+// Recipe objects use supplied static recipe data; they do not craft or hydrate inventory.
+const pureRecipeContracts = new Set([
+  "Recipe.constructor",
+  "Recipe.delta",
+  "Recipe.find",
+  "Recipe.ingredients",
+  "Recipe.inShape",
+  "Recipe.outShape",
+  "Recipe.requiresTable",
+  "Recipe.result",
+  "RecipeItem.clone",
+  "RecipeItem.constructor",
+  "RecipeItem.count",
+  "RecipeItem.fromEnum",
+  "RecipeItem.id",
+  "RecipeItem.metadata"
+].map(name => `prismarine-recipe.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

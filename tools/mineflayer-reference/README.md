@@ -230,3 +230,9 @@ parameters, hover variants, legacy string parsing, and JSON/string output.
 This establishes generated component data, not that a native client executes a
 click action, resolves a selector, or renders every format. `fromNetwork` remains
 separate because it fills an upstream declaration/source gap.
+
+Fourteen explicit Recipe/RecipeItem data members use the pure-library contract.
+The existing suite's recorded run passed6,136 comparisons across all1,470 pinned
+recipes/782 result IDs and six independent source corrections in QuickJS.
+Actual `bot.craft`, hydrated inventory queries, server recipe books and custom
+datapacks are not promoted from this static-data evidence.
