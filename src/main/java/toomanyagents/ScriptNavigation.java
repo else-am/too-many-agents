@@ -22,6 +22,7 @@ import net.minecraft.world.entity.ai.navigation.WaterBoundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.AmphibiousPathNavigation;
 import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import net.minecraft.world.entity.animal.frog.Tadpole;
+import net.minecraft.world.entity.animal.frog.Frog;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -69,7 +70,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -117,7 +118,7 @@ public final class ScriptNavigation {
     private Pose puffPose;
     private Vec3 swimHold;
     private boolean smoothPrepared, smoothControlTick, smoothTravelTick;
-    private boolean axolotlBaby, axolotlCanFloat;
+    private boolean axolotlBaby, axolotlCanFloat, frogCanFloat;
     private PathNavigation smoothNavigation;
     private LivingEntity smoothTarget;
     private Pose smoothPose;
@@ -206,6 +207,7 @@ public final class ScriptNavigation {
         swimHold = mob.position();
         smoothPrepared = false; smoothStep = null;
         if (physics == Physics.AXOLOTL) { axolotlBaby = mob.isBaby(); axolotlCanFloat = mob.getNavigation().canFloat(); }
+        if (physics == Physics.FROG) frogCanFloat = mob.getNavigation().canFloat();
         if (smoothSwimmer(physics)) {
             smoothNavigation = mob.getNavigation(); smoothTarget = mob.getTarget(); smoothPose = mob.getPose();
             smoothWidth = mob.getBbWidth(); smoothHeight = mob.getBbHeight(); smoothEyeHeight = mob.getEyeHeight();
@@ -1370,7 +1372,8 @@ public final class ScriptNavigation {
         requireMode();
         if (OWNED.get(mob) != this || !active || !owner.vehicleLeaseActive(lease))
             throw error("script_no_longer_controls_body");
-        if (smoothStep != null) throw error(physics == Physics.AXOLOTL ? "route_duplicate_axolotl_control"
+        if (smoothStep != null) throw error(physics == Physics.FROG ? "route_duplicate_frog_control"
+            : physics == Physics.AXOLOTL ? "route_duplicate_axolotl_control"
             : physics == Physics.DOLPHIN ? "route_duplicate_dolphin_control" : "route_duplicate_tadpole_control");
         Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
         double speed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
@@ -1378,12 +1381,13 @@ public final class ScriptNavigation {
         // Desired acceleration selects input only. The actual limited native
         // pitch/yaw and complete XYZ input below determine the next movement.
         Vec3 correction = goal.subtract(pos).scale(0.015).subtract(velocity.scale(0.4));
-        if (physics != Physics.AXOLOTL) correction = correction.add(0, fishHadTarget ? -0.005 : 0.005 / 0.9 - 0.005, 0);
+        if (physics == Physics.FROG) correction = correction.add(0, -0.005, 0);
+        else if (physics != Physics.AXOLOTL) correction = correction.add(0, fishHadTarget ? -0.005 : 0.005 / 0.9 - 0.005, 0);
         double length = correction.length();
         Vec3 heading = length > 1e-12 ? correction.scale(1 / length) : new Vec3(0, 0, 1);
         double alignment = Math.max(0, mob.getLookAngle().dot(heading));
         double modifier;
-        if (physics == Physics.DOLPHIN || physics == Physics.AXOLOTL) {
+        if (physics == Physics.DOLPHIN || physics == Physics.AXOLOTL || physics == Physics.FROG) {
             // These native travel methods use prepared speed, not AbstractFish's .01F.
             // Coupled normalized input gives factor*f1*min(f1,1) acceleration.
             float factor = physics == Physics.AXOLOTL ? 0.1F : 0.02F;
@@ -1412,7 +1416,7 @@ public final class ScriptNavigation {
         Vec3 velocity = mob.getDeltaMovement(), input = new Vec3(mob.xxa, mob.yya, mob.zza);
         if (!Double.isFinite(input.lengthSqr()) || !Double.isFinite(velocity.lengthSqr()))
             throw error(smoothReason("input_invalid"));
-        float acceleration = physics == Physics.DOLPHIN || physics == Physics.AXOLOTL ? mob.getSpeed() : 0.01F;
+        float acceleration = physics == Physics.DOLPHIN || physics == Physics.AXOLOTL || physics == Physics.FROG ? mob.getSpeed() : 0.01F;
         if (!Float.isFinite(acceleration) || acceleration < 0 || acceleration > 4)
             throw error(smoothReason("input_invalid"));
         if (input.lengthSqr() >= 1e-7) {
@@ -1430,7 +1434,7 @@ public final class ScriptNavigation {
         if (Math.abs(velocity.y - motion.delta.y) > EPS) throw error("route_aquatic_vertical_collision");
         Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0, velocity.y,
             Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0).scale(0.9);
-        if (physics != Physics.AXOLOTL && !fishHadTarget) remaining = remaining.add(0, -0.005, 0);
+        if (physics != Physics.AXOLOTL && physics != Physics.FROG && !fishHadTarget) remaining = remaining.add(0, -0.005, 0);
         return new DryStep(after, remaining);
     }
 
@@ -1652,7 +1656,7 @@ public final class ScriptNavigation {
         mob.setSprinting(false);
         mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
         // These modes change inputs only; outer action cancellation retains its existing policy.
-        if (physics != Physics.DOLPHIN && physics != Physics.AXOLOTL && physics != Physics.DROWNED_SWIM) mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
+        if (physics != Physics.DOLPHIN && physics != Physics.AXOLOTL && physics != Physics.FROG && physics != Physics.DROWNED_SWIM) mob.setDeltaMovement(0, mob.getDeltaMovement().y, 0);
     }
 
     private boolean settled() {
@@ -1872,6 +1876,7 @@ public final class ScriptNavigation {
             result.addProperty("physics", mode == Physics.DROWNED_WATER ? "native-drowned-water-post-tick"
                 : mode == Physics.DROWNED_SWIM ? "native-drowned-true-intent-post-tick"
                 : mode == Physics.AXOLOTL ? "native-axolotl-submerged-post-tick"
+                : mode == Physics.FROG ? "native-frog-submerged-post-tick"
                 : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick"
                 : mode == Physics.DOLPHIN ? "native-dolphin-submerged-post-tick" : "native-fish-submerged-post-tick");
             result.addProperty("locomotion", "submerged");
@@ -1985,6 +1990,10 @@ public final class ScriptNavigation {
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
             && smoothSwimParameters((SmoothSwimmingMoveControl) mob.getMoveControl()))
             return mob.getClass() == Dolphin.class ? Physics.DOLPHIN : Physics.TADPOLE;
+        if (mob.getClass() == Frog.class && control == SmoothSwimmingMoveControl.class
+            && mob.getNavigation().getClass() == Frog.FrogPathNavigation.class && mob.getPose() == Pose.STANDING
+            && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
+            && smoothSwimParameters((SmoothSwimmingMoveControl) mob.getMoveControl())) return Physics.FROG;
         if (mob.getClass() == Axolotl.class && control == Axolotl.AxolotlMoveControl.class
             && mob.getNavigation().getClass() == AmphibiousPathNavigation.class
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
@@ -2071,7 +2080,8 @@ public final class ScriptNavigation {
             if (physics == Physics.AXOLOTL && (mob.isBaby() != axolotlBaby
                 || smoothNavigation.canFloat() != axolotlCanFloat || ((Axolotl) mob).isPlayingDead()))
                 throw error("route_axolotl_state_changed");
-            if ((physics == Physics.DOLPHIN || physics == Physics.AXOLOTL) && mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)
+            if (physics == Physics.FROG && smoothNavigation.canFloat() != frogCanFloat) throw error("route_frog_state_changed");
+            if ((physics == Physics.DOLPHIN || physics == Physics.AXOLOTL || physics == Physics.FROG) && mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)
                 throw error(smoothReason("stuck_pending"));
             requireSubmerged(mob.getBoundingBox());
         }
@@ -2302,10 +2312,11 @@ public final class ScriptNavigation {
 
     private static boolean drownedWaterMode(Physics mode) { return mode == Physics.DROWNED_WATER || mode == Physics.DROWNED_SWIM; }
 
-    private static boolean smoothSwimmer(Physics mode) { return mode == Physics.TADPOLE || mode == Physics.DOLPHIN || mode == Physics.AXOLOTL; }
+    private static boolean smoothSwimmer(Physics mode) { return mode == Physics.TADPOLE || mode == Physics.DOLPHIN || mode == Physics.AXOLOTL || mode == Physics.FROG; }
 
     private String smoothReason(String suffix) {
-        return (physics == Physics.AXOLOTL ? "route_axolotl_" : physics == Physics.DOLPHIN ? "route_dolphin_" : "route_tadpole_") + suffix;
+        return (physics == Physics.FROG ? "route_frog_" : physics == Physics.AXOLOTL ? "route_axolotl_"
+            : physics == Physics.DOLPHIN ? "route_dolphin_" : "route_tadpole_") + suffix;
     }
 
     private static boolean smoothSwimParameters(SmoothSwimmingMoveControl control) {
