@@ -82,19 +82,12 @@ function sameMetadata(a, b) {
 // This first slice is intentionally not marked conformant in coverage.json.
 // Coverage expands through shared scripts and reference comparisons.
 export function createBot(initial) {
-  const registry = createRegistry(data);
-  registry.chatFormattingById = initial.chatFormattingById ?? {};
+  if (!initial.registryCodecs) throw new Error('Native registry codecs are missing');
+  const registry = createRegistry(data, initial.registryCodecs);
   const biomeNames = initial.itemRegistries.references['minecraft:worldgen/biome'];
-  if (biomeNames) {
-    const byName = Object.fromEntries(data.biomesArray.map(biome => [biome.name, biome]));
-    registry.biomesArray = biomeNames.map((name, id) => {
-      const biome = byName[name?.replace(/^minecraft:/, '')];
-      if (!biome) throw new Error(`Unsupported native biome registry entry: ${name}`);
-      return { ...biome, id };
-    });
-  }
-  registry.biomes = Object.fromEntries(registry.biomesArray.map(biome => [biome.id, biome]));
-  registry.biomesByName = Object.fromEntries(registry.biomesArray.map(biome => [biome.name, biome]));
+  if (!Array.isArray(biomeNames) || biomeNames.length !== registry.biomesArray.length
+    || biomeNames.some((name, id) => registry.biomesArray[id].name !== name.replace(/^minecraft:/, '')))
+    throw new Error('Native biome codec and item registry IDs differ');
   const Block = createBlockClass(registry);
   const ChunkColumn = createChunkClass(registry, Block);
   const Particle = createParticleClass(registry);

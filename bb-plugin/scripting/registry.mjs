@@ -1,6 +1,8 @@
 // Selected PC registry indexes/version helpers adapted from minecraft-data
 // 3.117.0 lib/indexes.js and index.js; its MIT attribution is bundled by build.mjs.
-export function createRegistry(data) {
+import { installRegistryCodecs } from './registry-codecs.mjs';
+
+export function createRegistry(data, nativeCodecs) {
   const { versionDataVersions, ...registry } = data;
   const index = (array, field) => array === undefined ? undefined
     : Object.fromEntries(array.map(value => [value[field], value]));
@@ -33,5 +35,6 @@ export function createRegistry(data) {
   version['=='] = name => current === other(name);
   registry.isNewerOrEqualTo = name => version['>='](name);
   registry.isOlderThan = name => version['<'](name);
+  installRegistryCodecs(registry, data, nativeCodecs);
   return registry;
 }

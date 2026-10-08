@@ -20,6 +20,7 @@ const data = JSON.stringify({
 const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./state.LICENSE', import.meta.url), 'utf8'));
+licenses.push(await readFile(new URL('./registry-codecs.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./block-events.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./chunks.LICENSE', import.meta.url), 'utf8'));
