@@ -916,6 +916,7 @@ final class AgentActions {
         // The reviewed flight controllers retain passive momentum, including
         // release after the script lease is cleared. Route cleanup owns gravity.
         if (ScriptNavigation.reviewedParrotFlightBody(mob) || ScriptNavigation.reviewedAllayFlightBody(mob)
+            || ScriptNavigation.reviewedBeeFlightBody(mob)
             || scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
             mob.setDeltaMovement(velocity);
     }

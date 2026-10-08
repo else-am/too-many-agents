@@ -27,6 +27,7 @@ import net.minecraft.world.entity.animal.Fox;
 import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.entity.animal.Parrot;
 import net.minecraft.world.entity.animal.allay.Allay;
+import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.ai.navigation.FlyingPathNavigation;
 import net.minecraft.world.entity.animal.Pufferfish;
 import net.minecraft.world.entity.animal.AbstractFish;
@@ -65,7 +66,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED, DROWNED_WATER, FISH, TADPOLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -135,9 +136,9 @@ public final class ScriptNavigation {
     private Vec3 flightHold;
     private boolean flightPrepared, flightLanding;
     private float flightWidth, flightHeight, flightEyeHeight;
-    private PathNavigation allayNavigation;
-    private Pose allayPose;
-    private boolean allayTravelTick;
+    private PathNavigation hoverNavigation;
+    private Pose hoverPose;
+    private boolean hoverTravelTick, beeBaby;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target,
                          boolean jump, boolean sprint, float wantedYaw, double modifier) {
@@ -190,7 +191,8 @@ public final class ScriptNavigation {
         rabbitPrepared = false; rabbitStep = null;
         flightPrepared = flightLanding = false; flightStep = null; flightHold = mob.position();
         flightWidth = mob.getBbWidth(); flightHeight = mob.getBbHeight(); flightEyeHeight = mob.getEyeHeight();
-        if (physics == Physics.ALLAY) { allayNavigation = mob.getNavigation(); allayPose = mob.getPose(); }
+        if (hoverMode(physics)) { hoverNavigation = mob.getNavigation(); hoverPose = mob.getPose(); }
+        beeBaby = physics == Physics.BEE && mob.isBaby();
         fishHadTarget = mob.getTarget() != null;
         puffState = mob.getClass() == Pufferfish.class ? ((Pufferfish) mob).getPuffState() : -1;
         if (puffState >= 0) {
@@ -406,6 +408,7 @@ public final class ScriptNavigation {
                 else drownedStep = predictDrownedWater(mob.getDeltaMovement());
             }
             if (physics == Physics.ALLAY && flightStep == null) flightStep = predictAllayStep();
+            if (physics == Physics.BEE && flightStep == null) flightStep = predictDryStep(mob.getDeltaMovement(), beeFriction());
             if (physics == Physics.TADPOLE && tadpoleStep == null) {
                 if (active) prepareTadpole(swimHold);
                 else tadpoleStep = tadpoleTravelStep();
@@ -450,7 +453,7 @@ public final class ScriptNavigation {
 
     void stop() {
         requireThread();
-        boolean cleanup = (physics != Physics.ALLAY || ownsAllayCleanup())
+        boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
             && (physics != Physics.TADPOLE || ownsTadpoleCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
             && (physics != Physics.DROWNED_WATER || ownsDrownedWaterCleanup());
@@ -817,6 +820,7 @@ public final class ScriptNavigation {
 
     /** Native LivingEntity dry travel from already prepared inputs; no entity mutation. */
     private DryStep predictDryStep(Vec3 velocity, float friction) {
+        boolean falling = velocity.y <= 0;
         Vec3 pos = mob.position();
         float radians = mob.getYRot() * ((float) Math.PI / 180);
         double drag = mob.onGround() ? friction * 0.91F : 0.91F;
@@ -839,13 +843,23 @@ public final class ScriptNavigation {
         BlockPos nextSupport = motion.ground ? supportingBlock(nextBounds, after) : null;
         if (motion.ground && nextSupport == null && mob.mainSupportingBlockPos.isPresent())
             nextSupport = supportingBlock(nextBounds.move(-motion.delta.x, 0, -motion.delta.z), after);
+        if (physics == Physics.BEE) requireHoverImpact(nextSupport, after, velocity.y != motion.delta.y, motion.ground);
         BlockPos below = movementSupport(after, nextSupport), feet = BlockPos.containing(after);
         checkCell(feet); checkCell(below);
         float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
         if (factor == 1) factor = level.getBlockState(below).getBlock().getSpeedFactor();
+        if (physics == Physics.BEE && (!Float.isFinite(factor) || factor < 0 || factor > 4))
+            throw error("route_bee_block_speed_unsupported");
         remaining = remaining.multiply(factor * drag, 1, factor * drag);
-        // LivingEntity uses the horizontal drag for FlyingAnimal vertical motion.
-        remaining = new Vec3(remaining.x, (remaining.y - mob.getGravity()) * (physics == Physics.PARROT ? drag : 0.98F), remaining.z);
+        double gravity = mob.getGravity(), vertical = remaining.y;
+        if (physics == Physics.BEE && mob.hasEffect(MobEffects.LEVITATION))
+            vertical += (0.05 * (mob.getEffect(MobEffects.LEVITATION).getAmplifier() + 1) - vertical) * 0.2;
+        else {
+            if (physics == Physics.BEE && falling && mob.hasEffect(MobEffects.SLOW_FALLING)) gravity = Math.min(gravity, 0.01);
+            vertical -= gravity;
+        }
+        // Native FlyingAnimal vertical motion uses the horizontal drag.
+        remaining = new Vec3(remaining.x, vertical * (physics == Physics.PARROT || physics == Physics.BEE ? drag : 0.98F), remaining.z);
         return new DryStep(after, remaining);
     }
 
@@ -899,7 +913,7 @@ public final class ScriptNavigation {
 
     /** Cleanup uses the original native WAIT branch and never changes velocity. */
     private void clearFlightControls() {
-        if (physics == Physics.ALLAY) { clearAllayFlightControls(); return; }
+        if (hoverMode(physics)) { clearHoverFlightControls(); return; }
         if (mob.level() != level || mob.isRemoved() || mob.getMoveControl() != controller
             || OWNED.get(mob) != null && OWNED.get(mob) != this
             || owner.currentScriptId() != null && !lease.equals(owner.currentScriptId())) return;
@@ -966,22 +980,8 @@ public final class ScriptNavigation {
         BlockPos support = motion.ground ? supportingBlock(bounds, after) : null;
         if (motion.ground && support == null && mob.mainSupportingBlockPos.isPresent())
             support = supportingBlock(bounds.move(-motion.delta.x, 0, -motion.delta.z), after);
-        BlockPos legacy = BlockPos.containing(after.x, after.y - (double) 0.2F, after.z);
-        if (support != null) {
-            checkCell(support);
-            legacy = level.getBlockState(support).collisionExtendsVertically(level, support, mob)
-                ? support : support.atY(legacy.getY());
-        }
-        checkCell(legacy);
-        Block block = level.getBlockState(legacy).getBlock();
         boolean verticalCollision = velocity.y != motion.delta.y;
-        try {
-            if (verticalCollision && block.getClass().getMethod("updateEntityAfterFallOn",
-                net.minecraft.world.level.BlockGetter.class, Entity.class).getDeclaringClass() != Block.class
-                || motion.ground && block.getClass().getMethod("stepOn", net.minecraft.world.level.Level.class,
-                    BlockPos.class, BlockState.class, Entity.class).getDeclaringClass() != Block.class)
-                throw error("route_allay_impact_unsupported");
-        } catch (ReflectiveOperationException failure) { throw error("route_allay_impact_unsupported"); }
+        requireHoverImpact(support, after, verticalCollision, motion.ground);
         BlockPos feet = BlockPos.containing(after), below = movementSupport(after, support);
         checkCell(feet); checkCell(below);
         float factor = level.getBlockState(feet).getBlock().getSpeedFactor();
@@ -992,15 +992,41 @@ public final class ScriptNavigation {
         return new DryStep(after, remaining.multiply(factor, 1, factor).scale(0.91F));
     }
 
-    private boolean ownsAllayCleanup() {
+    private void requireHoverImpact(BlockPos support, Vec3 after, boolean verticalCollision, boolean ground) {
+        BlockPos legacy = BlockPos.containing(after.x, after.y - (double) 0.2F, after.z);
+        if (support != null) {
+            checkCell(support);
+            legacy = level.getBlockState(support).collisionExtendsVertically(level, support, mob)
+                ? support : support.atY(legacy.getY());
+        }
+        checkCell(legacy);
+        Block block = level.getBlockState(legacy).getBlock();
+        try {
+            if (verticalCollision && block.getClass().getMethod("updateEntityAfterFallOn",
+                net.minecraft.world.level.BlockGetter.class, Entity.class).getDeclaringClass() != Block.class
+                || ground && block.getClass().getMethod("stepOn", net.minecraft.world.level.Level.class,
+                    BlockPos.class, BlockState.class, Entity.class).getDeclaringClass() != Block.class)
+                throw error(physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported");
+        } catch (ReflectiveOperationException failure) { throw error(physics == Physics.BEE ? "route_bee_impact_unsupported" : "route_allay_impact_unsupported"); }
+    }
+
+    private float beeFriction() {
+        BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
+        checkCell(support);
+        float friction = level.getBlockState(support).getFriction(level, support, mob);
+        if (!(friction >= 0.6F && friction <= 1)) throw error("route_flight_friction_unsupported");
+        return friction;
+    }
+
+    private boolean ownsHoverCleanup() {
         return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
-            && mob.getNavigation() == allayNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && mob.getNavigation() == hoverNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
             && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
     }
 
     /** Hover WAIT intentionally retains noGravity and actual momentum. */
-    private void clearAllayFlightControls() {
-        if (!ownsAllayCleanup()) return;
+    private void clearHoverFlightControls() {
+        if (!ownsHoverCleanup()) return;
         mob.getNavigation().stop();
         mob.setXxa(0); mob.setYya(0); mob.setZza(0); mob.setSpeed(0);
         mob.getJumpControl().tick(); mob.setJumping(false); mob.setSprinting(false);
@@ -1469,7 +1495,7 @@ public final class ScriptNavigation {
         if (!mob.isAlive() || mob.isRemoved()) throw error("route_body_changed");
         AABB sweep = mob.getBoundingBox().expandTowards(mob.getDeltaMovement()).inflate(0.4, mob.maxUpStep() + 0.1, 0.4);
         checkVolume(sweep);
-        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && physics != Physics.ALLAY && box.get() != null) {
+        if (!fishMode(physics) && physics != Physics.DROWNED_WATER && !hoverMode(physics) && box.get() != null) {
             BlockPos support = mob.getBlockPosBelowThatAffectsMyMovement();
             float friction = level.getBlockState(support).getFriction(level, support, mob);
             double acceleration = mob.onGround() ? mob.getSpeed() * (0.21600002F / (friction * friction * friction)) : 0.02F;
@@ -1484,10 +1510,10 @@ public final class ScriptNavigation {
         }
         drownedTravelTick = physics == Physics.DROWNED_WATER;
         tadpoleTravelTick = physics == Physics.TADPOLE;
-        allayTravelTick = physics == Physics.ALLAY;
+        hoverTravelTick = hoverMode(physics);
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; allayTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; tadpoleTravelTick = false; hoverTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1716,7 +1742,8 @@ public final class ScriptNavigation {
         boolean supported = mode != Physics.UNSUPPORTED;
         if (flightMode(mode)) {
             JsonObject result = new JsonObject();
-            result.addProperty("physics", mode == Physics.ALLAY ? "native-allay-flight-post-tick" : "native-parrot-flight-post-tick");
+            result.addProperty("physics", mode == Physics.BEE ? "native-bee-flight-post-tick"
+                : mode == Physics.ALLAY ? "native-allay-flight-post-tick" : "native-parrot-flight-post-tick");
             result.addProperty("locomotion", "flying");
             result.addProperty("canFly", true);
             result.addProperty("flightTargetYOffset", swimTargetOffset(mob));
@@ -1769,7 +1796,30 @@ public final class ScriptNavigation {
         return result;
     }
 
-    private static boolean flightMode(Physics mode) { return mode == Physics.PARROT || mode == Physics.ALLAY; }
+    private static boolean flightMode(Physics mode) { return mode == Physics.PARROT || hoverMode(mode); }
+
+    private static boolean hoverMode(Physics mode) { return mode == Physics.ALLAY || mode == Physics.BEE; }
+
+    /** Identity only, including after lease release; no transient gravity/state test. */
+    static boolean reviewedBeeFlightBody(Mob mob) {
+        if (mob.getClass() != Bee.class || mob.getMoveControl().getClass() != FlyingMoveControl.class) return false;
+        FlyingMoveControl control = (FlyingMoveControl) mob.getMoveControl();
+        return control.maxTurn == 20 && control.hoversInPlace;
+    }
+
+    private static final ClassValue<Boolean> BEE_NAVIGATION = new ClassValue<>() {
+        @Override protected Boolean computeValue(Class<?> type) {
+            var enclosing = type.getEnclosingMethod();
+            if (!type.isAnonymousClass() || type.getSuperclass() != FlyingPathNavigation.class || enclosing == null
+                || enclosing.getDeclaringClass() != Bee.class || !enclosing.getName().equals("createNavigation")
+                || enclosing.getReturnType() != PathNavigation.class || enclosing.getParameterCount() != 1
+                || enclosing.getParameterTypes()[0] != net.minecraft.world.level.Level.class) return false;
+            try {
+                return type.getDeclaredMethod("tick").getReturnType() == void.class
+                    && type.getDeclaredMethod("isStableDestination", BlockPos.class).getReturnType() == boolean.class;
+            } catch (ReflectiveOperationException failure) { return false; }
+        }
+    };
 
     /** Identity only: cleanup must still recognize a released native hover body. */
     static boolean reviewedAllayFlightBody(Mob mob) {
@@ -1795,6 +1845,10 @@ public final class ScriptNavigation {
                 && !mob.onClimbable() && !mob.hasEffect(MobEffects.LEVITATION) && !mob.hasEffect(MobEffects.SLOW_FALLING))
                 return Physics.PARROT;
             return Physics.UNSUPPORTED;
+        }
+        if (reviewedBeeFlightBody(mob) && GROUND_METHODS.get(Bee.class)) {
+            return !mob.isSleeping() && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable()
+                && BEE_NAVIGATION.get(mob.getNavigation().getClass()) ? Physics.BEE : Physics.UNSUPPORTED;
         }
         if (reviewedAllayFlightBody(mob)) {
             return !mob.isSleeping() && !mob.isInWater() && !mob.isInLava()
@@ -1858,9 +1912,10 @@ public final class ScriptNavigation {
         checkDryVolume(mob.getBoundingBox());
         if (flightMode(physics) && (mob.getBbWidth() != flightWidth || mob.getBbHeight() != flightHeight
             || mob.getEyeHeight() != flightEyeHeight)) throw error("route_flight_body_changed");
-        if (physics == Physics.ALLAY && ((!mob.isNoAi() && !allayTravelTick) || mob.getNavigation() != allayNavigation
-            || allayNavigation.getPath() != null || mob.getPose() != allayPose || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7))
-            throw error("route_allay_state_changed");
+        if (hoverMode(physics) && ((!mob.isNoAi() && !hoverTravelTick) || mob.getNavigation() != hoverNavigation
+            || hoverNavigation.getPath() != null || mob.getPose() != hoverPose || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7))
+            throw error(physics == Physics.BEE ? "route_bee_state_changed" : "route_allay_state_changed");
+        if (physics == Physics.BEE && mob.isBaby() != beeBaby) throw error("route_bee_age_changed");
         if (physics == Physics.RABBIT) {
             Rabbit rabbit = (Rabbit) mob;
             if (rabbit.getVariant() != rabbitVariant || rabbit.isBaby() != rabbitBaby
@@ -1931,16 +1986,19 @@ public final class ScriptNavigation {
             BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS)))
             if (!level.getFluidState(pos).isEmpty()) throw error("route_flight_requires_dry_volume");
         if (!level.noCollision(mob, volume)) throw error("route_flight_volume_obstructed");
-        if (physics == Physics.ALLAY) {
+        if (hoverMode(physics)) {
             for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(volume.minX, volume.minY, volume.minZ),
                 BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS))) {
-                if (!ordinaryAllayInsideBlock(level.getBlockState(pos).getBlock()))
-                    throw error("route_allay_block_effect_unsupported");
+                BlockState state = level.getBlockState(pos);
+                if (physics == Physics.BEE && state.is(net.minecraft.tags.BlockTags.CLIMBABLE))
+                    throw error("route_bee_climb_pending");
+                if (!ordinaryFlightInsideBlock(state.getBlock()))
+                    throw error(physics == Physics.BEE ? "route_bee_block_effect_unsupported" : "route_allay_block_effect_unsupported");
             }
         }
     }
 
-    private static boolean ordinaryAllayInsideBlock(Block block) {
+    private static boolean ordinaryFlightInsideBlock(Block block) {
         // entityInside is protected on BlockBehaviour; inspect declarations,
         // not public-method lookup, and never invoke a callback speculatively.
         for (Class<?> type = block.getClass(); type != null; type = type.getSuperclass()) {
@@ -2048,6 +2106,25 @@ public final class ScriptNavigation {
         }
         // The next action tick reports the retained failure. Native puff/size
         // effects now proceed outside route ownership; no rollback or retry.
+    }
+
+    /** Age metadata may grow/reposition a Bee directly, outside Entity.move. */
+    public static void beforeBeeAgeDimensions(Bee bee) {
+        if (bee.getClass() != Bee.class || bee.level().isClientSide || bee.level().getServer() == null
+            || !bee.level().getServer().isSameThread()) return;
+        ScriptNavigation route = OWNED.get(bee);
+        if (route == null || !route.active || route.physics != Physics.BEE || bee.isBaby() == route.beeBaby) return;
+        RuntimeException failure = error("route_bee_age_changed");
+        if (route.movementFailure == null) route.movementFailure = failure;
+        try {
+            if (bee.level() == route.level && route.owner.vehicleLeaseActive(route.lease) && route.ownsHoverCleanup()) route.stop();
+        } catch (RuntimeException | LinkageError cleanup) {
+            if (cleanup != route.movementFailure) route.movementFailure.addSuppressed(cleanup);
+        } finally {
+            OWNED.remove(bee, route);
+            route.active = false;
+        }
+        // Native age, dimensions and any direct reposition proceed unchanged.
     }
 
     /** Used only at FishMoveControl's isDone query, during our explicit tick. */
