@@ -3264,6 +3264,186 @@
       "evidence": [
         "window-library"
       ]
+    },
+    "prismarine-block.Block.type": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.metadata": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.stateId": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.hardness": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.shapes": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.boundingBox": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.transparent": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.diggable": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.material": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.harvestTools": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.drops": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.isWaterlogged": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
+    },
+    "prismarine-block.Block.getHash": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pinned-state constructor data compared by every own property across all PC1.21.1 states in the recorded29675-case suite. getHash preserves the PC upstream undefined stub, exercised by the mutation case. Native position/light/NBT and state acquisition are separate, not promoted.",
+      "scenarios": [
+        "tools/mineflayer-reference/blocks.mjs"
+      ],
+      "evidence": [
+        "block-library"
+      ]
     }
   },
   "schemaVersion": 2,

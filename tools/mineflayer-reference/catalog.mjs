@@ -468,7 +468,22 @@ const pureBlockContracts = new Set([
   "canHarvest",
   "digTime",
   "getSignText",
-  "setSignText"
+  "setSignText",
+  "type",
+  "metadata",
+  "stateId",
+  "name",
+  "hardness",
+  "displayName",
+  "shapes",
+  "boundingBox",
+  "transparent",
+  "diggable",
+  "material",
+  "harvestTools",
+  "drops",
+  "isWaterlogged",
+  "getHash"
 ].map(name => `prismarine-block.Block.${name}`));
 // Supplied Item components/NBT and local calculations only; no inventory mutation.
 const pureItemContracts = new Set([

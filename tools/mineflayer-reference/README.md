@@ -279,3 +279,10 @@ updates and click simulation) use that library evidence. Native close/deposit/
 withdraw, menu generation, slot predicates and observed contents remain separate.
 Calling a local Window method does not submit a server click or prove inventory
 mutation. Modes 5/6 retain the pinned implementation's unsupported failures.
+
+The existing all-state Block report also compares the constructor's own fields:
+type, metadata, stateId, name, hardness, displayName, shapes, boundingBox,
+transparent, diggable, material, harvestTools, drops and isWaterlogged. These
+pinned-state mappings are recorded separately from native state acquisition,
+position, light and NBT. The suite's mutation case also preserves the PC
+getHash stub's undefined result; this is not a Bedrock hash implementation.
