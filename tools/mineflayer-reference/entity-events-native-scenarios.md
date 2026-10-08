@@ -39,3 +39,17 @@ canceled death must emit nothing. Observe loot/removal independently. A kill and
 removal entirely between frames must still retain the event's typed victim.
 Ordinary later frames and script release must not replay the event. This is a
 nearby entity event, not a fabricated death/respawn cycle for protected bodies.
+
+Native aad8063 packaged check passed once with Codex gpt-6.1-sol low.
+One empty-hand body attack delivered entityHurt with the same cow/body objects
+and hydrated Health 20 -> 17. A new completed look gated the exact cow kill;
+entityDead retained the same victim with Health 0, alive false, and undefined
+cause. A second completed look gated one named paper pickup: playerCollect saw
+the actual body, the event-frame Entity, original shared Item/count 1/name
+component, and inventory paper count 1 -> 2 already hydrated. Five later ticks
+did not replay the selected events. Independent native NBT confirmed hurt/death
+health and the named paper in body inventory; the item entity was removed.
+All original inventory stacks/components, elytra and shield were preserved; native
+cow loot additionally supplied three beef. The script used 3 completed requests,
+28 updates and 9 bridge operations (1446 ms script, 1923 ms tool). Canceled/immune
+damage, canceled death, other-mob pickup and overflow cases were not exercised.
