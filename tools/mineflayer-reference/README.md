@@ -205,4 +205,4 @@ that procedure on the isolated reference fixture, records at most 512 selected
 click/inventory packets (64 KiB each), and reads server entity NBT on failure
 before disconnecting. Timestamped `craft-trace-*.json` files preserve previous
 reports. It does not patch upstream, replay clicks, or by itself establish a
-paired conformance pass. Syntax checked; this diagnostic has not yet run.
+paired conformance pass. One diagnostic run reproduced the mismatch with 49 complete transitions; see the source review for the demonstrated prediction/resynchronization ordering. The server saved and stopped normally.

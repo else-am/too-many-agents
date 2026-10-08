@@ -56,3 +56,36 @@ files matched (4.39.0); no installed-file drift was found. Evidence:
 `/Users/scott/.bb/thread-storage/mineflayer-installed-integrity.json`.
 The opt-in `--craft-trace` harness now records the missing transitions on a future
 single diagnostic execution; it is prepared, not executed evidence.
+
+## Executed diagnostic: 2026-10-08 05:49 UTC
+
+One `--craft-trace` run reproduced the final assertion failure. It captured
+49 transitions without truncation, then saved/stopped its own reference server;
+port25575 was no longer listening. No upstream edits, click replay, or native
+port rerun occurred. Full evidence is retained in
+`/Users/scott/.bb/thread-storage/reference-craft-diagnosis/`.
+
+The zero-based trace establishes a concrete ordering failure:
+
+- Entries8–12: first output pickup receives result-slot empty at state11; the
+  client stores planks and starts the next log insertion using state11.
+- Entries13–14: a slot4 empty correction and full inventory state13 arrive.
+  That full inventory has no crafting input/output and cursor empty, with the
+  remaining log still in storage slot9.
+- Entry15: before the later actual result arrives, the client sends an output
+  pickup at state13 claiming four planks on its cursor. This follows the
+  crafting plugin's local output prediction and a result-slot listener that
+  can also be satisfied by full inventory updates.
+- Entries16–17: the server sends cursor log1 at state14, then the actual
+  four-plank result at state15. Further clicks proceed amid corrections.
+- Final authoritative full-window state35 contains stick4 as the crafting
+  result, planks1 in each input slot1/3, storage planks4 and cursor stick4.
+  The server's independent entity-NBT read confirms storage planks4 and axe
+  damage2; player NBT does not include the transient crafting grid/cursor.
+
+This directly demonstrates reference prediction/resynchronization interleaving
+in this run. It does not prove every packet of the older run followed the same
+sequence, nor turn either failed procedure into a pass. The port's existing
+native result inspection and per-action ordered-state barriers intentionally
+avoid this failure. Do not replace them with upstream optimistic slot writes.
+No causal connection to the startup ArmorTrimMaterial warning was established.
