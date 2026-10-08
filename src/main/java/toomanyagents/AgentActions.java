@@ -35,6 +35,7 @@ final class AgentActions {
     private int entityEventSize;
     private final ArrayDeque<Supplier<JsonObject>> sounds = new ArrayDeque<>();
     private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
+    private final ArrayDeque<JsonObject> blockEvents = new ArrayDeque<>();
     private boolean creativeFlying;
     private boolean ownsElytraFlight;
     private final Set<String> heldControls = new HashSet<>();
@@ -80,6 +81,7 @@ final class AgentActions {
             overlay ? "game_info" : "system", null));
         hands.presentationSink = this::recordMessage;
         hands.soundSink = this::recordSound;
+        hands.blockEventSink = this::recordBlockPacket;
         ambient = new AmbientBehavior(mob);
     }
 
@@ -96,6 +98,7 @@ final class AgentActions {
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
         particles.clear();
+        blockEvents.clear();
         scriptId = id;
         columns = new ScriptColumns();
         lastScriptId = id;
@@ -131,6 +134,7 @@ final class AgentActions {
         entityEvents.clear(); entityEventSize = 0;
         sounds.clear();
         particles.clear();
+        blockEvents.clear();
         clearControls();
         cancel("");
         if (stateStream != null) stateStream.finish();
@@ -179,6 +183,35 @@ final class AgentActions {
         var result = new JsonArray();
         for (var event : entityEvents) if (event.accepted().getAsBoolean()) result.add(event.data());
         entityEvents.clear(); entityEventSize = 0;
+        return result;
+    }
+
+    void recordBlockEvent(ScriptBlockEvent event) {
+        if (!scripted() || mob.level() != event.level || !event.level.getServer().isSameThread()
+            || !event.level.hasChunkAt(event.position)) return;
+        boolean breaking = event.block == null;
+        if (breaking && (event.breakerId == mob.getId() || event.breakerId == hands.getId())) return;
+        double range = breaking ? 32 : 64;
+        if (mob.position().distanceToSqr(Vec3.atLowerCornerOf(event.position)) >= range * range) return;
+        if (blockEvents.size() >= 256) { failObservation("script_block_event_overflow"); return; }
+        try { blockEvents.addLast(event.snapshot()); }
+        catch (RuntimeException invalid) { failObservation("script_invalid_block_event"); }
+    }
+
+    private void recordBlockPacket(net.minecraft.network.protocol.Packet<?> packet) {
+        // AgentHands is never in the player list: native broadcasts are observed
+        // through ServerLevel, and only explicitly addressed packets reach here.
+        if (!(hands.level() instanceof ServerLevel level) || !level.getServer().isSameThread()) return;
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockEventPacket event)
+            recordBlockEvent(ScriptBlockEvent.action(level, event.getPos(), event.getBlock(), event.getB0(), event.getB1()));
+        else if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket event)
+            recordBlockEvent(ScriptBlockEvent.breaking(level, event.getId(), event.getPos(), event.getProgress()));
+    }
+
+    JsonArray drainBlockEvents() {
+        var result = new JsonArray();
+        blockEvents.forEach(result::add);
+        blockEvents.clear();
         return result;
     }
 

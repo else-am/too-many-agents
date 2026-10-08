@@ -18,7 +18,7 @@ const data = JSON.stringify({
   blockCollisionShapes: registry.blockCollisionShapes,
   materials: registry.materials, effectsByName: registry.effectsByName,
   enchantmentsByName: registry.enchantmentsByName, language: registry.language,
-  entitiesArray: registry.entitiesArray, recipes: registry.recipes,
+  entitiesArray: registry.entitiesArray, recipes: registry.recipes, instruments: registry.instruments,
 });
 const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));

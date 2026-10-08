@@ -776,6 +776,7 @@ final class GameAccess {
         snapshot.add("entityEvents", controller.drainEntityEvents());
         snapshot.add("sounds", controller.drainSounds());
         snapshot.add("particles", controller.drainParticles());
+        snapshot.add("blockEvents", controller.drainBlockEvents());
         ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
         for (var value : snapshot.getAsJsonArray("entities")) {
             var observed = value.getAsJsonObject();
@@ -1426,6 +1427,11 @@ final class GameAccess {
         result.addProperty("position", position);
         if (sender != null) result.addProperty("sender", sender.toString());
         return result;
+    }
+
+    void blockEvent(ScriptBlockEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        for (var controller : actions.values()) controller.recordBlockEvent(event);
     }
 
     void particleEvent(ScriptParticleEvent event) {

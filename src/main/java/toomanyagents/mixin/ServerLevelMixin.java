@@ -12,9 +12,23 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import toomanyagents.ScriptEntitySignalEvent;
 import toomanyagents.ScriptParticleEvent;
+import toomanyagents.ScriptBlockEvent;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.BlockEventData;
 
 @Mixin(ServerLevel.class)
 abstract class ServerLevelMixin {
+    @Inject(method = "doBlockEvent", at = @At("RETURN"))
+    private void observeBlockAction(BlockEventData event, CallbackInfoReturnable<Boolean> result) {
+        if (result.getReturnValue()) NeoForge.EVENT_BUS.post(ScriptBlockEvent.action((ServerLevel) (Object) this,
+            event.pos(), event.block(), event.paramA(), event.paramB()));
+    }
+
+    @Inject(method = "destroyBlockProgress", at = @At("RETURN"))
+    private void observeBlockBreaking(int breakerId, BlockPos position, int stage, CallbackInfo callback) {
+        NeoForge.EVENT_BUS.post(ScriptBlockEvent.breaking((ServerLevel) (Object) this, breakerId, position, stage));
+    }
+
     @Inject(method = "broadcastEntityEvent", at = @At("RETURN"))
     private void observeStatus(Entity entity, byte code, CallbackInfo callback) {
         NeoForge.EVENT_BUS.post(new ScriptEntitySignalEvent(entity, code, false));

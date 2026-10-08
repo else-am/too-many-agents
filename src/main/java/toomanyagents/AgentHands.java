@@ -95,6 +95,7 @@ public final class AgentHands extends FakePlayer {
     int forwardedTakes;
     Consumer<JsonObject> presentationSink;
     Consumer<net.minecraft.network.protocol.Packet<?>> soundSink;
+    Consumer<net.minecraft.network.protocol.Packet<?>> blockEventSink;
     private JsonObject tablist = JsonState.object("header", "", "footer", "");
     private final Mob body;
     private final Supplier<BodyBox> bodyBox;
@@ -140,7 +141,7 @@ public final class AgentHands extends FakePlayer {
         save();
     }
 
-    /** Observe only presentation packets sent to this body's no-op connection. */
+    /** Observe only supported packets addressed to this body's no-op connection. */
     public void observePresentation(net.minecraft.network.protocol.Packet<?> packet) {
         if (!(packet instanceof net.minecraft.network.protocol.game.ClientboundTabListPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket
@@ -149,8 +150,15 @@ public final class AgentHands extends FakePlayer {
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundClearTitlesPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket
-            || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket)) return;
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundBlockEventPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket)) return;
         requireThread();
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockEventPacket
+            || packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket) {
+            if (blockEventSink != null) blockEventSink.accept(packet);
+            return;
+        }
         if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket
             || packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket) {
             if (soundSink != null) soundSink.accept(packet);
