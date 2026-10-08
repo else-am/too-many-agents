@@ -66,3 +66,5 @@ The catalog now reviews 54 fixed-data/version members as supported; native biome
 indexes, supportFeature installation and dynamic codec methods stay separate.
 No physical action/event is promoted by this result. Guard probes rejected an
 unreviewed library-only dig declaration and tampered/missing reports.
+
+The coverage review also maps the exact declared Attribute, Effect, Enchantment, Food and Instrument data fields to the existing complete-table serialization comparison. Optional fields retain the pinned version’s presence or absence. These are fixed reference records; no native attributes/effects, hunger, enchanting or note delivery follows from their equality. Biome and dynamic registry fields remain separate.

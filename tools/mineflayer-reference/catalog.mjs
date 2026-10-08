@@ -396,6 +396,43 @@ const pinnedDataContracts = new Set([
   'protocolComments', 'protocolYaml', 'recipes', 'tints', 'type',
   'version', 'windows', 'windowsArray', 'windowsByName',
 ].map(name => `minecraft-data.MinecraftData.IndexedData.${name}`));
+// Nested fixed table values are included in the complete registry serialization comparison.
+const pinnedDataShapeContracts = new Set([
+  "minecraft-data.MinecraftData.Attribute.default",
+  "minecraft-data.MinecraftData.Attribute.max",
+  "minecraft-data.MinecraftData.Attribute.min",
+  "minecraft-data.MinecraftData.Attribute.name",
+  "minecraft-data.MinecraftData.Attribute.resource",
+  "minecraft-data.MinecraftData.Effect.displayName",
+  "minecraft-data.MinecraftData.Effect.id",
+  "minecraft-data.MinecraftData.Effect.name",
+  "minecraft-data.MinecraftData.Effect.type",
+  "minecraft-data.MinecraftData.Enchantment.category",
+  "minecraft-data.MinecraftData.Enchantment.curse",
+  "minecraft-data.MinecraftData.Enchantment.discoverable",
+  "minecraft-data.MinecraftData.Enchantment.displayName",
+  "minecraft-data.MinecraftData.Enchantment.exclude",
+  "minecraft-data.MinecraftData.Enchantment.id",
+  "minecraft-data.MinecraftData.Enchantment.maxCost",
+  "minecraft-data.MinecraftData.Enchantment.maxLevel",
+  "minecraft-data.MinecraftData.Enchantment.minCost",
+  "minecraft-data.MinecraftData.Enchantment.name",
+  "minecraft-data.MinecraftData.Enchantment.tradeable",
+  "minecraft-data.MinecraftData.Enchantment.treasureOnly",
+  "minecraft-data.MinecraftData.Enchantment.weight",
+  "minecraft-data.MinecraftData.Food.displayName",
+  "minecraft-data.MinecraftData.Food.effectiveQuality",
+  "minecraft-data.MinecraftData.Food.foodPoints",
+  "minecraft-data.MinecraftData.Food.id",
+  "minecraft-data.MinecraftData.Food.name",
+  "minecraft-data.MinecraftData.Food.saturation",
+  "minecraft-data.MinecraftData.Food.saturationRatio",
+  "minecraft-data.MinecraftData.Food.stackSize",
+  "minecraft-data.MinecraftData.Food.variations",
+  "minecraft-data.MinecraftData.Instrument.id",
+  "minecraft-data.MinecraftData.Instrument.name",
+  "minecraft-data.MinecraftData.Instrument.sound",
+]);
 // Vec3 members transform caller-supplied values only. Native position hydration
 // and ownership are separate Entity/Bot obligations, not vector arithmetic.
 const pureVectorContracts = new Set([
@@ -575,7 +612,7 @@ const pureWindowContracts = new Set([
   "dragClick",
   "doubleClick"
 ].map(name => `prismarine-windows.Window.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts]);
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

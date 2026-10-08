@@ -3468,6 +3468,414 @@
       "evidence": [
         "entity-library"
       ]
+    },
+    "minecraft-data.MinecraftData.Attribute.default": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Attribute.max": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Attribute.min": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Attribute.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Attribute.resource": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Effect.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Effect.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Effect.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Effect.type": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.category": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.curse": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.discoverable": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.exclude": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.maxCost": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.maxLevel": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.minCost": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.tradeable": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.treasureOnly": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Enchantment.weight": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.displayName": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.effectiveQuality": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.foodPoints": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.saturation": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.saturationRatio": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.stackSize": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Food.variations": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Instrument.id": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Instrument.name": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
+    },
+    "minecraft-data.MinecraftData.Instrument.sound": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Fixed PC1.21.1 reference-table field, including upstream absence of optional fields. Existing registry comparison serializes every complete static table and compares it to pinned minecraft-data in actual QuickJS, preserving these nested values and index identity. This is reference data, not native body attributes, active effects, player hunger, enchantment execution or emitted notes.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -4434,7 +4842,12 @@
       "path": "tools/mineflayer-reference/registry.mjs",
       "subjects": [
         "minecraft-data.MinecraftData.IndexedData",
-        "prismarine-registry.loader.RegistryPc"
+        "prismarine-registry.loader.RegistryPc",
+        "minecraft-data.MinecraftData.Attribute",
+        "minecraft-data.MinecraftData.Effect",
+        "minecraft-data.MinecraftData.Enchantment",
+        "minecraft-data.MinecraftData.Food",
+        "minecraft-data.MinecraftData.Instrument"
       ],
       "scope": "Exhaustive selected PC1.21.1 static-data equality, shared table/index references and all recognized version comparisons. Excludes native biome overrides, feature installation and dynamic codecs.",
       "testedRevision": "cbb5e22",
