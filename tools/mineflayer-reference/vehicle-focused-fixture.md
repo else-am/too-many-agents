@@ -62,3 +62,28 @@ original selected item/equipment/mode from known observed state afterward.
 Stop an affected family at the first real failure and retain phase/action/native
 evidence. Never replay an unknown mount/control outcome. No horse jump, ownership,
 rail slope/powered, cancellation or boundary matrix is included in this check.
+
+## Native 67ebb2c observations
+
+Codex gpt-6.1-sol low ran the same prepared script per selected family. Horse
+passed once (9.316 blocks, 7 requests / 66 updates / 18 bridge operations,
+4048 ms tool). Pig first rejected mount because normal AI wandered from the
+prepared position; no controls ran. One authorized same-pig correction used a
+holding pen and opened its north gate only after a new completed mount action.
+Pig then passed (2.329 blocks, 7 / 58 / 18, 3460 ms tool), allowing native
+always-forward after zero input. Minecart passed once on ordinary straight rails
+(1.299 blocks, 7 / 49 / 18, 2910 ms tool), allowing native coast. Each passed
+actual-body first-passenger identity, clear/zero inputs, dismount and unchanged
+inventory. Independent native Pig/Minecart Passengers matched the body UUID;
+Horse mounted NBT was missed, but final native positions/state were captured.
+
+Strider mounted and passed movement, then lost script control during clear;
+zero input and dismount remained unverified (6 requested / 5 completed,
+55 updates / 15 bridge operations, 3798 ms tool). Native health fell 19 -> 5 and
+the mount disappeared. A retained later autosave had raining true with 967 rain
+ticks remaining. Native rain duration and no intervening weather commands support
+rain-sensitive mount death as the fixture cause; the original damage event/stream
+exception was not retained. This is not a demonstrated control-clear defect.
+The lead bounded diagnosis and declined a Strider rerun in that lifecycle. No boost, horse jump,
+powered/slope or ownership matrices ran. Preserve dry weather for a future Strider
+fixture; current clear weather alone does not describe the earlier attempt.

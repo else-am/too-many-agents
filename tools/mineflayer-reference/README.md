@@ -2,8 +2,9 @@
 
 This directory contains the pinned PC Minecraft 1.21.1 reference installation,
 library comparisons, shared gameplay procedures, and a disposable reference
-server harness. **No live reference-server run is recorded. Minecraft EULA
-acceptance is still unanswered.** Catalog generation does not start any client,
+server harness. The user accepted the Minecraft EULA; the shared gather procedure
+has a recorded live reference pass. Wall/crafting differences remain recorded
+below. Catalog generation does not start any client,
 server, Minecraft instance, or BB process.
 
 ## Generate the inventory

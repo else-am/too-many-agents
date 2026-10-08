@@ -57,3 +57,13 @@ components/count and actual native body name versus returned bot.username. Keep
 all unrelated belongings intact. Record action IDs, phase times and counts.
 No hurt/death, XP/arrow, other-species or overflow checks are included. This file
 records preparation only; compilation/source inspection is not a native pass.
+
+Native packaged 67ebb2c check passed once with Codex gpt-6.1-sol low. The Fox
+callback retained the original shared named paper Item/count 1 and hydrated
+equipment after its zero-count take; body inventory stayed unchanged. Own-body
+pickup emitted exactly once with named count 0 -> 1 already hydrated. Both
+selected callbacks retained typed identities and did not replay over five ticks.
+Native HandItems, removed tagged drops and body inventory confirmed the results.
+bot.username was ScriptProbe, matching the native body's name. The script used
+2 completed requests, 34 updates and 8 bridge operations (1755 ms script,
+2266 ms tool). No XP/arrow, other-species or overflow cases ran.
