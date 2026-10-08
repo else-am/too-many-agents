@@ -99,7 +99,8 @@ only. Five earlier native reports (Window, raycast, route policy, lifecycle,
 and shapes), six later packaged runs (consumption/signs/game, fishing, boat
 controls, sleep, wake, observed events), and five more recent runs (direct
 following, sounds, presentation, creative actions, accepted entity events),
-and two `67ebb2c` runs (Fox/body collection and basic horse controls)
+two `67ebb2c` runs (Fox/body collection and basic horse controls),
+and the `c244383` native handedness check
 are indexed as narrow passes after
 checking their executed code against the scenario files. Later reports identify
 the tested revision and retain the independent native summary. They do not

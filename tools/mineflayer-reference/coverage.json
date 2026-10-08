@@ -735,6 +735,26 @@
         ]
       },
       "limitations": "Selected fixture only; not current HEAD, all species/permissions, boost/jump or paired reference conformance. Independent summary retains failures and restoration; no API promoted."
+    },
+    "native-settings": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/observe-settings.js",
+      "subjects": [
+        "mineflayer.Bot.setSettings",
+        "mineflayer.Bot.settings"
+      ],
+      "scope": "Native dominant-hand subset: right to left, stable observed object, invalid settings rejected, inventory unchanged; independent body/Dev state and separate synchronous finish-drain restoration. No client-only settings claim.",
+      "testedRevision": "c244383",
+      "result": "passed",
+      "sourceSha256": "6014ae361013a7c442991f6d9332d994edb6a2033eafcb5d54e01b60677ef86d",
+      "report": {
+        "path": "run/mineflayer-reference/native-settings-recorded.json",
+        "sha256": "bfcf3d51dbee09ed739b98ea9ef7271c323c24927939eb9cad6bdd24c2a81169",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Selected native mainHand subset only; not full setSettings parity, every input, all body types or paired reference conformance. No API promoted."
     }
   },
   "reviewNotes": {
