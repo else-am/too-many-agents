@@ -63,7 +63,7 @@ final class AgentActions {
     private long scriptDeadline, scriptHeartbeat;
     private CompletableFuture<JsonObject> completion;
     private ScriptStream stateStream;
-    private Supplier<JsonObject> stateSnapshot;
+    private java.util.function.Function<Boolean, JsonObject> stateSnapshot;
     private long snapshotRevision;
     private long actionSequence, completedActionSequence;
     ScriptColumns columns;
@@ -288,11 +288,11 @@ final class AgentActions {
     long nextSnapshotRevision() { return ++snapshotRevision; }
     long completedActionSequence() { return completedActionSequence; }
 
-    CompletableFuture<JsonObject> stream(ScriptStream stream, Supplier<JsonObject> snapshot) {
+    CompletableFuture<JsonObject> stream(ScriptStream stream, java.util.function.Function<Boolean, JsonObject> snapshot) {
         if (stateStream != null) throw error("script_state_stream_already_open");
         stateStream = stream;
         stateSnapshot = snapshot;
-        stream.offer(snapshot.get());
+        stream.offer(snapshot.apply(false));
         return stream.completion;
     }
 
@@ -406,17 +406,38 @@ final class AgentActions {
     }
 
     void close(String reason) {
+        close(reason, false);
+    }
+
+    void closeAfterDeath(String expectedSession) {
+        boolean terminalDeath = Objects.equals(session, expectedSession) && mob.isDeadOrDying();
+        close(terminalDeath ? "body_dead" : "body_unloaded", terminalDeath);
+    }
+
+    private void close(String reason, boolean terminalDeath) {
+        boolean notifyDeath = terminalDeath && scripted();
+        // Revoke mutation authority now; retain columns and queues until the
+        // final snapshot has captured native cleanup effects and action status.
         scriptId = null;
-        columns = null;
         creativeFlying = false;
-        stopElytraFlight();
-        clearControls();
-        if (stateStream != null) stateStream.fail(error(reason));
-        stateStream = null;
-        stateSnapshot = null;
-        if (busy()) finish("interrupted", reason, null);
-        if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
-        else hands.closeHands();
+        try {
+            stopElytraFlight();
+            clearControls();
+            if (busy()) finish("interrupted", reason, null);
+            if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
+            else hands.closeHands();
+            if (notifyDeath && stateStream != null && stateStream.open() && stateSnapshot != null)
+                stateStream.offer(stateSnapshot.apply(true));
+        } catch (RuntimeException failure) {
+            if (stateStream != null) stateStream.fail(failure);
+            com.mojang.logging.LogUtils.getLogger().warn("Script body cleanup failed for {}", mob.getStringUUID(), failure);
+        } finally {
+            columns = null;
+            // ScriptStream drains queued frames before writing this terminal error.
+            if (stateStream != null) stateStream.fail(error(reason));
+            stateStream = null;
+            stateSnapshot = null;
+        }
     }
 
     void tick(boolean minecraftAccess) {
@@ -719,7 +740,7 @@ final class AgentActions {
             }
             if (stateStream != null) {
                 if (stateStream.open()) {
-                    try { stateStream.offer(stateSnapshot.get()); }
+                    try { stateStream.offer(stateSnapshot.apply(false)); }
                     catch (RuntimeException failure) { stateStream.fail(failure); }
                 }
                 if (!stateStream.open()) releaseScript();

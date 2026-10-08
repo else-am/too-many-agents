@@ -742,10 +742,14 @@ final class GameAccess {
         controller.requireScript(string(args, "scriptId", 80));
         if (!string(args, "operation", 40).equals("stream")) throw error("invalid_script_stream_operation");
         var snapshots = new ScriptSnapshot();
-        return controller.stream(stream, () -> snapshots.frame(scriptSnapshot(current, mob, controller)));
+        return controller.stream(stream, terminalDeath -> snapshots.frame(scriptSnapshot(current, mob, controller, terminalDeath)));
     }
 
     private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
+        return scriptSnapshot(current, mob, controller, false);
+    }
+
+    private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller, boolean terminalDeath) {
         var snapshot = observe(current, mob, new JsonObject());
         var level = (ServerLevel) mob.level();
         var worldState = new JsonObject();
@@ -771,7 +775,7 @@ final class GameAccess {
         snapshot.add("scoreboard", scriptScoreboard.snapshot(level));
         snapshot.add("bossBars", ScriptBossBars.snapshot(level, mob, controller.hands, snapshot.getAsJsonArray("entities")));
         var items = new ScriptItems(level);
-        snapshot.add("hands", controller.hands.scriptSnapshot(items));
+        snapshot.add("hands", controller.hands.scriptSnapshot(items, terminalDeath));
         snapshot.add("messages", controller.drainMessages());
         snapshot.add("entityEvents", controller.drainEntityEvents());
         snapshot.add("sounds", controller.drainSounds());
@@ -955,7 +959,21 @@ final class GameAccess {
             }
         }
         var unloaded = actions.keySet().stream().filter(ref -> !seen.contains(ref)).toList();
-        for (var ref : unloaded) { actions.remove(ref).close("body_unloaded"); bodySnapshots.remove(ref); }
+        for (var ref : unloaded) {
+            var controller = actions.remove(ref);
+            var mob = controller.mob;
+            // A dead body in its original world can publish one final state.
+            // Unloading, discard and cross-dimension replacement are not death.
+            if (mob.isDeadOrDying() && mob.getStringUUID().equals(ref.entityUuid())
+                && ref.world().equals(world) && mob.level() instanceof ServerLevel level
+                && level.getServer() == current && level.dimension().location().toString().equals(ref.dimension())
+                && (mob.getRemovalReason() == null || mob.getRemovalReason() == Entity.RemovalReason.KILLED)
+                && (level.getEntity(mob.getUUID()) == mob || mob.getRemovalReason() == Entity.RemovalReason.KILLED
+                    && level.getEntity(mob.getUUID()) == null))
+                controller.closeAfterDeath(worldSession.get());
+            else controller.close("body_unloaded");
+            bodySnapshots.remove(ref);
+        }
         drainTools(current);
     }
 

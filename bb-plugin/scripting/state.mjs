@@ -69,7 +69,9 @@ export function installState(bot, featureTable) {
       if (previous.rainState !== state.rainState) events.push(['weatherUpdate']);
       if (previous.isRaining !== state.isRaining) events.push(['rain']);
       if (previous.thunderState !== state.thunderState) events.push(['weatherUpdate']);
-      if (previous.health !== state.health) events.push(['health']);
+      const died = previous.isAlive === true && state.isAlive === false && state.health <= 0;
+      if (previous.health !== state.health || died) events.push(['health']);
+      if (died) events.push(['death']);
       if (previous.airSupply !== state.airSupply) events.push(['breath']);
     }
     previous = state;

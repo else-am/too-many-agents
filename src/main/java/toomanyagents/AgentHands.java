@@ -1330,7 +1330,16 @@ public final class AgentHands extends FakePlayer {
     }
 
     JsonObject snapshot() {
-        syncBody();
+        return snapshot(false);
+    }
+
+    private JsonObject snapshot(boolean terminalDeath) {
+        if (terminalDeath) {
+            // Observe cleanup results without synchronizing or reviving a dead body.
+            requireThread();
+            if (!closed || !body.isDeadOrDying() || body.level() != level())
+                throw error("invalid_terminal_body_snapshot");
+        } else syncBody();
         ensureObservedMenu();
         var result = new JsonObject();
         result.addProperty("mode", BodySettings.mode(body.getPersistentData().getString("too_many_agents_mode")).id);
@@ -1369,7 +1378,11 @@ public final class AgentHands extends FakePlayer {
     }
 
     JsonObject scriptSnapshot(ScriptItems items) {
-        var result = snapshot();
+        return scriptSnapshot(items, false);
+    }
+
+    JsonObject scriptSnapshot(ScriptItems items, boolean terminalDeath) {
+        var result = snapshot(terminalDeath);
         result.addProperty("blockInteractionRange", blockInteractionRange());
         result.add("tablist", tablist.deepCopy());
         if (editedSign != null && !editedSign.isRemoved() && editedSign.getLevel() == level()
