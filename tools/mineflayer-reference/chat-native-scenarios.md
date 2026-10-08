@@ -46,3 +46,9 @@ world/chat mutation occurs. Privileged suggestions and tooltip content remain
 pending unless exercised. Concurrent body actions use the existing busy fence.
 
 Implementation build passed, including native completion polling and typed tooltip encoding. Native verification remains unrun: another connected game prevented installing the chat scripting bundle. No replacement was attempted.
+
+Native completion clarification (35e8a4f): development GameTest registers the
+`test` literal without a `requires` predicate. It legitimately remains visible
+at permission 0. Require privileged `teleport`, `team` and `tellraw` to be absent;
+do not blacklist a permitted name. The first rebuilt check satisfied this but
+stopped on the lead's incorrect `test` exclusion. No completion rerun is needed.
