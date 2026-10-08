@@ -122,3 +122,105 @@ isolated test JVM. These files are prepared, syntax-parsed only and UNRUN.
 Each exact UUID-substituted script ran once in a separate ordinary bound Codex gpt-6.1-sol low thread. Fox detour arrived, but its prepared actual-body-overlap exclusion assertion failed; sampled center never entered the excluded logical cell. Step/dig were not reached. Drowned approach and raised destination arrived without edits; native step_height was independently1.0, all observed ground flags remained true, so the full-block fixture did not establish jumping. Platform/drop were not reached. Preserve original sources/failures; no whole-script pass or production failure inferred from these fixture assumptions.
 
 Known Fox setup-only default-UP interaction rejection had zero withdrawal; visible NORTH-face setup then succeeded. Original tool returned to its temporary barrel, both empty disposable bodies archived through supported workflow, all owned cells restored and temporary30 forced chunks removed. ScriptProbe inventory/equipment/selection/carried matched original baseline. All dimensions saved00:16:59.837; exact JVM56121 stopped. Full raw sources/hashes/times/counts/diagnosis: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/22ac99f-summary.json`. Mode/revision/fence checks remain unrun.
+
+## Next preparation: remaining Fox and real Drowned gap — UNRUN
+
+These are new files. The measured 22ac99f sources and original failures remain
+unchanged. No preparation native calls, restart, model probe or build was performed.
+Use separate NEW disposable UUIDs, normal binding/attributes, independent native
+controller/health/ground/dry checks and Codex gpt-6.1-sol low after exact authorization.
+
+`observe-fox-route-remaining.js` starts at (153.5,-60,80.5), directly before the
+same bottom slab154/-60/80. It executes only previously unreached half-step,
+156/-60/80 approach and exact selected stone dig157/-60/80 through the reviewed
+one-block-high tunnel to158/-60/80. No earlier detour repeats. Fresh identical
+support/headroom/tunnel/tool inspection is required; only real undamaged iron
+pickaxe1 may enter this disposable inventory. Supply via a reachable actual barrel
+outside measurement; use an explicitly visible side face for low Fox eyes,
+not default UP. A tested position is barrel149/-60/82 from150.5/-60/80.5, NORTH
+face; afterward coordinator returns the body to new starting153.5/-60/80.5.
+The existing step/break exclusions operate on logical cells, not body-AABB
+intersection. Actual positions, step support, exact one edit and damage0->1 are
+still required. Record native drop truthfully; do not assume instantaneous pickup.
+No disabling flag, revision, fence or detour retry is included.
+
+`observe-drowned-gap-route.js` preserves actual native step_height1.0. Proposed
+fresh corridor: original floor x167..180,z88..92,y-61, dry and loaded; empty cells
+above throughy-52 must be independently inspected before edits. Stone runway
+x168..173,z90,y-59 gives feet-58; equal-height landingx175..176,z90,y-59.
+The single unsupported cellx174/z90 has air at-59 and-60 above the lower original
+floor. Stone lower exitx177..179,z90,y-60 gives feet-59. Side wallsx167..180,z89/91
+at y-59..-53, high shade roof at y-52, no low ceiling, fluids or neighboring entities.
+Logical step exclusions bound x168..179/z90. Starts170.5/-58/90.5, flat approach
+173/-58/90, one selected parkour edge to175/-58/90, supported platform176/-58/90.
+During the gap only: allowParkour=true, maxDropDown=0, no digging/scaffolding,
+sprinting/shortcuts/free motion. Native capabilities must report canJump and
+maxJumpDistance>=2; otherwise stop before any route and report the prerequisite.
+Require selected parkour witness, actual airborne crossing over gap x174..175,
+and meaningful ascent>.15 above takeoff, then supported landing. No tick/path parity.
+After that known landing only, maxDropDown becomes2 for the declared one-block
+exit177/-59/90, requiring observed descent/support and five settled ticks. The
+current public getLandingBlock scan compares feetY=-58 to support-blockY=-60
+(a difference2), not feet-to-feet drop1; no deeper exit is present. This
+changes a public planner policy, never body attributes. The initial gap cannot be
+satisfied by the previous full-block native step or a permitted walk down into the pit.
+Inspect all support/swept headroom/cache/query padding/body-box coordinates before
+invocation; preserve original cells for exact cleanup. No gap mutation while running.
+
+## Prepared known native start rejection — UNRUN
+
+The proposed stale captured Block test is **not suitable with current public API**:
+`actions.mjs:observed` rereads current block state, rejects changed state locally
+with `BlockChanged`, then forwards current.stateId. It cannot prove native
+HTTP400 `action_rejected_before_start` after hydrated blockUpdate. No product
+change, stale script, private request hook or native stale-state claim was added.
+
+Alternative `observe-known-action-rejection.js` uses a NEW empty dry ordinary
+bound body, alive/awake/unmounted on stone, clear reachable same-height cells
++1/+2X and adequate headroom/cache/body-box margins. Record exact native UUID,
+original position/inventory/action ID first. Source `pathfinder.mjs` forwards
+selected route without clearing/rejecting held controls; AgentActions.start checks
+heldControls and rejects `release_manual_controls_before_navigation` before route
+preparation or sequence publication. Script sets native sneak true, drains one tick,
+requests a known reachable noncurrent GoalBlock, and accepts only Error fields
+phase='before_start', detail='release_manual_controls_before_navigation'. It
+records name/code/message rather than inventing name='ActionError': current host's
+NativeActionError subclass does not override Error.name. Then it clears sneak,
+drains and awaits same-orientation look to prove continued authorization. Any
+other/unknown error is rethrown without cleanup or retry.
+
+Callbacks must show a successful plan but no goal reached, one path_stop and
+execution_error reset; position/inventory remain unchanged. These callbacks alone
+cannot prove native no-start: coordinator must retain producer HTTP400/native
+reason in raw error and independently inspect action ID/sequence to establish no
+route action was published between acknowledged sneak and its clear. Script-local
+native rejection is not itself a physical movement test. No network loss, stale
+block mutation, recovery after unknown outcome or old success rerun is included.
+
+## Prepared guarded world switch cancellation — UNRUN
+
+`observe-world-switch-cancellation.js`: NEW separate empty ordinary bound body,
+exact UUID, awake/unmounted/grounded, no controls/menu/cursor. Do not use ScriptProbe
+or either old archived test record. Coordinator independently records actual
+original world ID/session/name and native body tags/position/inventory before
+invocation; public guest records dimension/levelType/gameMode/UUID/shared identities
+without fabricating a private session accessor. Source script has no mutation other
+than first same-orientation forced look and a later distinct-yaw sentinel.
+
+Install/log initial state, observe NEW completed first look ID externally, then
+issue guarded `ui dev_switch_world` exactly once. Do not coordinate using guessed
+sleep or provider READY. Script waits400ticks and must terminate with world/session
+loss before later look(initialYaw+.37). Preserve first terminal error/logs/counts;
+no catch, replacement request or retry. Expected: only first native look starts,
+no UNEXPECTED-after-switch-wait log or sentinel native action. Run deadline60s
+when authorized; the first readiness-to-switch budget is400ticks (~20s), so the
+coordinator must be ready before invocation, not begin investigation after the gate.
+
+The switch uses only the isolated saved development world and its guarded '-other'
+world. Preserve the second world's existing state; no fixture edits/body actions
+there. After a known switch, use one guarded switch back for independent original
+body/action/tags/inventory/lease/tool-absence checks, then supported cleanup of only
+this new empty disposable record. If switch outcome is unknown do not replay or
+blindly switch back. Body release may be unconfirmed on close; later absence of
+lease/tools must be measured and reported separately. This validates actual world
+switching, not reply loss, self-death, pause behavior or a general lifecycle matrix.

@@ -3536,8 +3536,14 @@
         "mineflayer-pathfinder.Movements",
         "mineflayer-pathfinder.Move"
       ],
-      "scope": "Deterministic movement/planner fixtures against upstream; no native movement execution proof.",
-      "result": "not-recorded"
+      "scope": "63 deterministic planner scenarios, including 18 differential worlds, 22 body scenarios and actual QuickJS water neighbors. Covers liquid entry/vertical routes, body clearance, policies and no surface flight. No native fish controls, physics or execution proof.",
+      "result": "passed",
+      "testedRevision": "2b84bae",
+      "sourceSha256": "b68fdcf6a8a402ae0159b555834debba048c89882a971f911b89fd977ddce14b",
+      "report": {
+        "path": "run/mineflayer-reference/movements-current.txt",
+        "sha256": "3a5b7d11b66111e2b98964e9ba972e0ef2925a866f5bc8876aca824f06908671"
+      }
     },
     "planning-library": {
       "kind": "library-differential",
