@@ -11,3 +11,8 @@ The exact script disables shortcuts, digging, scaffolding, sprinting and parkour
 Source review: ScriptNavigation calls Rabbit.customServerAiStep, real MoveControl then JumpControl, reads getJumpPower after preparation, and invokes the native impulse only after preflight. No native AI/navigation tick is substituted. Native preparation can advance timers/carrot RNG/animation even on failure, which is terminal route_rabbit_prepared_failed. Existing 240-tick edge and 2400-tick route bounds remain. Private controller wanted/consumed fields and counters are not exposed by the guest: return public capabilities/trace and independently retain native action progress; do not invent public accessors or infer high-jump power from wanted Y. Actual normal/high-speed convergence remains unverified.
 
 Syntax parse only during preparation. Native startup/AT admission and end-to-end execution require a separately authorized artifact. No mode/revision/cancellation/species matrix.
+
+
+## Actual packaged 7fd4922 outcome (2026-10-08)
+
+Horizontal phase timed out node1/2, route_rabbit_prepared_failed: route_edge_timeout; real movement/trace retained, step/drop unrun. No retry. Codex gpt-6.1-sol low; source SHA256 `63cf531f918cf579edebdf1342cecbae26502e27785b873d27a0be04713a7008`. Counts 2/2 requests, 296 updates, 12 bridge operations; tool 15388 ms. Invocation 2026-10-08T08:43:20.021Z to 2026-10-08T08:43:35.429Z; release confirmed. Full literal source/raw/native evidence: `/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-rabbit-measured.json`, summary `7fd4922-summary.json`. No retry. Owned fixtures/added chunks restored; saved ScriptProbe belongings unchanged; all dimensions saved and exact JVM54481 stopped.

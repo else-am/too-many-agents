@@ -6237,6 +6237,78 @@
         "path": "run/mineflayer-reference/flight-planning-after.json",
         "sha256": "2c9c3707067627c49e82f08d873e1f5715b5e4430b88efc3d433cf2e110a7984"
       }
+    },
+    "slime-native-7fd4922": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-slime-7fd4922.js",
+      "subjects": [],
+      "scope": "Three selected native routes passed: horizontal hop, bottom-slab step and supported drop, unchanged health/inventory, confirmed release. No other sizes/fluids/cancellation claim.",
+      "result": "passed",
+      "testedRevision": "7fd4922",
+      "sourceSha256": "0bbac4b20372cf46e78c165ff335f073f6d33e311f22ee515ad2c60a61f39c23",
+      "report": {
+        "path": "run/mineflayer-reference/slime-native-7fd4922.json",
+        "sha256": "41dee8be5f59e25a33ea0c6b62ca01c6a4e42fa528adf4b403cb36948fa89721",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-summary.json",
+      "limitations": "Selected scenario, not full species/API conformance. Original failures and partial outcomes retained; no unknown replay."
+    },
+    "cod-native-7fd4922": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-cod-7fd4922.js",
+      "subjects": [],
+      "scope": "Four-node ascent completed, then next start rejected route_start_changed. Exact next-start coordinates were not captured; subsequent sinking does not prove their mismatch. Detour/down unrun.",
+      "result": "failed",
+      "testedRevision": "7fd4922",
+      "sourceSha256": "2996e9ad1da3cd609f041a17139a834ef1f6cf0169137a5888e04c03fd5c7444",
+      "report": {
+        "path": "run/mineflayer-reference/cod-native-7fd4922.json",
+        "sha256": "7b6cd16117c373e9be192ff80429445e6fbda55d0feeb846c544b69d33668db1",
+        "codePath": [
+          "exactSource"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-summary.json",
+      "limitations": "Selected scenario, not full species/API conformance. Original failures and partial outcomes retained; no unknown replay."
+    },
+    "rabbit-native-7fd4922": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-rabbit-7fd4922.js",
+      "subjects": [],
+      "scope": "Horizontal route failed route_rabbit_prepared_failed: route_edge_timeout. Retained trace shows settled whole-footprint goal-cell positions rejected by the center threshold; step/drop unrun.",
+      "result": "failed",
+      "testedRevision": "7fd4922",
+      "sourceSha256": "63cf531f918cf579edebdf1342cecbae26502e27785b873d27a0be04713a7008",
+      "report": {
+        "path": "run/mineflayer-reference/rabbit-native-7fd4922.json",
+        "sha256": "fcd5562ab083eb8106a9d5d89270da1f77198d21e9fea159bf01a05fad82149b",
+        "codePath": [
+          "source"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-summary.json",
+      "limitations": "Selected scenario, not full species/API conformance. Original failures and partial outcomes retained; no unknown replay."
+    },
+    "magma-native-7fd4922": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-magma-7fd4922.js",
+      "subjects": [],
+      "scope": "Three native route arrivals independently retained, but Script output limit exceeded prevents full final script verification. Executed source differs from requested source by trailing newline; both retained. No rerun.",
+      "result": "failed",
+      "testedRevision": "7fd4922",
+      "sourceSha256": "ffacb6e911657bbffbd45960761cf749648e7e726cee09ff0c1dbf8bcaa626d4",
+      "report": {
+        "path": "run/mineflayer-reference/magma-native-7fd4922.json",
+        "sha256": "7e49545ee5362d32003d6f6e07766620cc07e5ef1a602f1849c9688ac4d5c9c4",
+        "codePath": [
+          "executedSource"
+        ]
+      },
+      "independentObservation": "/Users/scott/.bb/thread-storage/thr_xykqkgui57/7fd4922-summary.json",
+      "limitations": "Selected scenario, not full species/API conformance. Original failures and partial outcomes retained; no unknown replay."
     }
   },
   "reviewNotes": {
