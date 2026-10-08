@@ -202,12 +202,20 @@ public final class TooManyAgents {
                     && java.util.Set.of("awaitAction", "awaitTicks").contains(field(request.getAsJsonObject("arguments"), "operation"));
                 try { result = JsonState.object("ok",true,"result",agents.callback(request).get(scriptWait ? 310 : 15,TimeUnit.SECONDS)); }
                 catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
+                catch(InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    return new LocalBridge.Reply(503, JSON.toJson(JsonState.object("ok",false,"error",
+                        JsonState.object("code","interrupted_outcome_unknown","message","interrupted_outcome_unknown"))));
+                }
                 catch(Exception failure) {
                     Throwable cause = failure;
                     while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) cause = cause.getCause();
                     boolean stale = cause instanceof AgentService.StaleSessionException;
-                    return new LocalBridge.Reply(stale ? 409 : 400, JSON.toJson(JsonState.object("ok",false,"error",
-                        JsonState.object("code",stale ? "world_session_changed" : "callback_failed","message",cause.getMessage()))));
+                    var rejection = cause instanceof ScriptRequestRejection known ? known : null;
+                    int status = stale ? 409 : rejection != null ? 400 : 500;
+                    String code = stale ? "world_session_changed" : rejection != null ? rejection.code : "callback_failed";
+                    return new LocalBridge.Reply(status, JSON.toJson(JsonState.object("ok",false,"error",
+                        JsonState.object("code",code,"message",cause.getMessage()))));
                 }
             } else if (path.equals("/v1/agents/providers")) result = agents.backendStatus().get(30,TimeUnit.SECONDS);
             else if (path.equals("/v1/agents/projects")) result = method.equals("GET") ? agents.projects() : agents.projectCommand(request).get(110,TimeUnit.SECONDS);

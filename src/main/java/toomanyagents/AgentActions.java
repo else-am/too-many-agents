@@ -111,7 +111,7 @@ final class AgentActions {
 
     void requireScript(String id) {
         expireScript();
-        if (scriptId == null || !scriptId.equals(id)) throw error("script_no_longer_controls_body");
+        if (scriptId == null || !scriptId.equals(id)) throw ScriptRequestRejection.leaseUnavailable();
         scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
     }
 
@@ -323,47 +323,54 @@ final class AgentActions {
         return start(request, true);
     }
 
+    private static IllegalStateException startRejection(boolean approachTargets, String message) {
+        return approachTargets ? error(message) : ScriptRequestRejection.beforeStart(message);
+    }
+
     private JsonObject start(JsonObject request, boolean approachTargets) {
-        if (busy()) throw error("action_already_running_cancel_or_wait");
+        if (busy()) throw startRejection(approachTargets, "action_already_running_cancel_or_wait");
         String type = text(request, "type");
-        if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw error("unknown_action_type");
-        if ((type.equals("route") || type.equals("walk")) && creativeFlying) throw error("stop_creative_flight_before_navigation");
+        if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw startRejection(approachTargets, "unknown_action_type");
+        if ((type.equals("route") || type.equals("walk")) && creativeFlying) throw startRejection(approachTargets, "stop_creative_flight_before_navigation");
         if (type.equals("creative_flying") && (!request.has("state") || !request.get("state").isJsonPrimitive()
-            || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_flight_state");
+            || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_flight_state");
         if (type.equals("creative_fly") || type.equals("creative_flying") && request.get("state").getAsBoolean()) requireCreativeFlight();
-        if (type.equals("creative_fly") && !heldControls.isEmpty()) throw error("release_manual_controls_before_fly_to");
-        if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw error("release_manual_controls_before_navigation");
+        if (type.equals("creative_fly") && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_fly_to");
+        if ((type.equals("route") || type.equals("walk")) && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_navigation");
         if (mob.isSleeping() && (type.equals("route") || type.equals("walk")
-            || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw error("wake_before_movement");
-        if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw error("dismount_before_navigation");
+            || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw startRejection(approachTargets, "wake_before_movement");
+        if ((type.equals("route") || type.equals("walk")) && mob.isPassenger()) throw startRejection(approachTargets, "dismount_before_navigation");
         if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
-            || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw error("invalid_control");
-        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()
-            && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
-            requireVehicleController();
-        }
+            || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_control");
         if (mob.isFallFlying() && List.of("walk", "route", "creative_fly").contains(type))
-            throw error("land_before_ground_navigation_or_creative_flight");
-        if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
-        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw error("position_or_entity_required");
-        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly", "set_command_block").contains(type) && !request.has("position")) throw error("position_required");
-        if (List.of("give", "attack").contains(type) && !request.has("entity")) throw error("entity_required");
+            throw startRejection(approachTargets, "land_before_ground_navigation_or_creative_flight");
+        if (request.has("position") && request.has("entity")) throw startRejection(approachTargets, "choose_position_or_entity");
+        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw startRejection(approachTargets, "position_or_entity_required");
+        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly", "set_command_block").contains(type) && !request.has("position")) throw startRejection(approachTargets, "position_required");
+        if (List.of("give", "attack").contains(type) && !request.has("entity")) throw startRejection(approachTargets, "entity_required");
         if (type.equals("set_command_block") && (!request.has("command") || !request.get("command").isJsonPrimitive()
             || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
-            throw error("invalid_command_block_command");
+            throw startRejection(approachTargets, "invalid_command_block_command");
         if (type.equals("set_settings")) mainHandSetting(request);
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
             if (List.of("mine", "place", "interact", "place_entity", "update_sign", "set_command_block").contains(type)) {
                 var level = (ServerLevel) mob.level();
-                if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
-                if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
-                if (args.has("expectedStateId") && Block.getId(level.getBlockState(pos)) != integer(args, "expectedStateId", -1)) throw error("target_changed");
+                if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw startRejection(approachTargets, "outside_build_height");
+                if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw startRejection(approachTargets, "target_unloaded_or_outside_world");
+                if (args.has("expectedStateId") && Block.getId(level.getBlockState(pos)) != integer(args, "expectedStateId", -1)) throw startRejection(approachTargets, "target_changed");
             }
         }
         if (List.of("place", "interact", "place_entity").contains(type) && args.has("position")) blockFace();
-        if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
+        if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw startRejection(approachTargets, "pickup_target_must_be_item");
+        // From here preparation can change native controls before a sequence
+        // is published. Failures must remain uncertain, never before-start.
+        // Vehicle eligibility syncs the proxy's item use/equipment first.
+        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()
+            && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
+            requireVehicleController();
+        }
         if (type.equals("route")) {
             var selected = new ScriptNavigation(this, box);
             try { selected.start(args); }

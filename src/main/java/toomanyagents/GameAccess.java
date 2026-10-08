@@ -1315,7 +1315,7 @@ final class GameAccess {
         var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, id));
         if (level == null) throw error("body_dimension_unavailable");
         var entity = level.getEntity(UUID.fromString(body.entityUuid()));
-        if (!(entity instanceof Mob mob) || !mob.isAlive() || mob.isRemoved()) throw error("body_missing_or_unloaded");
+        if (!(entity instanceof Mob mob) || !mob.isAlive() || mob.isRemoved()) throw ScriptRequestRejection.bodyUnavailable();
         if (mob.getPersistentData().getString("too_many_agents_agent").isBlank()) throw error("entity_is_not_an_agent_body");
         if (!allowRemoving && mob.getPersistentData().getBoolean("too_many_agents_removing")) throw error("agent_body_removal_pending");
         return mob;
