@@ -186,6 +186,9 @@ if (process.argv.includes('--reference-only')) {
   const bundle = await build({
     stdin: { contents: `import { createWorldView } from './bb-plugin/scripting/world-view.mjs'; import { createBlockClass } from './bb-plugin/scripting/blocks.mjs'; import { Vec3 } from 'vec3'; import goals from 'mineflayer-pathfinder/lib/goals.js'; globalThis.createWorldView = createWorldView; globalThis.Block = createBlockClass(${JSON.stringify(data)}); globalThis.Vec3 = Vec3; globalThis.goals = goals;`, resolveDir: root },
     bundle: true, write: false, platform: 'browser', format: 'iife', target: 'es2022', nodePaths: [resolve(referenceRoot, 'node_modules'), resolve(pluginRoot, 'node_modules')],
+    // The harness imports from two dependency roots; the production guest has
+    // one Vec3 constructor. Keep the reference goals and guest in that same realm.
+    alias: { vec3: plugin.resolve('vec3') },
   });
   const vm = (await getQuickJS()).newContext();
   vm.runtime.setMemoryLimit(256 * 1024 * 1024);

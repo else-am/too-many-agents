@@ -3526,8 +3526,13 @@
         "mineflayer-pathfinder.goals.GoalLookAtBlock",
         "mineflayer-pathfinder.goals.GoalPlaceBlock"
       ],
-      "scope": "Synthetic typed Block lookup with actual goals, clipping corrections and bounds in QuickJS; not native visibility.",
-      "result": "not-recorded"
+      "scope": "183 pinned world/goal comparisons, 10 demonstrated geometry corrections and 6 bounds in bundled QuickJS. Harness uses one Vec3 dependency matching production; initial duplicate-root identity failure retained. Synthetic real Block lookup only, not native visibility or full WorldSync conformance.",
+      "result": "passed",
+      "sourceSha256": "78d189f537b9f8b5f13053d28e5e50137967ef5497f39d9b788ccff7ce844c26",
+      "report": {
+        "path": "run/mineflayer-reference/world-view-current.txt",
+        "sha256": "34948798862e8d1df462356e8248ef5fdf4e9e97bdabc841cf6ed2f78e52f320"
+      }
     },
     "movements-library": {
       "kind": "library-differential",
