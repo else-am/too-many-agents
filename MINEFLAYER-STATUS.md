@@ -6,8 +6,8 @@ Updated October 7, 2026. **Core gameplay is broadly implemented and selectively 
 
 - Branch: `feat/mineflayer-api`.
 - Checkout: `/Users/scott/Else/too-many-agents/scratch/worktrees/mineflayer-api`.
-- Latest built implementation: **`c244383`**, including native dominant-hand settings (`42f9a38`) in addition to mounted controls and Mob collection. Full Java/plugin/package build passed; this new artifact has not yet been launched.
-- Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `7d3b18595abe0213d8ee21277dcf916264be9749b6b196c3f3e21311535aadf4`.
+- Latest built implementation: **`a6d9474`**, adding documented chat-pattern inspection and current scripting guidance atop the native dominant-hand settings. Full Java/plugin/package build passed; this newest artifact has not been launched. The tester is validating unchanged native settings/strider code on the fixed prior `c244383` artifact.
+- Latest built artifact: `build/libs/too-many-agents-0.9.0.jar`; SHA-256 `e5035c0845beb03dfd4aed50c24ef04e8ae839cbbd9216f8618ec825ced435dc`.
 - The earlier `aad8063` artifact passed shortcut/following, sound and accepted hurt/death/pickup checks; those passes do not verify the new additions. Previous performance measurements remain tied to **`042cc01`**, hash `2f97bf374d8c08acb8b903ecea0b5b7d296219741bb762399286c73ff5be8ce5`; they are not measurements of newer builds.
 - Latest focused native pass: **`67ebb2c`**, Fox original-item/count-zero collection and body pickup without duplicate callbacks; authoritative inventory/equipment and actual body username matched. Two requests, 34 updates, eight bridge operations. Horse, corrected Pig and minecart movement/release/dismount also passed; strider completion remains unverified after native rain damage killed the fixture.
 - Lifecycle: tester `thr_xykqkgui57` saved/disconnected and stopped exact `67ebb2c` JVM `50399`; original belongings/equipment/selection were restored. It is authorized to own the next `c244383` settings/healthy-strider check. Do not launch a competing client or change its artifact. [Handback](</Users/scott/.bb/thread-storage/thr_xykqkgui57/67ebb2c-summary.json>).
@@ -118,7 +118,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 - [x] Shared gather procedure passed on the authorized isolated reference server and matched historical native outcomes. Wider reference outcomes below remain incomplete.
 - [x] Performance comparisons on fixed 042cc01: wall 18 agent calls→1 script; gather/craft 44→1, with matching native outcomes. Script execution 1.225s/8.915s; direct tool intervals 123.557s/235.226s include model coordination (wall also compaction). This measures fewer agent round trips, not faster native physics. [Evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/performance-042cc01-summary.json>).
 
-- [x] Documented chatPatterns inspection records and legacy description retention. Pinned runtime omits the documented field; this correction preserves existing registration, sequential matching and removal. Syntax passes; next full build pending.
+- [x] Documented chatPatterns inspection records and legacy description retention. Pinned runtime omits the documented field; this correction preserves existing registration, sequential matching and removal. Syntax and full Java/plugin/package build passed; the new inspection surface has not been exercised in a native script.
 
 ## Still to implement or finish
 
