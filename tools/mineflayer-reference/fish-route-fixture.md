@@ -26,11 +26,16 @@ physics `native-fish-submerged-post-tick`, locomotion `submerged`, canSwim true,
 canJump false and zero jump envelopes. Read native width/height/eye height and
 positive finite movement speed (executor permits <=4). The actual target offset
 is `max(.05,(1-height)/2)`, not a player feet-height assumption. Set up the fresh
-body once at (204.5,-58+offset,108.5) using explicit decimal axes, then independently
-verify health, empty native inventory/equipment, awake/no passenger, complete
-submersion and original controller. Do not infer supported water mode from
-onGround or an invented flag. Endpoints remain multiple water cells from bottom
-and surface; there is no support-floor requirement.
+body at (204.5,-60.0,108.5) using explicit decimal axes and allow its ordinary
+passive physics to settle on the pool bottom. Independently observe healthy
+unchanged feet Y-60, grounded and wholly submerged body/eyes over at least20
+native ticks before invocation. Do not race a suspended teleport or freeze
+gravity/velocity. Retain empty native inventory/equipment, awake/no passenger
+and original controller. Grounded is a start-fixture condition, not proof of
+supported aquatic mode; native capabilities and full water volume are authority.
+The up/detour/down endpoints remain multiple water cells from bottom/surface;
+their aquatic arrival has no support-floor requirement. The lower policy cell
+bound is now-60 only to include this real bottom start.
 
 The one finite script selects up to GoalBlock(204,-56,108), horizontal detour
 to (210,-56,108), then down to (210,-58,108). Ordinary Movements, no digging,
@@ -54,3 +59,17 @@ guards and changes only the diagnosed slab goal to logical (154,-59,80).
 Physical feet remain -59.5; all existing arrival/dig/tool/exclusion assertions
 are unchanged. Previous failed calls/fixtures and their sources remain evidence;
 this preparation performs no replay.
+
+## Retained 649cc24 result and prepared start correction
+
+Original UUID-derived source SHA `f6004b589934564599a8438d5490cea4731a64d6a30b98447d1b223a920dd565`
+failed before movement with `Cod start differs` (0 requests/updates, 3 bridge
+operations, release confirmed; UTC07:59:35.179–07:59:35.741). Native capability
+assertions passed. Native TP to Y-57.65 was followed by pre-call NBT Y-59.126611248093525,
+MotionY-.04220395176016719, then settled Y-60; healthy3 and empty inventory.
+No fish route was submitted or retried. Source/raw response/times/native evidence
+remain in `/Users/scott/.bb/thread-storage/thr_xykqkgui57/649cc24-summary.json`.
+The prepared observer now accepts only the independently settled bottom start,
+changes the initial water sample/lower policy bound accordingly, and preserves
+capabilities/full-volume checks, up destination-56, detour, down destination-58,
+all physical arrival assertions and original failed evidence. Syntax only; unrun.

@@ -14,8 +14,8 @@ if (caps?.physics !== 'native-fish-submerged-post-tick' || caps.locomotion !== '
     !Number.isFinite(caps.swimTargetYOffset) ||
     Math.abs(caps.swimTargetYOffset - Math.max(.05, (1 - body.height) / 2)) > 1e-6)
   throw new Error('Native fish capability/dimension/offset contract differs');
-const offset = caps.swimTargetYOffset, origin = new Vec3(204.5, -58 + offset, 108.5);
-if (body.position.distanceTo(origin) > .2) throw new Error('Cod start differs');
+const offset = caps.swimTargetYOffset, origin = new Vec3(204.5, -60, 108.5);
+if (!body.onGround || body.position.distanceTo(origin) > .2) throw new Error('Settled Cod start differs');
 await bot.waitForChunksToLoad();
 function sourceWater(p) {
   const block = bot.blockAt(p);
@@ -32,7 +32,7 @@ function submerged() {
 for (let y = -60; y <= -54; y++)
   for (let z = 106; z <= 110; z++)
     if (bot.blockAt(new Vec3(207,y,z))?.name !== 'stone') throw new Error('Full-depth detour column differs');
-for (const p of [new Vec3(204,-58,108), new Vec3(204,-56,108),
+for (const p of [new Vec3(204,-60,108), new Vec3(204,-56,108),
     new Vec3(210,-56,108), new Vec3(210,-58,108), new Vec3(207,-56,105), new Vec3(207,-56,111)])
   if (!sourceWater(p) || !sourceWater(p.offset(0,1,0))) throw new Error('Submerged endpoints/detour differ');
 if (!submerged()) throw new Error('Initial body/eyes not wholly submerged');
@@ -55,7 +55,7 @@ movements.canDig = false; movements.allowParkour = false; movements.allowSprinti
 movements.allow1by1towers = false; movements.scafoldingBlocks = []; movements.allowFreeMotion = false;
 movements.exclusionAreasStep.push(block => !block.position ||
   block.position.x < 202 || block.position.x > 211 || block.position.z < 105 || block.position.z > 112 ||
-  block.position.y < -59 || block.position.y > -55 ? 200 : 0);
+  block.position.y < -60 || block.position.y > -55 ? 200 : 0);
 bot.pathfinder.enablePathShortcut = false; bot.pathfinder.setMovements(movements);
 bot.on('physicsTick',sample); bot.on('path_update',path); bot.on('path_reset',reset);
 async function arrive(x,y,z) {
