@@ -4004,8 +4004,13 @@
         "mineflayer.Bot.craft",
         "mineflayer.Bot.transfer"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "20 pinned-source/authoritative Window fixture groups in actual QuickJS: inventory, transfer, equipment, cancellation, known/unknown errors and craft orchestration. Controlled native callbacks, not live inventory proof.",
+      "result": "passed",
+      "sourceSha256": "4b3ff97640a05cf127817f3300aac3d6b9047e4f7b5fbe47bc04fadf07330594",
+      "report": {
+        "path": "run/mineflayer-reference/inventory-current.txt",
+        "sha256": "2d38b129030215c1a1ef138eb91d28ca1eeda503a0aaa990463a70f0cb11c6ec"
+      }
     },
     "specialized-guest": {
       "kind": "library-differential",
@@ -4015,8 +4020,13 @@
         "mineflayer.Bot.openAnvil",
         "mineflayer.Bot.openVillager"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "7 pinned-plugin/actual QuickJS groups for furnace, enchantment, anvil, merchant and stale-window/queue contracts. Shared inventory harness uses real production transport encoder; no new native/server validation.",
+      "result": "passed",
+      "sourceSha256": "bbe296c706941b5df411ade9aa95cb5b6f821a31a1d4e65ac190509b39d57160",
+      "report": {
+        "path": "run/mineflayer-reference/specialized-current.txt",
+        "sha256": "3431d04735f27ca5fc8b23b5330e03006ee29cda95426cbc05b8587859e66206"
+      }
     },
     "books-guest": {
       "kind": "library-differential",

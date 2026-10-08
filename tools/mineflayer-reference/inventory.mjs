@@ -28,7 +28,7 @@ const scenarios = [
 
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const referenceRoot = resolve(process.env.MINEFLAYER_REFERENCE_ROOT ?? resolve(root, 'tools/mineflayer-reference'));
@@ -41,6 +41,7 @@ const windows = reference('prismarine-windows')(registry);
 const { EventEmitter } = plugin('events/');
 const { build } = plugin('esbuild');
 const { getQuickJS } = plugin('quickjs-emscripten');
+const { encodeItemTransport } = await import(pathToFileURL(resolve(pluginRoot, 'scripting/item-wire.mjs')));
 const stone = registry.itemsByName.stone.id, dirt = registry.itemsByName.dirt.id;
 const helmet = registry.itemsByName.diamond_helmet.id;
 const plank = registry.itemsByName.oak_planks.id, stick = registry.itemsByName.stick.id;
@@ -71,6 +72,12 @@ const bundle = await build({ stdin: { contents: `
   `, resolveDir: resolve(root, 'bb-plugin/scripting'), sourcefile: 'inventory-fixture-entry.mjs' },
   bundle: true, platform: 'browser', format: 'iife', globalName: 'InventoryModule', target: 'es2022', write: false,
   alias: { vec3: plugin.resolve('vec3'), events: plugin.resolve('events/') },
+  // Match the production guest's transport binding, including creative's
+  // transitive import. Do not replace the real encoder with a fixture stub.
+  plugins: [{ name: 'item-transport', setup(build) {
+    build.onResolve({ filter: /^minecraft-item-transport$/ }, () => ({ path: 'transport', namespace: 'item-transport' }));
+    build.onLoad({ filter: /.*/, namespace: 'item-transport' }, () => ({ contents: `export const encodeItemTransport = ${encodeItemTransport.toString()};`, loader: 'js' }));
+  } }],
   nodePaths: [resolve(pluginRoot, 'node_modules'), resolve(referenceRoot, 'node_modules')] });
 const quickjs = await getQuickJS();
 const data = JSON.stringify({ itemsArray: registry.itemsArray, enchantmentsByName: registry.enchantmentsByName, entitiesByName:registry.entitiesByName });
