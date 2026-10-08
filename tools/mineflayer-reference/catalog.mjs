@@ -343,9 +343,9 @@ for (const [id, spec] of Object.entries(coverage.evidence ?? {})) {
   try { text = await readFile(join(sourceRoot, spec.path)); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   if (spec.result && !['not-recorded', 'passed', 'failed'].includes(spec.result)) throw new Error(`Invalid evidence result: ${id}`);
   const item = { id, ...spec, recordedSourceSha256: spec.sourceSha256, available: text !== undefined, sourceSha256: text && sha(text), result: spec.result ?? 'not-recorded' };
-  if (item.result === 'passed') {
-    if (!spec.report?.path || !spec.report?.sha256 || !spec.sourceSha256) throw new Error(`Passing evidence needs scenario/report hashes: ${id}`);
-    item.reportedResult = 'passed';
+  if (item.result === 'passed' || item.result === 'failed') {
+    if (!spec.report?.path || !spec.report?.sha256 || !spec.sourceSha256) throw new Error(`Recorded evidence needs scenario/report hashes: ${id}`);
+    item.reportedResult = item.result;
     let report;
     try { report = await readFile(join(sourceRoot, spec.report.path)); }
     catch (error) { if (error.code !== 'ENOENT') throw error; }

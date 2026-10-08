@@ -110,14 +110,18 @@ reports in another worktree are listed explicitly and remain unverified.
 `scenarioReview` flags new unindexed `observe-*`/`navigate-*` procedures; neither
 queue invents passing results or copies report contents.
 
-To record a passing run, add `result: "passed"`, the executed `sourceSha256`,
+To record a run, add `result: "passed"` or `result: "failed"`, the executed `sourceSha256`,
 and `report: { "path": "run/.../result.json", "sha256": "..." }` to that evidence
 record. The generator verifies both hashes; missing or changed artifacts become
 `unverified`. A `report.codePath` array optionally locates the executed script
 in a structured tool report; its code must match the scenario after trimming
 outer whitespace. The report must describe what ran,
 its fixture, results, independent observations, and limitations; a file hash
-does not evaluate those claims for the reviewer.
+does not evaluate those claims for the reviewer. Failed reports receive the same
+integrity checks as passes and retain their original `reportedResult` if an
+artifact becomes unavailable. A verified failure is still a failure, not
+supporting conformance evidence. Documented upstream defects require an explicit
+behavioral comparison; they must not be relabeled as passing reference runs.
 
 To mark a particular API `supported`, retain its stable key under `entries`,
 attach `evidence` IDs and executable `scenarios` paths, and review the reports.
