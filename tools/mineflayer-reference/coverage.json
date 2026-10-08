@@ -4815,12 +4815,12 @@
       "kind": "runtime-boundary",
       "path": "tools/mineflayer-reference/action-start-http-uncertainty.mjs",
       "subjects": [],
-      "scope": "Actual host HTTP decoder, script coordinator and worker/QuickJS with controlled504 callback timeout,503 interruption and502 unstructured failures. Each aborts before guest catch/replacement; exactly one action and scoped release. Pre-fix504 probe reached UNSAFE_CATCH. No native game/network fault injection; structured400 callback_failed phase classification remains under source review.",
+      "scope": "Actual host HTTP decoder/script coordinator/worker QuickJS controlled504 timeout,503 interruption,502 unstructured and generic400 callback_failed abort before catch/replacement. Explicit400 action_rejected_before_start remains catchable and permits a subsequent confirmed request. Pre-fix probes reached UNSAFE_CATCH. Native typed rejection emitter integration and packaged behavior pending; no game/network fault injection.",
       "result": "passed",
-      "sourceSha256": "06446777c739a83373aa43d958c4e319b750e6e819e3c3530da83ae051edb375",
+      "sourceSha256": "ded9be5140433a1a75e630c175006dc6a1b3eb597c7050e02150946f7384b224",
       "report": {
         "path": "run/mineflayer-reference/action-start-http-uncertainty.json",
-        "sha256": "0c40ed718a427c5cce8e98454129ee759468f2bf73dc7476d54e2a501e9b6b1b"
+        "sha256": "8d9fc30caa4c02bed0aed5789a7ed0725b2807edc1072aa3db1edb862b31ceac"
       }
     }
   },
