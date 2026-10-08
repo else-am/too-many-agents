@@ -23,6 +23,8 @@ Updated October 8, 2026. **Core gameplay is broadly implemented and selectively 
 
 ## Latest evidence reconciliation
 
+- [x] Focused live-reference chest transfer passed once with independent server NBT: chest63/player17, selection and close events preserved. The native task outcome matches historical observations; upstream bot.inventory only mirrored on close, unlike native per-frame hydration. Exact source/warnings are retained and no broad member or exact paired-source claim is made.
+
 - [x] Ready attachment and two-body breaking-broadcast scripts are syntax-checked and committed, not executed. The latter uses real native mining and a separate observer, with repeated stages allowed and self-breaker echo suppressed; no injected packets. Native invocation still requires fixed-artifact lifecycle ownership and an available display.
 
 - [x] Focused isolated live-reference world queries passed once: nearest table, sign extra-info and visibility/occlusion, with server block-type confirmation. Exact source/result hashes are indexed at `reference-world-queries`; protocol decode and setup movement warnings are retained. The historical native report lacks embedded source, so no exact paired-run or full-member claim is made. No native rerun.

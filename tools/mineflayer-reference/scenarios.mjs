@@ -75,6 +75,7 @@ async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
+  if (process.argv.includes('--container')) return containerScenario();
   if (process.argv.includes('--building') || process.argv.includes('--craft') || craftTrace) return buildingScenarios();
   await consoleCommands([
     'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
@@ -107,6 +108,43 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function containerScenario() {
+  await consoleCommands([
+    'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
+    'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
+    'fill 2 -61 -6 20 -61 10 minecraft:stone',
+    'fill 2 -60 -6 20 -53 10 minecraft:air',
+    'tp Reference 10.5 -60.0 2.5', 'gamemode survival Reference', 'clear Reference',
+    'item replace entity Reference hotbar.6 with minecraft:diamond_pickaxe',
+    'setblock 12 -60 2 minecraft:chest{Items:[{Slot:0b,id:"minecraft:stone",count:60},{Slot:1b,id:"minecraft:stone",count:20}]}',
+  ]);
+  await bot.waitForTicks(5);
+  const source = await readFile(new URL('./inventory-chest-common.js', import.meta.url), 'utf8');
+  const report = { scenario:'inventory-chest-common', backend:'mineflayer', minecraft:'1.21.1',
+    mineflayer:'4.39.0', source, sourceSha256:createHash('sha256').update(source).digest('hex'),
+    startedAt:new Date().toISOString(), clientErrors, protocolWarnings };
+  try {
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    report.result = await new AsyncFunction('bot','Vec3',source)(bot,Vec3);
+    const conditions = [
+      'if data block 12 -60 2 Items[{id:"minecraft:stone",count:63}]',
+      'unless data block 12 -60 2 Items[1]',
+      'if data entity Reference Inventory[{id:"minecraft:stone",count:17}]',
+      'if data entity Reference {SelectedItemSlot:6,SelectedItem:{id:"minecraft:diamond_pickaxe"}}',
+    ];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition,i) => `execute ${condition} run say ${markers[i]}`));
+    report.confirmations = { conditions, markers, messages };
+    report.serverConfirmed = markers.every(marker => messages.some(message => message.includes(marker)));
+    assert(report.serverConfirmed, 'Server must confirm container transfer and selection');
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'container-reference.json'),JSON.stringify(report,null,2)+'\n');
+  }
+  console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
 
 async function worldQueryScenario() {

@@ -6468,6 +6468,22 @@
         ]
       },
       "limitations": "Historical native report lacks embedded executed source; no exact paired-run claim. ArmorTrimMaterial decode and setup teleport movement warnings retained. No independent sign NBT check or general protocol conformance."
+    },
+    "reference-container": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/inventory-chest-common.js",
+      "subjects": [],
+      "scope": "One real chest task: synchronous selection, hydrated open, range transfer20, deposit10 merge/split, withdraw7 and close, with server NBT confirmation of chest63/player17/selected pickaxe. No member promotion.",
+      "result": "passed",
+      "sourceSha256": "d5afff1f6aecff0fe26c28e03e2fd48cb0a9c4a4e80cd014b4db85ef9fb373b4",
+      "report": {
+        "path": "run/mineflayer-reference/container-reference.json",
+        "sha256": "6503348d49f74d11388184c3d12bb6588ee01b0230df4a5fb5ce20ff78360372",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Pre-close inventory is read from the active Window; upstream bot.inventory mirrored only on close. Native stale-handle check omitted as a separate safety contract. Historical native report has no embedded source, so not an exact paired-source run. Existing ArmorTrimMaterial warning retained; no general protocol conformance."
     }
   },
   "reviewNotes": {
