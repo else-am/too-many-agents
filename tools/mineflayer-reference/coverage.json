@@ -4785,6 +4785,19 @@
           "code"
         ]
       }
+    },
+    "terminal-host-race-recorded": {
+      "kind": "runtime-boundary",
+      "path": "tools/mineflayer-reference/recorded/self-death-host-race-0612169.mjs",
+      "subjects": [],
+      "scope": "Existing actual minecraftWorlds HTTP decoder + minecraftScripts + real worker/QuickJS state adapter probe. Controlled fetch: known start, await and heartbeat lease/body rejections retain ordered health/death before terminal body_dead; lost start reply aborts before guest catch/replacement or delayed frame. One action maximum and one scoped release. Historical exact probe retains original absolute worktree paths; not a portable current-source runner or live native lost-reply claim.",
+      "testedRevision": "0612169",
+      "result": "passed",
+      "sourceSha256": "899a0f030451e9a0ba870cb7c76abac09467c2d2d20ed83b33b769ba797be317",
+      "report": {
+        "path": "run/mineflayer-reference/self-death-host-race-recorded.json",
+        "sha256": "df09e4863358f8b58a9cda18436d947482045fa64a8232cdd3c22bcf6dd9a875"
+      }
     }
   },
   "reviewNotes": {

@@ -20,3 +20,9 @@ Two additional reports embed complete executed source and successful terminal to
 - `route-cancel-dig-native.json`: cancellation on the first completed break retained exactly that break and one durability use. Three remaining blocks stayed intact over twenty ticks, the native route was interrupted, and release was confirmed. A separate native observation is included.
 
 Both are hash-indexed without promoting API members. Revision provenance remains absent. They establish historical selected-route cancellation, distinct from the earlier unproven invocation provenance for direct movement/mining cancellation and from external whole-script cancellation.
+
+## Known terminal errors versus a lost reply
+
+The implementation-child report for `0612169` is retained as `terminal-host-race-recorded`. It ran the actual host HTTP decoder, script coordinator and worker/QuickJS state adapter with controlled fetch responses. Three known body/lease rejection cases delivered hydrated health/death callbacks before terminal failure. The lost-start-reply case aborted before the guest catch could dispatch a replacement, with one action request and one scoped release. This is host-boundary evidence, not an actual game/network fault injection.
+
+The exact historical probe is preserved in `recorded/self-death-host-race-0612169.mjs`, including its original absolute worktree and result paths. Do not run that archival file blindly: those paths may now point at different source revisions. The indexed report records the original outcome; a future affected rerun must use explicit current inputs and a fresh output path. No rerun occurred during this reconciliation.
