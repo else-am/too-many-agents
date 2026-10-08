@@ -182,6 +182,10 @@ The player-owner constraint now has an implementation: the server keeps the exis
 
 Boat steering source was added after the fishing build: `actions.mjs`, `AgentActions.java`, a `Boat.controlBoat()` access transformer, and [prewritten scenarios](tools/mineflayer-reference/vehicle-native-scenarios.md). It uses native steering/physics, requires the actual body to control the boat, clears inputs on release, and enforces loaded/world/body-box boundaries. **Java/plugin/package build and basic live steering passed.** Other mount types and the listed boundary/ownership cases remain pending. Sleep/wake passed its focused live check; see [its scenarios](tools/mineflayer-reference/beds-native-scenarios.md).
 
+- Non-boat mounted controls are assigned to implementation child `thr_6qrtxjgv3m`, on a fresh branch from `5b15e8b`. Horses, pigs/striders and minecarts must retain native eligibility and physics; implementation and native checks are unfinished.
+- Nearby Mob collection observation has a source implementation using actual native take notifications, with original item data retained across native extraction and duplicate body/player item notifications suppressed. It also replaces the body's separate XP/arrow callback with the shared native source. [Preauthored scenarios](tools/mineflayer-reference/mob-collection-native-scenarios.md); build and native verification remain pending.
+- Test coordinator `thr_xykqkgui57` owns the next focused damage/death/body-item-pickup check on the existing `aad8063` artifact. That artifact does **not** contain the new nearby Mob collection observer or mount changes. No passing result is claimed yet.
+
 ## Working approach and logistics
 
 - Keep porting first; run only important new/changed E2E cases. Do not repeat all passing suites or chase irrelevant coordinate precision. Wrong targets, item loss, false success and ownership failures still matter.

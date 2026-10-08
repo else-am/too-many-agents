@@ -92,7 +92,7 @@ import java.util.function.Supplier;
 /** Native player interactions for one visible body. Never added to the world or player list. */
 public final class AgentHands extends FakePlayer {
     java.util.function.BiConsumer<Component, Boolean> messageSink;
-    Consumer<Entity> collectSink;
+    int forwardedTakes;
     Consumer<JsonObject> presentationSink;
     Consumer<net.minecraft.network.protocol.Packet<?>> soundSink;
     private JsonObject tablist = JsonState.object("header", "", "footer", "");
@@ -893,10 +893,9 @@ public final class AgentHands extends FakePlayer {
     @Override public void take(Entity item, int count) {
         requireThread();
         // The client knows the visible body, not this inventory's fake player.
-        body.take(item, count);
-        if (collectSink != null && count > 0 && !item.isRemoved()
-            && (item instanceof ExperienceOrb || item instanceof net.minecraft.world.entity.projectile.AbstractArrow))
-            collectSink.accept(item);
+        forwardedTakes++;
+        try { body.take(item, count); }
+        finally { forwardedTakes--; }
         containerMenu.broadcastChanges();
     }
 

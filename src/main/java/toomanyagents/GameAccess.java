@@ -423,7 +423,6 @@ final class GameAccess {
         return actions.computeIfAbsent(ref, ignored -> {
             var controller = new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer()),
                 request -> scriptChat(mob, request), request -> tabComplete(mob, request));
-            controller.hands.collectSink = collected -> entityEvent("playerCollect", mob, collected, null);
             return controller;
         });
     }
@@ -1479,6 +1478,16 @@ final class GameAccess {
 
     void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {
         entityEvent(kind, subject, cause, originalItem, () -> true);
+    }
+
+    void collectionEvent(ScriptCollectionEvent event) {
+        if (!(event.collector.level() instanceof ServerLevel level) || level.getServer() != server.get()
+            || !level.getServer().isSameThread()) return;
+        // AgentHands forwards take to its body; its item post-event already emitted.
+        if (event.collected instanceof net.minecraft.world.entity.item.ItemEntity
+            && actions.values().stream().anyMatch(controller -> controller.mob == event.collector
+                && controller.hands.forwardedTakes > 0)) return;
+        entityEvent("playerCollect", event.collector, event.collected, event.originalItem);
     }
 
     void deathEvent(net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) {
