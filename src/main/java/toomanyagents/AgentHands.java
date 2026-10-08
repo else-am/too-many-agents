@@ -1454,6 +1454,7 @@ public final class AgentHands extends FakePlayer {
         syncEquipment();
         var saved = new CompoundTag();
         saved.put("inventory", getInventory().save(new ListTag()));
+        saved.put("enderItems", getEnderChestInventory().createTag(registryAccess()));
         saved.putInt("selected", getInventory().selected);
         saved.putLong("menuGeneration", menuGeneration);
         saved.putFloat("XpP", experienceProgress);
@@ -1508,6 +1509,7 @@ public final class AgentHands extends FakePlayer {
     private void restore() {
         var saved = body.getPersistentData().getCompound("too_many_agents_hands");
         getInventory().load(saved.getList("inventory", 10));
+        getEnderChestInventory().fromTag(saved.getList("enderItems", 10), registryAccess());
         getInventory().selected = Math.clamp(saved.getInt("selected"), 0, 8);
         menuGeneration = saved.getLong("menuGeneration");
         experienceProgress = saved.getFloat("XpP");
