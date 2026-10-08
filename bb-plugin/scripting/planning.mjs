@@ -3,6 +3,7 @@
 import AStar from 'mineflayer-pathfinder/lib/astar.js';
 import Move from 'mineflayer-pathfinder/lib/move.js';
 import { Vec3 } from 'vec3';
+import { directCandidate, logicalPosition } from './direct-path.mjs';
 
 // Upstream only needs NBT simplification, not its Node compression/parser entrypoint.
 function simplify(data) {
@@ -19,6 +20,7 @@ function copyRecord(value) {
 // caller consuming action arrays may change the search graph on the next resume.
 function copyPath(path) {
   return path.map(node => Object.assign(copyRecord(node), {
+    ...(node.direct ? { direct: { ...node.direct, from: { ...node.direct.from } } } : {}),
     toBreak: node.toBreak.map(copyRecord),
     toPlace: node.toPlace.map(action => Object.assign(copyRecord(action),
       action.returnPos ? { returnPos: copyRecord(action.returnPos) } : {})),
@@ -51,6 +53,7 @@ function positionOnTop(block) {
 /** Install only synchronous planning. The caller owns movements, execution and events. */
 export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
   const rawPaths = new WeakMap();
+  const executionPaths = new WeakMap();
   pathfinder.thinkTimeout ??= 5000;
   pathfinder.tickTimeout ??= 40;
   pathfinder.searchRadius ??= -1;
@@ -80,13 +83,10 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
     const timeout = options.timeout ?? pathfinder.thinkTimeout;
     const tickTimeout = options.tickTimeout ?? pathfinder.tickTimeout;
     const searchRadius = options.searchRadius ?? pathfinder.searchRadius;
-    requireShortcutCapability(optimizePath);
     let start = options.startMove;
     if (!start) {
-      const p = startPos.floored();
-      const block = bot.blockAt(p);
-      const offset = block && startPos.y - p.y > 0.001 && bot.entity.onGround && !movements.emptyBlocks.has(block.type) ? 1 : 0;
-      start = new Move(p.x, p.y + offset, p.z, movements.countScaffoldingItems(), 0);
+      const p = logicalPosition(movements, startPos);
+      start = new Move(p.x, p.y, p.z, movements.countScaffoldingItems(), 0);
     }
     const origin = startPos ? new Vec3(startPos.x, startPos.y, startPos.z) : null;
     if (movements.allowEntityDetection) {
@@ -99,29 +99,26 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
       result = astarContext.compute();
       rawPaths.set(result, copyPath(result.path));
       result.path = copyPath(result.path);
+      const execution = copyPath(result.path);
       if (optimizePath) {
-        requireShortcutCapability(true);
-        result.path = postProcess(result.path, movements, origin, start);
-      }
+        const processed = postProcess(result.path, execution, movements, origin, start);
+        result.path = processed.path;
+        executionPaths.set(result, processed.execution);
+      } else executionPaths.set(result, execution);
       yield { result, astarContext };
     } while (result.status === 'partial');
   };
 
-  function requireShortcutCapability(optimizePath) {
-    if (optimizePath && pathfinder.enablePathShortcut && typeof canShortcut !== 'function') {
-      throw new Error('Path shortcuts require a synchronous body-aware canShortcut(from, to) capability');
-    }
-  }
-
-  function postProcess(path, movements, origin, start) {
-    const water = bot.registry.blocksByName.water.id;
-    const ladder = bot.registry.blocksByName.ladder.id;
-    const vine = bot.registry.blocksByName.vine.id;
+  function postProcess(path, execution, movements, origin, start) {
+    const queryBot = movements.bot;
+    const water = queryBot.registry.blocksByName.water.id;
+    const ladder = queryBot.registry.blocksByName.ladder.id;
+    const vine = queryBot.registry.blocksByName.vine.id;
     let prefixLength = 0;
     for (; prefixLength < path.length; prefixLength++) {
       const node = path[prefixLength];
       if (node.toBreak.length || node.toPlace.length) break;
-      const block = bot.blockAt(new Vec3(node.x, node.y, node.z));
+      const block = queryBot.blockAt(new Vec3(node.x, node.y, node.z));
       if (block && (block.type === water || ((block.type === ladder || block.type === vine) &&
         prefixLength + 1 < path.length && path[prefixLength + 1].y < node.y))) {
         node.x = Math.floor(node.x) + 0.5;
@@ -129,7 +126,7 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
         node.z = Math.floor(node.z) + 0.5;
         continue;
       }
-      const position = positionOnTop(block) ?? positionOnTop(bot.blockAt(new Vec3(node.x, node.y - 1, node.z)));
+      const position = positionOnTop(block) ?? positionOnTop(queryBot.blockAt(new Vec3(node.x, node.y - 1, node.z)));
       if (position) {
         node.x = position.x;
         node.y = position.y;
@@ -140,36 +137,46 @@ export function installPlanning(bot, pathfinder, { canShortcut } = {}) {
         node.z = Math.floor(node.z) + 0.5;
       }
     }
-    if (!pathfinder.enablePathShortcut || movements.exclusionAreasStep.length || prefixLength < 2) return path;
+    if (!pathfinder.enablePathShortcut || prefixLength < 2) return { path, execution };
     const shortened = [];
     let anchor = origin;
     if (!anchor) {
       // startMove also accepts a plain Move-shaped record. Only shortcutting
       // needs to project that grid coordinate to a physical standing position.
       const p = new Vec3(start.x, start.y, start.z);
-      const block = bot.blockAt(p);
+      const block = queryBot.blockAt(p);
       anchor = block && [water, ladder, vine].includes(block.type) ? p.offset(0.5, 0, 0.5)
-        : positionOnTop(block) ?? positionOnTop(bot.blockAt(p.offset(0, -1, 0))) ?? p.offset(0.5, 0, 0.5);
+        : positionOnTop(block) ?? positionOnTop(queryBot.blockAt(p.offset(0, -1, 0))) ?? p.offset(0.5, 0, 0.5);
     }
-    for (let i = 1; i < prefixLength; i++) {
-      const node = path[i];
-      let reachable = false;
-      if (Math.abs(node.y - anchor.y) <= 0.5) {
-        reachable = canShortcut(anchor, node);
-        if (typeof reachable !== 'boolean') throw new TypeError('canShortcut must return a boolean synchronously');
+    const selected = [];
+    for (let i = 0; i < prefixLength;) {
+      let last = i, direct;
+      let end = i + 1;
+      while (end < prefixLength && Math.hypot(path[end].x - anchor.x, path[end].z - anchor.z) <= 8) end++;
+      for (let j = end - 1; j > i; j--) {
+        if (Math.abs(path[j].y - anchor.y) > 0.5) continue;
+        const candidate = directCandidate(movements, anchor, path[j]);
+        if (!candidate) continue;
+        if (canShortcut) {
+          const allowed = canShortcut(anchor, path[j], { movements, startPos: origin });
+          if (typeof allowed !== 'boolean') throw new TypeError('canShortcut must return a boolean synchronously');
+          if (!allowed) continue;
+        }
+        last = j; direct = candidate;
+        break;
       }
-      if (!reachable) {
-        shortened.push(path[i - 1]);
-        anchor = path[i - 1];
-      }
+      shortened.push(path[last]);
+      selected.push(direct ? { ...execution[last], direct } : execution[last]);
+      anchor = path[last];
+      i = last + 1;
     }
-    shortened.push(path[prefixLength - 1]);
-    // Once a path changes the world, later nodes still have raw planning coordinates.
-    // Keep that entire suffix, including its actions, until execution replans it.
-    return shortened.concat(path.slice(prefixLength));
+    return { path: shortened.concat(path.slice(prefixLength)), execution: selected.concat(execution.slice(prefixLength)) };
   }
 
   // Execution needs the selected grid edges even when the public result is
   // optimized to physical stances. Do not expose mutable AStar-owned records.
-  return { getRawPath: result => copyPath(rawPaths.get(result) ?? []) };
+  return {
+    getRawPath: result => copyPath(rawPaths.get(result) ?? []),
+    getExecutionPath: result => copyPath(executionPaths.get(result) ?? []),
+  };
 }

@@ -1,6 +1,7 @@
 import { Vec3 } from 'vec3';
 import { Movements } from './movements.mjs';
 import { installPlanning } from './planning.mjs';
+import { directCandidate, directNode } from './direct-path.mjs';
 
 const nativeSlot = slot => slot >= 36 && slot <= 44 ? slot - 36 : slot === 45 ? 40 : slot < 9 ? 44 - slot : slot;
 const error = (name, message) => Object.assign(new Error(message), { name });
@@ -19,20 +20,22 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   let stopRequested = false;
   let planned = false;
   let lastFailure;
-  const { getRawPath } = installPlanning(bot, pathfinder, { canShortcut });
+  let directRejected = false;
+  const { getExecutionPath } = installPlanning(bot, pathfinder, { canShortcut });
 
   Object.defineProperties(pathfinder, {
     goal: { get: () => goal },
     movements: { get: () => movements },
   });
   pathfinder.setGoal = (next, isDynamic = false) => {
+    directRejected = false;
     goal = next;
     dynamic = isDynamic;
     const version = ++epoch;
     bot.emit('goal_updated', next, isDynamic);
     if (epoch === version) reset('goal_updated');
   };
-  pathfinder.setMovements = next => { movements = next; reset('movements_updated'); };
+  pathfinder.setMovements = next => { directRejected = false; movements = next; reset('movements_updated'); };
   pathfinder.isMoving = () => path.length > 0;
   pathfinder.isMining = () => route != null && !route.terminal && snapshot().action.id === route.id && snapshot().action.progress?.isMining === true;
   pathfinder.isBuilding = () => route != null && !route.terminal && snapshot().action.id === route.id && snapshot().action.progress?.isBuilding === true;
@@ -94,7 +97,11 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
     lastFailure = failure;
     bot.emit('path_stop');
   }
+  function freeGoal() {
+    return movements.allowFreeMotion && goal?.entity?.position && Number.isFinite(goal.rangeSq) && goal.rangeSq >= 0;
+  }
   function atGoal() {
+    if (freeGoal()) return bot.entity.position.distanceSquared(goal.entity.position) <= goal.rangeSq;
     const point = bot.entity.position.floored();
     const block = bot.blockAt(point);
     if (block && bot.entity.onGround && bot.entity.position.y - point.y > 0.001 && !movements.emptyBlocks.has(block.type))
@@ -108,7 +115,7 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
     if (epoch === version) goal = null;
   }
 
-  function runRoute(nodes) {
+  function runRoute(nodes, pursuit = null) {
     let count = 0, edits = 0;
     const padding = Math.ceil(bot.entity.width / 2) + 2;
     const top = Math.ceil(bot.entity.height) + 2;
@@ -122,6 +129,11 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
       if (edits + next > 128) break;
       const min = low.clone(), max = high.clone();
       extend(node, min, max);
+      if (node.direct) {
+        extend(node.direct.from, min, max);
+        extend({ ...node.direct, y: node.direct.minY }, min, max);
+        extend({ ...node.direct, y: node.direct.maxY }, min, max);
+      }
       for (const point of node.toBreak) extend(point, min, max);
       for (const point of node.toPlace) {
         extend(point, min, max);
@@ -141,7 +153,7 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
       states.push(state ?? -1);
     }
     const blocks = { min, size, states };
-    const active = { epoch, id: null, cancelled: false, terminal: false, stopSent: false, control: null };
+    const active = { epoch, id: null, cancelled: false, terminal: false, stopSent: false, control: null, pursuit };
     route = active;
     const scaffold = movements.getScaffoldingItem();
     const selected = nodes.slice(0, count).map(node => ({
@@ -172,9 +184,18 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         await waitForActionState(result);
         if (active.cancelled || active.epoch !== epoch) return;
         if (result.status !== 'completed') {
-          // Only an explicit changed-snapshot rejection permits a fresh plan.
+          // Known snapshot changes or a direct preflight rejection may replan.
           // A failed placement/mining outcome is never automatically replayed.
           if (result.detail === 'route_world_changed') { reset('block_updated'); return; }
+          if (result.detail === 'route_direct_preflight_rejected' && selected[0]?.direct) {
+            // Java emits this only on tick one, before any route travel or edit.
+            // Suppress further attempts for this target; unknown outcomes and
+            // start-position rejections never take this branch.
+            directRejected = true;
+            path = []; planned = false; search = undefined;
+            bot.emit('path_reset', 'direct_rejected');
+            return;
+          }
           throw error('NoPath', `Native route failed: ${result.detail ?? result.status}`);
         }
         path = [];
@@ -182,7 +203,10 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
         planned = false;
         search = undefined;
         if (goal && atGoal()) reachedGoal();
-        else if (goal && count === nodes.length) {
+        else if (goal && pursuit) {
+          if (bot.entity.position.distanceSquared(pursuit.start) < 0.01)
+            throw error('NoPath', 'Direct pursuit completed without progress');
+        } else if (goal && count === nodes.length) {
           // The complete selected path ended without satisfying its goal.
           // Replaying it can repeat edits indefinitely without making progress.
           throw error('NoPath', 'Native route completed without reaching the goal');
@@ -205,7 +229,12 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
   });
   bot.on('physicsTick', () => {
     if (goal && !goal.isValid()) { cancelRoute(); if (!route) stop(); return; }
-    if (goal?.hasChanged()) reset('goal_moved');
+    if (goal?.hasChanged()) { directRejected = false; reset('goal_moved'); }
+    if (!stopRequested && route?.pursuit && !route.cancelled && !route.terminal && goal?.entity?.position &&
+        goal.entity.position.distanceSquared(route.pursuit.target) > 0.0625) {
+      directRejected = false;
+      reset('goal_moved');
+    }
     if (stopRequested) {
       if (!route) { stop(); return; }
       if (route.id && !route.stopSent && !route.cancelled && !route.terminal) {
@@ -216,7 +245,23 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
     if (route || !goal || !movements || planned) return;
     if (atGoal()) { reachedGoal(); return; }
     const version = epoch;
-    search ??= pathfinder.getPathFromTo(movements, bot.entity.position, goal);
+    if (!search && freeGoal() && !directRejected) {
+      const from = bot.entity.position.clone(), target = goal.entity.position.clone();
+      const distance = from.distanceTo(target);
+      const travel = Math.min(8, distance - Math.max(0, Math.sqrt(goal.rangeSq) - 0.125));
+      if (travel > 0.05) {
+        if (movements.allowEntityDetection) { movements.clearCollisionIndex(); movements.updateCollisionIndex(); }
+        const to = from.plus(target.minus(from).scaled(travel / distance));
+        const direct = directCandidate(movements, from, to, { jump: true, pursuitEntity: goal.entity });
+        if (epoch !== version || !goal) return;
+        if (direct) {
+          path = [directNode(movements, direct)];
+          runRoute(path, { start: from, target });
+          return;
+        }
+      }
+    }
+    search ??= pathfinder.getPathFromTo(movements, bot.entity.position, goal, { optimizePath: !directRejected });
     const step = search.next();
     if (step.done) { planned = true; return; }
     const { result } = step.value;
@@ -226,7 +271,7 @@ export function installPathfinder(bot, { request, waitForActionState, snapshot, 
     planned = true;
     search = undefined;
     if (result.status !== 'success') return;
-    path = getRawPath(result);
+    path = getExecutionPath(result);
     if (path.length === 0) {
       if (atGoal()) reachedGoal();
       else stop(error('NoPath', 'An empty path did not satisfy the goal'));

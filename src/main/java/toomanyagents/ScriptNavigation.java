@@ -66,6 +66,7 @@ final class ScriptNavigation {
     private final int[] currentSlots = new int[41];
     private Vec3 edgeStart, target, returnTo;
     private AABB relevant;
+    private JsonObject direct;
     private BlockPos mining;
     private int miningBefore;
     private boolean active, completed, stopRequested, stopped, sprintAllowed, edgeStarted, tower, waterTravel;
@@ -93,7 +94,7 @@ final class ScriptNavigation {
         nodes.clear(); while (!edits.isEmpty()) edits.remove(edits.size() - 1); trajectory.clear();
         index = breakIndex = placeIndex = ticks = edgeTicks = frameIndex = 0;
         completed = stopRequested = stopped = edgeStarted = tower = false;
-        mining = null; returnTo = null; lastTick = -1;
+        mining = null; returnTo = null; direct = null; lastTick = -1;
         if (!ordinaryPhysics(mob)) throw error("route_unsupported_physics");
         if (!inside(mob.position())) throw error("route_outside_body_box");
         Vec3 start = vector(request.getAsJsonObject("start"));
@@ -108,10 +109,22 @@ final class ScriptNavigation {
             int dx = Math.abs(pos.getX() - previous.getX()), dz = Math.abs(pos.getZ() - previous.getZ());
             int dy = pos.getY() - previous.getY();
             boolean parkour = flag(node, "parkour");
-            if (dx > (parkour ? 4 : 1) || dz > (parkour ? 4 : 1) || dy > 1 || dy < -16
+            if (node.has("direct")) {
+                JsonObject segment = node.getAsJsonObject("direct");
+                Vec3 from = vector(segment.getAsJsonObject("from")), to = vector(segment);
+                double min = segment.get("minY").getAsDouble(), max = segment.get("maxY").getAsDouble();
+                if (from.distanceTo(to) > 8.1 || Math.abs(from.y - to.y) > 1 || dx > 9 || dz > 9 || Math.abs(dy) > 2
+                    || !Double.isFinite(min) || !Double.isFinite(max) || min > Math.min(from.y, to.y)
+                    || max < Math.max(from.y, to.y) || min < Math.min(from.y, to.y) - 0.2
+                    || max > Math.max(from.y, to.y) + 4.5
+                    || Math.abs(to.x - pos.getX() - 0.5) > 0.5 || Math.abs(to.z - pos.getZ() - 0.5) > 0.5
+                    || to.y < pos.getY() - 1 || to.y > pos.getY() + EPS)
+                    throw error("route_invalid_direct_segment");
+            } else if (dx > (parkour ? 4 : 1) || dz > (parkour ? 4 : 1) || dy > 1 || dy < -16
                 || parkour && dx != 0 && dz != 0) throw error("route_discontinuous_edge");
             for (String key : List.of("toBreak", "toPlace")) {
                 if (!node.has(key)) node.add(key, new JsonArray());
+                if (node.has("direct") && !node.getAsJsonArray(key).isEmpty()) throw error("route_direct_edits");
                 for (JsonElement edit : node.getAsJsonArray(key)) {
                     JsonObject action = edit.getAsJsonObject();
                     integerPosition(action);
@@ -186,10 +199,10 @@ final class ScriptNavigation {
                 } else if (placeIndex < node.getAsJsonArray("toPlace").size()) {
                     place(node.getAsJsonArray("toPlace").get(placeIndex).getAsJsonObject());
                 } else {
-                    target = destination(integerPosition(node));
+                    target = direct == null ? destination(integerPosition(node)) : vector(direct);
                     waterTravel |= mob.isInWater() || level.getFluidState(mob.blockPosition()).is(FluidTags.WATER);
                     if (arrivedAtNode(target)) { clearControls(); checkArrival = true; }
-                    else if (waterTravel || mob.onClimbable() || waterOrClimb(integerPosition(node))) {
+                    else if (direct == null && (waterTravel || mob.onClimbable() || waterOrClimb(integerPosition(node)))) {
                         // A swim exit can briefly leave and re-enter water before
                         // landing. Keep native controls for the entire selected edge.
                         specialTravel(target);
@@ -198,7 +211,15 @@ final class ScriptNavigation {
                         checkArrival = true;
                     } else {
                         phase = flag(node, "parkour") ? "parkour" : "moving";
-                        plan(target, flag(node, "parkour"));
+                        try { plan(target, flag(node, "parkour") || direct != null && flag(direct, "jump")); }
+                        catch (IllegalStateException failure) {
+                            // This name is proof of no route travel or edit. Only this
+                            // failure permits the guest to attempt ordinary AStar.
+                            if (direct != null && index == 0 && ticks == 1 && edits.isEmpty()
+                                && List.of("route_edge_unexecutable", "route_parkour_unexecutable", "route_prediction_budget")
+                                    .contains(failure.getMessage())) throw error("route_direct_preflight_rejected");
+                            throw failure;
+                        }
                         if (!trajectory.isEmpty()) predicted = followFrame();
                     }
                 }
@@ -229,10 +250,20 @@ final class ScriptNavigation {
         edgeStarted = true; edgeTicks = breakIndex = placeIndex = frameIndex = 0;
         trajectory.clear(); tower = waterTravel = false; returnTo = null;
         edgeStart = mob.position();
-        Vec3 raw = Vec3.atBottomCenterOf(integerPosition(nodes.get(index)));
+        direct = nodes.get(index).has("direct") ? nodes.get(index).getAsJsonObject("direct") : null;
+        Vec3 raw = direct == null ? Vec3.atBottomCenterOf(integerPosition(nodes.get(index))) : vector(direct);
+        if (direct != null && edgeStart.distanceTo(vector(direct.getAsJsonObject("from"))) > 0.2)
+            throw error("route_direct_start_changed");
         double rise = Math.min(4, jumpRise(mob));
         relevant = mob.getBoundingBox().minmax(mob.getBoundingBox().move(raw.subtract(edgeStart)))
             .inflate(0.1, 0, 0.1).expandTowards(0, rise + 0.1, 0).expandTowards(0, -1, 0);
+        if (direct != null) {
+            Vec3 from = vector(direct.getAsJsonObject("from"));
+            double half = mob.getBbWidth() / 2.0 + 0.3;
+            relevant = new AABB(Math.min(from.x, raw.x) - half, direct.get("minY").getAsDouble() - 1,
+                Math.min(from.z, raw.z) - half, Math.max(from.x, raw.x) + half,
+                direct.get("maxY").getAsDouble() + mob.getBbHeight(), Math.max(from.z, raw.z) + half);
+        }
         checkVolume(relevant);
         for (String key : List.of("toBreak", "toPlace")) for (JsonElement entry : nodes.get(index).getAsJsonArray(key)) {
             BlockPos pos = integerPosition(entry.getAsJsonObject());
@@ -242,7 +273,7 @@ final class ScriptNavigation {
     }
 
     private void finishEdge() {
-        index++; edgeStarted = false; trajectory.clear(); frameIndex = 0;
+        index++; edgeStarted = false; trajectory.clear(); frameIndex = 0; direct = null;
         clearControls();
         if (stopRequested || index == nodes.size()) complete();
     }
@@ -410,7 +441,7 @@ final class ScriptNavigation {
         predictionDeadline = System.nanoTime() + 25_000_000L;
         if (arrived(goal)) return;
         List<Frame> best = simulate(goal, -1, false);
-        if (best == null && mob.onGround() && jumpRise(mob) > 0) {
+        if (best == null && mob.onGround() && jumpRise(mob) > 0 && (direct == null || flag(direct, "jump"))) {
             for (boolean sprint : new boolean[]{false, true}) {
                 if (sprint && !sprintAllowed) continue;
                 for (int takeoff = 0; takeoff <= (parkour ? 12 : 5); takeoff++) {
@@ -581,6 +612,7 @@ final class ScriptNavigation {
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
         finally { mob.setNoAi(true); mob.setJumping(false); }
         if (!inside(mob.position())) throw error("route_leaves_body_box");
+        if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
     }
 
     private void clearInputs() {
@@ -611,6 +643,7 @@ final class ScriptNavigation {
     }
 
     private boolean arrivedAtNode(Vec3 goal) {
+        if (direct != null) return arrived(goal);
         BlockPos node = integerPosition(nodes.get(index));
         if (!settled() || !logicalPosition(mob.position()).equals(node)
             || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
@@ -647,7 +680,12 @@ final class ScriptNavigation {
     }
 
     private boolean withinEdge(Vec3 position) {
-        return relevant != null && relevant.inflate(0.4).contains(position);
+        if (direct == null) return relevant != null && relevant.inflate(0.4).contains(position);
+        Vec3 from = vector(direct.getAsJsonObject("from")), to = vector(direct);
+        double dx = to.x - from.x, dz = to.z - from.z, length = dx * dx + dz * dz;
+        double t = length == 0 ? 0 : Math.clamp(((position.x - from.x) * dx + (position.z - from.z) * dz) / length, 0, 1);
+        return Math.hypot(position.x - from.x - t * dx, position.z - from.z - t * dz) <= 0.2
+            && position.y >= direct.get("minY").getAsDouble() && position.y <= direct.get("maxY").getAsDouble();
     }
 
     private void checkVolume(AABB volume) {
