@@ -346,8 +346,9 @@ export function createBot(initial) {
       const kind = registry.entitiesByName[type.replace(/^minecraft:/, '')];
       for (const key of entityFields) if (Object.hasOwn(source, key)) entity[key] = source[key];
       Object.assign(entity, { yaw: (180 - yaw) * Math.PI / 180, pitch: -pitch * Math.PI / 180,
-        name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: kind?.type ?? 'other',
+        name: kind?.name ?? 'unknown', displayName: kind?.displayName ?? name, type: Object.hasOwn(source, 'experienceValue') ? 'orb' : kind?.type ?? 'other',
         entityType: kind?.id, kind: kind?.category, isValid: true });
+      if (Object.hasOwn(source, 'experienceValue')) entity.count = source.experienceValue;
       if (kind?.name === 'player') entity.username = name;
       entity.position.update(position);
       entity.velocity.update(velocity);

@@ -45,6 +45,8 @@ final class Observations {
             if (target.isPresent()) result.addProperty("fireworkAttachedTo", target.getAsInt());
             result.addProperty("fireworkTicksRemaining", Math.max(0, rocket.lifetime - rocket.life + 1));
         }
+        if (entity instanceof net.minecraft.world.entity.ExperienceOrb orb)
+            result.addProperty("experienceValue", orb.getValue());
         if (entity instanceof LivingEntity living) {
             result.addProperty("elytraFlying", living.isFallFlying());
             result.addProperty("health", living.getHealth());

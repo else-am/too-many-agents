@@ -154,6 +154,7 @@ export function createChunkClass (registry, Block) {
       const result = Upstream.fromJson(json)
       Object.setPrototypeOf(result, this.prototype)
       result.emptyBlockLightMask = BitArray.fromLongArray(parsed.emptyBlockLightMask, 1)
+      result.emptySkyLightMask = BitArray.fromLongArray(parsed.emptySkyLightMask, 1)
       for (let i = 0; i < result.biomes.length; i++) restoreDirect(result.biomes[i].data, parsed.biomes[i])
       configureBiomes(result)
       return result

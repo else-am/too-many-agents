@@ -53,3 +53,12 @@ All original inventory stacks/components, elytra and shield were preserved; nati
 cow loot additionally supplied three beef. The script used 3 completed requests,
 28 updates and 9 bridge operations (1446 ms script, 1923 ms tool). Canceled/immune
 damage, canceled death, other-mob pickup and overflow cases were not exercised.
+
+## XP orb observation (before correction)
+
+A native ExperienceOrb exposes Mineflayer's type `orb` and count equal to the
+native getValue()/spawn packet XP value. Observe an orb with Value7 and merged
+Count3 outside pickup range: count must be7, not3 or21; entitySpawn must receive
+that already-hydrated same Entity. Independently inspect native orb NBT. Other
+entities must not acquire a count from generic observation. Collection/XP credit
+remain a separate scenario, not established by an observation or compilation.

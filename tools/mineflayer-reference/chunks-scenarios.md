@@ -109,3 +109,17 @@ semantics (cave_air/void_air differ from native non-air counting); native load
 preserves the authoritative count. Generic docs mention a version property and
 loadLight, but this selected PC1.21.1 class exposes neither; no fake methods or
 all-version promises are added. Host/native conformance remains pending.
+
+## Empty light masks (follow-up source correction)
+
+The pinned fromJson swaps both empty masks; the existing adapter corrected only
+emptyBlockLightMask. A column whose empty sky mask has bit1 and empty block mask
+has bit2 must preserve those distinct masks through toJson/fromJson and dumpLight.
+This affects guest column serialization, not native light computation. Check
+against the serialized masks, since reproducing the upstream swap is incorrect.
+
+Focused source/QuickJS check passed: upstream swaps distinct bits1/2; adapter
+JSON restoration and dumpLight both preserve them. Evidence is in ignored
+run/mineflayer-reference/light-mask-correction.json (exact probe included). This
+is guest serialization evidence only; the initial probe's missing registry
+indexes were corrected before the successful check. No gameplay suite reran.

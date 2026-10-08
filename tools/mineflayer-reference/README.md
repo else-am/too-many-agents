@@ -128,7 +128,7 @@ the generator permits only the explicitly reviewed native-body and connection ex
 
 Current implementation and native-verification gaps are tracked in
 [the handoff checklist](../../MINEFLAYER-STATUS.md). Recent ports awaiting native
-checks, raw entity metadata, broader world/chunk coverage and
+checks, raw entity metadata, dynamic registry codecs, broader world/chunk coverage and
 Pathfinder execution/lifecycle remain review priorities. Native Mob/player
 applicability follows the user-confirmed boundary in the checklist. Source-only fields and declaration contradictions
 are in the generated review queues. The shared gather procedure now has an actual live reference pass and historical native outcome match. Wider paired coverage remains incomplete.
@@ -173,3 +173,11 @@ The shared gather procedure passed on unmodified pinned Mineflayer/Pathfinder an
 The exact previously native-tested wall script completed all eight server placements and consumed all stone, but its immediate final inventory assertion failed in Mineflayer; reopening the saved reference world confirmed the blocks and consumption. The gather/craft script also failed its final assertion; saved player data contained axe damage2 and planks7, not the native-tested planks4/sticks8 outcome. These are recorded failed reference procedures, not port regressions or passes. No failed phase was replayed for a better result. Startup also logged an upstream ArmorTrimMaterial PartialReadError; no library schema was silently patched.
 
 `npm run check -- --building` requests both prepared building procedures. `--craft` first independently inspects the preceding saved wall attempt, then runs only the unreached craft procedure. The reports retain exact source and limitations. These flags are fixture-specific, not automatic retries.
+
+The selected registry codec comparison is recorded separately from native runs.
+It checks pinned import projections and corrects invalid exports using the real
+packet codec in QuickJS; Java capture/custom-datapack startup remains unverified.
+A bounded object audit found XP-orb count/type and the remaining sky-mask JSON
+assignment defects. Those are corrected; native XP observation remains pending.
+World's public sync/async methods are inherited from the selected upstream source,
+with guest-local save/raycast overrides; source review is not a runtime pass.
