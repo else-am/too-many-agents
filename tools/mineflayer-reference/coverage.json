@@ -1268,6 +1268,126 @@
       "evidence": [
         "vectors-library"
       ]
+    },
+    "prismarine-chat.ChatMessage.append": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.clone": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.getText": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.length": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.parse": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.toAnsi": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.toHTML": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.toMotd": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.toString": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
+    },
+    "prismarine-chat.ChatMessage.valueOf": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Pure transformation/rendering of supplied components, exercised against pinned source in actual bundled QuickJS; not native chat delivery.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -1696,10 +1816,25 @@
       "kind": "library-differential",
       "path": "tools/mineflayer-reference/chat.mjs",
       "subjects": [
-        "prismarine-chat.ChatMessage"
+        "prismarine-chat.ChatMessage.append",
+        "prismarine-chat.ChatMessage.clone",
+        "prismarine-chat.ChatMessage.getText",
+        "prismarine-chat.ChatMessage.length",
+        "prismarine-chat.ChatMessage.parse",
+        "prismarine-chat.ChatMessage.toAnsi",
+        "prismarine-chat.ChatMessage.toHTML",
+        "prismarine-chat.ChatMessage.toMotd",
+        "prismarine-chat.ChatMessage.toString",
+        "prismarine-chat.ChatMessage.valueOf"
       ],
-      "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
-      "result": "not-recorded"
+      "scope": "292 pinned ChatMessage/builder comparisons and two network-builder fixtures in bundled QuickJS; selected text transformation members individually reviewed.",
+      "result": "passed",
+      "sourceSha256": "02f73e574127a5fe44ff3d7fb79502dcd52aa7e6771e0a5912b95144dea8a8e7",
+      "report": {
+        "path": "run/mineflayer-reference/chat-library.json",
+        "sha256": "492a1a98a9dca51a63d18db080aea2fad221ae2b32e28ab893c01e739bbbce1b"
+      },
+      "limitations": "Synthetic supplied components/formats only; native chat delivery and actual registry hydration remain separate. Source quirks and malformed-input errors retained."
     },
     "entity-library": {
       "kind": "library-differential",

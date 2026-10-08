@@ -394,7 +394,13 @@ const pureVectorContracts = new Set([
   'scaled', 'set', 'subtract', 'toArray', 'toString', 'translate', 'unit', 'update',
   'volume', 'xy', 'xyDistanceTo', 'xz', 'xzDistanceTo', 'xzy', 'yz', 'yzDistanceTo',
 ].map(name => `vec3.Vec3.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts]);
+// These methods render/transform supplied component data. Native delivery and
+// registry chat-type initialization are not covered by this classification.
+const pureChatContracts = new Set([
+  'append', 'clone', 'getText', 'length', 'parse', 'toAnsi', 'toHTML', 'toMotd',
+  'toString', 'valueOf',
+].map(name => `prismarine-chat.ChatMessage.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

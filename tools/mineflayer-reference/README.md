@@ -217,3 +217,9 @@ archival limitations remain attached. These links do not promote whole APIs or
 substitute for missing reference evidence.
 
 The explicit Vec3 member list has a recorded 288-case host/bundled-QuickJS comparison (`vectors.mjs`), including local mutations, returned identity and special numeric results. Native coordinates, movement, class-wide coverage and the package helper are separate; no native members were promoted from it.
+
+Ten explicitly listed ChatMessage rendering/transformation methods also use the
+pure-library contract. The recorded existing suite passed292 comparisons plus
+two builder-network fixtures in bundled QuickJS. Their synthetic component and
+format inputs do not prove native chat reception, permissions, or registry
+hydration. Other ChatMessage/MessageBuilder members remain separately reviewed.
