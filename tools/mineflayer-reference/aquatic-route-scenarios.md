@@ -29,5 +29,7 @@ route_start_changed. The retained response lacks detour start arguments and
 request-time native position; later bottom NBT only proves subsequent ordinary
 sinking. Do not infer the exact drift or weaken the .2 start fence from that
 observation. The rejection now includes requested and actual positions for a
-future affected run. Its terminal error behavior and execution safeguards are
-unchanged; no retry or physical correction is introduced.
+future affected run. The distance fence and executor check remain unchanged. As ofa6d0a88, an
+additional read-only check rejects stale origins before route construction or
+cleanup, using the existing typed before-start error. No retry or physical
+correction is introduced; multi-route success remains unverified.
