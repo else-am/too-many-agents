@@ -3581,23 +3581,51 @@
     },
     "native-block-observations": {
       "kind": "native-integration",
-      "path": "tools/mineflayer-reference/observe-blocks.js",
+      "path": "tools/mineflayer-reference/recorded/observe-blocks-historical.js",
       "subjects": [
         "mineflayer.Bot.blockAt",
         "prismarine-block.Block"
       ],
-      "scope": "Requires known slab/sign/ore fixture and independent native world observations. Availability is not a passing run.",
-      "result": "not-recorded"
+      "scope": "Historical native slab/sign/ore projections returned; independent native block states retained. Reference comparison summary covers properties/shapes/harvest/digTime only; no reference-server lighting/biome proof.",
+      "result": "passed",
+      "sourceSha256": "3f3f4ef2dfc26443d9672172210fb0621db76c049d4f697595b5c36543cfd23d",
+      "report": {
+        "path": "run/mineflayer-reference/blocks-native.json",
+        "sha256": "b5dac67daf1d767f1ed4656a0b1c8951da7283a9c0b359028235f6ad72f68e24",
+        "codePath": [
+          "toolEvent",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Recovered exact historical executed source and successful raw response; packaged revision is not retained in this report. No claim that this validates every member or the latest product build.",
+      "recordedAtMs": 1791403978011
     },
     "native-item-observations": {
       "kind": "native-integration",
-      "path": "tools/mineflayer-reference/observe-items.js",
+      "path": "tools/mineflayer-reference/recorded/observe-items-historical.js",
       "subjects": [
         "mineflayer.Bot.inventory",
         "prismarine-item.Item"
       ],
-      "scope": "Requires actual native damaged/component stacks and independently decoded native bytes. Availability is not a passing run.",
-      "result": "not-recorded"
+      "scope": "Historical six native inventory item projections returned, including damage/name/lore/enchantments/potion/bundle/custom NBT. Recorded comparison summary is not byte-exact complex wire roundtrip evidence.",
+      "result": "passed",
+      "sourceSha256": "240a40fb5c3c0fba2bbbf901feddd29fa868eef26156a327ad9eefbeb00cf72c",
+      "report": {
+        "path": "run/mineflayer-reference/items-native.json",
+        "sha256": "fbe15ff5cd552aaac291e4d82fdd478e12b63ee3da5e1675535299654262ee17",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Recovered exact historical executed source and successful raw response; packaged revision is not retained in this report. No claim that this validates every member or the latest product build.",
+      "recordedAtMs": 1791405509205
     },
     "native-window-observations": {
       "kind": "native-integration",
@@ -3650,23 +3678,52 @@
     },
     "native-event-observations": {
       "kind": "native-integration",
-      "path": "tools/mineflayer-reference/observe-events.js",
+      "path": "tools/mineflayer-reference/recorded/observe-events-historical.js",
       "subjects": [
         "mineflayer.BotEvents",
         "events.EventEmitter"
       ],
-      "scope": "Independent fixture mutation, blockUpdate, physicsTick and stable entity identity. Availability is not a passing run.",
-      "result": "not-recorded"
+      "scope": "Historical diamond-ore to stone update returned with readable new state during callback,29 physics ticks and stable entity/position identities. Does not cover all events.",
+      "result": "passed",
+      "sourceSha256": "af50c3faa2bfb0c93f1ac1ec9d09489add7ee8a5462d130f75d6131419b4aef8",
+      "report": {
+        "path": "run/mineflayer-reference/events-native.json",
+        "sha256": "624d7e6b044a81f95aeaabdb101556784d531f84849a54c19d75b22c5f8e4124",
+        "codePath": [
+          "events",
+          0,
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Recovered exact historical executed source and successful raw response; packaged revision is not retained in this report. No claim that this validates every member or the latest product build.",
+      "recordedAtMs": 1791404592303
     },
     "native-tick-order": {
       "kind": "native-integration",
-      "path": "tools/mineflayer-reference/observe-tick-order.js",
+      "path": "tools/mineflayer-reference/recorded/observe-tick-order-historical.js",
       "subjects": [
         "mineflayer.Bot.waitForTicks",
         "mineflayer.Bot.equip"
       ],
-      "scope": "Tick count and state visible before action completion. Availability is not a passing run.",
-      "result": "not-recorded"
+      "scope": "Historical exact40 tick wait and two equipment completions exposed updated held items; independent final native hand inventory retained. Does not cover cancellation or current queued-control barriers.",
+      "result": "passed",
+      "sourceSha256": "9b2ae251a810bf98c2065e5c915bf48eb352579c21b3ee42effacea4e2439ff9",
+      "report": {
+        "path": "run/mineflayer-reference/tick-order-native.json",
+        "sha256": "b217f3011f589cdefe43154ee100ab444f9b26012ad7fa3c65f740dc654e2571",
+        "codePath": [
+          "event",
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      },
+      "limitations": "Recovered exact historical executed source and successful raw response; packaged revision is not retained in this report. No claim that this validates every member or the latest product build.",
+      "recordedAtMs": 1791406210754
     },
     "native-navigation-policy": {
       "kind": "native-integration",
