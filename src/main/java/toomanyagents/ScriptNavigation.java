@@ -14,6 +14,8 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.control.MoveControl;
+import net.minecraft.world.entity.animal.Fox;
+import net.minecraft.world.entity.monster.Drowned;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.ClipContext;
@@ -31,25 +33,31 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.common.NeoForgeMod;
 
 import java.util.ArrayList;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
-final class ScriptNavigation {
+public final class ScriptNavigation {
+    private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, DROWNED }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     private static final double EPS = 1e-6;
     // Method ownership is immutable for a loaded class; body state is not.
-    private static final ClassValue<Boolean> ORDINARY_PHYSICS = new ClassValue<>() {
+    private static final ClassValue<Boolean> GROUND_METHODS = new ClassValue<>() {
         @Override protected Boolean computeValue(Class<?> type) {
             try {
-                return type.getMethod("travel", Vec3.class).getDeclaringClass() == LivingEntity.class
+                return type.getMethod("travel", Vec3.class).getDeclaringClass() == (type == Drowned.class ? Drowned.class : LivingEntity.class)
                     && type.getMethod("jumpFromGround").getDeclaringClass() == LivingEntity.class
                     && inherits(type, "getJumpPower") && inherits(type, "getFlyingSpeed")
                     && inherits(type, "isAffectedByFluids");
             } catch (ReflectiveOperationException failure) { return false; }
         }
     };
+    private final AgentActions owner;
+    private final String lease;
     private final Mob mob;
     private final AgentHands hands;
     private final Supplier<BodyBox> box;
@@ -71,13 +79,18 @@ final class ScriptNavigation {
     private int miningBefore;
     private boolean active, completed, stopRequested, stopped, sprintAllowed, edgeStarted, tower, waterTravel;
     private String phase = "idle";
+    private Physics physics;
+    private MoveControl controller;
+    private RuntimeException movementFailure;
 
     private record Frame(Vec3 before, Vec3 after, Vec3 beforeVelocity, boolean beforeGround, Vec3 target, boolean jump, boolean sprint) {}
     private record Motion(Vec3 delta, boolean ground, boolean wall) {}
 
-    ScriptNavigation(Mob mob, AgentHands hands, Supplier<BodyBox> box) {
-        this.mob = mob;
-        this.hands = hands;
+    ScriptNavigation(AgentActions owner, Supplier<BodyBox> box) {
+        this.owner = owner;
+        this.lease = owner.currentScriptId();
+        this.mob = owner.mob;
+        this.hands = owner.hands;
         this.box = box;
         this.level = (ServerLevel) mob.level();
     }
@@ -95,7 +108,9 @@ final class ScriptNavigation {
         index = breakIndex = placeIndex = ticks = edgeTicks = frameIndex = 0;
         completed = stopRequested = stopped = edgeStarted = tower = false;
         mining = null; returnTo = null; direct = null; lastTick = -1;
-        if (!ordinaryPhysics(mob)) throw error("route_unsupported_physics");
+        physics = physics(mob);
+        if (physics == Physics.UNSUPPORTED) throw error("route_unsupported_physics");
+        controller = mob.getMoveControl();
         if (!inside(mob.position())) throw error("route_outside_body_box");
         Vec3 start = vector(request.getAsJsonObject("start"));
         if (mob.position().distanceTo(start) > 0.2) throw error("route_start_changed");
@@ -151,8 +166,15 @@ final class ScriptNavigation {
         toolSlot = slot(request, "toolSlot", hands.getInventory().selected);
         scaffoldSlot = slot(request, "scaffoldingSlot", hands.getInventory().selected);
         for (int i = 0; i < currentSlots.length; i++) currentSlots[i] = i;
+        if (!owner.vehicleLeaseActive(lease)) throw error("script_no_longer_controls_body");
+        if (OWNED.containsKey(mob)) throw error("route_already_running");
+        relevant = mob.getBoundingBox().inflate(0.4, 1, 0.4);
+        checkVolume(relevant);
+        checkDryVolume(mob.getBoundingBox());
         clearControls();
+        movementFailure = null;
         active = true;
+        OWNED.put(mob, this);
         phase = "starting";
     }
 
@@ -160,20 +182,21 @@ final class ScriptNavigation {
 
     JsonObject tick() {
         requireThread();
-        if (completed) return progress();
-        if (!active) throw error("route_not_running");
-        int now = level.getServer().getTickCount();
-        if (lastTick == now) throw error("route_duplicate_tick");
-        lastTick = now;
-        if (++ticks > MAX_TICKS) throw error("route_timeout");
-        if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
-        if (!ordinaryPhysics(mob)) throw error("route_unsupported_physics");
-        if (!inside(mob.position())) throw error("route_outside_body_box");
-        clearInputs();
-        if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
-        Frame predicted = null;
-        boolean checkArrival = false;
         try {
+            if (completed) return progress();
+            if (movementFailure != null) throw movementFailure;
+            if (!active) throw error("route_not_running");
+            int now = level.getServer().getTickCount();
+            if (lastTick == now) throw error("route_duplicate_tick");
+            lastTick = now;
+            if (++ticks > MAX_TICKS) throw error("route_timeout");
+            if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
+            requireMode();
+            if (!inside(mob.position())) throw error("route_outside_body_box");
+            clearInputs();
+            if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
+            Frame predicted = null;
+            boolean checkArrival = false;
             if (index == nodes.size()) {
                 if (settled()) complete();
                 else { phase = "landing"; clearControls(); }
@@ -230,6 +253,7 @@ final class ScriptNavigation {
                 throw error("route_trajectory_changed");
             if (predicted != null) frameIndex++;
             if (checkArrival && arrivedAtNode(target)) finishEdge();
+            if (completed) OWNED.remove(mob, this);
             return progress();
         } catch (RuntimeException failure) {
             stop();
@@ -239,9 +263,11 @@ final class ScriptNavigation {
 
     void stop() {
         requireThread();
+        OWNED.remove(mob, this);
+        active = false;
         try { hands.cancelMine(); }
         finally {
-            mining = null; clearControls(); active = false; trajectory.clear();
+            mining = null; trajectory.clear(); clearControls();
         }
         // Outer AgentActions owns subsequent passive gravity after cancellation.
     }
@@ -467,6 +493,7 @@ final class ScriptNavigation {
     }
 
     private void steer(Vec3 goal, boolean sprint) {
+        requireMode();
         double dx = goal.x - mob.getX(), dz = goal.z - mob.getZ();
         mob.setSprinting(sprint);
         if (dx * dx + dz * dz < 0.0025) { mob.setSpeed(0); return; }
@@ -504,6 +531,10 @@ final class ScriptNavigation {
             float friction = state.getFriction(level, support, mob);
             if (!(friction >= 0.6F && friction <= 1)) return null;
             double drag = ground ? friction * 0.91F : 0.91F;
+            // DrownedMoveControl.tick adds this before super.tick/travel, but
+            // steer does not call the controller inside its .05 horizontal band.
+            if (physics == Physics.DROWNED && !ground && distance >= 0.05)
+                velocity = velocity.add(0, -0.008, 0);
             boolean jump = tick == takeoff;
             if (jump) {
                 if (!ground) return null;
@@ -517,6 +548,7 @@ final class ScriptNavigation {
             Motion motion = collide(bounds, velocity, ground);
             Vec3 next = pos.add(motion.delta);
             if (!inside(next) || !withinEdge(next)) return null;
+            if (physics == Physics.DROWNED && hasFluid(bounds.expandTowards(motion.delta))) return null;
             if (next.y < Math.min(edgeStart.y, goal.y) - 1.1) return null;
             Vec3 remaining = new Vec3(Math.abs(velocity.x - motion.delta.x) > EPS ? 0 : velocity.x,
                 Math.abs(velocity.y - motion.delta.y) > EPS ? 0 : velocity.y,
@@ -592,7 +624,8 @@ final class ScriptNavigation {
     }
 
     private void travel() {
-        if (!mob.isAlive() || mob.isRemoved()) return;
+        requireMode();
+        if (!mob.isAlive() || mob.isRemoved()) throw error("route_body_changed");
         AABB sweep = mob.getBoundingBox().expandTowards(mob.getDeltaMovement()).inflate(0.4, mob.maxUpStep() + 0.1, 0.4);
         checkVolume(sweep);
         if (box.get() != null) {
@@ -611,6 +644,7 @@ final class ScriptNavigation {
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
         finally { mob.setNoAi(true); mob.setJumping(false); }
+        requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
     }
@@ -688,17 +722,26 @@ final class ScriptNavigation {
             && position.y >= direct.get("minY").getAsDouble() && position.y <= direct.get("maxY").getAsDouble();
     }
 
-    private void checkVolume(AABB volume) {
+    private void checkVolumeSize(AABB volume) {
         if ((volume.maxX - volume.minX + 2) * (volume.maxY - volume.minY + 2) * (volume.maxZ - volume.minZ + 2) > 8192)
             throw error("route_sweep_limit");
+    }
+
+    private void checkVolume(AABB volume) {
+        checkVolumeSize(volume);
         for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(volume.minX, volume.minY, volume.minZ),
             BlockPos.containing(volume.maxX - EPS, volume.maxY - EPS, volume.maxZ - EPS))) checkCell(pos);
     }
 
-    private void checkCell(BlockPos pos) {
+    private int availableCell(BlockPos pos) {
         int offset = cacheIndex(pos);
         if (expected[offset] < 0 || !level.hasChunkAt(pos) || !level.isPositionEntityTicking(pos) || !level.getWorldBorder().isWithinBounds(pos))
             throw error("route_cell_unavailable");
+        return offset;
+    }
+
+    private void checkCell(BlockPos pos) {
+        int offset = availableCell(pos);
         if (Block.getId(level.getBlockState(pos)) != expected[offset]) throw error("route_world_changed");
     }
 
@@ -730,9 +773,12 @@ final class ScriptNavigation {
     }
 
     static JsonObject capabilities(Mob mob) {
-        boolean supported = ordinaryPhysics(mob);
+        Physics mode = physics(mob);
+        boolean supported = mode != Physics.UNSUPPORTED;
         double gravity = supported ? mob.getGravity() : 0;
         double power = supported ? jumpPower(mob, mob.position()) : 0;
+        // Vertical-only tower jumps do not tick MoveControl, including Drowned;
+        // this is their native maximum rise. Horizontal edges model every tick.
         double rise = supported && !mob.hasEffect(MobEffects.LEVITATION) ? jumpRise(power, gravity) : 0;
         double speed = supported ? mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1) : 0;
         double velocity = mob.getDeltaMovement().horizontalDistance();
@@ -741,16 +787,94 @@ final class ScriptNavigation {
         result.addProperty("stepHeight", Math.max(0, mob.maxUpStep()));
         result.addProperty("jumpHeight", rise);
         result.addProperty("canJump", supported && rise > 0);
-        result.addProperty("canSwim", supported && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
-        result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false) : 0);
-        result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true) : 0);
-        result.addProperty("physics", supported ? "native-ground-post-tick" : "unsupported");
+        result.addProperty("canSwim", supported && mode != Physics.DROWNED && mob.canSwimInFluidType(NeoForgeMod.WATER_TYPE.value()));
+        result.addProperty("maxJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, false, mode == Physics.DROWNED) : 0);
+        result.addProperty("maxSprintJumpDistance", rise > 0 ? reachEnvelope(speed, velocity, power, gravity, width, true, mode == Physics.DROWNED) : 0);
+        result.addProperty("physics", mode == Physics.DROWNED ? "native-drowned-dry-post-tick" : mode == Physics.FOX ? "native-fox-awake-post-tick" : supported ? "native-ground-post-tick" : "unsupported");
         return result;
     }
 
-    private static boolean ordinaryPhysics(Mob mob) {
-        return mob.getMoveControl().getClass() == MoveControl.class && !mob.isPassenger() && !mob.isNoGravity()
-            && !mob.isFallFlying() && !mob.shouldDiscardFriction() && ORDINARY_PHYSICS.get(mob.getClass());
+    private static Physics physics(Mob mob) {
+        if (mob.isPassenger() || mob.isNoGravity() || mob.noPhysics || mob.isFallFlying()
+            || mob.shouldDiscardFriction() || !GROUND_METHODS.get(mob.getClass())) return Physics.UNSUPPORTED;
+        Class<?> control = mob.getMoveControl().getClass();
+        if (control == MoveControl.class && !(mob instanceof Drowned)) return Physics.ORDINARY;
+        if (mob.hasEffect(MobEffects.LEVITATION) || mob.hasEffect(MobEffects.SLOW_FALLING)) return Physics.UNSUPPORTED;
+        if (mob.getClass() == Fox.class && control == Fox.FoxMoveControl.class) {
+            Fox fox = (Fox) mob;
+            // Exact Fox.canMove predicate; do not clear its native state flags.
+            return !fox.isSleeping() && !fox.isSitting() && !fox.isFaceplanted() ? Physics.FOX : Physics.UNSUPPORTED;
+        }
+        if (mob.getClass() == Drowned.class && control == Drowned.DrownedMoveControl.class
+            && !mob.isInWater() && !mob.isInLava()) return Physics.DROWNED;
+        return Physics.UNSUPPORTED;
+    }
+
+    private void requireMode() {
+        if (movementFailure != null) throw movementFailure;
+        if (mob.isRemoved() || !mob.isAlive() || mob.level() != level) throw error("route_body_changed");
+        if (physics(mob) != physics || mob.getMoveControl() != controller) throw error("route_physics_changed");
+        checkDryVolume(mob.getBoundingBox());
+    }
+
+    private void checkDryVolume(AABB bounds) {
+        if (physics == Physics.DROWNED && hasFluid(bounds)) throw error("route_drowned_requires_dry_ground");
+    }
+
+    private boolean hasFluid(AABB bounds) {
+        checkVolumeSize(bounds);
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(bounds.minX, bounds.minY, bounds.minZ),
+            BlockPos.containing(bounds.maxX - EPS, bounds.maxY - EPS, bounds.maxZ - EPS))) {
+            availableCell(pos);
+            // Detect the actual mode even before fluid flags refresh. A newly
+            // flooded body is terminal, not a generic changed-cell replan.
+            var fluid = level.getFluidState(pos);
+            if (!fluid.isEmpty() && pos.getY() + fluid.getHeight(level, pos) > bounds.minY + EPS) return true;
+        }
+        return false;
+    }
+
+    /** Entity.move HEAD: bound queries before native collision resolution. No unowned entity changes. */
+    public static boolean allowMove(Entity entity, Vec3 delta) {
+        return guardedMove(entity, delta, false);
+    }
+
+    /** Entity.move after collide, before setPos: validate the actual native clipped displacement. */
+    public static boolean allowClippedMove(Entity entity, Vec3 delta) {
+        return guardedMove(entity, delta, true);
+    }
+
+    private static boolean guardedMove(Entity entity, Vec3 delta, boolean clipped) {
+        if (entity.level().isClientSide) return true;
+        ScriptNavigation route = OWNED.get(entity);
+        if (route == null) return true;
+        try {
+            route.requireThread();
+            // Expiry owns cleanup and removes this fence. Cancel this rejected
+            // call only; later unowned passive physics remains native.
+            if (!route.owner.vehicleLeaseActive(route.lease)) throw error("script_no_longer_controls_body");
+            route.requireMode();
+            if (!Double.isFinite(delta.x) || !Double.isFinite(delta.y) || !Double.isFinite(delta.z)
+                || Math.max(Math.abs(delta.x), Math.max(Math.abs(delta.y), Math.abs(delta.z))) > 16)
+                throw error("route_move_limit");
+            AABB sweep = entity.getBoundingBox().expandTowards(delta);
+            route.checkVolume(clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0));
+            if (clipped) {
+                Vec3 next = entity.position().add(delta);
+                if (!route.inside(next)) throw error("route_leaves_body_box");
+                if (!route.withinEdge(next)) throw error("route_leaves_selected_edge");
+                route.checkDryVolume(sweep);
+            }
+            return true;
+        } catch (RuntimeException failure) {
+            // A geometric rejection does not release the action/lease. Keep
+            // rejecting later moves until Post reports the failure and stop
+            // removes the fence. Lease expiry already performed that cleanup.
+            if (route.movementFailure == null) route.movementFailure = failure;
+            try { route.clearControls(); }
+            catch (RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+            return false;
+        }
     }
 
     private static boolean inherits(Class<?> type, String method) {
@@ -787,7 +911,7 @@ final class ScriptNavigation {
     }
 
     /** Candidate envelope, not a promise: includes a bounded takeoff approach and body overlap. */
-    private static double reachEnvelope(double speed, double initialVelocity, double power, double gravity, double width, boolean sprint) {
+    private static double reachEnvelope(double speed, double initialVelocity, double power, double gravity, double width, boolean sprint, boolean drowned) {
         speed *= sprint ? 1.3 : 1;
         // Native forward input equals speed. For supported friction [.6, 1], use
         // the largest ground acceleration and drag as a conservative 12-tick run-up bound.
@@ -801,6 +925,7 @@ final class ScriptNavigation {
             if (height < -1) break;
             horizontal = (horizontal * 0.91F * 0.98) + 0.02F * Math.min(1, speed);
             vertical = (vertical - gravity) * 0.98F * 0.98;
+            if (drowned) vertical -= 0.008; // airborne controller before the next travel
         }
         return Math.min(4, distance + 1 + width);
     }

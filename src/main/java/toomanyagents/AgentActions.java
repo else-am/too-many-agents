@@ -365,7 +365,7 @@ final class AgentActions {
         if (List.of("place", "interact", "place_entity").contains(type) && args.has("position")) blockFace();
         if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
         if (type.equals("route")) {
-            var selected = new ScriptNavigation(mob, hands, box);
+            var selected = new ScriptNavigation(this, box);
             try { selected.start(args); }
             catch (RuntimeException failure) { selected.stop(); throw failure; }
             route = selected;
