@@ -10253,6 +10253,26 @@
         ]
       },
       "limitations": "Reference only; no cancellation/unbreakable/full-tool matrix or native counterpart. Timer equality not required. Existing protocol and setup teleport warnings retained."
+    },
+    "reference-dig-cancellation": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/dig-cancel-common.js",
+      "subjects": [
+        "mineflayer.Bot.stopDigging",
+        "mineflayer.Bot.dig",
+        "mineflayer.BotEvents.diggingAborted"
+      ],
+      "scope": "One active empty-hand dig cancelled twice: void stop calls, rejected original promise, one original-target abort callback with cleared target fields, no completion or late break across160ticks; three server confirmations.",
+      "result": "passed",
+      "sourceSha256": "932f1727d6afb2c3c00ac6713ca288cd8032227d1187fc81343f41487d40a4fb",
+      "report": {
+        "path": "run/mineflayer-reference/dig-cancel-reference.json",
+        "sha256": "0fed940f4a6118dc28ab1784027722e81155d9a037b8c37a858ce2f0b1bf0e55",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Reference only. Native active-action cancellation requires independent action ledger and remains unrun for this exact source. No replacement-dig/unknown-reply coverage promotion; existing protocol warning retained."
     }
   },
   "reviewNotes": {

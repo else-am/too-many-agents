@@ -126,3 +126,28 @@ calls gameMode.destroyBlock for harvest rules; this source review identifies no
 missing no-harvest branch, but cannot establish runtime behavior. Do not require
 player timing or change native attributes. No cancellation, retry, extra dig or
 unrelated loot cleanup is part of the measured procedure.
+
+## Explicit digging cancellation — preauthored
+
+Separate empty-hand stone fixture at60/-60/3, survival body60.5/-60/0.5.
+Start exactly one dig and attach both fulfillment/rejection handlers immediately.
+Wait boundedly for the public targetDigBlock to identify that target, then three
+physics ticks; stone must still exist. Call stopDigging twice, requiring void
+returns. Await the original promise: it must reject, emit one diggingAborted with
+the original target and cleared target fields, emit no completion and leave the
+inventory empty. Observe for160ticks (longer than this fixture's7500ms reference
+dig estimate) to catch a stale finish timer, without another action. Independent
+server checks confirm stone and no item entity/inventory. Stop on failure; no
+replacement dig, retry or catch-and-repair. Native active-action evidence must
+independently establish cancellation happened after native start when later run.
+
+Explicit cancellation reference result: first invocation PASS. Original promise
+rejected Error/Digging aborted; both stop calls returned void. One abort event
+retained original target identity and observed cleared target fields. No completed
+event, inventory gain or late block break over160ticks (elapsed8238ms). Three
+server conditions independently confirmed stone/empty inventory/no item entity.
+All dimensions saved, process exited0 and port25575 unbound. Exact source/result
+and server log: /Users/scott/.bb/thread-storage/dig-cancel-reference/. Existing
+protocol warning retained. Native counterpart remains unrun; no replacement-dig
+or unknown-outcome claim. The harness helper was renamed miningScenario after
+execution for clarity; the recorded measured source is unchanged.

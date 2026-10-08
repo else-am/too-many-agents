@@ -80,7 +80,7 @@ async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--placement-refusal')) return placementRefusalScenario();
-  if (process.argv.includes('--dig-unsuitable-tool')) return unsuitableToolScenario();
+  if (process.argv.includes('--dig-unsuitable-tool') || process.argv.includes('--dig-cancel')) return miningScenario();
   if (process.argv.includes('--equipment') || process.argv.includes('--equipment-common')) return equipmentScenario();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--container')) return containerScenario();
@@ -119,9 +119,11 @@ async function scenario() {
   console.log(JSON.stringify(report, null, 2));
 }
 
-async function unsuitableToolScenario() {
-  const source = await readFile(new URL('./dig-unsuitable-tool.js', import.meta.url), 'utf8');
-  const report = { scenario:'dig-unsuitable-tool',backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
+async function miningScenario() {
+  const cancelling = process.argv.includes('--dig-cancel');
+  const scenario = cancelling ? 'dig-cancel' : 'dig-unsuitable-tool';
+  const source = await readFile(new URL(cancelling ? './dig-cancel-common.js' : './dig-unsuitable-tool.js', import.meta.url), 'utf8');
+  const report = { scenario,backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
     source,sourceSha256:createHash('sha256').update(source).digest('hex'),startedAt:new Date().toISOString(),
     clientErrors,protocolWarnings,serverConfirmed:false };
   try {
@@ -134,7 +136,7 @@ async function unsuitableToolScenario() {
     await bot.waitForTicks(5);
     report.invokedAt = new Date().toISOString();
     report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3',source)(bot,Vec3);
-    const conditions = ['if block 60 -60 3 minecraft:air','unless data entity Reference Inventory[]',
+    const conditions = [`if block 60 -60 3 minecraft:${cancelling ? 'stone' : 'air'}`,'unless data entity Reference Inventory[]',
       'unless entity @e[type=minecraft:item,x=58,y=-60,z=-2,dx=6,dy=6,dz=8]'];
     const markers = conditions.map(() => randomUUID());
     const messages = await consoleCommands(conditions.map((condition,index) => `execute ${condition} run say ${markers[index]}`));
@@ -144,7 +146,7 @@ async function unsuitableToolScenario() {
   } catch (error) { report.error = String(error); throw error; }
   finally {
     report.finishedAt = new Date().toISOString();
-    await writeFile(join(directory,'dig-unsuitable-tool-reference.json'),JSON.stringify(report,null,2)+'\n');
+    await writeFile(join(directory,`${scenario}-reference.json`),JSON.stringify(report,null,2)+'\n');
   }
   console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
