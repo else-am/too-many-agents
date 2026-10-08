@@ -68,3 +68,15 @@ corrections and batch/cache bounds passed. Changed native classes compiled
 standalone against existing generated artifacts/AT visibility overlay; packaged
 mixin targeting and all live event callbacks remain unverified. Probe/evidence
 are retained in thread storage; no game, build or lifecycle operation ran.
+
+
+## Fixture-corrected packaged result: b21ce69
+
+New observe-note-only.js once PASS: explicit note_block instrument=basedrum,note=12,powered=false overstone, native prelistener state condition confirmed; one NEW completed-look gate then one power change. Exactly1 event basedrum/pitch12, shared registry instrument and typed Block/Vec3/hydratednote checks alltrue; no replay10ticks/inventory unchanged.1request/completed,99updates,7bridge operations; tool5517ms/script4965ms. Prior note failure was strict string12 vs numeric12, with possible initialdefaultHARP fixture update; original compound failure did not isolate its booleans and remains retained. Corrected expectation uses independent native serializedname/pitch, not enum-value/name equality. No piston/chest repeat.
+
+Codex gpt-6.1-sol low; JAR SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Only created note/power cells removed; original position/belongings restored.
+All dimensions saved22:59:44.432 local2026-10-07; exactPID2774 stopped afterward.
+Source hashes, absolute times/raw results/gates/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21-move-note-summary.json`.

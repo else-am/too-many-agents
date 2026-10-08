@@ -2916,6 +2916,46 @@
         "sha256": "4e851371cc774a454fe79c49455e0c6fd7fba48ceb5139657a150ac273881287"
       },
       "limitations": "Vector values, local mutation, return identity and runtime portability only; no native observation or movement claim."
+    },
+    "forced-move-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-forced-move-native.js",
+      "subjects": [
+        "mineflayer.BotEvents.forcedMove"
+      ],
+      "scope": "Two exact-body accepted teleports out and back; zero-argument callbacks, stable position identity, no ordinary-look/replay event and unchanged inventory.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "5d578c3fd64edf197e900376c5bb2922d380491cbaadda9fdfb35a4be918f62b",
+      "report": {
+        "path": "run/mineflayer-reference/forced-move-native.json",
+        "sha256": "ab4f27d5f59903ebac9dd1b05c00878fd8b53c1a5457bc1bec95afd6c32b2153",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "Direct same-level teleport only; passenger/random teleport and dimension-transition paths not established."
+    },
+    "note-only-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/b21ce69-note-only-native.js",
+      "subjects": [
+        "mineflayer.BotEvents.noteHeard"
+      ],
+      "scope": "One basedrum/pitch12 note with typed Block/Vec3, shared registry instrument, hydrated state and no replay.",
+      "testedRevision": "b21ce69",
+      "result": "passed",
+      "sourceSha256": "8e9f522a449159c38b0bcf9ac6a851b94298e03868fa363e3b28657de1515427",
+      "report": {
+        "path": "run/mineflayer-reference/note-only-native.json",
+        "sha256": "36fd99ab598c0048ed31a00870a6fa6dfc520839712da41be70b5796f6731626",
+        "codePath": [
+          "args",
+          "code"
+        ]
+      },
+      "limitations": "One fixed note fixture; not instrument or event-source cross-product."
     }
   },
   "reviewNotes": {

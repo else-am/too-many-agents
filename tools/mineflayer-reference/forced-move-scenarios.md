@@ -64,3 +64,15 @@ Standalone compile of changed sources and exact generated method-target source
 inspection passed. This does not validate packaged Mixin transformation or live
 teleport/rollback delivery. Those checks remain lead-owned; no game/build/lifecycle
 operation ran during this slice.
+
+
+## Fixture-corrected packaged result: b21ce69
+
+Exact observe-forced-move.js once PASS: two accepted exact-body +2X/origin teleports at NEW completed native look gates, every command axis explicit decimal. Independently read original110.67839822950626,-60,63.87059232798029 and clear supported destination; native out/return positions match. Exactly2 hydrated zero-argument events, same body/position identity, no ordinarylook/replay, inventory unchanged.2requests/completed,118updates,10bridge operations; tool6568ms/script6004ms. Previous partial/coordinate-fixture failure remains retained.
+
+Codex gpt-6.1-sol low; JAR SHA256
+`e502233e1840adffaf3d6529749689c283e695264695e193a934edd70972c8ce`.
+Only created note/power cells removed; original position/belongings restored.
+All dimensions saved22:59:44.432 local2026-10-07; exactPID2774 stopped afterward.
+Source hashes, absolute times/raw results/gates/native evidence and limits:
+`/Users/scott/.bb/thread-storage/thr_xykqkgui57/b21-move-note-summary.json`.
