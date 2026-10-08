@@ -39,12 +39,12 @@ independence of exported codec copies. It does not import modified registries or
 test custom datapacks.
 
 After its new completed look, summon one uniquely tagged native experience orb
-on inspected floor at least five blocks from both body and Dev, within observation
+on inspected floor at least nine blocks from both body and Dev, within observation
 range. Use native `Value:7s,Count:3` and zero motion; `NoGravity:1b` may hold the
 fixture in place. Resolve and record the actual UUID and independent native
 Value/Count. The public `Entity.count` must be **7**, the XP value, not the merged
 orb count 3. The listener checks hydrated type `orb`, shared Entity/Vec3 references
-and unchanged inventory. Keep it out of attraction range during the five followup
+and unchanged inventory. The native attraction radius is eight blocks. Keep it outside that radius during the five followup
 ticks. Remove that exact orb after recording the outcome. No XP pickup event,
 reward or merging behavior is claimed.
 

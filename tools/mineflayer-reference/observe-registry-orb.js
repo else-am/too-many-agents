@@ -1,5 +1,5 @@
 // Read-only registry checks, then one coordinator-created XP orb after a NEW look.
-// Fixture: ordinary overworld, no nearby old orbs; native Value7/Count3 >=5 blocks away.
+// Fixture: ordinary overworld, no nearby old orbs; native Value7/Count3 >=9 blocks away.
 const before = JSON.stringify(bot.inventory.slots), start = Date.now();
 const registry = bot.registry, codecs = registry.writeDimensionCodec();
 const ids = ['minecraft:dimension_type', 'minecraft:worldgen/biome', 'minecraft:chat_type'];
