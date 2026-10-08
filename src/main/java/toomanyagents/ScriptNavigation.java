@@ -40,7 +40,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.neoforge.common.NeoForgeMod;
 
@@ -1116,12 +1118,46 @@ public final class ScriptNavigation {
         BlockPos node = integerPosition(nodes.get(index));
         if (physics == Physics.PARROT)
             return BlockPos.containing(mob.position()).equals(node) && arrived(goal) && (!flightLanding || mob.onGround());
+        if (physics == Physics.RABBIT) return rabbitArrivedAtNode(node, goal);
         if (!settled() || !logicalPosition(mob.position()).equals(node)
             || goal.subtract(mob.position()).horizontalDistance() >= 0.12) return false;
         if (physics == Physics.FISH) return arrived(goal);
         // Only water accepts the whole cell. A ladder may otherwise finish
         // almost a block above its target while still sliding down toward it.
         return level.getFluidState(node).is(FluidTags.WATER) || Math.abs(goal.y - mob.getY()) < 0.12;
+    }
+
+    private boolean rabbitArrivedAtNode(BlockPos node, Vec3 goal) {
+        // Native hops need not converge to a cell's center. Accept only a quiet,
+        // fully contained footprint with real support at the resolved feet Y.
+        if (!mob.onGround() || !logicalPosition(mob.position()).equals(node)
+            || Math.abs(goal.y - mob.getY()) > EPS || mob.getDeltaMovement().horizontalDistanceSqr() > 0.03 * 0.03)
+            return false;
+        AABB bounds = mob.getBoundingBox();
+        if (bounds.minX < node.getX() - EPS || bounds.maxX > node.getX() + 1 + EPS
+            || bounds.minZ < node.getZ() - EPS || bounds.maxZ > node.getZ() + 1 + EPS) return false;
+        if (!inside(mob.position())) throw error("route_outside_body_box");
+        checkVolume(bounds);
+        checkDryVolume(bounds);
+        if (!level.noCollision(mob, bounds)) return false;
+
+        // Project actual top faces to one common Y slab, so native shape union
+        // can prove coverage rather than accepting a tiny supporting overlap.
+        VoxelShape support = Shapes.empty();
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(bounds.minX, bounds.minY - 1, bounds.minZ),
+            BlockPos.containing(bounds.maxX - EPS, bounds.minY, bounds.maxZ - EPS))) {
+            checkCell(pos);
+            for (AABB local : level.getBlockState(pos).getCollisionShape(level, pos, CollisionContext.of(mob)).toAabbs()) {
+                AABB shape = local.move(pos);
+                if (Math.abs(shape.maxY - bounds.minY) > EPS) continue;
+                double minX = Math.max(bounds.minX, shape.minX), maxX = Math.min(bounds.maxX, shape.maxX);
+                double minZ = Math.max(bounds.minZ, shape.minZ), maxZ = Math.min(bounds.maxZ, shape.maxZ);
+                if (maxX > minX && maxZ > minZ)
+                    support = Shapes.or(support, Shapes.box(minX, 0, minZ, maxX, 1, maxZ));
+            }
+        }
+        VoxelShape footprint = Shapes.box(bounds.minX + EPS, 0, bounds.minZ + EPS, bounds.maxX - EPS, 1, bounds.maxZ - EPS);
+        return !Shapes.joinIsNotEmpty(footprint, support, BooleanOp.ONLY_FIRST);
     }
 
     private Vec3 destination(BlockPos node) {
