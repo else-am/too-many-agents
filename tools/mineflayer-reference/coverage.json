@@ -4869,6 +4869,45 @@
         "path": "run/mineflayer-reference/planning-submerged.txt",
         "sha256": "cfd3c02dce00bcd71b1b133c3255c6faa1aac6e158b84034ee69778d94f0ed8b"
       }
+    },
+    "known-rejection-native-572692c": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-known-action-rejection-572692c.js",
+      "subjects": [],
+      "scope": "Actual native held-control rejection reached guest before_start, with unchanged body/items and successful control clear/look continuation. Native ledger has no route sequence; HTTP wire was not separately captured.",
+      "result": "passed",
+      "testedRevision": "572692c",
+      "sourceSha256": "8d7eda178958b2205f2e7de8367148b8555f3d8d5c7d6be1056086b570e58fbd",
+      "report": {
+        "path": "run/mineflayer-reference/known-rejection-native-572692c.json",
+        "sha256": "d969bd652d6b5728f0f6d9aa9b92d7b89fa9cc2adcce08fd83c41211d13ccdf7"
+      }
+    },
+    "drowned-gap-native-572692c": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-drowned-gap-route-572692c.js",
+      "subjects": [],
+      "scope": "Selected dry Drowned parkour edge, actual airborne ascent/crossing, supported landing and drop, no item/health change. Actual native stepHeight1 preserved. No aquatic or mode-change proof.",
+      "result": "passed",
+      "testedRevision": "572692c",
+      "sourceSha256": "8ebd8ebfaecfe548d03fdd816912e22bdafed9873e82ab27b3b1854aef1742fe",
+      "report": {
+        "path": "run/mineflayer-reference/drowned-gap-native-572692c.json",
+        "sha256": "6603c3b47eaa1a4ea4973ea4e9fdd8e6914a7db0071499bde4d0ba33a48b2691"
+      }
+    },
+    "world-switch-native-572692c": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/observe-world-switch-cancellation-572692c.js",
+      "subjects": [],
+      "scope": "Guarded integrated-world switch stopped after first look with local_player_unavailable before sentinel. Release acknowledgement unconfirmed; returned disposable independently alive/empty/idle with no pending tools. No unknown retry.",
+      "result": "passed",
+      "testedRevision": "572692c",
+      "sourceSha256": "967c6936c02014fa7be1324dbee0317dbe7694cc115a88fac76ab7aee2c5edeb",
+      "report": {
+        "path": "run/mineflayer-reference/world-switch-native-572692c.json",
+        "sha256": "f954b7ff137c0127db222a94f76011f97b91a42df20eb6ca9b72aadd38d44669"
+      }
     }
   },
   "reviewNotes": {
