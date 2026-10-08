@@ -68,3 +68,12 @@ creative_slot result/authoritative inventory before clear if feasible; do not
 infer native codec correctness only from the guest's source Item. ClearInventory,
 offhand writes, persistence and full lifecycle matrix remain separate pending
 checks. The fixture does not require deleting or restashing unrelated belongings.
+
+
+Focused native result on packaged `4d7e8b9`: exact `observe-creative.js` passed
+component-bearing write/clear, unchanged prepared inventory, actual flight
+arrival/hover, solid-wall rejection and grounded return. Seven requests,
+53 updates, 18 bridge operations; invocation 2026-10-08 02:25:49.115–02:25:52.697 UTC.
+The test owner is restoring mode/slot arrangement and checking native cleanup.
+[Guest evidence](</Users/scott/.bb/thread-storage/creative-evidence-b8a54dfe.json>).
+No broad permission/component/lifecycle conformance is claimed.
