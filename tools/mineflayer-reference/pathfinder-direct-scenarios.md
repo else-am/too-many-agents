@@ -113,3 +113,5 @@ pending. Existing planning harness was updated only for deliberate changed
 contracts; its single run passed all 31 scenarios.
 [Shortcuts](</Users/scott/.bb/thread-storage/navigation-direct-evidence-21448fc8.json>)
 and [follow](</Users/scott/.bb/thread-storage/navigation-follow-evidence-8a295ae9.json>).
+
+Independent native route/fixture and unchanged inventory/equipment evidence passed; survival body grounded with normal gravity. World saved/disconnected and exact JVM `25257` stopped. [Final coordinator evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/aad8063-summary.json>).

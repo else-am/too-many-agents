@@ -70,3 +70,5 @@ positions, expected volume/pitch, no replay and unchanged inventory. One request
 The native fixture also sent an unrelated-proxy negative control.
 [Guest evidence](</Users/scott/.bb/thread-storage/sounds-evidence-7608a9b5.json>).
 Wider native range/modification/cancellation/lifecycle combinations remain unrun.
+
+Independent native route/fixture and unchanged inventory/equipment evidence passed; survival body grounded with normal gravity. World saved/disconnected and exact JVM `25257` stopped. [Final coordinator evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/aad8063-summary.json>).
