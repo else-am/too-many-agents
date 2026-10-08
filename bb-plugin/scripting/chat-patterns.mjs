@@ -13,17 +13,21 @@ function match(pattern, message) {
 export function installChatPatterns(bot, { defaultChatPatterns = true } = {}) {
   const patterns = new Map();
   let nextId = 0;
-  function register(name, values, { repeat = true, parse = false, deprecated = false } = {}) {
+  // Documented inspection view; registration stays with add/removeChatPattern.
+  Object.defineProperty(bot, 'chatPatterns', { enumerable: true, get: () =>
+    [...patterns.values()].flatMap(({ name, values, description }) =>
+      values.map(pattern => ({ pattern, type: name, description }))) });
+  function register(name, values, { repeat = true, parse = false, deprecated = false, description } = {}) {
     if (!Array.isArray(values) || !values.length || !values.every(value => value instanceof RegExp))
       throw new TypeError('Pattern parameter should be a nonempty array of RegExp');
     const id = nextId++;
-    patterns.set(id, { name, values: values.slice(), repeat, parse, deprecated,
+    patterns.set(id, { name, values: values.slice(), repeat, parse, deprecated, description,
       position: 0, matches: [], captures: [], originals: [] });
     return id;
   }
   bot.addChatPatternSet = (name, values, options) => register(name, values, options);
   bot.addChatPattern = (name, pattern, options) => register(name, [pattern], options);
-  bot.chatAddPattern = (pattern, type) => bot.addChatPattern(type, pattern, { deprecated: true });
+  bot.chatAddPattern = (pattern, type, description) => bot.addChatPattern(type, pattern, { deprecated: true, description });
   bot.removeChatPattern = name => {
     if (typeof name === 'number') patterns.delete(name);
     else for (const [id, pattern] of patterns) if (pattern.name === name) patterns.delete(id);

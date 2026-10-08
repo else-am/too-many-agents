@@ -52,3 +52,20 @@ Native completion clarification (35e8a4f): development GameTest registers the
 at permission 0. Require privileged `teleport`, `team` and `tellraw` to be absent;
 do not blacklist a permitted name. The first rebuilt check satisfied this but
 stopped on the lead's incorrect `test` exclusion. No completion rerun is needed.
+
+## Documented pattern inspection (preauthored follow-up)
+
+Pinned docs/api.md:964 and index.d.ts:507 describe bot.chatPatterns as records
+with pattern, type and optional description. Pinned chat.js never publishes it
+and drops chatAddPattern's documented third argument. Restore a snapshot view of
+active registrations: one record per regex, in registration/set order; preserve
+legacy descriptions. Registration/removal and one-shot retirement own the data;
+editing a returned array does not register patterns. Multi-pattern sets remain
+sequential matches, not independent patterns despite the inspection projection.
+
+Focused contract to check: default patterns are visible; add a described legacy
+pattern and a two-pattern set, inspect their actual RegExp/type/description,
+match messages in order, remove by returned ID/name, and confirm retired records
+are absent. Delivery/parse behavior must remain unchanged. This is a documented
+surface correction, not a claim that the pinned runtime exposes this field.
+No new native fixture is needed for the inspection-only field.
