@@ -305,6 +305,17 @@ for (const edge of inheritance) {
     edge.runtimeBase = runtime.base;
     edge.status = 'pending-review';
     edge.reason = 'Declaration and source inheritance disagree';
+    // The documented deprecated wrapper owns a GoalLookAtBlock; it does not
+    // inherit that class's fields or constructor (pinned goals.js:209).
+    if (edge.derived === 'mineflayer-pathfinder.goals.GoalBreakBlock'
+        && edge.base === 'mineflayer-pathfinder.goals.GoalLookAtBlock'
+        && runtime.base === 'mineflayer-pathfinder.goals.Goal') {
+      edge.declaredBase = edge.base;
+      edge.base = runtime.base;
+      edge.status = 'reviewed-source-correction';
+      edge.reason = 'Pinned readme.md:421 and goals.js:209 define the Goal wrapper; index.d.ts:199 incorrectly declares GoalLookAtBlock inheritance';
+      delete edge.runtimeBase;
+    }
   }
   delete edge.imported;
 }
