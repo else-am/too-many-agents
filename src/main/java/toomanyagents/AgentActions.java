@@ -87,6 +87,7 @@ final class AgentActions {
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
     boolean scripted() { return scriptId != null; }
+    String currentScriptId() { return scriptId; }
     boolean controlsScript(String id) { return Objects.equals(scriptId, id); }
 
     void claimScript(String id, int timeoutMs) {

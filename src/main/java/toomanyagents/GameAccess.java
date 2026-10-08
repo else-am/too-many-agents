@@ -1429,6 +1429,25 @@ final class GameAccess {
         return result;
     }
 
+    void forcedMoveAttempt(ScriptForcedMoveEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        for (var controller : actions.values()) {
+            var body = controller.mob;
+            String lease = controller.currentScriptId();
+            if (lease == null || body.level() != event.level || body.isRemoved()) continue;
+            try {
+                if (event.root != body && !event.root.hasIndirectPassenger(body)) continue;
+                java.util.function.BooleanSupplier active = () -> controller.controlsScript(lease)
+                    && body.level() == event.level && !body.isRemoved();
+                event.watch(body, active, () -> controller.recordEntityEvent(
+                    JsonState.object("name", "forcedMove", "subject", body.getId(), "entities", new JsonArray()), active),
+                    reason -> { if (controller.controlsScript(lease)) controller.failObservation(reason); });
+            } catch (RuntimeException failed) {
+                controller.failObservation("script_forced_move_observation_failed");
+            }
+        }
+    }
+
     void blockEvent(ScriptBlockEvent event) {
         if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
         for (var controller : actions.values()) controller.recordBlockEvent(event);

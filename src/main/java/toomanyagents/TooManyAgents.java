@@ -91,6 +91,9 @@ public final class TooManyAgents {
             });
         NeoForge.EVENT_BUS.addListener(this::despawn);
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
+        NeoForge.EVENT_BUS.addListener((ScriptForcedMoveEvent event) -> {
+            if (game != null) game.forcedMoveAttempt(event);
+        });
         NeoForge.EVENT_BUS.addListener((ScriptBlockEvent event) -> {
             if (game != null) game.blockEvent(event);
         });
