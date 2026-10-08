@@ -7620,6 +7620,150 @@
         "version-features-library"
       ],
       "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.bold": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.clickEvent": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.color": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.fallback": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.hoverEvent": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.italic": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.obfuscated": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.reset": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.strikethrough": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.text": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.underlined": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
+    },
+    "prismarine-chat.ChatMessage.with": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Caller-supplied component parsing and rendering data only. Existing chat.mjs compares all enumerable fields before/after render and clone, with explicit text/style/color/hover/click/translation fixtures in the recorded292-case QuickJS run. Native delivery and registry hydration are separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/chat.mjs"
+      ],
+      "evidence": [
+        "chat-library"
+      ],
+      "applicability": "applicable"
     }
   },
   "schemaVersion": 2,
@@ -8213,7 +8357,19 @@
         "prismarine-chat.ChatMessage.selector",
         "prismarine-chat.ChatMessage.keybind",
         "prismarine-chat.ChatMessage.score",
-        "prismarine-chat.MessageBuilder.fromNetwork"
+        "prismarine-chat.MessageBuilder.fromNetwork",
+        "prismarine-chat.ChatMessage.bold",
+        "prismarine-chat.ChatMessage.clickEvent",
+        "prismarine-chat.ChatMessage.color",
+        "prismarine-chat.ChatMessage.fallback",
+        "prismarine-chat.ChatMessage.hoverEvent",
+        "prismarine-chat.ChatMessage.italic",
+        "prismarine-chat.ChatMessage.obfuscated",
+        "prismarine-chat.ChatMessage.reset",
+        "prismarine-chat.ChatMessage.strikethrough",
+        "prismarine-chat.ChatMessage.text",
+        "prismarine-chat.ChatMessage.underlined",
+        "prismarine-chat.ChatMessage.with"
       ],
       "scope": "292 pinned ChatMessage/builder comparisons and two network-builder fixtures in bundled QuickJS; reviewed supplied-component construction, fields, conversions and text transformations. Native hydration remains separate.",
       "result": "passed",

@@ -507,6 +507,9 @@ const pureVectorContracts = new Set([
 const pureChatContracts = new Set([
   'constructor', 'fromNotch', 'fromNetwork', 'json', 'extra', 'translate',
   'selector', 'keybind', 'score',
+  // Existing chat differential records complete parsed fields before/after rendering.
+  'bold', 'clickEvent', 'color', 'fallback', 'hoverEvent', 'italic', 'obfuscated',
+  'reset', 'strikethrough', 'text', 'underlined', 'with',
   'append', 'clone', 'getText', 'length', 'parse', 'toAnsi', 'toHTML', 'toMotd',
   'toString', 'valueOf',
 ].map(name => `prismarine-chat.ChatMessage.${name}`));
