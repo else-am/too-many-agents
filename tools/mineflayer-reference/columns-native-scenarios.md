@@ -41,3 +41,9 @@ bounded state box covering its selected edges and edit targets. Split at native
 128-node/128-edit/65,536-cell limits; never submit unbounded terrain or silently
 navigate without policy validation. Check near and remote segments plus a cell
 that changes between planning and execution. Unknown outcome is not replayable.
+
+Known biome metadata correction: Block.biome must use the actual native-ID
+registry entry when available, including its name and climate metadata. The
+pinned Block loader accidentally supplies a version object to the Biome loader,
+yielding blank metadata for known IDs. Preserve the fallback only when no
+registry entry exists; validate known native names in the next focused check.

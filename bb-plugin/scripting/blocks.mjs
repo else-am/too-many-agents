@@ -46,10 +46,9 @@ export function createBlockClass (registry) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) blocksByStateId[id] = block
   }
   function Biome (id) {
-    // prismarine-block 1.23.0 passes its version object to prismarine-biome,
-    // not the registry. Its Biome therefore returns this fallback even for
-    // known IDs. Preserve the pinned contract rather than inventing metadata.
-    return { color: 0, height: null, name: '', rainfall: 0, temperature: 0, id }
+    // Correct the pinned Block loader's version-object/registry mix-up.
+    // Production supplies metadata indexed by the actual native biome IDs.
+    return registry.biomes?.[id] ?? { color: 0, height: null, name: '', rainfall: 0, temperature: 0, id }
   }
   const sign = signMethods(registry.language)
   const shapes = registry.blockCollisionShapes
