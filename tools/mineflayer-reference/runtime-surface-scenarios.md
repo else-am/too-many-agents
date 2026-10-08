@@ -26,3 +26,7 @@ using a Vec3 and the existing game notification. No body respawn is invented.
 
 World columns, async storage/mutation APIs, settings and remaining lifecycle
 members stay pending. These additions do not establish complete world support.
+
+## Recorded script-local plugin comparison
+
+`plugin-helpers.mjs` executes the actual production bot bundle in QuickJS (64MiB memory,512KiB stack) against pinned plugin_loader after inject_allowed. The preauthored plugin criteria pass, including nine invalid-input cases, reentry and thrown initializer retention. Initialization uses an explicit synthetic empty observation; the first setup attempt encoded empty Slot as null and stopped before the scenario. Correcting it to itemCount0 allowed initialization without product changes. Native requests are forbidden by the harness. Invalid arguments produce TypeError here versus upstream Node AssertionError; both reject synchronously before registration. This check does not cover world getters, block events, native actions inside plugins or arbitrary external packages.

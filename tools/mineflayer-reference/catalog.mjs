@@ -740,7 +740,8 @@ const pureFeatureContracts = new Set([
     "usetraderlist", "village&pillageInventoryWindows", "whereDurabilityIsSerialized",
   ].map(name => `minecraft-data.MinecraftData.SupportsFeature.${name}`)
 ]);
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts, ...pureFeatureContracts]);
+const purePluginContracts = ['mineflayer.Bot.loadPlugin', 'mineflayer.Bot.loadPlugins', 'mineflayer.Bot.hasPlugin'];
+const pureLibraryContracts = new Set([...purePluginContracts, ...pinnedDataContracts, ...pinnedDataShapeContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts, ...pureWindowContracts, ...pureGoalContracts, ...pureFeatureContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

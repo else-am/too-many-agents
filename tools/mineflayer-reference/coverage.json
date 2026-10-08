@@ -7764,6 +7764,42 @@
         "chat-library"
       ],
       "applicability": "applicable"
+    },
+    "mineflayer.Bot.loadPlugin": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "applicability": "applicable",
+      "reason": "Script-local post-injection function registration is synchronous and has no native side effects. Actual production bot bundle in bounded QuickJS compared with pinned plugin_loader; native plugin actions and arbitrary third-party packages remain separate. Invalid values reject; TypeError replaces upstream Node AssertionError.",
+      "scenarios": [
+        "tools/mineflayer-reference/plugin-helpers.mjs"
+      ],
+      "evidence": [
+        "plugin-helpers-library"
+      ]
+    },
+    "mineflayer.Bot.loadPlugins": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "applicability": "applicable",
+      "reason": "Script-local post-injection function registration is synchronous and has no native side effects. Actual production bot bundle in bounded QuickJS compared with pinned plugin_loader; native plugin actions and arbitrary third-party packages remain separate. Invalid values reject; TypeError replaces upstream Node AssertionError.",
+      "scenarios": [
+        "tools/mineflayer-reference/plugin-helpers.mjs"
+      ],
+      "evidence": [
+        "plugin-helpers-library"
+      ]
+    },
+    "mineflayer.Bot.hasPlugin": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "applicability": "applicable",
+      "reason": "Script-local post-injection function registration is synchronous and has no native side effects. Actual production bot bundle in bounded QuickJS compared with pinned plugin_loader; native plugin actions and arbitrary third-party packages remain separate. Invalid values reject; TypeError replaces upstream Node AssertionError.",
+      "scenarios": [
+        "tools/mineflayer-reference/plugin-helpers.mjs"
+      ],
+      "evidence": [
+        "plugin-helpers-library"
+      ]
     }
   },
   "schemaVersion": 2,
@@ -9869,6 +9905,23 @@
         "sha256": "4beda68ba926ee6e8b2ce21b5e4e2b304766bc92ffa32a80778d7e4d1c5f8aa8"
       },
       "limitations": "No native world/runner hydration/packaged lifecycle or throughput claim. Controlled byte source with actual host code."
+    },
+    "plugin-helpers-library": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/plugin-helpers.mjs",
+      "subjects": [
+        "mineflayer.Bot.loadPlugin",
+        "mineflayer.Bot.loadPlugins",
+        "mineflayer.Bot.hasPlugin"
+      ],
+      "scope": "Actual initialized production bot in QuickJS: identity, register-before-call, duplicate/reentrant/empty loads, shared options, void returns, thrown initializer retention and whole-array validation. Synthetic empty observation only.",
+      "result": "passed",
+      "sourceSha256": "a52809cdb6c40a4cd60677b48923a22f24ac1ed612233811592399a0563d6b89",
+      "report": {
+        "path": "run/mineflayer-reference/plugin-helpers.json",
+        "sha256": "36efaf6fda3b62e4d32cff647cfa48ba0631145a4f277a2e70e245373187f4fa"
+      },
+      "limitations": "Script-local post-injection plugin functions only. Synthetic initialization, no native requests, third-party packages, lifecycle or world conformance claim. Invalid arguments reject in both; error classes intentionally differ (TypeError versus upstream AssertionError)."
     }
   },
   "reviewNotes": {
