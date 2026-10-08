@@ -494,7 +494,13 @@ const pureEntityContracts = new Set([
   'constructor', 'setEquipment', 'getCustomName', 'getDroppedItem',
   'heldItem', 'mobType', 'objectType',
 ].map(name => `prismarine-entity.Entity.${name}`));
-const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts]);
+// Registration/dispatch on the guest emitter; not a claim about native event sources.
+const pureEmitterContracts = new Set([
+  'on', 'once', 'prependListener', 'listenerCount', 'eventNames', 'listeners',
+  'rawListeners', 'emit', 'off', 'removeAllListeners', 'setMaxListeners',
+  'prependOnceListener', 'getMaxListeners',
+].map(name => `events.EventEmitter.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts, ...pureChatContracts, ...pureBuilderContracts, ...pureRecipeContracts, ...pureBlockContracts, ...pureItemContracts, ...pureEntityContracts, ...pureEmitterContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);

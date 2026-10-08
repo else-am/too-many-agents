@@ -256,8 +256,15 @@ Pinned equality/component-setter quirks remain documented in items.mjs.
 
 Seven local Entity contracts (constructor, setEquipment, getCustomName,
 getDroppedItem, heldItem, mobType and objectType) have an explicit pure-library
-classification. The recorded existing suite passed1,396 comparisons, including
-all1,333 dropped Item IDs and shared Item/ChatMessage identity in QuickJS64MiB.
+classification. The recorded existing suite passed 1,396 comparisons, including
+all 1,333 dropped Item IDs and shared Item/ChatMessage identity in QuickJS at 64 MiB.
 Supplying metadata to this suite does not establish native metadata acquisition,
 collection-event timing or real equipment changes. Native Entity fields and
 event delivery remain separate obligations.
+
+The same report's preauthored emitter case covers thirteen instance methods:
+on, once, prependListener, listenerCount, eventNames, listeners, rawListeners,
+emit, off, removeAllListeners, setMaxListeners, prependOnceListener and
+getMaxListeners. This verifies local listener behavior, including symbols and
+unhandled error emission. It does not verify any Minecraft event producer or
+promote static emitter helpers or unexercised methods.

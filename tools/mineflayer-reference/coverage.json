@@ -2404,13 +2404,169 @@
       "evidence": [
         "entity-library"
       ]
+    },
+    "events.EventEmitter.on": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.once": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.prependListener": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.listenerCount": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.eventNames": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.listeners": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.rawListeners": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.emit": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.off": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.removeAllListeners": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.setMaxListeners": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.prependOnceListener": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
+    },
+    "events.EventEmitter.getMaxListeners": {
+      "status": "supported",
+      "applicability": "applicable",
+      "verification": "pinned-library",
+      "reason": "Existing Entity suite exercises local registration/order/once/symbol/removal/introspection/emit-error behavior against the host emitter and bundled events3 in QuickJS. Native event sources/payloads/order remain separate.",
+      "scenarios": [
+        "tools/mineflayer-reference/entities.mjs"
+      ],
+      "evidence": [
+        "entity-library"
+      ]
     }
   },
   "schemaVersion": 2,
   "evidencePolicy": {
-    "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
+    "results": "Recorded passed and failed outcomes require matching scenario/report hashes. Missing or changed artifacts become unverified; verified failures remain failed. not-recorded means executable indexed without a durable run.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block/Item calculations can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 data/version, Vec3 operations and selected ChatMessage transformations and MessageBuilder/Recipe data members and selected Block/Item calculations, local Entity accessors and guest EventEmitter registration/dispatch can use verified library-differential evidence. The generator uses exact eligible keys and rejects unreviewed/gameplay reclassification. Scenario/report hashes and member-level scope review are required; supplied library values do not establish native hydration.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
@@ -2913,7 +3069,8 @@
       "kind": "library-differential",
       "path": "tools/mineflayer-reference/entities.mjs",
       "subjects": [
-        "prismarine-entity.Entity"
+        "prismarine-entity.Entity",
+        "events.EventEmitter"
       ],
       "scope": "1396 pinned Entity comparisons in bundled QuickJS64MiB: local constructors, aliases, equipment/accessors, supplied metadata and all1333 dropped Item IDs with injected class identity. Includes one local EventEmitter case; no native hydration/event delivery claim.",
       "result": "passed",
