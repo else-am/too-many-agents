@@ -2247,7 +2247,7 @@ public final class ScriptNavigation {
         if (mob.getClass() == Camel.class && control == Camel.CamelMoveControl.class
             && mob.getJumpControl().getClass() == JumpControl.class
             && mob.getNavigation().getClass() == GroundPathNavigation.class
-            && mob.getPose() == Pose.STANDING && !((Camel) mob).refuseToMove()
+            && mob.getPose() == Pose.STANDING && !((Camel) mob).refuseToMove() && !((Camel) mob).isImmobile()
             && !mob.isInWater() && !mob.isInLava() && !mob.onClimbable() && !mob.isSleeping()) return Physics.CAMEL;
         if (mob.getClass() == Panda.class && control == Panda.PandaMoveControl.class
             && mob.getJumpControl().getClass() == JumpControl.class

@@ -11,7 +11,12 @@ body-sized obstacle detour and supported elevation/drop; verify native positions
 health/items, route completion and cleanup independently. Direct shortcuts remain
 disabled under distinct native-camel-ground-post-tick capability. No runtime run.
 
-Revalidate refuseToMove and actual pose/age/geometry/controller/navigation before
+Grazing/rearing immobility is independent of refuseToMove. Native NoAI ticking
+can begin grazing: reject an already immobile Camel and terminate an active route
+when that state appears, without clearing native eating/rearing flags. Future
+native checks must distinguish that rejection from successful standing movement.
+
+Revalidate refuseToMove, isImmobile and actual pose/age/geometry/controller/navigation before
 owned movement. Pose and baby refresh may resize/reposition with setPos, so end
 only captured ownership before native refresh and allow actual change unchanged.
 No synthetic standUp, last-pose tick, dash timer, target, velocity or brain tick.
