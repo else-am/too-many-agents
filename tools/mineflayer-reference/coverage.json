@@ -10213,6 +10213,25 @@
         ]
       },
       "limitations": "Pinned equip uses player slot45 in the active chest window. Saved player NBT confirms shield in ordinary inventory slot27, not offhand. No full equipment parity or native coverage promotion; protocol/setup teleport warnings retained."
+    },
+    "reference-equipment-ordinary": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/equipment-common.js",
+      "subjects": [
+        "mineflayer.Bot.equip",
+        "mineflayer.Bot.unequip"
+      ],
+      "scope": "Ordinary inventory: Item/numeric equip to head/offhand/hand, unequip, void returns, hydrated state, sword components and unchanged counts; seven independent server confirmations.",
+      "result": "passed",
+      "sourceSha256": "4f7cc7365c4de4741b251ee1dce2bb5ff2396ed536f0d3bd082f10d0f0aadc2f",
+      "report": {
+        "path": "run/mineflayer-reference/equipment-common-reference.json",
+        "sha256": "e73f075cdb05df27a9e832de7e33ba5087e26cf10edce75990dd1fa3ca01583a",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "No open-container case or full-inventory toss behavior. Separate failed container procedure retained. Native execution of this exact common source remains pending; existing protocol warning retained."
     }
   },
   "reviewNotes": {

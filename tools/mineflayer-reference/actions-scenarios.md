@@ -64,3 +64,31 @@ failure does not establish the unreached methods' parity. Existing protocol and
 setup teleport warnings remain. All dimensions saved; owned server stopped and
 port25575 unbound. Exact result/source/server log/player NBT and decoded inventory:
 /Users/scott/.bb/thread-storage/equipment-reference/. No production code changed.
+
+## Ordinary equipment — preauthored separate case
+
+The container-slot failure left armor/unequip/sword phases unexecuted. Use a new
+ordinary inventory fixture with no open container: stone17 in slot9, helmet in
+slot10, shield in slot11, named damage7 diamond sword hotbar0, pickaxe hotbar6.
+Equip helmet by Item to head and shield by numeric type to off-hand; each awaited
+result is void and corresponding equipment slot must reflect the item. Unequip
+both, equip sword by numeric type, then unequip hand to an available empty slot.
+Verify all item counts and sword components unchanged, cursor/window clear.
+Select hotbar6 and wait one ordinary physics tick before checking held pickaxe;
+this deliberate common observation barrier does not claim immediate native
+control semantics. Independently inspect server inventory/equipment and selected
+slot after return. Invoke once, retain first failure and stop; no container
+attempt, split repetition, full-inventory toss behavior or retry.
+
+Ordinary equipment reference result: first invocation PASS, source and report in
+/Users/scott/.bb/thread-storage/equipment-common-reference/. Item/numeric equip,
+head/offhand/hand transitions, all awaited void results, unequip, damage7 sword
+components and all five item counts passed. Seven independent server conditions
+confirmed final counts/damage, empty head/offhand and selection6. One physics
+tick after explicit quickbar selection remains part of this common procedure.
+Existing protocol warning retained. All dimensions saved; process exited0 and
+port25575 unbound. The separate container-slot failure is unchanged. This common
+source is ready for a future native fixture with identical ordinary inventory;
+no native execution or broad equip/unequip conformance claim follows from this
+reference pass. Full inventory and other equipment destinations remain separate
+coverage requirements, not exclusions.
