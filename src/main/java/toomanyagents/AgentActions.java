@@ -911,8 +911,10 @@ final class AgentActions {
     private void stopMotion() {
         var velocity = mob.getDeltaMovement();
         GameAccess.stopFollowingMotion(mob);
-        // Stopping an action removes AI inputs, not native gliding momentum.
-        if (scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
+        // The reviewed flight controllers retain passive momentum, including
+        // release after the script lease is cleared. Route cleanup owns gravity.
+        if (ScriptNavigation.reviewedParrotFlightBody(mob)
+            || scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
             mob.setDeltaMovement(velocity);
     }
 

@@ -25,3 +25,10 @@ Narrow check performed: standalone Java21 compilation of ScriptNavigation agains
 Integration boundary reported to root: ScriptNavigation cleanup preserves velocity and runs the exact original controller's native WAIT, leaving replacements untouched. Existing AgentActions.finish subsequently invokes generic stopMotion/GameAccess.stopFollowingMotion, which clears X/Z velocity and queues a current-position MOVE_TO. That outer cleanup is outside this slice; preserving horizontal passive momentum through the entire outer action termination remains an integration follow-up, not an established property of the current package.
 
 Implementation refinement agreed before native changes: only actual shape support at the requested raw integer feet Y permits a grounded endpoint; slabs at a different feet height do not redefine the logical cell. Otherwise use the graph offset. The additional strip from offset down to raw Y remains within the same feet block cells already visited by graph policy callbacks, but native loaded/revision/body+eye shape/entity collision and body-box checks must cover that full strip. Completion in air is a low-speed instantaneous arrival, followed by native gravity restoration; it does not promise an indefinitely hovering body after release. Cleanup must run only the original controller on the original world/body, preserving velocity and leaving any replacement controller untouched.
+
+Root integration: AgentActions.stopMotion preserves the exact reviewed Parrot's
+passive velocity through generic cleanup, including release after scriptId is
+cleared. ScriptNavigation still owns native WAIT gravity restoration; no other
+controller is admitted by this exception. Native cancellation/landing verification
+must inspect both final noGravity and actual passive motion, not merely the
+executor's local stop method. The prepared observe-parrot-route.js remains unrun.
