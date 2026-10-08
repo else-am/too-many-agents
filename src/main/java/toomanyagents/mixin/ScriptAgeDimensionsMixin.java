@@ -6,6 +6,7 @@ import net.minecraft.world.entity.animal.Bee;
 import net.minecraft.world.entity.animal.Panda;
 import net.minecraft.world.entity.animal.camel.Camel;
 import net.minecraft.world.entity.animal.sniffer.Sniffer;
+import net.minecraft.world.entity.animal.Turtle;
 import net.minecraft.world.entity.animal.axolotl.Axolotl;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,6 +24,7 @@ abstract class ScriptAgeDimensionsMixin {
         else if ((Object) this instanceof Panda panda) ScriptNavigation.beforeGroundWrapperDimensions(panda);
         else if ((Object) this instanceof Camel camel) ScriptNavigation.beforeGroundWrapperDimensions(camel);
         else if ((Object) this instanceof Sniffer sniffer) ScriptNavigation.beforeGroundWrapperDimensions(sniffer);
+        else if ((Object) this instanceof Turtle turtle) ScriptNavigation.beforeTurtleDimensions(turtle);
         else if ((Object) this instanceof Axolotl axolotl) ScriptNavigation.beforeAxolotlAgeDimensions(axolotl);
     }
 }

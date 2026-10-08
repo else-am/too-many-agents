@@ -3,6 +3,7 @@ package toomanyagents.mixin;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.animal.camel.Camel;
 import net.minecraft.world.entity.animal.sniffer.Sniffer;
+import net.minecraft.world.entity.animal.Turtle;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
@@ -22,6 +23,7 @@ abstract class VehicleMovementMixin {
     private void beforeReviewedGroundPoseDimensions(EntityDataAccessor<?> key, CallbackInfo callback) {
         if ((Object) this instanceof Camel camel) ScriptNavigation.beforeGroundWrapperDimensions(camel);
         else if ((Object) this instanceof Sniffer sniffer) ScriptNavigation.beforeGroundWrapperDimensions(sniffer);
+        else if ((Object) this instanceof Turtle turtle) ScriptNavigation.beforeTurtleDimensions(turtle);
     }
 
     @Inject(method = "move", at = @At("HEAD"), cancellable = true)

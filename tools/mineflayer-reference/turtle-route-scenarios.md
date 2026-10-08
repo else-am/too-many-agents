@@ -34,3 +34,28 @@ ordinary distance16/20 crossings use the actual equations, not a frozen branch.
 Native egg-goal execution is not part of selected movement. Dry/surface modes
 remain pending work. Compilation and source review are not native convergence,
 packaged-hook or cancellation evidence.
+
+Additional source criteria before implementation: crossing home radius16 changes
+that tick's speed reduction, not captured-state validity; radius20 is tested at
+the predicted post-move position for sink. Baby reduction follows the home16
+reduction in float arithmetic, then active .125F interpolation. Candidate idle
+still adds +.005 before native speed0, whereas terminal cleanup performs no
+controller tick and therefore adds no buoyancy. Actual prepared state must match
+the selected pure command and be re-preflighted before exactly one travel.
+
+Implementation handoff: `native-turtle-submerged-post-tick`, existing
+`locomotion:submerged`/dimension-derived offset, canSwim and zero ground-jump
+fields. Up to11 pure candidates (idle plus two headings/five modifiers); one
+actual selected controller preparation, checked against expected native output,
+then actual-state re-preflight and one travel. The existing .3 route corridor,
+.12 arrival coordinates and .03 velocity threshold are unchanged. All failures
+after preparation retain `route_turtle_prepared_failed`, without replay.
+Speed history survives start, per-frame reset and intermediate edges; terminal
+cleanup alone clears it, without an idle controller tick. Current home-distance
+branches are evaluated per candidate, including post-move sink.
+
+Actual generated-bytecode source-target/order checks and standalone Java21
+compilation passed. The access overlay changes only the two nested class
+visibilities and two native getter visibilities for compilation. No full build,
+game or runtime probe ran. Native convergence, packaged mixin execution,
+cancellation, threshold crossings and growth/scute behavior remain UNRUN.

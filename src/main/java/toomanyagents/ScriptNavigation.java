@@ -28,6 +28,7 @@ import net.minecraft.world.entity.animal.frog.Frog;
 import net.minecraft.world.entity.animal.Panda;
 import net.minecraft.world.entity.animal.camel.Camel;
 import net.minecraft.world.entity.animal.sniffer.Sniffer;
+import net.minecraft.world.entity.animal.Turtle;
 import net.minecraft.world.entity.ai.control.JumpControl;
 import net.minecraft.world.entity.ai.navigation.GroundPathNavigation;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
@@ -77,7 +78,7 @@ import java.util.function.Supplier;
 /** Executes supplied edges; never asks the native navigator to find a route. Server thread only. */
 public final class ScriptNavigation {
     private static final Map<Entity, ScriptNavigation> OWNED = new IdentityHashMap<>();
-    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, SNIFFER, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
+    private enum Physics { UNSUPPORTED, ORDINARY, FOX, PANDA, CAMEL, SNIFFER, DROWNED, DROWNED_WATER, DROWNED_SWIM, FISH, TADPOLE, DOLPHIN, AXOLOTL, FROG, GUARDIAN, TURTLE, SLIME, MAGMA, RABBIT, PARROT, ALLAY, BEE }
     private static final int MAX_NODES = 128, MAX_EDITS = 128, MAX_TICKS = 2400, EDGE_TICKS = 240;
     // Native MagmaCube waits up to 116 grounded command ticks per hop.
     private static final int MAGMA_EDGE_TICKS = 720, MAGMA_MAX_DELAY = 116, HOP_FLIGHT_TICKS = 100;
@@ -148,6 +149,13 @@ public final class ScriptNavigation {
     private Vec3 drownedHold;
     private AABB drownedPolicyVolume, drownedInitialVolume;
     private DryStep drownedStep;
+    private PathNavigation turtleNavigation;
+    private LivingEntity turtleTarget;
+    private BlockPos turtleHome;
+    private Pose turtlePose;
+    private boolean turtleBaby, turtleGoingHome, turtleCanFloat, turtlePrepared, turtleControlTick, turtleTravelTick;
+    private float turtleWidth, turtleHeight, turtleEyeHeight;
+    private DryStep turtleStep;
     private Sniffer.State snifferState;
     private boolean snifferPrepared;
     private boolean groundBaby;
@@ -177,6 +185,7 @@ public final class ScriptNavigation {
         }
     }
     private record SnifferControl(MoveControl.Operation before, MoveControl.Operation after, boolean kick) {}
+    private record TurtleCommand(boolean active, Vec3 wanted, double modifier, float yaw, float speed, Vec3 preparedVelocity, DryStep step) {}
     private record HopInput(float yaw, double modifier) {}
     private record SwimStep(Vec3 wanted, double modifier, float speed, float yaw, Vec3 after, Vec3 velocity) {}
     private record Motion(Vec3 delta, boolean ground, boolean wall) {}
@@ -243,6 +252,14 @@ public final class ScriptNavigation {
         if (smoothSwimmer(physics)) {
             smoothNavigation = mob.getNavigation(); smoothTarget = mob.getTarget(); smoothPose = mob.getPose();
             smoothWidth = mob.getBbWidth(); smoothHeight = mob.getBbHeight(); smoothEyeHeight = mob.getEyeHeight();
+        }
+        turtlePrepared = false; turtleStep = null;
+        if (physics == Physics.TURTLE) {
+            Turtle turtle = (Turtle) mob;
+            turtleNavigation = mob.getNavigation(); turtleTarget = mob.getTarget(); turtleHome = turtle.getHomePos().immutable();
+            turtlePose = mob.getPose(); turtleBaby = mob.isBaby(); turtleGoingHome = turtle.isGoingHome();
+            turtleCanFloat = turtleNavigation.canFloat();
+            turtleWidth = mob.getBbWidth(); turtleHeight = mob.getBbHeight(); turtleEyeHeight = mob.getEyeHeight();
         }
         guardianPrepared = false; guardianStep = null;
         if (physics == Physics.GUARDIAN) {
@@ -327,7 +344,8 @@ public final class ScriptNavigation {
         checkVolume(relevant);
         checkDryVolume(mob.getBoundingBox());
         if (fishMode(physics) || physics == Physics.DROWNED_WATER) requireSubmerged(mob.getBoundingBox());
-        clearControls();
+        if (physics == Physics.TURTLE) { requireMode(); clearInputs(); }
+        else clearControls();
         movementFailure = null;
         active = true;
         OWNED.put(mob, this);
@@ -350,7 +368,7 @@ public final class ScriptNavigation {
             requireMode();
             if (!inside(mob.position())) throw error("route_outside_body_box");
             clearInputs();
-            rabbitStep = null; flightStep = null; drownedStep = null; smoothStep = null; guardianStep = null;
+            rabbitStep = null; flightStep = null; drownedStep = null; smoothStep = null; guardianStep = null; turtleStep = null;
             if (!trajectory.isEmpty() && frameIndex == trajectory.size()) { trajectory.clear(); frameIndex = 0; clearControls(); }
             Frame predicted = null;
             SwimStep swimming = null;
@@ -377,6 +395,9 @@ public final class ScriptNavigation {
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (smoothSwimmer(physics)) {
                         prepareSmoothSwim(returnTo);
+                        if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
+                    } else if (physics == Physics.TURTLE) {
+                        prepareTurtle(returnTo);
                         if (arrived(returnTo)) { swimHold = returnTo; returnTo = null; }
                     } else if (physics == Physics.GUARDIAN) {
                         prepareGuardian(returnTo);
@@ -414,6 +435,10 @@ public final class ScriptNavigation {
                     } else if (smoothSwimmer(physics)) {
                         phase = "swimming";
                         prepareSmoothSwim(target);
+                        checkArrival = true;
+                    } else if (physics == Physics.TURTLE) {
+                        phase = "swimming";
+                        prepareTurtle(target);
                         checkArrival = true;
                     } else if (physics == Physics.GUARDIAN) {
                         phase = "swimming";
@@ -479,6 +504,13 @@ public final class ScriptNavigation {
                 if (active) prepareSmoothSwim(swimHold);
                 else smoothStep = smoothSwimTravelStep();
             }
+            if (physics == Physics.TURTLE && turtleStep == null) {
+                if (active) prepareTurtle(swimHold);
+                else {
+                    turtleStep = turtleTravelStep(mob.getDeltaMovement(), mob.getSpeed(), mob.getYRot());
+                    if (turtleStep == null) throw error("route_turtle_edge_unexecutable");
+                }
+            }
             if (physics == Physics.GUARDIAN && guardianStep == null) {
                 if (active) prepareGuardian(swimHold);
                 else {
@@ -488,6 +520,8 @@ public final class ScriptNavigation {
             }
             // Exactly one native travel on a successful tick, including mining and building waits.
             travel();
+            if (turtleStep != null && (mob.position().distanceTo(turtleStep.after) > 0.01
+                || mob.getDeltaMovement().distanceTo(turtleStep.velocity) > 0.01)) throw error("route_turtle_trajectory_changed");
             if (guardianStep != null && (mob.position().distanceTo(guardianStep.after) > 0.01
                 || mob.getDeltaMovement().distanceTo(guardianStep.velocity) > 0.01)) throw error("route_guardian_trajectory_changed");
             if (smoothStep != null && (mob.position().distanceTo(smoothStep.after) > 0.01
@@ -520,6 +554,8 @@ public final class ScriptNavigation {
                 throw new IllegalStateException("route_rabbit_prepared_failed: " + failure.getMessage(), failure);
             if (flightMode(physics) && flightPrepared)
                 throw new IllegalStateException("route_flight_prepared_failed: " + failure.getMessage(), failure);
+            if (physics == Physics.TURTLE && turtlePrepared)
+                throw new IllegalStateException("route_turtle_prepared_failed: " + failure.getMessage(), failure);
             if (physics == Physics.GUARDIAN && guardianPrepared)
                 throw new IllegalStateException("route_guardian_prepared_failed: " + failure.getMessage(), failure);
             if (smoothSwimmer(physics) && smoothPrepared)
@@ -536,6 +572,7 @@ public final class ScriptNavigation {
         requireThread();
         boolean cleanup = (!hoverMode(physics) || ownsHoverCleanup())
             && (!smoothSwimmer(physics) || ownsSmoothSwimCleanup())
+            && (physics != Physics.TURTLE || ownsTurtleCleanup())
             && (physics != Physics.GUARDIAN || ownsGuardianCleanup())
             && (puffState < 0 || ownsPufferfishCleanup())
             && (!drownedWaterMode(physics) || ownsDrownedWaterCleanup())
@@ -589,7 +626,8 @@ public final class ScriptNavigation {
 
     private void finishEdge() {
         index++; edgeStarted = false; trajectory.clear(); frameIndex = 0; direct = null;
-        clearControls();
+        if (physics == Physics.TURTLE && !stopRequested && index < nodes.size()) clearInputs();
+        else clearControls();
         if (stopRequested || index == nodes.size()) complete();
     }
 
@@ -1445,6 +1483,175 @@ public final class ScriptNavigation {
             throw error("route_fish_controller_unavailable");
     }
 
+    /** Eleven pure input candidates at most; execute only the chosen native controller tick. */
+    private void prepareTurtle(Vec3 goal) {
+        requireTurtleLease();
+        if (turtleStep != null) throw error("route_duplicate_turtle_control");
+        Vec3 pos = mob.position(), velocity = mob.getDeltaMovement();
+        double baseSpeed = mob.getAttributeValue(Attributes.MOVEMENT_SPEED) / (mob.isSprinting() ? 1.3 : 1);
+        float history = turtleAdjustedSpeed();
+        if (!Double.isFinite(baseSpeed) || baseSpeed <= 0 || baseSpeed > 4 || !Float.isFinite(history) || history < 0 || history > 4
+            || !Double.isFinite(velocity.lengthSqr()) || !Double.isFinite(goal.distanceToSqr(pos))) throw error("route_turtle_input_invalid");
+        Vec3 correction = goal.subtract(pos).scale(0.015).subtract(velocity.scale(0.4));
+        // This estimate chooses input only. The travel tail below evaluates sink at its actual predicted destination.
+        double vertical = correction.y + (turtleSinks(pos) ? 0.005 / 0.9 : 0) - 0.005;
+        double horizontal = correction.horizontalDistance();
+        double wantedSpeed = Math.max(horizontal, Math.abs(vertical)) / 0.1;
+        double modifier = Math.clamp((wantedSpeed - 0.875 * history) / (0.125 * baseSpeed), 0, 1);
+        double heading = horizontal > 1e-10 ? Math.atan2(correction.z, correction.x) * 180 / Math.PI - 90 : mob.getYRot();
+        Vec3 toward = goal.subtract(pos);
+        double goalHeading = toward.horizontalDistanceSqr() > 1e-12 ? Math.atan2(toward.z, toward.x) * 180 / Math.PI - 90 : heading;
+        TurtleCommand chosen = turtleCommand(false, heading, 0, vertical, baseSpeed);
+        double score = chosen == null ? Double.POSITIVE_INFINITY : turtleScore(chosen, goal);
+        for (double yaw : new double[]{heading, goalHeading}) {
+            for (double input : new double[]{modifier, 0, 0.25, 0.5, 1}) {
+                TurtleCommand candidate = turtleCommand(true, yaw, input, vertical, baseSpeed);
+                if (candidate == null) continue;
+                double candidateScore = turtleScore(candidate, goal);
+                if (candidateScore < score) { chosen = candidate; score = candidateScore; }
+            }
+        }
+        if (chosen == null) throw error("route_turtle_edge_unexecutable");
+        requireTurtleLease();
+        turtlePrepared = true;
+        mob.setSprinting(false);
+        controller.setWantedPosition(chosen.wanted.x, chosen.wanted.y, chosen.wanted.z, chosen.modifier);
+        turtleControlTick = chosen.active;
+        try { controller.tick(); }
+        finally { turtleControlTick = false; }
+        requireTurtleLease();
+        if (!pos.equals(mob.position()) || Math.abs(mob.getSpeed() - chosen.speed) > 1e-6
+            || Math.abs(Mth.wrapDegrees(mob.getYRot() - chosen.yaw)) > 1e-4
+            || mob.getDeltaMovement().distanceTo(chosen.preparedVelocity) > 1e-8
+            || Math.abs(mob.zza - chosen.speed) > 1e-6 || mob.xxa != 0 || mob.yya != 0)
+            throw error("route_turtle_preparation_changed");
+        turtleStep = turtleTravelStep(mob.getDeltaMovement(), mob.getSpeed(), mob.getYRot());
+        if (turtleStep == null) throw error("route_turtle_edge_unexecutable");
+    }
+
+    private float turtleAdjustedSpeed() {
+        float speed = mob.getSpeed();
+        if (!turtleHome.closerToCenterThan(mob.position(), 16)) speed = Math.max(speed / 2.0F, 0.08F);
+        if (turtleBaby) speed = Math.max(speed / 3.0F, 0.06F);
+        return speed;
+    }
+
+    private boolean turtleSinks(Vec3 position) {
+        return turtleTarget == null && (!turtleGoingHome || !turtleHome.closerToCenterThan(position, 20));
+    }
+
+    private TurtleCommand turtleCommand(boolean activeControl, double wantedYaw, double modifier, double vertical, double baseSpeed) {
+        Vec3 pos = mob.position(), wanted = pos, velocity = mob.getDeltaMovement().add(0, 0.005, 0);
+        float speed = 0, yaw = mob.getYRot();
+        if (activeControl) {
+            speed = Mth.lerp(0.125F, turtleAdjustedSpeed(), (float) (modifier * baseSpeed));
+            double up = speed > 1e-8 ? Math.clamp(vertical / (speed * 0.1), -0.999, 0.999) : 0;
+            double horizontal = Math.sqrt(1 - up * up), angle = wantedYaw * Math.PI / 180;
+            wanted = pos.add(-Math.sin(angle) * horizontal, up, Math.cos(angle) * horizontal);
+            Vec3 delta = wanted.subtract(pos);
+            if (!Double.isFinite(delta.lengthSqr()) || delta.lengthSqr() < 1e-12 || delta.lengthSqr() > 1.000001)
+                throw error("route_turtle_input_invalid");
+            float nativeWanted = (float) (Mth.atan2(delta.z, delta.x) * 180.0F / (float) Math.PI) - 90.0F;
+            yaw = guardianYaw(yaw, nativeWanted); // identical native MoveControl.rotlerp
+            velocity = velocity.add(0, (double) speed * (delta.y / delta.length()) * 0.1, 0);
+        }
+        DryStep step = turtleTravelStep(velocity, speed, yaw);
+        return step == null ? null : new TurtleCommand(activeControl, wanted, modifier, yaw, speed, velocity, step);
+    }
+
+    private double turtleScore(TurtleCommand command, Vec3 goal) {
+        Vec3 toward = goal.subtract(command.step.after);
+        double score = toward.lengthSqr() + command.step.velocity.lengthSqr() * 4;
+        double horizontal = toward.horizontalDistance();
+        if (horizontal > 1e-8) {
+            double yaw = command.yaw * Math.PI / 180;
+            double facing = (-Math.sin(yaw) * toward.x + Math.cos(yaw) * toward.z) / horizontal;
+            score += 0.05 * Math.min(1, horizontal * horizontal) * (1 - facing);
+        }
+        return score;
+    }
+
+    private DryStep turtleTravelStep(Vec3 prepared, float speed, float yaw) {
+        requireMode();
+        if (!Double.isFinite(prepared.lengthSqr()) || !Float.isFinite(speed) || speed < 0 || speed > 4 || !Float.isFinite(yaw))
+            throw error("route_turtle_input_invalid");
+        Vec3 velocity = prepared;
+        if ((double) speed * speed >= 1e-7) {
+            double acceleration = Math.min(1, speed) * (double) 0.1F;
+            float radians = yaw * ((float) Math.PI / 180);
+            velocity = velocity.add(-acceleration * Mth.sin(radians), 0, acceleration * Mth.cos(radians));
+        }
+        Vec3 prospective = mob.position().add(velocity);
+        if (!inside(prospective) || !withinEdge(prospective)) return null;
+        AABB sweep = fishVolume(mob.getBoundingBox().expandTowards(velocity));
+        checkVolume(sweep.expandTowards(0, 1, 0));
+        for (BlockPos pos : BlockPos.betweenClosed(BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
+            BlockPos.containing(sweep.maxX - EPS, sweep.maxY - EPS, sweep.maxZ - EPS))) {
+            var state = level.getBlockState(pos);
+            var fluid = state.getFluidState();
+            if (!state.is(Blocks.WATER) || !fluid.is(FluidTags.WATER)
+                || pos.getY() + fluid.getHeight(level, pos) + EPS < Math.min(sweep.maxY, pos.getY() + 1)) return null;
+        }
+        if (!level.noCollision(mob, sweep)) return null;
+        Motion motion = collide(mob.getBoundingBox(), velocity, mob.onGround());
+        if (Math.abs(velocity.y - motion.delta.y) > EPS) return null;
+        Vec3 after = mob.position().add(motion.delta);
+        if (!inside(after) || !withinEdge(after)) return null;
+        Vec3 remaining = new Vec3(Mth.equal(velocity.x, motion.delta.x) ? velocity.x : 0, velocity.y,
+            Mth.equal(velocity.z, motion.delta.z) ? velocity.z : 0).scale(0.9);
+        // Turtle evaluates home20 after its native move, not at the old position.
+        if (turtleSinks(after)) remaining = remaining.add(0, -0.005, 0);
+        return new DryStep(after, remaining);
+    }
+
+    private void requireTurtleLease() {
+        requireMode();
+        if (!active || OWNED.get(mob) != this || !owner.vehicleLeaseActive(lease)) throw error("script_no_longer_controls_body");
+    }
+
+    public static boolean selectedTurtleControl(Turtle body, MoveControl control, PathNavigation navigation) {
+        if (body.level().isClientSide) return false;
+        ScriptNavigation route = OWNED.get(body);
+        if (route == null || route.physics != Physics.TURTLE || !route.turtleControlTick
+            || route.controller != control || route.turtleNavigation != navigation) return false;
+        try { route.requireThread(); route.requireTurtleLease(); return true; }
+        catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
+    }
+
+    private boolean ownsTurtleCleanup() {
+        return mob.level() == level && !mob.isRemoved() && mob.getMoveControl() == controller
+            && mob.getNavigation() == turtleNavigation && (OWNED.get(mob) == null || OWNED.get(mob) == this)
+            && (owner.currentScriptId() == null || lease.equals(owner.currentScriptId()));
+    }
+
+    private void clearTurtleControls() {
+        if (!ownsTurtleCleanup()) return;
+        turtleControlTick = false;
+        clearInputs();
+        mob.setSpeed(0);
+        mob.setSprinting(false);
+        controller.setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0);
+        // Do not tick: Turtle's native idle branch adds buoyancy, too.
+    }
+
+    /** Release old geometry before native growth/pose refresh; native scute/drop behavior proceeds. */
+    public static void beforeTurtleDimensions(Turtle body) {
+        if (body.getClass() != Turtle.class || body.level().isClientSide || body.level().getServer() == null
+            || !body.level().getServer().isSameThread()) return;
+        ScriptNavigation route = OWNED.get(body);
+        if (route == null || !route.active || route.physics != Physics.TURTLE
+            || body.isBaby() == route.turtleBaby && body.getPose() == route.turtlePose) return;
+        if (route.movementFailure == null) route.movementFailure = error("route_turtle_dimensions_changed");
+        try {
+            if (body.level() == route.level && route.owner.vehicleLeaseActive(route.lease) && route.ownsTurtleCleanup()) route.stop();
+        } catch (RuntimeException | LinkageError cleanup) {
+            if (cleanup != route.movementFailure) route.movementFailure.addSuppressed(cleanup);
+        } finally {
+            OWNED.remove(body, route);
+            route.active = false;
+        }
+    }
+
     /** Nine pure candidates at most; only the selected native branch is executed. */
     private void prepareGuardian(Vec3 goal) {
         requireGuardianLease();
@@ -1982,10 +2189,11 @@ public final class ScriptNavigation {
         drownedTravelTick = drownedWaterMode(physics);
         smoothTravelTick = smoothSwimmer(physics);
         guardianTravelTick = physics == Physics.GUARDIAN;
+        turtleTravelTick = physics == Physics.TURTLE;
         hoverTravelTick = hoverMode(physics);
         mob.setNoAi(false);
         try { mob.travel(new Vec3(mob.xxa, mob.yya, mob.zza)); }
-        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; guardianTravelTick = false; hoverTravelTick = false; }
+        finally { mob.setNoAi(true); mob.setJumping(false); drownedTravelTick = false; smoothTravelTick = false; guardianTravelTick = false; turtleTravelTick = false; hoverTravelTick = false; }
         requireMode();
         if (!inside(mob.position())) throw error("route_leaves_body_box");
         if (direct != null && !withinEdge(mob.position())) throw error("route_leaves_direct_corridor");
@@ -1994,13 +2202,14 @@ public final class ScriptNavigation {
     private void clearInputs() {
         mob.getNavigation().stop();
         mob.setXxa(0); mob.setYya(0); mob.setZza(0);
-        if (physics != Physics.FISH && physics != Physics.GUARDIAN) mob.setSpeed(0);
+        if (physics != Physics.FISH && physics != Physics.GUARDIAN && physics != Physics.TURTLE) mob.setSpeed(0);
         if (physics != Physics.RABBIT) mob.getJumpControl().tick();
         mob.setJumping(false);
     }
 
     private void clearControls() {
         if (groundWrapper(physics) && !ownsGroundCleanup()) return;
+        if (physics == Physics.TURTLE) { clearTurtleControls(); return; }
         if (physics == Physics.GUARDIAN) { clearGuardianControls(); return; }
         if (smoothSwimmer(physics) && !ownsSmoothSwimCleanup()) return;
         if (drownedWaterMode(physics) && !ownsDrownedWaterCleanup()) return;
@@ -2233,6 +2442,7 @@ public final class ScriptNavigation {
                 : mode == Physics.DROWNED_SWIM ? "native-drowned-true-intent-post-tick"
                 : mode == Physics.AXOLOTL ? "native-axolotl-submerged-post-tick"
                 : mode == Physics.FROG ? "native-frog-submerged-post-tick"
+                : mode == Physics.TURTLE ? "native-turtle-submerged-post-tick"
                 : mode == Physics.GUARDIAN ? "native-guardian-submerged-post-tick"
                 : mode == Physics.TADPOLE ? "native-tadpole-submerged-post-tick"
                 : mode == Physics.DOLPHIN ? "native-dolphin-submerged-post-tick" : "native-fish-submerged-post-tick");
@@ -2347,6 +2557,9 @@ public final class ScriptNavigation {
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()
             && smoothSwimParameters((SmoothSwimmingMoveControl) mob.getMoveControl()))
             return mob.getClass() == Dolphin.class ? Physics.DOLPHIN : Physics.TADPOLE;
+        if (mob.getClass() == Turtle.class && control == Turtle.TurtleMoveControl.class
+            && mob.getNavigation().getClass() == Turtle.TurtlePathNavigation.class
+            && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()) return Physics.TURTLE;
         if ((mob.getClass() == Guardian.class || mob.getClass() == ElderGuardian.class) && control == Guardian.GuardianMoveControl.class
             && mob.getNavigation().getClass() == WaterBoundPathNavigation.class && mob.getLookControl().getClass() == LookControl.class
             && mob.isInWater() && mob.isEyeInFluid(FluidTags.WATER) && !mob.isInLava()) return Physics.GUARDIAN;
@@ -2462,6 +2675,16 @@ public final class ScriptNavigation {
             if (physics == Physics.FROG && smoothNavigation.canFloat() != frogCanFloat) throw error("route_frog_state_changed");
             if ((physics == Physics.DOLPHIN || physics == Physics.AXOLOTL || physics == Physics.FROG) && mob.stuckSpeedMultiplier.lengthSqr() > 1e-7)
                 throw error(smoothReason("stuck_pending"));
+            requireSubmerged(mob.getBoundingBox());
+        }
+        if (physics == Physics.TURTLE) {
+            Turtle turtle = (Turtle) mob;
+            if ((!mob.isNoAi() && !turtleTravelTick) || mob.getNavigation() != turtleNavigation || turtleNavigation.getPath() != null
+                || turtleNavigation.canFloat() != turtleCanFloat || mob.getTarget() != turtleTarget
+                || !turtle.getHomePos().equals(turtleHome) || turtle.isGoingHome() != turtleGoingHome
+                || mob.isBaby() != turtleBaby || mob.getPose() != turtlePose
+                || mob.getBbWidth() != turtleWidth || mob.getBbHeight() != turtleHeight || mob.getEyeHeight() != turtleEyeHeight
+                || mob.stuckSpeedMultiplier.lengthSqr() > 1e-7) throw error("route_turtle_state_changed");
             requireSubmerged(mob.getBoundingBox());
         }
         if (physics == Physics.GUARDIAN) {
@@ -2592,15 +2815,15 @@ public final class ScriptNavigation {
             AABB sweep = entity.getBoundingBox().expandTowards(delta);
             AABB checked = clipped ? sweep : sweep.expandTowards(0, route.mob.maxUpStep(), 0);
             route.checkVolume(flightMode(route.physics) ? route.flightVolume(checked)
-                : (drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN) ? route.fishVolume(checked) : checked);
+                : (drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN || route.physics == Physics.TURTLE) ? route.fishVolume(checked) : checked);
             if (clipped) {
                 Vec3 next = entity.position().add(delta);
                 if (!route.inside(next)) throw error("route_leaves_body_box");
                 if (!route.withinEdge(next)) throw error("route_leaves_selected_edge");
                 route.checkDryVolume(sweep);
                 if (fishMode(route.physics) || route.physics == Physics.DROWNED_WATER) route.requireSubmerged(sweep);
-                if ((drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
-                    throw error(route.physics == Physics.GUARDIAN ? "route_guardian_volume_obstructed"
+                if ((drownedWaterMode(route.physics) || smoothSwimmer(route.physics) || route.physics == Physics.GUARDIAN || route.physics == Physics.TURTLE) && !route.level.noCollision(route.mob, route.fishVolume(sweep)))
+                    throw error(route.physics == Physics.TURTLE ? "route_turtle_volume_obstructed" : route.physics == Physics.GUARDIAN ? "route_guardian_volume_obstructed"
                         : smoothSwimmer(route.physics) ? route.smoothReason("volume_obstructed")
                         : route.physics == Physics.DROWNED_SWIM ? "route_drowned_swim_volume_obstructed" : "route_drowned_water_volume_obstructed");
             }
@@ -2727,7 +2950,7 @@ public final class ScriptNavigation {
         } catch (RuntimeException failure) { route.rejectMovement(failure); return false; }
     }
 
-    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.DROWNED_SWIM || mode == Physics.GUARDIAN || smoothSwimmer(mode); }
+    private static boolean fishMode(Physics mode) { return mode == Physics.FISH || mode == Physics.DROWNED_SWIM || mode == Physics.GUARDIAN || mode == Physics.TURTLE || smoothSwimmer(mode); }
 
     private static boolean drownedWaterMode(Physics mode) { return mode == Physics.DROWNED_WATER || mode == Physics.DROWNED_SWIM; }
 

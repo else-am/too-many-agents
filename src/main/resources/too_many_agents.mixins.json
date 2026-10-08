@@ -3,7 +3,7 @@
   "minVersion": "0.8",
   "package": "toomanyagents.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": ["ServerLevelMixin", "ContainerOpenersCounterMixin", "EntityTeleportMixin", "LivingEntityTeleportMixin", "ServerChunkCacheMixin", "FakePlayerPresentationMixin", "LivingEntityCollectionMixin", "VehicleLivingMixin", "VehicleMinecartMixin", "VehicleMovementMixin", "FishMoveControlMixin", "SmoothSwimmingMoveControlMixin", "DrownedMoveControlMixin", "GuardianMoveControlMixin", "PufferfishSizeMixin", "ScriptAgeDimensionsMixin", "SnifferDimensionsMixin"],
+  "mixins": ["ServerLevelMixin", "ContainerOpenersCounterMixin", "EntityTeleportMixin", "LivingEntityTeleportMixin", "ServerChunkCacheMixin", "FakePlayerPresentationMixin", "LivingEntityCollectionMixin", "VehicleLivingMixin", "VehicleMinecartMixin", "VehicleMovementMixin", "FishMoveControlMixin", "SmoothSwimmingMoveControlMixin", "DrownedMoveControlMixin", "GuardianMoveControlMixin", "TurtleMoveControlMixin", "PufferfishSizeMixin", "ScriptAgeDimensionsMixin", "SnifferDimensionsMixin"],
   "client": ["KeyboardHandlerMixin", "ScreenMixin"],
   "injectors": { "defaultRequire": 1 }
 }
