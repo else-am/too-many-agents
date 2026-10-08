@@ -80,6 +80,7 @@ async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
   if (process.argv.includes('--placement-refusal')) return placementRefusalScenario();
+  if (process.argv.includes('--craft-missing')) return missingMaterialsScenario();
   if (process.argv.includes('--dig-unsuitable-tool') || process.argv.includes('--dig-cancel')) return miningScenario();
   if (process.argv.includes('--equipment') || process.argv.includes('--equipment-common')) return equipmentScenario();
   if (process.argv.includes('--world-queries')) return worldQueryScenario();
@@ -117,6 +118,29 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function missingMaterialsScenario() {
+  const source = await readFile(new URL('./craft-missing-common.js', import.meta.url), 'utf8');
+  const report = { scenario:'craft-missing',backend:'mineflayer',minecraft:'1.21.1',mineflayer:'4.39.0',
+    source,sourceSha256:createHash('sha256').update(source).digest('hex'),startedAt:new Date().toISOString(),
+    clientErrors,protocolWarnings,serverConfirmed:false };
+  try {
+    await consoleCommands(['gamemode survival Reference','clear Reference']);
+    await bot.waitForTicks(5);
+    report.invokedAt = new Date().toISOString();
+    report.result = await new (Object.getPrototypeOf(async function(){}).constructor)('bot','Vec3',source)(bot,Vec3);
+    const marker = randomUUID();
+    const messages = await consoleCommands([`execute unless data entity Reference Inventory[] run say ${marker}`]);
+    report.confirmations = {marker,messages};
+    assert(messages.some(message => message.includes(marker)), 'Server inventory must remain empty');
+    report.serverConfirmed = true;
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'craft-missing-reference.json'),JSON.stringify(report,null,2)+'\n');
+  }
+  console.log(JSON.stringify({scenario:report.scenario,result:report.result,serverConfirmed:report.serverConfirmed}));
 }
 
 async function miningScenario() {

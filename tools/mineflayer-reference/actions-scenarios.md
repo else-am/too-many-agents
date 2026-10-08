@@ -164,3 +164,26 @@ reference adds numeric offhand, hand unequip, void results and whole component
 assertions that this native call did NOT establish. Do not promote these gaps or
 reinterpret the original reference failure. Full raw events/source/results:
 /Users/scott/.bb/thread-storage/thr_xykqkgui57/equipment-provenance-recovery.json.
+
+## Missing crafting materials — preauthored
+
+Isolated survival Reference with empty inventory/cursor and no open window.
+recipesAll(crafting_table,null,null) must expose a 2x2 recipe independently of
+stock; recipesFor(crafting_table,null,1,null) must return an empty array. Call
+craft on exactly one discovered recipe once. It must reject without producing
+items or leaving cursor/menu state; record actual error, not exact cross-backend
+error wording. Recheck after five ticks and independently confirm empty server
+inventory. No fixture crafting table or ingredients are supplied, so no native
+world change is needed. Stop on first failure; no retry/repair/alternate recipe.
+This is distinct from the prior successful/partially divergent gathering-craft
+runs and does not alter their evidence.
+
+Missing-materials reference result: first invocation PASS,11 recipesAll entries,
+0 available recipes, one Error/Error: missing ingredient rejection. No inventory,
+cursor or menu change immediately or after5ticks; independent server inventory
+condition passed. All dimensions saved, process exited0 and port25575 unbound.
+Exact source/result/log: /Users/scott/.bb/thread-storage/craft-missing-reference/.
+Existing protocol warning retained. Native counterpart remains unrun; use a fresh
+empty disposable body through its actual bound script, without changing any
+existing body's belongings. No exact error wording parity, successful crafting,
+partial ingredient consumption or full-inventory behavior is implied.

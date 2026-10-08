@@ -10296,6 +10296,26 @@
         ]
       },
       "limitations": "Native source differs from original failed reference only by trailing newline. New passing ordinary reference shares only selected outcomes; native call did not assert void returns, ordinary numeric offhand, hand unequip or whole component equality. Auxiliary observation provenance and packaged artifact identity unavailable. No member promotion."
+    },
+    "reference-craft-missing-materials": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/craft-missing-common.js",
+      "subjects": [
+        "mineflayer.Bot.craft",
+        "mineflayer.Bot.recipesAll",
+        "mineflayer.Bot.recipesFor"
+      ],
+      "scope": "Empty inventory:11 recipesAll results,0 recipesFor results, one craft rejection with no inventory/cursor/menu change after5ticks; independent server empty-inventory confirmation.",
+      "result": "passed",
+      "sourceSha256": "16f0e7f94d2bb06b72466a9872b23ba0dfcae40ae8cc286ca8b1b0da8001ad01",
+      "report": {
+        "path": "run/mineflayer-reference/craft-missing-reference.json",
+        "sha256": "8ecbed4ba8a58da373f71b1bb97d5acfee997fb33df757ed191a61f5e41d4219",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "One missing-materials2x2 case only; native exact-source counterpart pending. Prior gathering/craft result difference retained; no broad crafting promotion. Existing protocol warning retained."
     }
   },
   "reviewNotes": {
