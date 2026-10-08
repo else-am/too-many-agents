@@ -2439,7 +2439,8 @@
       "kind": "library-differential",
       "path": "tools/mineflayer-reference/recipes.mjs",
       "subjects": [
-        "prismarine-recipe.Recipe"
+        "prismarine-recipe.Recipe",
+        "prismarine-recipe.RecipeItem"
       ],
       "scope": "Pinned library/guest comparisons. Indexed executable only; no new run, native or whole-API claim.",
       "result": "passed",
