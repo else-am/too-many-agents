@@ -620,9 +620,14 @@ public final class ScriptNavigation {
         double yDirection = speed == 0 ? 0 : Math.clamp((vertical - 0.005) / (speed * 0.1), -0.95, 0.95);
         Vec3 wanted = pos.add(heading.x, yDirection / Math.sqrt(1 - yDirection * yDirection), heading.z);
         Vec3 toward = wanted.subtract(pos);
-        float desiredYaw = (float) (Mth.atan2(toward.z, toward.x) * 180 / (float) Math.PI) - 90;
-        float yaw = mob.getYRot() + Mth.clamp(Mth.wrapDegrees(desiredYaw - mob.getYRot()), -90, 90);
-        if (yaw < 0) yaw += 360; else if (yaw > 360) yaw -= 360;
+        float yaw = mob.getYRot();
+        // Vec3.normalize may return zero for a tiny horizontal correction.
+        // FishMoveControl leaves yaw unchanged for a purely vertical target.
+        if (toward.x != 0 || toward.z != 0) {
+            float desiredYaw = (float) (Mth.atan2(toward.z, toward.x) * 180 / (float) Math.PI) - 90;
+            yaw += Mth.clamp(Mth.wrapDegrees(desiredYaw - yaw), -90, 90);
+            if (yaw < 0) yaw += 360; else if (yaw > 360) yaw -= 360;
+        }
         // FishMoveControl: eye buoyancy, then speed-dependent vertical impulse.
         velocity = velocity.add(0, 0.005, 0);
         if (toward.y != 0) velocity = velocity.add(0, speed * (toward.y / toward.length()) * 0.1, 0);
