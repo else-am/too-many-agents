@@ -1,6 +1,8 @@
 package toomanyagents.mixin;
 
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.animal.camel.Camel;
+import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,6 +16,12 @@ import toomanyagents.ScriptVehicleControls;
 /** Unowned entities take the unchanged native movement path. */
 @Mixin(Entity.class)
 abstract class VehicleMovementMixin {
+    @Inject(method = "onSyncedDataUpdated(Lnet/minecraft/network/syncher/EntityDataAccessor;)V",
+        at = @At(value = "INVOKE", target = "Lnet/minecraft/world/entity/Entity;refreshDimensions()V"))
+    private void beforeCamelPoseDimensions(EntityDataAccessor<?> key, CallbackInfo callback) {
+        if ((Object) this instanceof Camel camel) ScriptNavigation.beforeGroundWrapperDimensions(camel);
+    }
+
     @Inject(method = "move", at = @At("HEAD"), cancellable = true)
     private void ownedMovementBounds(MoverType type, Vec3 delta, CallbackInfo callback) {
         Entity entity = (Entity) (Object) this;
