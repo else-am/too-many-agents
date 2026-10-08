@@ -352,6 +352,8 @@ final class AgentActions {
             || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
             throw startRejection(approachTargets, "invalid_command_block_command");
         if (type.equals("set_settings")) mainHandSetting(request);
+        // Reject stale observations before route preparation or its cleanup can change controls.
+        if (type.equals("route")) ScriptNavigation.validateStartPosition(mob, request);
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));

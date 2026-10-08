@@ -131,6 +131,12 @@ public final class ScriptNavigation {
         this.level = (ServerLevel) mob.level();
     }
 
+    static void validateStartPosition(Mob mob, JsonObject request) {
+        Vec3 start = vector(request.getAsJsonObject("start"));
+        if (mob.position().distanceTo(start) > 0.2)
+            throw ScriptRequestRejection.beforeStart("route_start_changed: requested=" + start + ", actual=" + mob.position());
+    }
+
     void start(JsonObject request) {
         requireThread();
         try { parseStart(request); }
