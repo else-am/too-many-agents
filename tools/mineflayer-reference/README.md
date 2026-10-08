@@ -121,9 +121,16 @@ does not evaluate those claims for the reviewer.
 
 To mark a particular API `supported`, retain its stable key under `entries`,
 attach `evidence` IDs and executable `scenarios` paths, and review the reports.
-The generator requires verified passing **native-integration and live-reference**
-evidence; a library-only pass cannot promote a full native gameplay API. Pending
-members remain pending by default. Applicability changes require explicit review;
+Physical actions and native observations require verified passing
+**native-integration and live-reference** evidence. Explicitly reviewed fixed
+PC1.21.1 data/version members may use `verification: "pinned-library"` with a
+verified **library-differential** report. The generator has an explicit list of
+eligible keys; marking `dig` or a dynamic/native member as library-only rejects.
+Every promotion still requires related subjects, exact scenario/report hashes,
+and reviewed scope. A library pass cannot promote a native gameplay API. Missing
+supporting reports cause validation to fail rather than silently retaining a
+supported claim; point SOURCE_ROOT at the checkout containing the evidence.
+Pending members remain pending by default. Applicability changes require explicit review;
 the generator permits only the explicitly reviewed native-body and connection exclusions.
 
 Current implementation and native-verification gaps are tracked in
@@ -181,3 +188,11 @@ A bounded object audit found XP-orb count/type and the remaining sky-mask JSON
 assignment defects. Those are corrected; native XP observation remains pending.
 World's public sync/async methods are inherited from the selected upstream source,
 with guest-local save/raycast overrides; source review is not a runtime pass.
+
+The current static-registry run at cbb5e22 compares every selected static value,
+10,045 shared index references, 26,684 block-state links and 838 version names.
+Fifty-four individually reviewed fixed-data/version members are recorded as
+supported under that PC1.21.1 library contract. Native biome indexes, dynamic
+codecs and feature installation are excluded from that promotion. These counts
+are not a gameplay-completion percentage. Catalog guard probes rejected a
+library-only dig claim, a modified report hash and an unavailable report.

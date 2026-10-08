@@ -368,6 +368,22 @@ const exclusions = new Set(['mineflayer.createBot', 'mineflayer.Bot.connect',
   'mineflayer.Bot.respawn', 'mineflayer.Bot.physics', 'mineflayer.Bot.physicsEnabled',
   'mineflayer.Bot.acceptResourcePack', 'mineflayer.Bot.denyResourcePack',
   'mineflayer.BotEvents.resourcePack']);
+// Reviewed PC1.21.1 data contracts: no native observation or action is involved.
+// Keep this explicit so an arbitrary gameplay member cannot opt out of native
+// evidence by setting a flag in coverage.json. Dynamic registries are separate.
+const pinnedDataContracts = new Set([
+  'attributes', 'attributesArray', 'attributesByName', 'blockCollisionShapes', 'blockLoot',
+  'blockMappings', 'blocks', 'blocksArray', 'blocksByName', 'blocksByStateId',
+  'blockStates', 'commands', 'defaultSkin', 'effects', 'effectsArray',
+  'effectsByName', 'enchantments', 'enchantmentsArray', 'enchantmentsByName', 'entities',
+  'entitiesArray', 'entitiesByName', 'entityLoot', 'foods', 'foodsArray',
+  'foodsByName', 'instruments', 'instrumentsArray', 'isNewerOrEqualTo', 'isOlderThan',
+  'items', 'itemsArray', 'itemsByName', 'language', 'loginPacket',
+  'mapIcons', 'mapIconsArray', 'mapIconsByName', 'materials', 'mobs',
+  'objects', 'particles', 'particlesArray', 'particlesByName', 'protocol',
+  'protocolComments', 'protocolYaml', 'recipes', 'tints', 'type',
+  'version', 'windows', 'windowsArray', 'windowsByName',
+].map(name => `minecraft-data.MinecraftData.IndexedData.${name}`));
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
@@ -380,7 +396,12 @@ for (const [key, decision] of Object.entries(coverage.entries)) {
     if (reports.some(e => !e || e.result !== 'passed')) throw new Error(`Unverified supporting evidence: ${key}`);
     if (decision.scenarios.some(path => !reports.some(e => e.path === path))) throw new Error(`Scenario lacks a verified run: ${key}`);
     if (reports.some(e => !(e.subjects ?? []).some(s => key === s || key.startsWith(`${s}.`) || entry.canonical === s || entry.canonical?.startsWith(`${s}.`)))) throw new Error(`Evidence is unrelated to API: ${key}`);
-    for (const kind of ['native-integration', 'live-reference']) if (!reports.some(e => e.kind === kind)) throw new Error(`${key} lacks ${kind} conformance evidence`);
+    const verification = decision.verification ?? 'native-gameplay';
+    if (!['pinned-library', 'native-gameplay'].includes(verification)) throw new Error(`Unknown verification contract: ${key}`);
+    if (verification === 'pinned-library' && (!pinnedDataContracts.has(key) || !decision.reason))
+      throw new Error(`${key} has no reviewed pure-library contract`);
+    const required = verification === 'pinned-library' ? ['library-differential'] : ['native-integration', 'live-reference'];
+    for (const kind of required) if (!reports.some(e => e.kind === kind)) throw new Error(`${key} lacks ${kind} conformance evidence`);
   }
   Object.assign(entry, decision);
 }

@@ -20,8 +20,9 @@ Contract recorded before implementation:
   live server's permissions, datapacks, login state or recipes. Reading them
   cannot send packets or grant command execution.
 - Public loadDimensionCodec/writeDimensionCodec and richer native dynamic
-  registry hydration remain separate pending work; this slice must not claim
-  those methods exist or promote the entire Registry API to conformant.
+  registry hydration were separate work at this contract's authoring. They are
+  now implemented under registry-codecs-scenarios.md; this static comparison
+  does not establish their native behavior or full Registry conformance.
 
 Preimplementation comparison: exercise the actual pinned registry, record all
 static keys and table/index identity plus exact version comparison outcomes.
@@ -38,3 +39,30 @@ production bot with 25 full native columns. The combined Java/plugin/package bui
 guest bundle also loaded within QuickJS at 64 MiB / 512 KiB, using about 8.15 MiB before
 bot initialization (279ms measured). No initialized columns/native snapshot
 claim follows from that load. Dynamic data methods remain pending above.
+
+
+## Coverage evidence boundary
+
+For this PC1.21.1 target, fixed registry tables/indexes and version comparisons
+are pure library contracts: their values and shared references are exhaustively
+compared against the pinned data in QuickJS. They do not require a native packet
+or physical action to exist. Review these members individually, excluding biome
+indexes (overridden by native codecs), supportFeature (installed elsewhere), and
+all dynamic codec methods/data. No library record promotes bot.blockAt, items
+observed in inventory, native events or any physical action.
+
+Before changing coverage policy, require: only explicitly reviewed fixed-data
+keys can use library evidence; every pass still needs exact scenario/report
+hashes, related subject and reviewed scope. Unlisted gameplay members retain
+native and live-reference evidence requirements. Reject a library-only dig
+claim even if its evidence files exist. Missing/tampered evidence must never
+become supported. Historical results need not be silently treated as current.
+
+A focused rerun after dynamic codec integration passed on cbb5e22 with the same
+60 static keys, 10,045 index links, 26,684 state links and 838 version names.
+Actual QuickJS reported 7,258,533 bytes used; bundle 2,777,577 bytes, no external
+imports. Current source/report hashes are in registry-library-current evidence.
+The catalog now reviews 54 fixed-data/version members as supported; native biome
+indexes, supportFeature installation and dynamic codec methods stay separate.
+No physical action/event is promoted by this result. Guard probes rejected an
+unreviewed library-only dig declaration and tampered/missing reports.

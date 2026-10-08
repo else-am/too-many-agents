@@ -27,7 +27,7 @@ Checked boxes mean the described implementation exists. Verification is listed s
 - [x] Typed Block, Item, Window, Entity, ChatMessage/MessageBuilder, Recipe/RecipeItem and Vec3 objects; component/NBT transport.
 - [x] Player lists and UUID/name mapping; `bot.username` reads the actual body name; the focused `67ebb2c` check matched native ScriptProbe; stable game state; time, health, oxygen, weather, XP and version feature queries.
 - [x] Script-local `loadPlugin`/`loadPlugins`/`hasPlugin`, pinned protocol/major version and registry feature queries. Native shared spawn position is exposed as a stable `spawnPoint` Vec3. Java/plugin/package build passed; focused runtime/native checks remain pending.
-- [x] Complete pinned 1.21.1 static registry tables/indexes and version comparisons implemented without historical game-data loaders. Actual QuickJS checks matched 60 static keys, 10,045 shared index entries, 26,684 block-state links and 838 recognized version names; full build and production bundle load passed. [Registry contract](tools/mineflayer-reference/registry-scenarios.md).
+- [x] Complete pinned 1.21.1 static registry tables/indexes and version comparisons implemented without historical game-data loaders. Actual QuickJS checks matched 60 static keys, 10,045 shared index entries, 26,684 block-state links and 838 recognized version names; the focused rerun after codec integration also passed. Fifty-four individually reviewed fixed-data/version members now have supported library coverage, separately from native gameplay. Full build and production bundle load passed. [Registry contract](tools/mineflayer-reference/registry-scenarios.md).
 
 ### Observation and ordinary gameplay
 
@@ -153,7 +153,7 @@ Earlier failed mount/potion checks are superseded by the final successful build.
 
 The user accepted Minecraft's EULA and chose native Mob behavior. Keep actual health/air/effects/item use and movement; do not add player hunger/saturation, player respawn, self-player metadata or client player-physics emulation. Connection/account setup, socket end/quit, resource-pack negotiation and the internal packet client have no independent per-body counterpart. Scripts never disconnect the shared game or BB. Multiplayer and arbitrary third-party plugin compatibility are not established. Other uncertain APIs remain pending review rather than automatically excluded.
 
-The [catalog guide](tools/mineflayer-reference/README.md) and coverage.json retain individual obligations. Its strict pending counts are **not an implementation percentage**: broad API members are not promoted from isolated successful fixtures. The bounded [gameplay-method audit](</Users/scott/.bb/thread-storage/thr_6qrtxjgv3m/gameplay-method-audit.md>) found no additional concrete method omission beyond known categories; this does not establish exhaustive conformance.
+The [catalog guide](tools/mineflayer-reference/README.md) and coverage.json retain individual obligations. Its pending counts are **not an implementation percentage**: 54 fixed-data/version members have verified pure-library coverage; native gameplay still requires native and reference evidence, and broad API members are not promoted from isolated fixtures. The bounded [gameplay-method audit](</Users/scott/.bb/thread-storage/thr_6qrtxjgv3m/gameplay-method-audit.md>) found no additional concrete method omission beyond known categories; this does not establish exhaustive conformance.
 
 ## Latest affected findings
 

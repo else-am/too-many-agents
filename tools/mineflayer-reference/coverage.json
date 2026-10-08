@@ -56,13 +56,661 @@
     "mineflayer.BotEvents.resourcePack": {
       "status": "inapplicable",
       "reason": "Connection-only resource-pack request event; no independent Mob connection exists. Do not fabricate a shared-client request."
+    },
+    "minecraft-data.MinecraftData.IndexedData.attributes": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.attributesArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.attributesByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blockCollisionShapes": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blockLoot": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blockMappings": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blocks": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blocksArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blocksByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blocksByStateId": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.blockStates": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.commands": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.defaultSkin": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.effects": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.effectsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.effectsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.enchantments": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.enchantmentsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.enchantmentsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.entities": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.entitiesArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.entitiesByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.entityLoot": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.foods": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.foodsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.foodsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.instruments": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.instrumentsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.isNewerOrEqualTo": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.isOlderThan": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.items": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.itemsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.itemsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.language": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.loginPacket": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.mapIcons": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.mapIconsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.mapIconsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.materials": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.mobs": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.objects": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.particles": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.particlesArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.particlesByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.protocol": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.protocolComments": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.protocolYaml": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.recipes": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.tints": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.type": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.version": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.windows": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.windowsArray": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
+    },
+    "minecraft-data.MinecraftData.IndexedData.windowsByName": {
+      "status": "supported",
+      "verification": "pinned-library",
+      "reason": "Selected PC1.21.1 static data/version contract, directly compared against the pinned source in QuickJS. Describes packaged reference data, not live server state, permissions or native observation.",
+      "scenarios": [
+        "tools/mineflayer-reference/registry.mjs"
+      ],
+      "evidence": [
+        "registry-library-current"
+      ],
+      "applicability": "applicable"
     }
   },
   "schemaVersion": 2,
   "evidencePolicy": {
     "results": "not-recorded means executable indexed without a durable run; passed is accepted only when scenario/report hashes verify. Missing ignored reports remain unverified, not passes.",
     "levels": "library-differential and serialization are distinct from runtime-boundary, native-integration and live-reference.",
-    "supported": "Requires verified passing native-integration and live-reference evidence. All current native requirements remain pending.",
+    "supported": "Physical actions and native observations require verified native-integration and live-reference evidence. Explicitly reviewed fixed PC1.21.1 library data/version members can use verified library-differential evidence; the generator rejects this classification for unreviewed/gameplay members. Scenario/report hashes and scope review are required for both.",
     "referenceServer": "User explicitly accepted the Minecraft EULA. The isolated pinned loopback gather run passed with independent server checks; wider reference failures/limitations remain separately recorded.",
     "nativeRuns": "Historical source-matched native reports are indexed with their limitations and tested revisions where available. They do not validate newer code or establish paired reference conformance."
   },
@@ -815,6 +1463,26 @@
         ]
       },
       "limitations": "Source-generated packets only; no Java-generated byte or live native/custom-registry startup claim."
+    },
+    "registry-library-current": {
+      "kind": "library-differential",
+      "path": "tools/mineflayer-reference/registry.mjs",
+      "subjects": [
+        "minecraft-data.MinecraftData.IndexedData",
+        "prismarine-registry.loader.RegistryPc"
+      ],
+      "scope": "Exhaustive selected PC1.21.1 static-data equality, shared table/index references and all recognized version comparisons. Excludes native biome overrides, feature installation and dynamic codecs.",
+      "testedRevision": "cbb5e22",
+      "result": "passed",
+      "sourceSha256": "346ad93e290b57a83adb4c1b8d3330e762b78dae1f225103e80ea64caf6e50e8",
+      "report": {
+        "path": "run/mineflayer-reference/registry-library-current.json",
+        "sha256": "df727bfa6e26f2d42fe331d73c153bf145780289de594791fb39f184444d28d3",
+        "codePath": [
+          "code"
+        ]
+      },
+      "limitations": "Actual isolated QuickJS64MiB/512KiB check; native biome/codec initialization and full native bot are outside this static-table proof."
     }
   },
   "reviewNotes": {
