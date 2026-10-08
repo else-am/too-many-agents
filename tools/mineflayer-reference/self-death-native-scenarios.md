@@ -28,22 +28,40 @@ Result: the actual host/runner probe passed known-start (body_missing_or_unloade
 
 ## Prepared disposable fixture (source baseline 54ce6a4; NOT RUN)
 
-`observe-self-death.js` is ready for syntax parsing only. **The normal live kill
-step is currently BLOCKED:** `TooManyAgents.incomingDamage` (161–165) cancels
-all damage to a body with `too_many_agents_agent`, explicitly including /kill.
-Generated 1.21.1 `KillCommand.kill` calls `Entity.kill`; `LivingEntity.kill`
-(293–294) calls `hurt(genericKill, Float.MAX_VALUE)`, and `hurt` (1125–1126)
-returns on the canceled NeoForge incoming-damage event. Normal spawning adds
-that binding tag and invulnerability (`GameAccess.createBody`, 630–634).
-Changing vanilla Invulnerable alone does not remove this guard. No existing
-normal setup option for a killable bound body was established. Do not remove
-binding tags, write Health NBT, invent a death helper, or change shared immunity
-to run this fixture. Report the obstacle to the lead; this preparation grants
-no native execution authorization. A /kill success message alone is not proof
-that damage was accepted.
+`observe-self-death.js` is prepared and syntax-parsed, never executed here.
+The accepted fixture mechanism is now vanilla
+`data merge entity <exact NEW disposable UUID> {Health:0.0f}`. This is authorized
+only as preparation for a separately authorized coordinator run, not a live
+operation now, guest capability, or permission to mutate ScriptProbe.
 
-Smallest normal setup, for the coordinator only if the blocker is resolved by
-an explicitly accepted fixture mechanism:
+**This establishes NBT-induced native terminal death, not accepted damage or
+combat death.** Normal /kill remains canceled by `TooManyAgents.incomingDamage`
+(161–165); the script's introductory /kill warning still applies. No immunity
+or identity tags are changed. Do not remove binding tags, introduce a helper,
+or use a broad selector.
+
+Narrow generated 1.21.1 source verification:
+- `DataCommands.mergeData:436–445` copies the existing entity NBT and merges only
+  the supplied Health field. `EntityDataAccessor.setData:45–51` rejects Players,
+  loads the same Entity object, and restores its UUID. `Entity.saveWithoutId:1721`
+  and `Entity.load:1803` retain NeoForgeData, including the body's binding tags.
+- `LivingEntity.readAdditionalSaveData:747–748` calls `setHealth`; its clamp at
+  1105–1106 permits zero. `isDeadOrDying:1109–1110` and `isAlive:1595–1596` then
+  expose actual dead state. This path never calls hurt/genericKill or the
+  incoming-damage cancellation handler.
+- `LivingEntity` tick at 471–472 invokes `tickDeath`; 556–561 removes the corpse
+  with KILLED after 20 death ticks when the level ticks death. Normal `entity.load`
+  does not insert a replacement or trigger EntityJoinLevelEvent. The mod's
+  `GameAccess.restoreBody:873–883` does not reset health anyway. Its Post-tick
+  dead-controller path at 962–976 accepts this same-object, same-world dead
+  state with removal reason null or KILLED and calls `closeAfterDeath`.
+
+No setter clamp or controller restoration obstacle was found in these source
+paths. Actual terminal serialization/removal remains unverified until the live
+fixture. This is not evidence of normal `die(DamageSource)`, damage callbacks,
+combat drops, or accepted incoming damage.
+
+Smallest normal setup, for the coordinator only during an authorized run:
 
 1. In the isolated test world, use the normal body/thread creation path:
    `python3 tools/agents.py --game-dir run spawn --provider codex --model gpt-6.1-sol --reasoning-level low --body minecraft:cow --name SelfDeathDisposable --mode survival`.
@@ -67,15 +85,16 @@ an explicitly accepted fixture mechanism:
    state; `AgentActions.start` creates a unique ID. Only this script may act on
    the disposable body. The forced look preserves its current orientation and
    occurs after listeners are registered. If no new completion appears within
-   15 seconds, or the script already ended, do not kill. No separate readiness
+   15 seconds, or the script already ended, do not apply the NBT mutation. No separate readiness
    mutation/helper is needed; the pending look wait or following waitForTicks
-   remains outstanding when the accepted death is delivered.
+   remains outstanding when the native NBT-induced death is delivered.
 4. After the readiness gate, the coordinator's existing authorized native
-   command path would issue exactly `kill <recorded-body-UUID>` once (no broad
-   selector). Do not send the command through the waiting disposable thread.
-   This step remains blocked as explained above; do not execute a known
-   ineffective kill or substitute an immunity bypass. Do not pause/unload the
-   world as a surrogate for death.
+   command path issues exactly
+   `data merge entity <recorded-body-UUID> {Health:0.0f}` once. Preserve the
+   command outcome and exact target. Do not send the command through the waiting
+   disposable thread or modify Invulnerable/NeoForgeData/UUID/other fields.
+   Never use /kill, pause/unload as a death surrogate, or retry an unknown
+   command outcome. This note prepares that operation; no live call is made.
 5. Expected report: error contains body_dead, not a successful result or fixture
    timeout. `execution.logs` contains an armed row and a terminal health row
    immediately followed (among this script's logged rows) by exactly one death
@@ -86,9 +105,10 @@ an explicitly accepted fixture mechanism:
    confirmed scoped release or report its uncertainty. The script never sends
    a post-death mutation or catches/replays a rejected operation.
 6. Independently retain command outcome and native exact-UUID health/death or
-   removal observations, then agent bodyLoaded/bodyLost and pendingWorldTools
+   removal observations (a corpse may disappear before a later Health read),
+   then agent bodyLoaded/bodyLost and pendingWorldTools
    after corpse removal. Missing body alone does not establish death; pair it
-   with the terminal callback evidence/accepted native cause. Verify no new
+   with terminal callback evidence and the recorded Health-only NBT operation. Verify no new
    native action after the marker and no remaining active script tool. Use the
    normal remove/archive workflow for this disposable record only after saving
    evidence, subject to coordinator authorization. Never respawn/substitute a
