@@ -19,3 +19,15 @@ long-distance flag; the pinned class does not expose type-specific payloads.
 - Validate one ordinary broadcast plus no replay in a grouped packaged check;
   targeted/range/multi-body edge matrix remains pending. Compilation alone does
   not establish that the mixin runs or a native event is received.
+
+Fixture correction after the first packaged attempt: an ordinary cow with
+NoAI:1 did not fall (native position stayed at its spawn height), so no landing
+emission occurred. Enable ordinary AI only after a new listener-readiness action
+on that same known cow. The public speed field is movementSpeed, not speed;
+require a finite value before comparing it to the native 0.15 float.
+
+The corrected fixture was also inconclusive: successful NoAI removal at
+18:40:38 followed a wrong-UUID no-op at 18:40:17, while the guest listener
+lasted only 15.59 seconds. The cow landed after script release. Before another
+grouped check, resolve the exact fixture UUID upfront and allow sufficient
+coordinator time; do not diagnose event transport from this missed window.
