@@ -74,6 +74,7 @@ async function consoleCommands(commands) {
 async function scenario() {
   await once(bot, 'spawn', { signal: abort.signal });
   await bot.waitForChunksToLoad();
+  if (process.argv.includes('--world-queries')) return worldQueryScenario();
   if (process.argv.includes('--building') || process.argv.includes('--craft') || craftTrace) return buildingScenarios();
   await consoleCommands([
     'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
@@ -106,6 +107,40 @@ async function scenario() {
     serverConfirmed: true, confirmations: { block: blockMarker, inventory: itemMarker, messages }, clientErrors, protocolWarnings };
   await writeFile(join(directory, 'gather-reference.json'), JSON.stringify(report, null, 2) + '\n');
   console.log(JSON.stringify(report, null, 2));
+}
+
+async function worldQueryScenario() {
+  await consoleCommands([
+    'gamerule doDaylightCycle false', 'gamerule doWeatherCycle false',
+    'gamerule randomTickSpeed 0', 'time set day', 'weather clear',
+    'tp Reference 10.5 -60 3.5',
+    'fill 2 -61 -6 20 -61 10 minecraft:stone',
+    'fill 2 -60 -6 20 -53 10 minecraft:air',
+    'setblock 11 -60 1 minecraft:crafting_table',
+    'setblock 11 -60 0 minecraft:stone',
+    `setblock 9 -60 2 minecraft:oak_sign{front_text:{messages:['{"text":"Query fixture"}','""','""','""']}}`,
+  ]);
+  await bot.waitForTicks(5);
+  const source = await readFile(new URL('./world-queries-common.js', import.meta.url), 'utf8');
+  const report = { scenario:'world-queries-common', backend:'mineflayer', minecraft:'1.21.1',
+    mineflayer:'4.39.0', source, sourceSha256:createHash('sha256').update(source).digest('hex'),
+    startedAt:new Date().toISOString(), clientErrors, protocolWarnings };
+  try {
+    const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+    report.result = await new AsyncFunction('bot','Vec3',source)(bot,Vec3);
+    const conditions = ['if block 11 -60 1 minecraft:crafting_table',
+      'if block 11 -60 0 minecraft:stone', 'if block 9 -60 2 minecraft:oak_sign'];
+    const markers = conditions.map(() => randomUUID());
+    const messages = await consoleCommands(conditions.map((condition,i) => `execute ${condition} run say ${markers[i]}`));
+    assert(markers.every(marker => messages.some(message => message.includes(marker))));
+    report.confirmations = { conditions, markers, messages };
+    report.serverConfirmed = true;
+  } catch (error) { report.error = String(error); throw error; }
+  finally {
+    report.finishedAt = new Date().toISOString();
+    await writeFile(join(directory,'world-queries-reference.json'),JSON.stringify(report,null,2)+'\n');
+  }
+  console.log(JSON.stringify({ scenario:report.scenario, result:report.result, serverConfirmed:true }));
 }
 
 async function buildingScenarios() {

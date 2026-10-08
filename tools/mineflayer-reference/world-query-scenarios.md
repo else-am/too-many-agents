@@ -87,3 +87,20 @@ against independent native observations. Confirm entity width/eyeHeight scalars
 and cache bounds update before synchronous queries run. Retain actual blockAt
 nulls; never fill the bounded cache's unseen cells with air. Reference-server
 conformance and native action/reach behavior remain unproven by these probes.
+
+## Shared reference subset — preauthored
+
+`world-queries-common.js` retains the existing native observer's nearest-table,
+extra-info sign and table/occluded-wall checks. It deliberately omits opening a
+window/cursor and the port-only unknown-cache exception. Native evidence for
+those omitted checks is not relabeled as reference parity. The new reference
+harness places the same named cells in its isolated world and uses an ordinary
+player at10.5/-60/3.5; actual body geometry may differ from the historical native
+run. Independent server block assertions verify the three block types after the
+read-only procedure. Sign text is client-decoded; no separate NBT check ran. This checks known observations, not arbitrary unloaded/world bounds.
+
+Actual reference run passed once on 2026-10-08 at 09:22 UTC. The server stopped
+and its port closed. Startup retained an ArmorTrimMaterial decoding warning and
+setup teleport movement warnings; this is not general protocol conformance. The
+historical native report has no embedded executed source, so this new shared
+source is not claimed as an exact paired native/reference execution.

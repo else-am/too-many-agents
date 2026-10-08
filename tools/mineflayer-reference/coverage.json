@@ -6452,6 +6452,22 @@
         "sha256": "b57b071a9030ce17f30331fce9435d384b7d7847f10c826fb1be0543c9d4cb03"
       },
       "limitations": "Known rejection provenance is source-reviewed in AgentActions; native Cod consecutive-route result remains unrun. No member promoted."
+    },
+    "reference-world-queries": {
+      "kind": "live-reference",
+      "path": "tools/mineflayer-reference/world-queries-common.js",
+      "subjects": [],
+      "scope": "Known nearest-table, sign extra-info and visibility/occlusion subset on an isolated pinned reference server, with independent block-type checks. No member promotion.",
+      "result": "passed",
+      "sourceSha256": "68b05ef6d1201333a10b186def46cef1929380f82f6d87219a8ef99391ede137",
+      "report": {
+        "path": "run/mineflayer-reference/world-queries-reference.json",
+        "sha256": "87f90cf608b80f223540f097972ddecc69d180f83d965eeacc30da2e554e1719",
+        "codePath": [
+          "source"
+        ]
+      },
+      "limitations": "Historical native report lacks embedded executed source; no exact paired-run claim. ArmorTrimMaterial decode and setup teleport movement warnings retained. No independent sign NBT check or general protocol conformance."
     }
   },
   "reviewNotes": {
