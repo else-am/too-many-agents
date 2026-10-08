@@ -72,3 +72,5 @@ five events in native order, hydrated stable tab-list/ChatMessages, no replay an
 unchanged inventory. One request, 10 updates, five bridge operations; invocation
 2026-10-08 02:23:41.526–02:23:42.597 UTC. Wider lifecycle cases remain unrun.
 [Guest evidence](</Users/scott/.bb/thread-storage/presentation-evidence-dfdc3716.json>).
+
+Independent native outcomes and exact inventory/mode restoration passed. World saved/disconnected, exact JVM `13903` stopped. [Coordinator evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/4d7e8b9-summary.json>).

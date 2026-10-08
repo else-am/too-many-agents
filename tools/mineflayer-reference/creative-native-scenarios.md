@@ -77,3 +77,5 @@ arrival/hover, solid-wall rejection and grounded return. Seven requests,
 The test owner is restoring mode/slot arrangement and checking native cleanup.
 [Guest evidence](</Users/scott/.bb/thread-storage/creative-evidence-b8a54dfe.json>).
 No broad permission/component/lifecycle conformance is claimed.
+
+Independent native outcomes and exact inventory/mode restoration passed. World saved/disconnected, exact JVM `13903` stopped. [Coordinator evidence](</Users/scott/.bb/thread-storage/thr_xykqkgui57/4d7e8b9-summary.json>).

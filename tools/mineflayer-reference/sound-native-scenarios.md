@@ -59,3 +59,5 @@ one native nearby world note, and sends an unrelated-proxy negative control.
 The script checks shared Vec3 values, native order/volume/pitch, no replay and
 unchanged inventory. Position tolerance allows the native packet's 1/8-block
 quantization. No mutation is sent to the human UI. Native execution is pending.
+
+Proxy packet addition and guarded fixture compile with Java 21. Guest script syntax and Python CLI compilation pass; combined packaging and native execution remain pending.
