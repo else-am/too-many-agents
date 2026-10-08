@@ -12,6 +12,14 @@
     "mineflayer.Bot._client": {
       "status": "inapplicable",
       "reason": "Mineflayer's internal packet client is outside the agreed public gameplay compatibility boundary."
+    },
+    "mineflayer.Bot.end": {
+      "status": "inapplicable",
+      "reason": "Pinned documentation/source define Minecraft socket disconnection. Server connection APIs are outside the agreed native-body scope; a script has no independent socket and must not disconnect the shared game or BB."
+    },
+    "mineflayer.Bot.quit": {
+      "status": "inapplicable",
+      "reason": "Pinned documentation/source define Minecraft socket disconnection. Server connection APIs are outside the agreed native-body scope; a script has no independent socket and must not disconnect the shared game or BB."
     }
   },
   "schemaVersion": 2,
@@ -597,12 +605,12 @@
   },
   "reviewNotes": {
     "prismarine-item.Item": "Components/componentMap/removedComponents are source-visible but omitted from declarations; Item.equal ignores components in the pin.",
-    "prismarine-windows.Window": "Declarations/docs/runtime disagree on some signatures, layouts and events; windows.mjs separates intended corrections from parity. Drag/double-click throw upstream.",
+    "prismarine-windows.Window": "Declarations/docs/runtime disagree on some signatures, layouts and events; windows.mjs separates intended corrections from parity. Drag/double-click (modes 5/6) remain explicit failures, matching pinned api.md:2175\u20132177 and upstream implementation; not an unported working upstream capability.",
     "prismarine-world.WorldSync": "Full selected columns and sync/async guest cache APIs are implemented. Native full-height/light/biome/sign/freshness and stable references passed selected flat-world checks; storage remains guest-local. Wider loaded worlds/performance require verification.",
     "mineflayer-pathfinder.Pathfinder": "Body-aware planning, native selected edges and bounded shortcuts/direct pursuit implemented. Selected native routes and actual single-node direct following passed. Dynamic/cancel/unsupported physics and larger direct candidates remain pending; no full parity claim.",
     "events.EventEmitter": "Inherited instance surface comes from pinned events 3.3.0, not current Node type declarations. Event payloads/ordering need independent native evidence.",
     "prismarine-registry.loader.RegistryPc": "Registry tables and codecs, chunk access/storage, Bedrock-labelled data and source-only helpers require applicability review; none are silently excluded.",
-    "mineflayer-pathfinder.goals.GoalBreakBlock": "Pinned declarations extend GoalLookAtBlock, but source extends Goal and wraps this.goal; source isEnd drops its node argument. Inherited declaration promises require review.",
+    "mineflayer-pathfinder.goals.GoalBreakBlock": "Use the documented/source deprecated (x,y,z,bot,options) wrapper contract. Pinned index.d.ts incorrectly declares inherited GoalLookAtBlock construction/fields; readme.md:421 and lib/goals.js:209 establish the wrapper. Native adapter accepts bot/world and corrects dropped isEnd(node). No additional inherited-field promise is made from that erroneous declaration.",
     "mineflayer.Bot.chatPatterns": "Declared public ChatPattern[] in index.d.ts, but pinned chat.js keeps private _patterns and never assigns bot.chatPatterns. Requires an explicit declaration/source decision; do not treat declaration presence as upstream runtime behavior."
   }
 }
