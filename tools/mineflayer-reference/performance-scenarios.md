@@ -64,7 +64,8 @@ zero remaining stone for both arms, with unchanged position/shield. No retry.
 | Game ticks over measured task | 2,469 | 31 within script |
 | Recorded tool/task interval | 123.557 s | 1.689 s for minecraft_run |
 | Script execution | n/a | 1.225 s |
-| Recorded scripting coordination interval | n/a | 7.721 s |
+| Source-read through script completion | n/a | 7.721 s |
+| Coordinator dispatch through result report | 169.190 s | 48.228 s |
 | Bridge operations | not separately recorded | 19 |
 
 Direct calls were two observations, eight placements and eight status checks,
@@ -89,8 +90,9 @@ The same Codex model/body, two oak logs and fresh iron axe produced logs0,
 planks4 and sticks8 in both arms. Each axe gained two damage; grid/cursor were
 empty and the menu was closed. No measured retry or command use occurred.
 Fixture preparation, including correcting an empty supply barrel before the
-first arm, is outside the measurements. Independent final verification and
-restoration are recorded by the coordinator separately.
+first arm, is outside the measurements. Independent native checks confirmed the outcomes; original item totals and
+components, elytra and shield were restored. Crafted outputs were stored
+separately; the world was saved and exact test JVM stopped.
 
 | Measurement | Direct tools | Prepared script |
 | --- | ---: | ---: |
@@ -99,7 +101,8 @@ restoration are recorded by the coordinator separately.
 | Game ticks over measured task | 4,704 | 175 within script |
 | Recorded tool/task interval | 235.226 s | 9.450 s for minecraft_run |
 | Script execution | n/a | 8.915 s |
-| Recorded scripting coordination interval | n/a | 14.542 s |
+| Source-read through script completion | n/a | 14.542 s |
+| Coordinator dispatch through result report | 304.936 s | 44.896 s |
 | Bridge operations | not separately recorded | 63 |
 
 Direct calls were two observations, 21 actions and 21 status checks, with no
@@ -118,3 +121,10 @@ claim that Minecraft simulation itself became faster.
 [Direct transcript](</Users/scott/.bb/thread-storage/performance-gather-direct-evidence.json>)
 and [script transcript](</Users/scott/.bb/thread-storage/performance-gather-script-evidence-6b2cbb8c.json>)
 retain exact calls, code, timestamps and output.
+
+
+The coordinator also recorded dispatch-to-report intervals in both tables. These
+include agent startup, preparation to invoke the tool, result inspection and
+reporting; they are broader than either tool duration or script execution.
+[Combined evidence and clean handback](</Users/scott/.bb/thread-storage/thr_xykqkgui57/performance-042cc01-summary.json>)
+include independently checked native results and transcript-count verification.
