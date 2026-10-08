@@ -4688,6 +4688,66 @@
           "code"
         ]
       }
+    },
+    "historical-stream-pause-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/historical-stream-pause-native.js",
+      "subjects": [],
+      "scope": "Historical native UI pause/resume during waitForTicks: completed with 402 physics events and stable Entity identity, confirmed release. Transition snapshots do not measure exact pause-freeze duration. Artifact revision not recorded; not current-build lifecycle certification.",
+      "result": "passed",
+      "sourceSha256": "ba2b6078c124ca69f27f3917ae038a2864ec0500fe546b0f108cb02fe4c26758",
+      "report": {
+        "path": "run/mineflayer-reference/stream-pause-native.json",
+        "sha256": "735d24bb4943526459e2ff12ddff20d317974ba291d35b71157dc9ef204d34c8",
+        "codePath": [
+          "toolEvents",
+          0,
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      }
+    },
+    "historical-departure-tick-wait-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/historical-departure-tick-wait-native.js",
+      "subjects": [],
+      "scope": "Historical native world departure during tick wait: expected world_closed error, zero completed requests, no later dig, independent target stone intact after reopen. Release acknowledgement unconfirmed. Artifact revision not recorded; not current-build lifecycle certification.",
+      "result": "passed",
+      "sourceSha256": "6cc458dd9a84a9f644924f1db7ac29b8e6d4a2f182f02f28d243d1bcbaba670c",
+      "report": {
+        "path": "run/mineflayer-reference/departure-tick-wait-native.json",
+        "sha256": "3bb68473d79fa0c0396c2db83358c7c9c504a175512822cfd30973c62a44939b",
+        "codePath": [
+          "toolEvents",
+          0,
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      }
+    },
+    "historical-stream-departure-native": {
+      "kind": "native-integration",
+      "path": "tools/mineflayer-reference/recorded/historical-stream-departure-native.js",
+      "subjects": [],
+      "scope": "Historical native streamed world departure during tick wait: script_no_longer_controls_body error, zero completed requests, no later dig, independent target stone intact after reopen. Release acknowledgement unconfirmed. Later host terminal-error ordering changed; this is not validation of that change.",
+      "result": "passed",
+      "sourceSha256": "ee9fcb2c354771b339420e6a07008f7c2e2fa30a7f9c2379cf10256fadee9bd1",
+      "report": {
+        "path": "run/mineflayer-reference/stream-departure-native.json",
+        "sha256": "a61618c64db93b45daa74170dac996546060f31bfc35b9ef36e884029ad2a558",
+        "codePath": [
+          "toolEvents",
+          0,
+          "data",
+          "item",
+          "arguments",
+          "code"
+        ]
+      }
     }
   },
   "reviewNotes": {
