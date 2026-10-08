@@ -123,9 +123,10 @@ To mark a particular API `supported`, retain its stable key under `entries`,
 attach `evidence` IDs and executable `scenarios` paths, and review the reports.
 Physical actions and native observations require verified passing
 **native-integration and live-reference** evidence. Explicitly reviewed fixed
-PC1.21.1 data/version members may use `verification: "pinned-library"` with a
+PC1.21.1 data/version members and the explicit source-reviewed Vec3 member list may use `verification: "pinned-library"` with a
 verified **library-differential** report. The generator has an explicit list of
 eligible keys; marking `dig` or a dynamic/native member as library-only rejects.
+Vec3 eligibility covers arithmetic, local mutation and representation of supplied values; it does not establish native position/velocity hydration or movement. The class-wide key and package helper are not automatically eligible. No vector member is promoted by this policy change alone.
 Every promotion still requires related subjects, exact scenario/report hashes,
 and reviewed scope. A library pass cannot promote a native gameplay API. Missing
 supporting reports cause validation to fail rather than silently retaining a

@@ -384,6 +384,17 @@ const pinnedDataContracts = new Set([
   'protocolComments', 'protocolYaml', 'recipes', 'tints', 'type',
   'version', 'windows', 'windowsArray', 'windowsByName',
 ].map(name => `minecraft-data.MinecraftData.IndexedData.${name}`));
+// Vec3 members transform caller-supplied values only. Native position hydration
+// and ownership are separate Entity/Bot obligations, not vector arithmetic.
+const pureVectorContracts = new Set([
+  'constructor', 'x', 'y', 'z', 'abs', 'add', 'at', 'clone', 'cross',
+  'distanceSquared', 'distanceTo', 'divide', 'dot', 'equals', 'floor', 'floored',
+  'innerProduct', 'isZero', 'manhattanDistanceTo', 'max', 'min', 'minus', 'modulus',
+  'multiply', 'norm', 'normalize', 'offset', 'plus', 'round', 'rounded', 'scale',
+  'scaled', 'set', 'subtract', 'toArray', 'toString', 'translate', 'unit', 'update',
+  'volume', 'xy', 'xyDistanceTo', 'xz', 'xzDistanceTo', 'xzy', 'yz', 'yzDistanceTo',
+].map(name => `vec3.Vec3.${name}`));
+const pureLibraryContracts = new Set([...pinnedDataContracts, ...pureVectorContracts]);
 for (const [key, decision] of Object.entries(coverage.entries)) {
   const entry = declarations.get(key);
   if (!entry) throw new Error(`Coverage key absent from inventory: ${key}`);
@@ -398,7 +409,7 @@ for (const [key, decision] of Object.entries(coverage.entries)) {
     if (reports.some(e => !(e.subjects ?? []).some(s => key === s || key.startsWith(`${s}.`) || entry.canonical === s || entry.canonical?.startsWith(`${s}.`)))) throw new Error(`Evidence is unrelated to API: ${key}`);
     const verification = decision.verification ?? 'native-gameplay';
     if (!['pinned-library', 'native-gameplay'].includes(verification)) throw new Error(`Unknown verification contract: ${key}`);
-    if (verification === 'pinned-library' && (!pinnedDataContracts.has(key) || !decision.reason))
+    if (verification === 'pinned-library' && (!pureLibraryContracts.has(key) || !decision.reason))
       throw new Error(`${key} has no reviewed pure-library contract`);
     const required = verification === 'pinned-library' ? ['library-differential'] : ['native-integration', 'live-reference'];
     for (const kind of required) if (!reports.some(e => e.kind === kind)) throw new Error(`${key} lacks ${kind} conformance evidence`);
