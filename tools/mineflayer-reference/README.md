@@ -196,3 +196,5 @@ supported under that PC1.21.1 library contract. Native biome indexes, dynamic
 codecs and feature installation are excluded from that promotion. These counts
 are not a gameplay-completion percentage. Catalog guard probes rejected a
 library-only dig claim, a modified report hash and an unavailable report.
+
+Source review of the retained wall/craft failures, including the limits of the available timing evidence: [reference-failure-review.md](reference-failure-review.md). No scenario was rerun for this review.
