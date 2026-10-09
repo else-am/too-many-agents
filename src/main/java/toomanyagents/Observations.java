@@ -21,16 +21,60 @@ final class Observations {
 
     static JsonObject entity(Entity entity) {
         var result = new JsonObject();
+        result.addProperty("id", entity.getId());
         result.addProperty("uuid", entity.getUUID().toString());
-        result.addProperty("type", BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
+        result.addProperty("type", entity instanceof BodyFishingHook ? "minecraft:fishing_bobber"
+            : BuiltInRegistries.ENTITY_TYPE.getKey(entity.getType()).toString());
         result.addProperty("name", entity.getName().getString());
         result.add("position", position(entity.position()));
+        result.add("velocity", position(entity.getDeltaMovement()));
+        result.addProperty("width", entity.getBbWidth());
+        result.addProperty("height", entity.getBbHeight());
+        result.addProperty("onGround", entity.onGround());
+        result.addProperty("eyeHeight", entity.getEyeHeight());
         result.add("eyePosition", position(entity.getEyePosition()));
         result.add("direction", position(entity.getLookAngle()));
         result.addProperty("yaw", entity.getYRot());
         result.addProperty("pitch", entity.getXRot());
         result.addProperty("alive", entity.isAlive());
-        if (entity instanceof LivingEntity living) result.addProperty("health", living.getHealth());
+        result.addProperty("isInWater", entity.isInWater());
+        result.addProperty("isInLava", entity.isInLava());
+        result.addProperty("crouching", entity.isShiftKeyDown());
+        if (entity instanceof net.minecraft.world.entity.projectile.FireworkRocketEntity rocket) {
+            var target = rocket.getEntityData().get(net.minecraft.world.entity.projectile.FireworkRocketEntity.DATA_ATTACHED_TO_TARGET);
+            if (target.isPresent()) result.addProperty("fireworkAttachedTo", target.getAsInt());
+            result.addProperty("fireworkTicksRemaining", Math.max(0, rocket.lifetime - rocket.life + 1));
+        }
+        if (entity instanceof net.minecraft.world.entity.ExperienceOrb orb)
+            result.addProperty("experienceValue", orb.getValue());
+        if (entity instanceof LivingEntity living) {
+            result.addProperty("elytraFlying", living.isFallFlying());
+            result.addProperty("health", living.getHealth());
+            result.addProperty("mainHand", living.getMainArm() == net.minecraft.world.entity.HumanoidArm.LEFT ? "left" : "right");
+            result.addProperty("isSleeping", living.isSleeping());
+            result.addProperty("airSupply", living.getAirSupply());
+            result.addProperty("maxAirSupply", living.getMaxAirSupply());
+            var attributes = new JsonObject();
+            for (var attribute : living.getAttributes().getSyncableAttributes()) {
+                var key = BuiltInRegistries.ATTRIBUTE.getKey(attribute.getAttribute().value());
+                if (key == null) continue;
+                var modifiers = new JsonArray();
+                attribute.getModifiers().stream().sorted(java.util.Comparator.comparing(modifier -> modifier.id().toString()))
+                    .forEach(modifier -> modifiers.add(JsonState.object("uuid", modifier.id().toString(),
+                        "amount", modifier.amount(), "operation", modifier.operation().id())));
+                var value = JsonState.object("value", attribute.getBaseValue());
+                value.add("modifiers", modifiers);
+                attributes.add(key.getNamespace().equals("minecraft") ? key.getPath() : key.toString(), value);
+            }
+            result.add("attributes", attributes);
+            var effects = new JsonObject();
+            for (var effect : living.getActiveEffects()) {
+                int id = BuiltInRegistries.MOB_EFFECT.getId(effect.getEffect().value());
+                effects.add(Integer.toString(id), JsonState.object("id", id, "amplifier", effect.getAmplifier(),
+                    "duration", effect.getDuration()));
+            }
+            result.add("effects", effects);
+        }
         var saved = entity.getPersistentData();
         if (saved.contains("too_many_agents_agent")) {
             var agent = new JsonObject();

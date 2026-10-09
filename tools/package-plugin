@@ -47,6 +47,11 @@ def bb_command(env):
 
 
 def main():
+    # BB validates tool instructions when loading, after its bundle has built.
+    # Catch this limit here so a valid build cannot ship an unloadable plugin.
+    instructions = (PLUGIN / 'surface/scripting.md').read_text()
+    if len(instructions.encode('utf-16-le')) // 2 > 4096:
+        raise RuntimeError("Minecraft scripting instructions exceed BB's 4096-character limit.")
     env = build_environment()
     bb_env = dict(env)
     bb = bb_command(bb_env)
@@ -61,7 +66,12 @@ def main():
         installed.write_text(dependencies)
     shutil.copyfile(ROOT / 'surface/tools.json', PLUGIN / 'surface/tools.json')
     subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'typecheck'], env=env, check=True)
+    subprocess.run([npm, '--prefix', str(PLUGIN), 'run', 'build:scripting'], env=env, check=True)
     subprocess.run([*bb, 'plugin', 'build', str(PLUGIN)], env=bb_env, check=True)
+    # Frontend installation scans the package. Avoid shipping accidentally
+    # expanded multi-version data as an enormous JavaScript source file.
+    if (PLUGIN / 'dist/server.js').stat().st_size > 32 * 1024 * 1024:
+        raise RuntimeError('Plugin server bundle exceeds 32 MiB; inspect bundled data/dependencies.')
     # The diagram worker runs independently of BB's server bundle. Include its
     # pure-JavaScript dependencies and WASM; installation needs neither npm nor a compiler.
     packages = subprocess.check_output([npm, 'ls', '--omit=dev', '--all', '--parseable'], cwd=PLUGIN, env=env, text=True).splitlines()
@@ -78,7 +88,7 @@ def main():
             files[name] = (PLUGIN / name).read_bytes()
         for name in ['app.js', 'app.css', 'app.meta.json']:
             files['dist/' + name] = (PLUGIN / 'dist' / name).read_bytes()
-    for item in ['skills', 'surface', 'assets', 'diagram-worker.mjs']:
+    for item in ['skills', 'surface', 'assets', 'diagram-worker.mjs', 'scripting', 'dist/scripting']:
         path = PLUGIN / item
         for source in sorted(path.rglob('*')) if path.is_dir() else [path]:
             if source.is_file():

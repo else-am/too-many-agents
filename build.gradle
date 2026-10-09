@@ -111,6 +111,8 @@ def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
     outputs.file(file('bb-plugin/dist/app.js'))
     outputs.file(file('bb-plugin/dist/app.css'))
     outputs.file(file('bb-plugin/dist/app.meta.json'))
+    outputs.file(file('bb-plugin/dist/scripting/bot.js'))
+    outputs.file(file('bb-plugin/dist/scripting/licenses.txt'))
     outputs.file(file('bb-plugin/node_modules/.package-lock.json'))
     commandLine 'python3', 'tools/package-plugin'
 }

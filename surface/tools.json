@@ -1,5 +1,20 @@
 [
   {
+    "name": "minecraft_run",
+    "minecraft": true,
+    "description": "Run an awaited JavaScript procedure using your body's bot API. The body stays under script control between steps. Returns the script's JSON result and logs. Permissions and physical limits still apply; no automatic retry after uncertain outcomes. API coverage is in the scripting instructions.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 262144 },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 300000, "default": 120000 }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    },
+    "operation": "SCRIPT"
+  },
+  {
     "name": "minecraft_observe",
     "minecraft": true,
     "description": "Observe body, nearby entities, live player, inventory, settings and current action. Radius 1\u201364.",

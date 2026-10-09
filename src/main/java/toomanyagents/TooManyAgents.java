@@ -73,6 +73,9 @@ public final class TooManyAgents {
     public TooManyAgents(IEventBus modBus, ModContainer container) {
         container.registerExtensionPoint(IConfigScreenFactory.class, (IConfigScreenFactory) (mod, parent) -> TooManyAgentsSettingsScreen.open(parent));
         AgentInventoryMenu.MENUS.register(modBus);
+        BodyFishingHook.ENTITIES.register(modBus);
+        modBus.addListener((net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
+            event.registerEntityRenderer(BodyFishingHook.TYPE.get(), net.minecraft.client.renderer.entity.FishingHookRenderer::new));
         toomanyagents.mobs.Mobs.register(modBus);
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));
@@ -83,8 +86,48 @@ public final class TooManyAgents {
         NeoForge.EVENT_BUS.addListener(this::serverTick);
         NeoForge.EVENT_BUS.addListener(this::clientTick);
         NeoForge.EVENT_BUS.addListener(this::chatReceived);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST,
+            (net.neoforged.neoforge.event.ServerChatEvent event) -> {
+                if (game != null && !event.isCanceled()) game.publicChat(event.getPlayer(), event.getMessage());
+            });
         NeoForge.EVENT_BUS.addListener(this::despawn);
         NeoForge.EVENT_BUS.addListener(this::incomingDamage);
+        NeoForge.EVENT_BUS.addListener((ScriptForcedMoveEvent event) -> {
+            if (game != null) game.forcedMoveAttempt(event);
+        });
+        NeoForge.EVENT_BUS.addListener((ScriptBlockEvent event) -> {
+            if (game != null) game.blockEvent(event);
+        });
+        NeoForge.EVENT_BUS.addListener((ScriptContainerOpenersEvent event) -> {
+            if (game != null) game.containerOpeners(event);
+        });
+        NeoForge.EVENT_BUS.addListener((ScriptParticleEvent event) -> {
+            if (game != null) game.particleEvent(event);
+        });
+        NeoForge.EVENT_BUS.addListener((ScriptEntitySignalEvent event) -> {
+            if (game != null) game.entitySignal(event);
+        });
+        NeoForge.EVENT_BUS.addListener((ScriptCollectionEvent event) -> {
+            if (game != null) game.collectionEvent(event);
+        });
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.NORMAL, true,
+            (net.neoforged.neoforge.event.PlayLevelSoundEvent event) -> {
+            if (game != null) game.soundEvent(event);
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.living.LivingDamageEvent.Post event) -> {
+            if (game != null && !event.getEntity().level().isClientSide)
+                game.entityEvent("entityHurt", event.getEntity(), event.getSource().getEntity(), null);
+        });
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.NORMAL, true,
+            (net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) -> {
+                if (game != null) game.deathEvent(event);
+            });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.player.ItemEntityPickupEvent.Post event) -> {
+            if (game != null) game.entityEvent("playerCollect", event.getPlayer(), event.getItemEntity(), event.getOriginalStack());
+        });
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) -> {
+            if (game != null && !event.getEntity().level().isClientSide) game.nativeUseFinished(event);
+        });
         NeoForge.EVENT_BUS.addListener(this::entityJoined);
         NeoForge.EVENT_BUS.addListener(this::entityLeft);
         NeoForge.EVENT_BUS.addListener(this::entityChangingDimension);
@@ -143,14 +186,37 @@ public final class TooManyAgents {
             if (path.equals("/v1/dev") && DevelopmentWorld.ENABLED) {
                 result = method.equals("GET") ? DevelopmentChecks.snapshot() : game.development(request).get(10,TimeUnit.SECONDS);
             } else if (path.equals("/v1/bb") && method.equals("POST")) {
-                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(15,TimeUnit.SECONDS)); }
+                if ("script".equals(field(request, "op")) && request.has("arguments")
+                    && request.get("arguments").isJsonObject()
+                    && "stream".equals(field(request.getAsJsonObject("arguments"), "operation"))) {
+                    var stream = new ScriptStream();
+                    agents.callback(request, stream).whenComplete((done, failure) -> {
+                        if (failure == null) stream.finish();
+                        else stream.fail(failure);
+                    });
+                    return new LocalBridge.Reply(200, "", stream);
+                }
+                // Script completion waits hold a virtual HTTP thread, never the
+                // game thread. Their script deadline and scope cancellation still apply.
+                boolean scriptWait = "script".equals(field(request, "op"))
+                    && request.has("arguments") && request.get("arguments").isJsonObject()
+                    && java.util.Set.of("awaitAction", "awaitTicks").contains(field(request.getAsJsonObject("arguments"), "operation"));
+                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(scriptWait ? 310 : 15,TimeUnit.SECONDS)); }
                 catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
+                catch(InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    return new LocalBridge.Reply(503, JSON.toJson(JsonState.object("ok",false,"error",
+                        JsonState.object("code","interrupted_outcome_unknown","message","interrupted_outcome_unknown"))));
+                }
                 catch(Exception failure) {
                     Throwable cause = failure;
                     while ((cause instanceof CompletionException || cause instanceof ExecutionException) && cause.getCause() != null) cause = cause.getCause();
                     boolean stale = cause instanceof AgentService.StaleSessionException;
-                    return new LocalBridge.Reply(stale ? 409 : 400, JSON.toJson(JsonState.object("ok",false,"error",
-                        JsonState.object("code",stale ? "world_session_changed" : "callback_failed","message",cause.getMessage()))));
+                    var rejection = cause instanceof ScriptRequestRejection known ? known : null;
+                    int status = stale ? 409 : rejection != null ? 400 : 500;
+                    String code = stale ? "world_session_changed" : rejection != null ? rejection.code : "callback_failed";
+                    return new LocalBridge.Reply(status, JSON.toJson(JsonState.object("ok",false,"error",
+                        JsonState.object("code",code,"message",cause.getMessage()))));
                 }
             } else if (path.equals("/v1/agents/providers")) result = agents.backendStatus().get(30,TimeUnit.SECONDS);
             else if (path.equals("/v1/agents/projects")) result = method.equals("GET") ? agents.projects() : agents.projectCommand(request).get(110,TimeUnit.SECONDS);

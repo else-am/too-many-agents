@@ -3,6 +3,9 @@ package toomanyagents;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
 import com.mojang.serialization.JsonOps;
 import com.mojang.logging.LogUtils;
 import net.minecraft.commands.CommandSource;
@@ -50,7 +53,7 @@ import java.util.function.Supplier;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND }
+    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -70,13 +73,15 @@ final class GameAccess {
     private Map<String, AgentState> agentStates = Map.of();
     private final ConcurrentHashMap<Body, JsonObject> bodySnapshots = new ConcurrentHashMap<>();
     private String actionSession;
+    private ScriptScoreboard scriptScoreboard;
     private Set<UUID> failedBodyCleanup;
     private String cleanupSession;
     private PovCapture pov;
     private final Object queueLock = new Object();
     private final Set<ToolScope> toolScopes = new HashSet<>();
     private final ArrayDeque<PendingCall> toolQueue = new ArrayDeque<>();
-    private final ConcurrentHashMap<Body, String> actionStops = new ConcurrentHashMap<>();
+    private record ActionStop(Body body, String session, String scriptId) {}
+    private final Set<ActionStop> actionStops = ConcurrentHashMap.newKeySet();
     private long activeNanos, clockNanos = System.nanoTime();
     private boolean clockPaused;
 
@@ -86,6 +91,7 @@ final class GameAccess {
         private final MinecraftServer current;
         private String closed;
         private int pending;
+        private final Set<CompletableFuture<JsonObject>> waits = new HashSet<>();
 
         private ToolScope(String session, MinecraftServer current) {
             this.session = session;
@@ -96,10 +102,13 @@ final class GameAccess {
 
         void close(String reason) {
             var rejected = new ArrayList<PendingCall>();
+            var waiting = new ArrayList<CompletableFuture<JsonObject>>();
             synchronized (queueLock) {
                 if (closed != null) return;
                 closed = reason == null ? "turn_closed" : reason;
                 toolScopes.remove(this);
+                waiting.addAll(waits);
+                waits.clear();
                 toolQueue.removeIf(call -> {
                     if (call.scope != this) return false;
                     pending--;
@@ -109,6 +118,7 @@ final class GameAccess {
             }
             // Completion can call AgentService; never run those callbacks with queueLock held.
             for (var call : rejected) call.result.completeExceptionally(error(closed));
+            for (var wait : waiting) wait.completeExceptionally(error(closed));
         }
     }
 
@@ -119,13 +129,15 @@ final class GameAccess {
         final JsonObject args;
         final long deadline;
         final long expiresAt;
+        final ScriptStream stream;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
 
-        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
+        PendingCall(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt, ScriptStream stream) {
             this.scope = scope;
             this.body = body;
             this.operation = operation;
             this.args = args;
+            this.stream = stream;
             deadline = activeNanos + TimeUnit.SECONDS.toNanos(QUEUE_SECONDS);
             this.expiresAt = expiresAt;
         }
@@ -148,6 +160,10 @@ final class GameAccess {
     }
 
     CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt) {
+        return callInTurn(scope, body, operation, args, expiresAt, null);
+    }
+
+    CompletableFuture<JsonObject> callInTurn(ToolScope scope, Body body, Operation operation, JsonObject args, long expiresAt, ScriptStream stream) {
         var arguments = args == null ? new JsonObject() : args.deepCopy();
         synchronized (queueLock) {
             updateQueueClock();
@@ -158,7 +174,7 @@ final class GameAccess {
             if (scope.pending >= 16 || toolQueue.size() >= 256) {
                 return CompletableFuture.failedFuture(error("world_tool_queue_full"));
             }
-            var call = new PendingCall(scope, body, operation, arguments, expiresAt);
+            var call = new PendingCall(scope, body, operation, arguments, expiresAt, stream);
             toolQueue.addLast(call);
             scope.pending++;
             return call.result;
@@ -169,11 +185,14 @@ final class GameAccess {
     void clientTick() {
         var rejected = new ArrayList<PendingCall>();
         var reasons = new ArrayList<String>();
+        var waiting = new ArrayList<CompletableFuture<JsonObject>>();
         synchronized (queueLock) {
             updateQueueClock();
             for (var scope : toolScopes) {
                 if (scope.current != server.get() || !Objects.equals(scope.session, worldSession.get())) {
                     scope.closed = "world_session_changed";
+                    waiting.addAll(scope.waits);
+                    scope.waits.clear();
                 }
             }
             toolScopes.removeIf(scope -> scope.closed != null);
@@ -189,6 +208,7 @@ final class GameAccess {
             });
         }
         for (int i = 0; i < rejected.size(); i++) rejected.get(i).result.completeExceptionally(error(reasons.get(i)));
+        for (var wait : waiting) wait.completeExceptionally(error("world_session_changed"));
     }
 
     private void updateQueueClock() {
@@ -225,6 +245,21 @@ final class GameAccess {
                         if (failure != null) call.result.completeExceptionally(failure);
                         else call.result.complete(result);
                     });
+                } else if (call.stream != null || scriptWait(call.operation, call.args)) {
+                    synchronized (queueLock) {
+                        if (call.scope.closed != null) throw error(call.scope.closed);
+                        call.scope.waits.add(call.result);
+                    }
+                    call.result.whenComplete((result, failure) -> {
+                        synchronized (queueLock) { call.scope.waits.remove(call.result); }
+                    });
+                    // Register on the owning thread; the result itself contains only JSON.
+                    var waiting = call.stream == null ? awaitScript(current, call.body, call.args)
+                        : streamScript(current, call.body, call.args, call.stream);
+                    waiting.whenComplete((result, failure) -> {
+                        if (failure != null) call.result.completeExceptionally(failure);
+                        else call.result.complete(result);
+                    });
                 } else call.result.complete(executeOperation(current, call.body, call.operation, call.args));
             } catch (Exception | LinkageError failure) { call.result.completeExceptionally(failure); }
         }
@@ -232,17 +267,20 @@ final class GameAccess {
 
     /** Stop is accepted even while paused, and applied before the next action controller tick. */
     void requestActionStop(Body body, String expectedSession) {
+        requestActionStop(body, expectedSession, null);
+    }
+
+    void requestActionStop(Body body, String expectedSession, String scriptId) {
         if (body != null && expectedSession != null && expectedSession.equals(worldSession.get())) {
-            actionStops.put(body, expectedSession);
+            actionStops.add(new ActionStop(body, expectedSession, scriptId));
         }
     }
 
     private void drainActionStops() {
-        for (var entry : actionStops.entrySet()) {
-            if (!actionStops.remove(entry.getKey(), entry.getValue())) continue;
-            if (!entry.getValue().equals(worldSession.get())) continue;
-            var controller = actions.get(entry.getKey());
-            if (controller != null) controller.cancel("");
+        for (var stop : actionStops) {
+            if (!actionStops.remove(stop) || !stop.session.equals(worldSession.get())) continue;
+            var controller = actions.get(stop.body);
+            if (controller != null && (stop.scriptId == null || controller.controlsScript(stop.scriptId))) controller.releaseScript();
         }
     }
 
@@ -382,7 +420,9 @@ final class GameAccess {
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, () -> box(mob), () -> player(mob.getServer())));
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession,
+            () -> box(mob), () -> player(mob.getServer()),
+            request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
@@ -457,6 +497,7 @@ final class GameAccess {
         actionStops.clear();
         actions.values().forEach(a -> a.close("world_closed"));
         actions.clear(); bodySnapshots.clear(); actionSession = null;
+        scriptScoreboard = null;
     }
 
     CompletableFuture<JsonObject> development(JsonObject request) {
@@ -473,6 +514,22 @@ final class GameAccess {
                     var fixture=human.serverLevel().getEntity(UUID.fromString(snapshot.get("bodyUuid").getAsString()));
                     if(fixture==null || !fixture.getPersistentData().getBoolean("too_many_agents_development_fixture"))throw error("development_fixture_missing");
                     yield snapshot;
+                }
+                case "presentation", "sounds" -> {
+                    var uuid = UUID.fromString(string(request, "bodyUuid", 36));
+                    var entity = human.serverLevel().getEntity(uuid);
+                    if (!(entity instanceof Mob mob)) throw error("development_body_missing");
+                    var ref = new Body(mob.getStringUUID(), world(current), mob.level().dimension().location().toString());
+                    var controller = actions.get(ref);
+                    if (controller == null || !controller.scripted()) throw error("development_script_not_active");
+                    var latest = controller.status("");
+                    String readyId = string(request, "readyAction", 36);
+                    if (!latest.has("id") || !readyId.equals(latest.get("id").getAsString())
+                        || !"look".equals(latest.get("type").getAsString())
+                        || !"completed".equals(latest.get("status").getAsString()))
+                        throw error("development_listener_not_ready");
+                    yield action.equals("presentation") ? DevelopmentChecks.presentation(controller.hands)
+                        : DevelopmentChecks.sounds(controller.hands);
                 }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
                 default -> throw error("unknown_development_action");
@@ -580,6 +637,18 @@ final class GameAccess {
         return mob;
     }
 
+    /** Native item effects have completed; the next frame carries the resulting hand stack. */
+    void nativeUseFinished(net.neoforged.neoforge.event.entity.living.LivingEntityUseItemEvent.Finish event) {
+        var entity = event.getEntity();
+        if (!(entity.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
+        var animation = event.getItem().getUseAnimation();
+        if (animation == net.minecraft.world.item.UseAnim.EAT || animation == net.minecraft.world.item.UseAnim.DRINK)
+            entityEvent("entityEat", entity, null, null);
+        for (var controller : actions.values()) {
+            if (controller.mob == entity) { controller.hands.nativeUseFinished(event); return; }
+        }
+    }
+
     /** Only destructive removal proves loss; chunk unloading and dimension changes do not. */
     Body destroyedBody(Entity entity) {
         if (!(entity instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)
@@ -603,7 +672,7 @@ final class GameAccess {
         var controller = actions.remove(previous);
         if (controller != null) controller.close("body_dimension_changed");
         bodySnapshots.remove(previous);
-        actionStops.remove(previous);
+        actionStops.removeIf(stop -> stop.body.equals(previous));
         var rejected = new ArrayList<PendingCall>();
         synchronized (queueLock) {
             toolQueue.removeIf(call -> {
@@ -647,11 +716,82 @@ final class GameAccess {
     CompletableFuture<JsonObject> call(Body body, String expectedSession, Operation operation, JsonObject args) {
         // Do not allow callers to mutate queued arguments after validation.
         var arguments = args == null ? new JsonObject() : args.deepCopy();
+        if (scriptWait(operation, arguments))
+            return schedule(expectedSession, current -> awaitScript(current, body, arguments)).thenCompose(Function.identity());
         if (operation == Operation.POV) {
             return schedule(expectedSession, current -> { body(current, body); return UUID.fromString(body.entityUuid()); })
                 .thenCompose(id -> pov.capture(id,expectedSession,POV));
         }
         return schedule(expectedSession, current -> executeOperation(current, body, operation, arguments));
+    }
+
+    private static boolean scriptWait(Operation operation, JsonObject args) {
+        return operation == Operation.SCRIPT && args.has("operation")
+            && args.get("operation").getAsString().equals("awaitAction");
+    }
+
+    private CompletableFuture<JsonObject> awaitScript(MinecraftServer current, Body body, JsonObject args) {
+        var controller = actions(body, body(current, body));
+        controller.requireScript(string(args, "scriptId", 80));
+        return controller.awaitAction(string(args, "id", 80));
+    }
+
+    private CompletableFuture<JsonObject> streamScript(MinecraftServer current, Body body, JsonObject args, ScriptStream stream) {
+        var mob = body(current, body);
+        var controller = actions(body, mob);
+        controller.requireScript(string(args, "scriptId", 80));
+        if (!string(args, "operation", 40).equals("stream")) throw error("invalid_script_stream_operation");
+        var snapshots = new ScriptSnapshot();
+        return controller.stream(stream, terminalDeath -> snapshots.frame(scriptSnapshot(current, mob, controller, terminalDeath)));
+    }
+
+    private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller) {
+        return scriptSnapshot(current, mob, controller, false);
+    }
+
+    private JsonObject scriptSnapshot(MinecraftServer current, Mob mob, AgentActions controller, boolean terminalDeath) {
+        var snapshot = observe(current, mob, new JsonObject());
+        var level = (ServerLevel) mob.level();
+        var worldState = new JsonObject();
+        // Decimal strings preserve all signed-long bits through JSON/QuickJS.
+        worldState.addProperty("dayTime", Long.toString(level.getDayTime()));
+        worldState.addProperty("gameTime", Long.toString(level.getGameTime()));
+        worldState.addProperty("doDaylightCycle", level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DAYLIGHT));
+        worldState.addProperty("isRaining", level.isRaining());
+        worldState.addProperty("rainState", level.getRainLevel(1.0F));
+        // getThunderLevel multiplies by rain; it is not the raw protocol value.
+        worldState.addProperty("thunderState", level.thunderLevel);
+        worldState.addProperty("difficulty", level.getDifficulty().getKey());
+        worldState.addProperty("hardcore", current.isHardcore());
+        var spawn = level.getSharedSpawnPos();
+        worldState.add("spawnPoint", JsonState.object("x", spawn.getX(), "y", spawn.getY(), "z", spawn.getZ()));
+        snapshot.add("worldState", worldState);
+        snapshot.add("players", ScriptEntities.players(level));
+        if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
+            scriptScoreboard = new ScriptScoreboard(current.getScoreboard());
+        snapshot.add("scoreboard", scriptScoreboard.snapshot(level));
+        snapshot.add("bossBars", ScriptBossBars.snapshot(level, mob, controller.hands, snapshot.getAsJsonArray("entities")));
+        var items = new ScriptItems(level);
+        snapshot.add("hands", controller.hands.scriptSnapshot(items, terminalDeath));
+        snapshot.add("messages", controller.drainMessages());
+        snapshot.add("entityEvents", controller.drainEntityEvents());
+        snapshot.add("sounds", controller.drainSounds());
+        snapshot.add("particles", controller.drainParticles());
+        snapshot.add("blockEvents", controller.drainBlockEvents());
+        ScriptEntities.enrich(mob, snapshot.getAsJsonObject("body"), items);
+        for (var value : snapshot.getAsJsonArray("entities")) {
+            var observed = value.getAsJsonObject();
+            var entity = level.getEntity(observed.get("id").getAsInt());
+            if (entity != null) ScriptEntities.enrich(entity, observed, items);
+        }
+        snapshot.add("action", controller.status(""));
+        snapshot.add("blocks", ScriptSnapshot.blocks((ServerLevel) mob.level(), mob.blockPosition()));
+        snapshot.add("columnView", controller.columns.snapshot(level, mob, controller.completedActionSequence()));
+        snapshot.addProperty("minY", mob.level().getMinBuildHeight());
+        snapshot.addProperty("height", mob.level().getHeight());
+        snapshot.addProperty("revision", controller.nextSnapshotRevision());
+        snapshot.addProperty("completedActionSequence", controller.completedActionSequence());
+        return snapshot;
     }
 
     private JsonObject executeOperation(MinecraftServer current, Body body, Operation operation, JsonObject arguments) {
@@ -668,10 +808,41 @@ final class GameAccess {
             }
             case ACTION -> controller.start(arguments);
             case ACTION_STATUS -> controller.status(arguments.has("id") ? string(arguments,"id",80) : "");
-            case CANCEL -> controller.cancel(arguments.has("id") ? string(arguments,"id",80) : "");
+            case CANCEL -> {
+                var result = controller.cancel(arguments.has("id") ? string(arguments,"id",80) : "");
+                if (!arguments.has("id") || !controller.busy()) controller.releaseScript();
+                yield result;
+            }
             case BLOCKS -> blocks((ServerLevel) mob.level(), arguments);
-            case COMMAND -> command(current, mob, arguments);
+            case COMMAND -> { controller.requireUnscripted(); yield command(current, mob, arguments); }
+            case SCRIPT -> script(current, body, mob, controller, arguments);
             case POV -> throw error("pov_requires_client_renderer");
+        };
+    }
+
+    private JsonObject script(MinecraftServer current, Body body, Mob mob, AgentActions controller, JsonObject args) {
+        String id = string(args, "scriptId", 80);
+        String operation = string(args, "operation", 40);
+        if (operation.equals("end")) { controller.endScript(id); return new JsonObject(); }
+        if (operation.equals("begin")) {
+            int timeout = args.get("timeoutMs").getAsInt();
+            controller.claimScript(id, timeout);
+        } else controller.requireScript(id);
+        return switch (operation) {
+            case "begin", "snapshot" -> {
+                var snapshot = scriptSnapshot(current, mob, controller);
+                if (operation.equals("begin")) {
+                    snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
+                    snapshot.add("registryCodecs", ScriptRegistryData.snapshot((ServerLevel) mob.level()));
+                }
+                yield snapshot;
+            }
+            case "heartbeat" -> new JsonObject();
+            case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
+            case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
+            case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
+            case "stopMovement" -> controller.stopScriptMovement(args.has("id") ? string(args, "id", 80) : null);
+            default -> throw error("unknown_script_operation");
         };
     }
 
@@ -722,9 +893,15 @@ final class GameAccess {
         var seen = new HashSet<Body>();
         String world = world(current);
         for (var level : current.getAllLevels()) {
+            // Actions add/remove entities (fishing hooks, loot, orphaned bodies).
+            // Snapshot bodies before running them; the live entity iterator is not mutation-safe.
+            var bodies = new ArrayList<Mob>();
             for (var entity : level.getAllEntities()) {
-                if (!(entity instanceof Mob mob) || !mob.isAlive()
-                    || mob.getPersistentData().getString("too_many_agents_agent").isBlank()) continue;
+                if (entity instanceof Mob mob && !mob.getPersistentData().getString("too_many_agents_agent").isBlank())
+                    bodies.add(mob);
+            }
+            for (var mob : bodies) {
+                if (!mob.isAlive() || mob.isRemoved()) continue;
                 if (world.startsWith("unresolved:")) { mob.setNoAi(true); mob.setDeltaMovement(Vec3.ZERO); continue; }
                 var saved = mob.getPersistentData();
                 if (!saved.getString("too_many_agents_world").equals(world)) {
@@ -761,7 +938,7 @@ final class GameAccess {
                         drainActionStops();
                         boolean wasBusy = controller.busy();
                         controller.tick(agentState(mob).minecraftAccess());
-                        if (!wasBusy) idle(current,mob,controller);
+                        if (!wasBusy && !controller.scripted()) idle(current,mob,controller);
                         cacheBody(body,mob);
                     }
                 } catch (RuntimeException | LinkageError failure) {
@@ -777,7 +954,21 @@ final class GameAccess {
             }
         }
         var unloaded = actions.keySet().stream().filter(ref -> !seen.contains(ref)).toList();
-        for (var ref : unloaded) { actions.remove(ref).close("body_unloaded"); bodySnapshots.remove(ref); }
+        for (var ref : unloaded) {
+            var controller = actions.remove(ref);
+            var mob = controller.mob;
+            // A dead body in its original world can publish one final state.
+            // Unloading, discard and cross-dimension replacement are not death.
+            if (mob.isDeadOrDying() && mob.getStringUUID().equals(ref.entityUuid())
+                && ref.world().equals(world) && mob.level() instanceof ServerLevel level
+                && level.getServer() == current && level.dimension().location().toString().equals(ref.dimension())
+                && (mob.getRemovalReason() == null || mob.getRemovalReason() == Entity.RemovalReason.KILLED)
+                && (level.getEntity(mob.getUUID()) == mob || mob.getRemovalReason() == Entity.RemovalReason.KILLED
+                    && level.getEntity(mob.getUUID()) == null))
+                controller.closeAfterDeath(worldSession.get());
+            else controller.close("body_unloaded");
+            bodySnapshots.remove(ref);
+        }
         drainTools(current);
     }
 
@@ -881,6 +1072,7 @@ final class GameAccess {
 
     /** Move a body one physics step. The step is undone if it would leave its box, or move further out of it. */
     static void travelFollowingBody(Mob mob, BodyBox box) {
+        if (mob.isPassenger() || mob.isSleeping()) return; // Native riding/sleep owns its position.
         var before = mob.position();
         // NoAI disables physics as well as goals. Enable only travel(), never a mob/brain AI tick.
         mob.setNoAi(false);
@@ -1118,7 +1310,7 @@ final class GameAccess {
         var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, id));
         if (level == null) throw error("body_dimension_unavailable");
         var entity = level.getEntity(UUID.fromString(body.entityUuid()));
-        if (!(entity instanceof Mob mob) || !mob.isAlive() || mob.isRemoved()) throw error("body_missing_or_unloaded");
+        if (!(entity instanceof Mob mob) || !mob.isAlive() || mob.isRemoved()) throw ScriptRequestRejection.bodyUnavailable();
         if (mob.getPersistentData().getString("too_many_agents_agent").isBlank()) throw error("entity_is_not_an_agent_body");
         if (!allowRemoving && mob.getPersistentData().getBoolean("too_many_agents_removing")) throw error("agent_body_removal_pending");
         return mob;
@@ -1240,6 +1432,228 @@ final class GameAccess {
         result.addProperty("includeAir", includeAir);
         result.add("blocks", found);
         return result;
+    }
+
+    static JsonObject chatRecord(ServerLevel level, Component message, String position, UUID sender) {
+        var result = new JsonObject();
+        result.add("message", net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(
+            level.registryAccess().createSerializationContext(JsonOps.INSTANCE), message).getOrThrow());
+        result.addProperty("position", position);
+        if (sender != null) result.addProperty("sender", sender.toString());
+        return result;
+    }
+
+    void forcedMoveAttempt(ScriptForcedMoveEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        for (var controller : actions.values()) {
+            var body = controller.mob;
+            String lease = controller.currentScriptId();
+            if (lease == null || body.level() != event.level || body.isRemoved()) continue;
+            try {
+                if (event.root != body && !event.root.hasIndirectPassenger(body)) continue;
+                java.util.function.BooleanSupplier active = () -> controller.controlsScript(lease)
+                    && body.level() == event.level && !body.isRemoved();
+                event.watch(body, active, () -> controller.recordEntityEvent(
+                    JsonState.object("name", "forcedMove", "subject", body.getId(), "entities", new JsonArray()), active),
+                    reason -> { if (controller.controlsScript(lease)) controller.failObservation(reason); });
+            } catch (RuntimeException failed) {
+                controller.failObservation("script_forced_move_observation_failed");
+            }
+        }
+    }
+
+    void containerOpeners(ScriptContainerOpenersEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()
+            || worldSession.get() == null) return;
+        String currentWorld = world(event.level.getServer());
+        String dimension = event.level.dimension().location().toString();
+        // Menus survive script release and are also opened by physical tools.
+        for (var entry : actions.entrySet()) {
+            var ref = entry.getKey();
+            var controller = entry.getValue();
+            var body = controller.mob;
+            var hands = controller.hands;
+            if (!ref.world().equals(currentWorld) || !ref.dimension().equals(dimension)
+                || !ref.entityUuid().equals(body.getStringUUID()) || hands.visibleBody() != body
+                || event.level.getEntity(body.getUUID()) != body || !hands.isContainerOpener(event.level, event.bounds)
+                || event.players.stream().anyMatch(player -> player == hands)) continue;
+            if (event.ownsContainer.test(hands)) event.players.add(hands);
+        }
+    }
+
+    void blockEvent(ScriptBlockEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        for (var controller : actions.values()) controller.recordBlockEvent(event);
+    }
+
+    void particleEvent(ScriptParticleEvent event) {
+        if (event.level.getServer() != server.get() || !event.level.getServer().isSameThread()) return;
+        var type = BuiltInRegistries.PARTICLE_TYPE.getKey(event.options.getType());
+        var position = event.position;
+        var data = JsonState.object("name", type.getNamespace().equals("minecraft") ? type.getPath() : type.toString(),
+            "x", position.x, "y", position.y, "z", position.z,
+            "offsetX", event.offset.x, "offsetY", event.offset.y, "offsetZ", event.offset.z,
+            "amount", event.count, "velocityOffset", event.speed, "longDistance", event.longDistance);
+        for (var controller : actions.values()) {
+            if (!controller.scripted() || controller.mob.level() != event.level
+                || event.recipient != null && event.recipient != controller.hands) continue;
+            if (controller.mob.blockPosition().closerToCenterThan(position, event.longDistance ? 512 : 32))
+                controller.recordParticle(data);
+        }
+    }
+
+    void soundEvent(net.neoforged.neoforge.event.PlayLevelSoundEvent event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || level.getServer() != server.get()
+            || !level.getServer().isSameThread()) return;
+        Vec3 position;
+        if (event instanceof net.neoforged.neoforge.event.PlayLevelSoundEvent.AtPosition at) position = at.getPosition();
+        else if (event instanceof net.neoforged.neoforge.event.PlayLevelSoundEvent.AtEntity at) position = at.getEntity().position();
+        else return;
+        for (var controller : actions.values()) {
+            if (controller.scripted() && controller.mob.level() == level) controller.recordSound(event, position);
+        }
+    }
+
+    void entitySignal(ScriptEntitySignalEvent event) {
+        String name = event.animation ? switch (event.code) {
+            case 0, 3 -> "entitySwingArm";
+            case 4 -> "entityCriticalEffect";
+            case 5 -> "entityMagicCriticalEffect";
+            default -> null;
+        } : switch (event.code) {
+            case 6 -> "entityTaming";
+            case 7 -> "entityTamed";
+            case 8 -> "entityShakingOffWater";
+            case 10 -> "entityEatingGrass";
+            default -> null;
+        };
+        // Damage/death and wake already have native or observed-state sources.
+        if (name != null) entityEvent(name, event.entity, null, null);
+    }
+
+    void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem) {
+        entityEvent(kind, subject, cause, originalItem, () -> true);
+    }
+
+    void collectionEvent(ScriptCollectionEvent event) {
+        if (!(event.collector.level() instanceof ServerLevel level) || level.getServer() != server.get()
+            || !level.getServer().isSameThread()) return;
+        // AgentHands forwards take to its body; its item post-event already emitted.
+        if (event.collected instanceof net.minecraft.world.entity.item.ItemEntity
+            && actions.values().stream().anyMatch(controller -> controller.mob == event.collector
+                && controller.hands.forwardedTakes > 0)) return;
+        entityEvent("playerCollect", event.collector, event.collected, event.originalItem);
+    }
+
+    void deathEvent(net.neoforged.neoforge.event.entity.living.LivingDeathEvent event) {
+        entityEvent("entityDead", event.getEntity(), null, null, () -> !event.isCanceled());
+    }
+
+    private void entityEvent(String kind, Entity subject, Entity cause, ItemStack originalItem,
+                             java.util.function.BooleanSupplier accepted) {
+        if (!(subject.level() instanceof ServerLevel level) || level.getServer() != server.get()) return;
+        if (!level.getServer().isSameThread()) return;
+        if (subject instanceof AgentHands hands) subject = hands.visibleBody();
+        if (cause instanceof AgentHands hands) cause = hands.visibleBody();
+        for (var controller : actions.values()) {
+            if (!controller.scripted() || controller.mob.level() != level || controller.mob.distanceToSqr(subject) > OBSERVE_RADIUS * OBSERVE_RADIUS) continue;
+            try {
+                var event = new JsonObject(); event.addProperty("name", kind);
+                var entities = new JsonArray();
+                var items = new ScriptItems(level);
+                var primary = Observations.entity(subject);
+                ScriptEntities.enrich(subject, primary, items);
+                entities.add(primary);
+                event.addProperty("subject", subject.getId());
+                if (cause != null && controller.mob.distanceToSqr(cause) <= OBSERVE_RADIUS * OBSERVE_RADIUS) {
+                    event.addProperty("cause", cause.getId());
+                    var secondary = Observations.entity(cause);
+                    ScriptEntities.enrich(cause, secondary, items);
+                    if (originalItem != null) secondary.add("droppedItem", JsonState.object("wire", items.wire(originalItem)));
+                    entities.add(secondary);
+                }
+                event.add("entities", entities);
+                controller.recordEntityEvent(event, accepted);
+            } catch (RuntimeException failure) {
+                // Observation errors terminate only this lease, not native gameplay.
+                controller.failObservation("script_entity_event_serialization_failed");
+            }
+        }
+    }
+
+    void publicChat(ServerPlayer sender, Component message) {
+        if (sender.getServer() != server.get()) return;
+        if (!sender.getServer().isSameThread()) throw error("chat_requires_server_thread");
+        var formatted = Component.translatable("chat.type.text", sender.getDisplayName(), message);
+        broadcastScriptChat(chatRecord(sender.serverLevel(), formatted, "chat", sender.getUUID()));
+    }
+
+    private void broadcastScriptChat(JsonObject message) {
+        for (var controller : actions.values()) controller.recordMessage(message);
+    }
+
+    private CompletableFuture<Suggestions> tabComplete(Mob mob, JsonObject args) {
+        String text = string(args, "text", 4096);
+        if (text.codePoints().anyMatch(c -> c < 32 || c == 127)) throw error("invalid_completion_text");
+        var current = mob.getServer();
+        var source = player(current).createCommandSourceStack().withSuppressedOutput()
+            .withEntity(mob).withLevel((ServerLevel) mob.level()).withPosition(mob.position()).withRotation(mob.getRotationVector());
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).commands)
+            source = source.withPermission(0);
+        var reader = new com.mojang.brigadier.StringReader(text);
+        if (reader.canRead() && reader.peek() == '/') reader.skip();
+        var dispatcher = current.getCommands().getDispatcher();
+        var parsed = dispatcher.parse(reader, source);
+        var context = parsed.getContext();
+        var suggestion = context.findSuggestionContext(text.length());
+        var futures = new ArrayList<CompletableFuture<Suggestions>>();
+        var command = context.build(text);
+        int start = Math.min(suggestion.startPos, text.length());
+        // Brigadier's completion loop omits the permission check used when parsing.
+        // Apply it here before invoking providers, including nested argument providers.
+        for (var child : suggestion.parent.getChildren()) {
+            if (!child.canUse(source)) continue;
+            try {
+                futures.add(child.listSuggestions(command, new SuggestionsBuilder(text, start)));
+            } catch (CommandSyntaxException ignored) {
+                // Invalid partial input has no suggestions from this child.
+            }
+        }
+        return CompletableFuture.allOf(futures.toArray(CompletableFuture[]::new))
+            .thenApply(ignored -> Suggestions.merge(text, futures.stream().map(CompletableFuture::join).toList()));
+    }
+
+    private JsonObject scriptChat(Mob mob, JsonObject args) {
+        String text = string(args, "message", 4096);
+        if (text.isBlank() || text.codePoints().anyMatch(c -> c < 32 || c == 127 || c == 167)) throw error("invalid_chat_message");
+        var current = mob.getServer();
+        if ((args.has("target") || !text.startsWith("/")) && text.length() > 256) throw error("chat_message_too_long");
+        if (args.has("target")) {
+            String target = string(args, "target", 256);
+            var recipient = current.getPlayerList().getPlayerByName(target);
+            var matches = actions.values().stream().filter(a -> a.mob.getName().getString().equals(target) && a.mob.isAlive()).toList();
+            if (recipient == null && matches.size() != 1 || recipient != null && !matches.isEmpty()) throw error("whisper_target_missing_or_ambiguous");
+            var incoming = Component.translatable("commands.message.display.incoming", mob.getName(), Component.literal(text));
+            if (recipient != null) recipient.sendSystemMessage(incoming);
+            else matches.get(0).recordMessage(chatRecord((ServerLevel) mob.level(), incoming, "chat", mob.getUUID()));
+            var outgoing = Component.translatable("commands.message.display.outgoing", Component.literal(target), Component.literal(text));
+            var owner = actions.values().stream().filter(a -> a.mob == mob).findFirst().orElseThrow();
+            owner.recordMessage(chatRecord((ServerLevel) mob.level(), outgoing, "system", null));
+        } else if (text.startsWith("/")) {
+            var request = new JsonObject(); request.addProperty("command", text);
+            var result = command(current, mob, request);
+            var owner = actions.values().stream().filter(a -> a.mob == mob).findFirst().orElseThrow();
+            for (var feedback : result.getAsJsonArray("feedback"))
+                owner.recordMessage(chatRecord((ServerLevel) mob.level(), Component.literal(feedback.getAsString()), "system", null));
+            return result;
+        } else {
+            var formatted = Component.translatable("chat.type.text", mob.getName(), Component.literal(text));
+            current.getPlayerList().broadcastSystemMessage(formatted, false);
+            var record = chatRecord((ServerLevel) mob.level(), formatted, "chat", mob.getUUID());
+            record.addProperty("verified", false); // Native body speech has no player signature.
+            broadcastScriptChat(record);
+        }
+        return JsonState.object("status", "sent");
     }
 
     private JsonObject command(MinecraftServer current, Mob mob, JsonObject args) {

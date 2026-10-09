@@ -23,7 +23,9 @@ import java.util.function.Supplier;
 
 /** HTTP only. The supplied functions own all Minecraft thread/lifecycle rules. */
 final class LocalBridge implements AutoCloseable {
-    record Reply(int status, String body) {}
+    record Reply(int status, String body, ScriptStream stream) {
+        Reply(int status, String body) { this(status, body, null); }
+    }
     interface AgentRoutes { Reply handle(String method, String path, JsonObject request); }
     String token() { return token; }
     String url() { return "http://127.0.0.1:" + http.getAddress().getPort(); }
@@ -133,6 +135,17 @@ final class LocalBridge implements AutoCloseable {
     }
 
     private static void send(HttpExchange exchange, Reply reply) throws IOException {
+        if (reply.stream() != null) {
+            exchange.getResponseHeaders().set("Content-Type", "application/x-ndjson; charset=utf-8");
+            exchange.getResponseHeaders().set("Cache-Control", "no-store");
+            try {
+                exchange.sendResponseHeaders(reply.status(), 0);
+                reply.stream().write(exchange.getResponseBody());
+            } finally {
+                if (reply.stream().open()) reply.stream().fail(new IOException("script_state_connection_closed"));
+            }
+            return;
+        }
         byte[] body = reply.body().getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "application/json; charset=utf-8");
         exchange.getResponseHeaders().set("Cache-Control", "no-store");

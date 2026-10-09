@@ -77,6 +77,52 @@ final class DevelopmentChecks {
         return snapshot();
     }
 
+    static JsonObject presentation(AgentHands recipient) {
+        var level = recipient.serverLevel();
+        requireDevelopment(level);
+        var component = net.minecraft.network.chat.Component.literal("Native header")
+            .withStyle(net.minecraft.ChatFormatting.GOLD);
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundTabListPacket(component,
+            net.minecraft.network.chat.Component.literal("Native footer")));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
+            net.minecraft.network.chat.Component.translatable("chat.type.text",
+                net.minecraft.network.chat.Component.literal("Fixture"), net.minecraft.network.chat.Component.literal("Title"))));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket(
+            net.minecraft.network.chat.Component.literal("Native subtitle")), null);
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitlesAnimationPacket(-1, 40, 5));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket(
+            net.minecraft.network.chat.Component.literal("Native action bar")));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundClearTitlesPacket(true));
+        var unrelated = new net.neoforged.neoforge.common.util.FakePlayer(level,
+            new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "FixtureControl"));
+        unrelated.connection.send(new net.minecraft.network.protocol.game.ClientboundSetTitleTextPacket(
+            net.minecraft.network.chat.Component.literal("Wrong recipient")));
+        return JsonState.object("bodyUuid", recipient.visibleBody().getStringUUID(),
+            "nativePackets", 6, "negativeControlPackets", 1, "tick", level.getGameTime());
+    }
+
+    static JsonObject sounds(AgentHands recipient) {
+        var level = recipient.serverLevel();
+        requireDevelopment(level);
+        var body = recipient.visibleBody();
+        var position = body.position();
+        var sound = net.minecraft.sounds.SoundEvents.NOTE_BLOCK_HARP;
+        var source = net.minecraft.sounds.SoundSource.MASTER;
+        // This packet already chose its recipient; ordinary range filtering must not remove it.
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundPacket(
+            sound, source, position.x + 32, position.y, position.z, 0.5F, 1.25F, 1L));
+        recipient.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundEntityPacket(
+            sound, source, body, 0.75F, 0.75F, 2L), null);
+        level.playSound(null, body.getX(), body.getY(), body.getZ(),
+            net.minecraft.sounds.SoundEvents.NOTE_BLOCK_BELL.value(), source, 0.5F, 1.0F);
+        var unrelated = new net.neoforged.neoforge.common.util.FakePlayer(level,
+            new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "FixtureControl"));
+        unrelated.connection.send(new net.minecraft.network.protocol.game.ClientboundSoundPacket(
+            sound, source, position.x, position.y, position.z, 0.25F, 0.25F, 3L));
+        return JsonState.object("bodyUuid", body.getStringUUID(), "nativePackets", 2,
+            "worldSounds", 1, "negativeControlPackets", 1, "tick", level.getGameTime());
+    }
+
     static void tick(MinecraftServer server) {
         var run = active;
         if (run == null || run.level.getServer() != server) return;

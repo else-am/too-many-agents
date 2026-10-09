@@ -3,20 +3,45 @@ package toomanyagents;
 import com.google.gson.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.inventory.ClickType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 /** One body's server-thread action state. Models choose goals; native controls advance each tick. */
 final class AgentActions {
     static final List<String> TYPES = List.of("walk", "look", "mine", "place", "equip", "creative_item", "use", "release", "pickup", "give", "interact", "menu", "menu_click", "menu_close");
+    private static final Set<String> SCRIPT_TYPES = Set.of("set_settings", "select_hotbar", "menu_button", "anvil_name", "select_trade", "edit_book", "attack", "swing", "place_entity", "control", "consume", "dismount", "update_sign", "fish", "vehicle_control", "wake", "chat", "tab_complete", "creative_slot", "creative_flying", "creative_fly", "set_command_block", "elytra_fly");
+    private static final Set<String> CONTROLS = Set.of("forward", "back", "left", "right", "jump", "sprint", "sneak");
+    private final java.util.function.Function<JsonObject, JsonObject> chatAction;
+    private final java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete;
+    private CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestions;
+    private long suggestionDeadline;
+    private final ArrayDeque<JsonObject> messages = new ArrayDeque<>();
+    private int messageSize;
+    private record PendingEntityEvent(JsonObject data, java.util.function.BooleanSupplier accepted) {}
+    private final ArrayDeque<PendingEntityEvent> entityEvents = new ArrayDeque<>();
+    private int entityEventSize;
+    private final ArrayDeque<Supplier<JsonObject>> sounds = new ArrayDeque<>();
+    private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
+    private final ArrayDeque<JsonObject> blockEvents = new ArrayDeque<>();
+    private boolean creativeFlying;
+    private boolean ownsElytraFlight;
+    private final Set<String> heldControls = new HashSet<>();
+    private net.minecraft.world.entity.vehicle.Boat controlledBoat;
+    private float vehicleLeft, vehicleForward;
+    private ScriptVehicleControls mountedControls;
     final Mob mob;
     final AgentHands hands;
     final AmbientBehavior ambient;
@@ -31,17 +56,260 @@ final class AgentActions {
     private Vec3 lastPosition;
     private BlockState original;
     private boolean mining;
+    private boolean approachTargets;
+    private boolean travelled;
+    private String scriptId, lastScriptId;
+    private long scriptDeadline, scriptHeartbeat;
+    private CompletableFuture<JsonObject> completion;
+    private ScriptStream stateStream;
+    private java.util.function.Function<Boolean, JsonObject> stateSnapshot;
+    private long snapshotRevision;
+    private long actionSequence, completedActionSequence;
+    ScriptColumns columns;
 
-    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player) {
+    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
+                 java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete) {
         this.mob = mob;
         this.session = session;
         this.box = box;
         this.player = player;
-        hands = new AgentHands(mob);
+        this.chatAction = chatAction;
+        this.tabComplete = tabComplete;
+        hands = new AgentHands(mob, box);
+        hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
+            overlay ? "game_info" : "system", null));
+        hands.presentationSink = this::recordMessage;
+        hands.soundSink = this::recordSound;
+        hands.blockEventSink = this::recordBlockPacket;
         ambient = new AmbientBehavior(mob);
     }
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
+    boolean scripted() { return scriptId != null; }
+    String currentScriptId() { return scriptId; }
+    boolean controlsScript(String id) { return Objects.equals(scriptId, id); }
+
+    void claimScript(String id, int timeoutMs) {
+        expireScript();
+        if (scripted() || busy()) throw error("body_already_busy");
+        UUID.fromString(id);
+        if (timeoutMs < 1 || timeoutMs > 300_000) throw error("invalid_script_deadline");
+        messages.clear(); messageSize = 0;
+        entityEvents.clear(); entityEventSize = 0;
+        sounds.clear();
+        particles.clear();
+        blockEvents.clear();
+        scriptId = id;
+        columns = new ScriptColumns();
+        lastScriptId = id;
+        snapshotRevision = 0;
+        scriptDeadline = System.nanoTime() + timeoutMs * 1_000_000L;
+        scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
+        stopMotion();
+    }
+
+    void requireScript(String id) {
+        expireScript();
+        if (scriptId == null || !scriptId.equals(id)) throw ScriptRequestRejection.leaseUnavailable();
+        scriptHeartbeat = System.nanoTime() + 10_000_000_000L;
+    }
+
+    void requireUnscripted() {
+        expireScript();
+        if (scripted()) throw error("body_controlled_by_script");
+    }
+
+    void endScript(String id) {
+        if (!Objects.equals(lastScriptId, id) || (scripted() && !controlsScript(id)))
+            throw error("script_no_longer_controls_body");
+        if (controlsScript(id)) releaseScript();
+    }
+
+    void releaseScript() {
+        scriptId = null;
+        columns = null;
+        creativeFlying = false;
+        stopElytraFlight();
+        messages.clear(); messageSize = 0;
+        entityEvents.clear(); entityEventSize = 0;
+        sounds.clear();
+        particles.clear();
+        blockEvents.clear();
+        clearControls();
+        cancel("");
+        if (stateStream != null) stateStream.finish();
+        stateStream = null;
+        stateSnapshot = null;
+    }
+
+    void recordMessage(JsonObject message) {
+        if (!scripted()) return;
+        int size = message.toString().length();
+        if (messages.size() >= 64 || messageSize + size > 65536) {
+            if (stateStream != null) stateStream.fail(error("script_chat_overflow"));
+            releaseScript();
+            return;
+        }
+        messages.addLast(message);
+        messageSize += size;
+    }
+
+    JsonArray drainMessages() {
+        var result = new JsonArray();
+        messages.forEach(result::add);
+        messages.clear(); messageSize = 0;
+        return result;
+    }
+
+    void recordEntityEvent(JsonObject event, java.util.function.BooleanSupplier accepted) {
+        if (!scripted()) return;
+        int size = event.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        if (entityEvents.size() >= 64 || entityEventSize + size > 1024 * 1024) {
+            failObservation("script_entity_event_overflow"); return;
+        }
+        entityEvents.addLast(new PendingEntityEvent(event, accepted)); entityEventSize += size;
+    }
+
+    void failObservation(String reason) {
+        if (stateStream != null) stateStream.fail(error(reason));
+        try { releaseScript(); }
+        catch (RuntimeException cleanup) {
+            // Native event listeners must not break damage/pickup if cleanup fails.
+            com.mojang.logging.LogUtils.getLogger().warn("Script event cleanup failed for body {}", mob.getStringUUID(), cleanup);
+        }
+    }
+
+    JsonArray drainEntityEvents() {
+        var result = new JsonArray();
+        for (var event : entityEvents) if (event.accepted().getAsBoolean()) result.add(event.data());
+        entityEvents.clear(); entityEventSize = 0;
+        return result;
+    }
+
+    void recordBlockEvent(ScriptBlockEvent event) {
+        if (!scripted() || mob.level() != event.level || !event.level.getServer().isSameThread()
+            || !event.level.hasChunkAt(event.position)) return;
+        boolean breaking = event.block == null;
+        if (breaking && (event.breakerId == mob.getId() || event.breakerId == hands.getId())) return;
+        double range = breaking ? 32 : 64;
+        if (mob.position().distanceToSqr(Vec3.atLowerCornerOf(event.position)) >= range * range) return;
+        if (blockEvents.size() >= 256) { failObservation("script_block_event_overflow"); return; }
+        try { blockEvents.addLast(event.snapshot()); }
+        catch (RuntimeException invalid) { failObservation("script_invalid_block_event"); }
+    }
+
+    private void recordBlockPacket(net.minecraft.network.protocol.Packet<?> packet) {
+        // AgentHands is never in the player list: native broadcasts are observed
+        // through ServerLevel, and only explicitly addressed packets reach here.
+        if (!(hands.level() instanceof ServerLevel level) || !level.getServer().isSameThread()) return;
+        if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockEventPacket event)
+            recordBlockEvent(ScriptBlockEvent.action(level, event.getPos(), event.getBlock(), event.getB0(), event.getB1()));
+        else if (packet instanceof net.minecraft.network.protocol.game.ClientboundBlockDestructionPacket event)
+            recordBlockEvent(ScriptBlockEvent.breaking(level, event.getId(), event.getPos(), event.getProgress()));
+    }
+
+    JsonArray drainBlockEvents() {
+        var result = new JsonArray();
+        blockEvents.forEach(result::add);
+        blockEvents.clear();
+        return result;
+    }
+
+    void recordParticle(JsonObject event) {
+        if (!scripted()) return;
+        if (particles.size() >= 256) { failObservation("script_particle_event_overflow"); return; }
+        particles.addLast(event);
+    }
+
+    JsonArray drainParticles() {
+        var result = new JsonArray();
+        particles.forEach(result::add);
+        particles.clear();
+        return result;
+    }
+
+    void recordSound(net.neoforged.neoforge.event.PlayLevelSoundEvent event, Vec3 position) {
+        if (!scripted()) return;
+        if (sounds.size() >= 256) { failObservation("script_sound_event_overflow"); return; }
+        // Keep the event until snapshot time, after later listeners can cancel or modify it.
+        var listener = mob.position();
+        sounds.addLast(() -> {
+            if (event.isCanceled() || event.getSound() == null) return null;
+            float volume = event.getNewVolume(), pitch = event.getNewPitch();
+            float range = event.getSound().value().getRange(volume);
+            if (!Float.isFinite(volume) || !Float.isFinite(pitch) || !Float.isFinite(range))
+                throw error("script_invalid_sound_event");
+            if (range <= 0 || listener.distanceToSqr(position) >= (double) range * range) return null;
+            return soundRecord(event.getSound(), position, volume, pitch);
+        });
+    }
+
+    private void recordSound(net.minecraft.network.protocol.Packet<?> packet) {
+        if (!scripted()) return;
+        if (sounds.size() >= 256) { failObservation("script_sound_event_overflow"); return; }
+        JsonObject value;
+        try {
+            if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket sound) {
+                value = soundRecord(sound.getSound(), new Vec3(sound.getX(), sound.getY(), sound.getZ()),
+                    sound.getVolume(), sound.getPitch());
+            } else if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundEntityPacket sound) {
+                var entity = mob.level().getEntity(sound.getId());
+                if (entity == null) return;
+                value = soundRecord(sound.getSound(), entity.position(), sound.getVolume(), sound.getPitch());
+            } else return;
+        } catch (RuntimeException malformed) {
+            failObservation("script_invalid_sound_event"); return;
+        }
+        // Native recipient selection already happened; do not range-filter targeted packets again.
+        sounds.addLast(() -> value);
+    }
+
+    private static JsonObject soundRecord(net.minecraft.core.Holder<net.minecraft.sounds.SoundEvent> sound,
+                                          Vec3 position, float volume, float pitch) {
+        if (!Float.isFinite(volume) || !Float.isFinite(pitch) || !Double.isFinite(position.x)
+            || !Double.isFinite(position.y) || !Double.isFinite(position.z)) throw error("script_invalid_sound_event");
+        var location = sound.value().getLocation();
+        String name = sound.unwrapKey().isPresent() && location.getNamespace().equals("minecraft")
+            ? location.getPath() : location.toString();
+        return JsonState.object("name", name, "position", JsonState.object("x", position.x, "y", position.y, "z", position.z),
+            "volume", volume, "pitch", pitch);
+    }
+
+    JsonArray drainSounds() {
+        var result = new JsonArray();
+        while (!sounds.isEmpty()) {
+            var value = sounds.removeFirst().get();
+            if (value != null) result.add(value);
+        }
+        return result;
+    }
+
+    long nextSnapshotRevision() { return ++snapshotRevision; }
+    long completedActionSequence() { return completedActionSequence; }
+
+    CompletableFuture<JsonObject> stream(ScriptStream stream, java.util.function.Function<Boolean, JsonObject> snapshot) {
+        if (stateStream != null) throw error("script_state_stream_already_open");
+        stateStream = stream;
+        stateSnapshot = snapshot;
+        stream.offer(snapshot.apply(false));
+        return stream.completion;
+    }
+
+    CompletableFuture<JsonObject> awaitAction(String id) {
+        var state = status(id);
+        if (!"running".equals(text(state, "status"))) return CompletableFuture.completedFuture(state);
+        return completion.thenApply(JsonObject::deepCopy);
+    }
+
+    private void expireScript() {
+        long now = System.nanoTime();
+        if (scripted() && (now >= scriptDeadline || now >= scriptHeartbeat)) {
+            if (busy()) finish("interrupted", "script_expired", null);
+            releaseScript();
+        }
+    }
+
+    JsonObject startScriptAction(JsonObject request) { return start(request, false); }
     JsonObject status(String id) {
         if (id == null || id.isBlank()) return action == null ? object("status", "idle") : action.deepCopy();
         var found = history.get(id);
@@ -50,34 +318,71 @@ final class AgentActions {
     }
 
     JsonObject start(JsonObject request) {
-        if (busy()) throw error("action_already_running_cancel_or_wait");
+        requireUnscripted();
+        return start(request, true);
+    }
+
+    private static IllegalStateException startRejection(boolean approachTargets, String message) {
+        return approachTargets ? error(message) : ScriptRequestRejection.beforeStart(message);
+    }
+
+    private JsonObject start(JsonObject request, boolean approachTargets) {
+        if (busy()) throw startRejection(approachTargets, "action_already_running_cancel_or_wait");
         String type = text(request, "type");
-        if (!TYPES.contains(type)) throw error("unknown_action_type");
-        if (request.has("position") && request.has("entity")) throw error("choose_position_or_entity");
-        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity")) throw error("position_or_entity_required");
-        if (List.of("mine", "place").contains(type) && !request.has("position")) throw error("position_required");
-        if (type.equals("give") && !request.has("entity")) throw error("entity_required");
+        if (!TYPES.contains(type) && !(SCRIPT_TYPES.contains(type) && !approachTargets)) throw startRejection(approachTargets, "unknown_action_type");
+        if (type.equals("walk") && creativeFlying) throw startRejection(approachTargets, "stop_creative_flight_before_navigation");
+        if (type.equals("creative_flying") && (!request.has("state") || !request.get("state").isJsonPrimitive()
+            || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_flight_state");
+        if (type.equals("creative_fly") || type.equals("creative_flying") && request.get("state").getAsBoolean()) requireCreativeFlight();
+        if (type.equals("creative_fly") && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_fly_to");
+        if (type.equals("walk") && !heldControls.isEmpty()) throw startRejection(approachTargets, "release_manual_controls_before_navigation");
+        if (mob.isSleeping() && (type.equals("walk")
+            || type.equals("control") && request.has("state") && request.get("state").getAsBoolean())) throw startRejection(approachTargets, "wake_before_movement");
+        if (type.equals("walk") && mob.isPassenger()) throw startRejection(approachTargets, "dismount_before_navigation");
+        if (type.equals("control") && (!CONTROLS.contains(text(request, "control")) || !request.has("state")
+            || !request.get("state").isJsonPrimitive() || !request.getAsJsonPrimitive("state").isBoolean())) throw startRejection(approachTargets, "invalid_control");
+        if (mob.isFallFlying() && List.of("walk", "creative_fly").contains(type))
+            throw startRejection(approachTargets, "land_before_ground_navigation_or_creative_flight");
+        if (request.has("position") && request.has("entity")) throw startRejection(approachTargets, "choose_position_or_entity");
+        if (List.of("walk", "look", "interact").contains(type) && !request.has("position") && !request.has("entity") && !(type.equals("look") && !approachTargets && request.has("yaw") && request.has("pitch"))) throw startRejection(approachTargets, "position_or_entity_required");
+        if (List.of("mine", "place", "place_entity", "update_sign", "creative_fly", "set_command_block").contains(type) && !request.has("position")) throw startRejection(approachTargets, "position_required");
+        if (List.of("give", "attack").contains(type) && !request.has("entity")) throw startRejection(approachTargets, "entity_required");
+        if (type.equals("set_command_block") && (!request.has("command") || !request.get("command").isJsonPrimitive()
+            || !request.getAsJsonPrimitive("command").isString() || request.get("command").getAsString().length() > 32767))
+            throw startRejection(approachTargets, "invalid_command_block_command");
+        if (type.equals("set_settings")) mainHandSetting(request);
         args = request.deepCopy();
         if (args.has("position")) {
             var pos = BlockPos.containing(position(args));
-            if (List.of("mine", "place", "interact").contains(type)) {
+            if (List.of("mine", "place", "interact", "place_entity", "update_sign", "set_command_block").contains(type)) {
                 var level = (ServerLevel) mob.level();
-                if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw error("outside_build_height");
-                if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
+                if (pos.getY() < level.getMinBuildHeight() || pos.getY() >= level.getMaxBuildHeight()) throw startRejection(approachTargets, "outside_build_height");
+                if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw startRejection(approachTargets, "target_unloaded_or_outside_world");
+                if (args.has("expectedStateId") && Block.getId(level.getBlockState(pos)) != integer(args, "expectedStateId", -1)) throw startRejection(approachTargets, "target_changed");
             }
         }
-        if (List.of("place", "interact").contains(type) && args.has("position")) blockFace();
-        if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw error("pickup_target_must_be_item");
+        if (List.of("place", "interact", "place_entity").contains(type) && args.has("position")) blockFace();
+        if (type.equals("pickup") && args.has("entity") && !(entity() instanceof ItemEntity)) throw startRejection(approachTargets, "pickup_target_must_be_item");
+        // From here preparation can change native controls before a sequence
+        // is published. Failures must remain uncertain, never before-start.
+        // Vehicle eligibility syncs the proxy's item use/equipment first.
+        if (type.equals("control") && request.get("state").getAsBoolean() && mob.isPassenger()
+            && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
+            requireVehicleController();
+        }
         kind = type;
+        completion = new CompletableFuture<>();
         action = object("id", UUID.randomUUID().toString(), "type", kind, "status", "running", "phase", "starting", "terminal", false, "session", session);
+        action.addProperty("sequence", ++actionSequence);
         history.put(text(action, "id"), action);
         while (history.size() > 32) history.remove(history.keySet().iterator().next());
         ticks = stillTicks = 0;
         lastPosition = mob.position();
-        original = args.has("position") && List.of("mine", "place", "interact").contains(kind)
+        original = args.has("position") && List.of("mine", "place", "interact", "place_entity").contains(kind)
             ? mob.level().getBlockState(BlockPos.containing(position(args))) : null;
         mining = false;
-        GameAccess.stopFollowingMotion(mob);
+        this.approachTargets = approachTargets;
+        stopMotion();
         return action.deepCopy();
     }
 
@@ -85,32 +390,80 @@ final class AgentActions {
         if (id != null && !id.isBlank() && (action == null || !id.equals(text(action, "id")))) return status(id);
         if (busy()) finish("interrupted", "cancelled", null);
         // A completed 'use' action can leave a bow or other held item in use.
-        hands.stopUsingItem();
+        hands.cancelUse();
         hands.cancelMine();
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
         return status("");
     }
 
+    // Called only after GameAccess validates the current script lease.
+    JsonObject stopScriptMovement(String id) {
+        clearControls();
+        if (busy() && ("walk".equals(kind) || "creative_fly".equals(kind))
+            && id != null && id.equals(text(action, "id"))) {
+            boolean flying = creativeFlying;
+            finish("interrupted", "movement_stopped", null);
+            creativeFlying = flying;
+        }
+        stopMotion();
+        return object("status", "stopped");
+    }
+
     void close(String reason) {
-        if (busy()) finish("interrupted", reason, null);
-        if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
-        else hands.closeHands();
+        close(reason, false);
+    }
+
+    void closeAfterDeath(String expectedSession) {
+        boolean terminalDeath = Objects.equals(session, expectedSession) && mob.isDeadOrDying();
+        close(terminalDeath ? "body_dead" : "body_unloaded", terminalDeath);
+    }
+
+    private void close(String reason, boolean terminalDeath) {
+        boolean notifyDeath = terminalDeath && scripted();
+        // Revoke mutation authority now; retain columns and queues until the
+        // final snapshot has captured native cleanup effects and action status.
+        scriptId = null;
+        creativeFlying = false;
+        try {
+            stopElytraFlight();
+            clearControls();
+            if (busy()) finish("interrupted", reason, null);
+            if (mob.getRemovalReason() == Entity.RemovalReason.CHANGED_DIMENSION) hands.closeAfterTransfer();
+            else hands.closeHands();
+            if (notifyDeath && stateStream != null && stateStream.open() && stateSnapshot != null)
+                stateStream.offer(stateSnapshot.apply(true));
+        } catch (RuntimeException failure) {
+            if (stateStream != null) stateStream.fail(failure);
+            com.mojang.logging.LogUtils.getLogger().warn("Script body cleanup failed for {}", mob.getStringUUID(), failure);
+        } finally {
+            columns = null;
+            // ScriptStream drains queued frames before writing this terminal error.
+            if (stateStream != null) stateStream.fail(error(reason));
+            stateStream = null;
+            stateSnapshot = null;
+        }
     }
 
     void tick(boolean minecraftAccess) {
+        travelled = false;
         try {
+            expireScript();
+            if (!minecraftAccess && scripted()) releaseScript();
             hands.tickHands();
             // Explicit pickup must collect and report its own target before it disappears.
             if (minecraftAccess && (!busy() || !kind.equals("pickup"))) hands.pickupNearby();
             if (!busy()) return;
-            if (++ticks > 1200) { finish("timeout", "Action exceeded 60 seconds of game time.", null); return; }
+            if (++ticks > 1200) { finish("timeout", "Action exceeded its game-time limit.", null); return; }
             switch (kind) {
                 case "walk" -> {
                     var wanted = target();
                     var confined = box.get();
                     var target = GameAccess.inside(mob, confined, wanted);
                     double distance = args.has("entity") ? 2.0 : 0.9;
-                    if (mob.position().distanceTo(wanted) <= distance) finish("completed", "arrived", null);
+                    // The direct tool's tolerance can stop in a neighboring tile.
+                    // A script's goal must reach the requested tile as well.
+                    boolean tileReached = approachTargets || BlockPos.containing(wanted).equals(mob.blockPosition());
+                    if (tileReached && mob.position().distanceTo(wanted) <= distance) finish("completed", "arrived", null);
                     else if (target != wanted && mob.position().distanceTo(target) <= 0.9) {
                         // The body stops at its box's edge; say so rather than claiming arrival.
                         var result = new JsonObject();
@@ -121,37 +474,58 @@ final class AgentActions {
                     else navigate(target, false);
                 }
                 case "look" -> {
-                    face(target());
-                    finish("completed", "looking", null);
+                    if (!args.has("yaw") || !args.has("pitch")) { face(target()); finish("completed", "looking", null); }
+                    else if (lookAngles()) finish("completed", "looking", null);
                 }
                 case "mine" -> {
                     var pos = checkedBlockTarget();
                     if (!mining && !mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
-                    if (!hands.blockReachable(pos)) {
-                        if (mining) throw error("target_out_of_reach");
+                    Direction face = args.has("face") ? blockFace() : null;
+                    if ((!mining || approachTargets) && !hands.blockReachable(pos, face)) {
+                        if (mining || !approachTargets) throw error("target_out_of_reach");
                         navigate(Vec3.atCenterOf(pos), true); return;
                     }
-                    GameAccess.stopFollowingMotion(mob);
-                    face(Vec3.atCenterOf(pos));
-                    JsonObject result = mining ? hands.tickMine() : hands.beginMine(pos);
+                    stopMotion();
+                    if (!ignoreLook()) face(Vec3.atCenterOf(pos));
+                    JsonObject result = mining ? hands.tickMine(!approachTargets) : hands.beginMine(pos, face);
                     mining = true;
                     action.addProperty("phase", "mining");
                     action.add("progress", result.deepCopy());
-                    if ("completed".equals(text(result, "status"))) finish("completed", "mined", result);
+                    if ("completed".equals(text(result, "status")))
+                        finish("completed", result.has("detail") ? text(result, "detail") : "mined", result);
                 }
-                case "place", "interact" -> {
+                case "place", "interact", "place_entity" -> {
                     if (args.has("entity")) {
                         Entity entity = entity();
-                        if (!hands.canReach(entity)) { navigate(entity.getBoundingBox().getCenter(), true); return; }
-                        face(entity.getEyePosition());
-                        finish("completed", "interacted", hands.interact(entity));
+                        if (!hands.canReach(entity)) {
+                            if (!approachTargets) throw error("target_out_of_reach");
+                            navigate(entity.getBoundingBox().getCenter(), true); return;
+                        }
+                        if (!ignoreLook()) face(entity.getEyePosition());
+                        Vec3 hit = args.has("entityAt") ? point(args.getAsJsonObject("entityAt")) : null;
+                        finish("completed", "interacted", hands.interact(entity, hit));
                     } else {
                         var pos = checkedBlockTarget();
                         if (!mob.level().getBlockState(pos).equals(original)) throw error("target_changed");
                         Direction face = blockFace();
-                        if (!hands.blockReachable(pos, face)) { navigate(Vec3.atCenterOf(pos), true); return; }
-                        face(Vec3.atCenterOf(pos));
-                        var result = hands.useBlock(pos, face, args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean());
+                        if (!kind.equals("place_entity") && !hands.blockReachable(pos, face)) {
+                            if (!approachTargets) throw error("target_out_of_reach");
+                            navigate(Vec3.atCenterOf(pos), true); return;
+                        }
+                        Vec3 cursor = null;
+                        if (args.has("cursorPos")) {
+                            var point = args.getAsJsonObject("cursorPos");
+                            cursor = new Vec3(number(point, "x"), number(point, "y"), number(point, "z"));
+                        }
+                        if (!ignoreLook()) face(Vec3.atLowerCornerOf(pos).add(cursor != null ? cursor
+                            : new Vec3(.5 + face.getStepX() * .5, .5 + face.getStepY() * .5, .5 + face.getStepZ() * .5)));
+                        InteractionHand hand = args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                        InteractionHand swingHand = args.has("swingArm") && text(args, "swingArm").equals("left") ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND;
+                        boolean showHand = !args.has("showHand") || args.get("showHand").getAsBoolean();
+                        BlockPos destination = args.has("expectedDestination") ? BlockPos.containing(point(args.getAsJsonObject("expectedDestination"))) : null;
+                        var result = kind.equals("place_entity") ? hands.placeEntity(pos, face, cursor, hand, swingHand, showHand)
+                            : hands.useBlock(pos, face, mob.isShiftKeyDown() || (args.has("secondaryUse") && args.get("secondaryUse").getAsBoolean()), cursor,
+                                hand, destination, swingHand, showHand);
                         finish("completed", "interaction_finished_check_result", result);
                     }
                 }
@@ -181,18 +555,368 @@ final class AgentActions {
                         finish("completed", "pickup_finished", hands.pickup(2));
                     }
                 }
-                case "equip" -> finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
+                case "equip" -> {
+                    if (!approachTargets && args.has("hotbar")) hands.selectHotbar(integer(args, "hotbar", 0));
+                    finish("completed", "equipped", hands.equip(integer(args, "slot", 0), args.has("equipment") ? text(args,"equipment") : "mainhand"));
+                }
+                case "creative_flying" -> {
+                    creativeFlying = args.get("state").getAsBoolean();
+                    if (creativeFlying) { requireCreativeFlight(); mob.setJumping(false); mob.setDeltaMovement(Vec3.ZERO); }
+                    finish("completed", creativeFlying ? "flying" : "flight_stopped", null);
+                }
+                case "creative_fly" -> {
+                    requireCreativeFlight();
+                    creativeFlying = true;
+                    var destination = position(args);
+                    flightBounds(destination, mob.getBoundingBox().move(destination.subtract(mob.position())));
+                    var delta = destination.subtract(mob.position());
+                    if (delta.lengthSqr() > 0.25) delta = delta.normalize().scale(0.5);
+                    travelled = true;
+                    flyStep(delta);
+                    if (mob.position().distanceToSqr(destination) <= 0.0025) finish("completed", "flight_arrived", null);
+                    else if (mob.position().distanceToSqr(lastPosition) < 0.000001) throw error("creative_flight_obstructed");
+                    lastPosition = mob.position();
+                }
+                case "set_command_block" -> finish("completed", "command_block_updated", hands.setCommandBlock(
+                    checkedBlockTarget(), integer(args, "expectedStateId", -1), text(args, "command"), integer(args, "mode", 2), booleanOption(args, "trackOutput"),
+                    booleanOption(args, "conditional"), booleanOption(args, "alwaysActive"), player.get().hasPermissions(2)));
+                case "elytra_fly" -> {
+                    if (creativeFlying) throw error("stop_creative_flight_before_gliding");
+                    var result = hands.beginElytraFlight();
+                    ownsElytraFlight = true;
+                    finish("completed", "elytra_started", result);
+                }
+                case "creative_slot" -> finish("completed", "creative_slot_set", hands.creativeSlot(
+                    integer(args, "menuId", -1), menuGeneration(), integer(args, "slot", -1), text(args, "wire")));
                 case "creative_item" -> finish("completed", "item_selected", hands.creativeItem(text(args,"item"), integer(args,"count",1)));
-                case "use" -> finish("completed", "use_started", hands.useHeld());
+                case "attack" -> finish("completed", "attack_attempted", hands.attackTarget(entity(), !args.has("swing") || args.get("swing").getAsBoolean()));
+                case "swing" -> finish("completed", "swung", hands.swingBody(args.has("showHand") && !args.get("showHand").getAsBoolean()
+                    ? InteractionHand.MAIN_HAND : args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "use" -> finish("completed", "use_started", hands.useHeld(args.has("offhand") && args.get("offhand").getAsBoolean() ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND));
+                case "tab_complete" -> {
+                    if (ticks == 1) {
+                        int timeout = integer(args, "timeout", 5000);
+                        if (timeout < 1 || timeout > 300000) throw error("invalid_completion_timeout");
+                        suggestionDeadline = System.nanoTime() + timeout * 1000000L;
+                        suggestions = tabComplete.apply(args);
+                    }
+                    if (suggestions.isDone()) {
+                        var matches = new JsonArray();
+                        var level = (ServerLevel) mob.level();
+                        int size = 0;
+                        for (var suggestion : suggestions.join().getList()) {
+                            if (matches.size() >= 1000) break; // Same native packet cap.
+                            var entry = new JsonObject();
+                            entry.addProperty("match", suggestion.getText());
+                            if (suggestion.getTooltip() == null) entry.add("tooltip", JsonNull.INSTANCE);
+                            else {
+                                var component = net.minecraft.network.chat.ComponentUtils.fromMessage(suggestion.getTooltip());
+                                var tag = net.minecraft.network.chat.ComponentSerialization.CODEC.encodeStart(
+                                    level.registryAccess().createSerializationContext(net.minecraft.nbt.NbtOps.INSTANCE), component).getOrThrow();
+                                entry.add("tooltip", ScriptNbt.typed(tag));
+                            }
+                            size += entry.toString().length();
+                            if (size > 65536) throw error("completion_output_too_large");
+                            matches.add(entry);
+                        }
+                        var result = new JsonObject(); result.add("matches", matches);
+                        finish("completed", "suggestions", result);
+                    } else if (System.nanoTime() >= suggestionDeadline) finish("timeout", "command_suggestions_timeout", null);
+                }
+                case "chat" -> finish("completed", "chat_processed", chatAction.apply(args));
+                case "wake" -> finish("completed", "awake", hands.wakeBody());
+                case "fish" -> {
+                    if (ticks == 1) hands.beginFishing();
+                    action.addProperty("phase", "waiting_for_bite");
+                    if (hands.tickFishing()) finish("completed", "fishing_retrieved", null);
+                }
+                case "consume" -> {
+                    if (ticks == 1) hands.beginConsume();
+                    String state = hands.consumptionStatus();
+                    action.addProperty("phase", "consuming");
+                    if (!state.equals("using")) finish(state.equals("completed") ? "completed" : "failed", "consumption_" + state, null);
+                }
                 case "release" -> finish("completed", "released", hands.releaseHeld());
+                case "dismount" -> {
+                    clearVehicleControls();
+                    finish("completed", "dismounted", hands.dismountBody());
+                }
+                case "update_sign" -> {
+                    if (!args.has("lines") || !args.get("lines").isJsonArray() || args.getAsJsonArray("lines").size() != 4)
+                        throw error("invalid_sign_lines");
+                    var lines = new ArrayList<String>();
+                    for (var line : args.getAsJsonArray("lines")) {
+                        if (!line.isJsonPrimitive() || !line.getAsJsonPrimitive().isString() || line.getAsString().length() > 45)
+                            throw error("invalid_sign_line");
+                        lines.add(line.getAsString());
+                    }
+                    finish("completed", "sign_updated", hands.updateSign(BlockPos.containing(position(args)),
+                        !args.has("front") || args.get("front").getAsBoolean(), lines));
+                }
                 case "menu" -> finish("completed", "menu", hands.menuSnapshot());
-                case "menu_click" -> finish("completed", "menu_clicked", hands.clickMenu(integer(args,"menuId",-1), integer(args,"slot",-1), integer(args,"button",0), ClickType.valueOf(text(args,"clickType").toUpperCase(Locale.ROOT))));
-                case "menu_close" -> finish("completed", "menu_closed", hands.closeMenu());
+                case "menu_click" -> {
+                    int menuId = integer(args, "menuId", -1), slot = integer(args, "slot", -1), button = integer(args, "button", 0);
+                    var click = ClickType.valueOf(text(args, "clickType").toUpperCase(Locale.ROOT));
+                    finish("completed", "menu_clicked", approachTargets ? hands.clickMenu(menuId, slot, button, click)
+                        : hands.clickMenu(menuId, menuGeneration(), slot, button, click));
+                }
+                case "menu_close" -> finish("completed", "menu_closed", approachTargets ? hands.closeMenu()
+                    : hands.closeMenu(integer(args, "menuId", -1), menuGeneration()));
+                case "set_settings" -> {
+                    String mainHand = mainHandSetting(args);
+                    if (mainHand != null) mob.setLeftHanded(mainHand.equals("left"));
+                    finish("completed", "settings_updated", null);
+                }
+                case "select_hotbar" -> {
+                    hands.selectHotbar(integer(args, "slot", -1));
+                    finish("completed", "hotbar_selected", null);
+                }
+                case "vehicle_control" -> {
+                    requireVehicleController();
+                    float left = (float) Math.clamp(number(args, "left"), -1, 1);
+                    float forward = (float) Math.clamp(number(args, "forward"), -1, 1);
+                    if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat) {
+                        controlledBoat = boat;
+                        vehicleLeft = left;
+                        vehicleForward = forward;
+                    } else mountedInput(left, forward);
+                    finish("completed", "vehicle_controls_updated", null);
+                }
+                case "control" -> {
+                    String control = text(args, "control");
+                    if (args.get("state").getAsBoolean()) heldControls.add(control);
+                    else heldControls.remove(control);
+                    if (mob.isPassenger() && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat)) {
+                        if (heldControls.contains("sneak")) {
+                            clearControls();
+                            hands.dismountBody();
+                        } else if (!heldControls.isEmpty() || mountedControls != null) applyControls();
+                    } else if (heldControls.isEmpty()) clearControls();
+                    finish("completed", "control_updated", null);
+                }
+                case "menu_button" -> finish("completed", "menu_button", hands.menuButton(integer(args, "menuId", -1), menuGeneration(), integer(args, "button", -1)));
+                case "anvil_name" -> finish("completed", "anvil_named", hands.renameAnvil(integer(args, "menuId", -1), menuGeneration(), text(args, "name")));
+                case "select_trade" -> finish("completed", "trade_selected", hands.selectTrade(integer(args, "menuId", -1), menuGeneration(), integer(args, "index", -1)));
+                case "edit_book" -> {
+                    if (!args.has("pages") || !args.get("pages").isJsonArray() || args.getAsJsonArray("pages").size() > 100)
+                        throw error("invalid_book_pages");
+                    var pages = new ArrayList<String>();
+                    for (var page : args.getAsJsonArray("pages")) {
+                        if (!page.isJsonPrimitive() || !page.getAsJsonPrimitive().isString()) throw error("invalid_book_page");
+                        pages.add(page.getAsString());
+                    }
+                    String title = null;
+                    if (args.has("title") && !args.get("title").isJsonNull()) {
+                        if (!args.get("title").isJsonPrimitive() || !args.getAsJsonPrimitive("title").isString())
+                            throw error("invalid_book_title");
+                        title = args.get("title").getAsString();
+                    }
+                    finish("completed", "book_edited", hands.editBook(integer(args, "menuId", -1), menuGeneration(),
+                        integer(args, "slot", -1), text(args, "expectedItemKey"), pages, title));
+                }
             }
         } catch (RuntimeException failure) {
             if (busy()) finish("failed", failure.getMessage(), null);
             else throw failure;
+        } finally {
+            if (scripted() && !travelled) {
+                if (creativeFlying) {
+                    try { tickCreativeFlight(); }
+                    catch (RuntimeException failure) {
+                        creativeFlying = false;
+                        clearControls();
+                        if (stateStream != null) stateStream.fail(failure);
+                    }
+                } else {
+                    if (mob.isSleeping()) clearControls();
+                    else if (!heldControls.isEmpty()) applyControls();
+                    tickVehicleControls();
+                    GameAccess.travelFollowingBody(mob, box.get());
+                }
+            }
+            if (stateStream != null) {
+                if (stateStream.open()) {
+                    try { stateStream.offer(stateSnapshot.apply(false)); }
+                    catch (RuntimeException failure) { stateStream.fail(failure); }
+                }
+                if (!stateStream.open()) releaseScript();
+            }
         }
+    }
+
+    private void requireCreativeFlight() {
+        if (mob.isFallFlying()) throw error("land_before_creative_flight");
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).creative)
+            throw error("creative_mode_required");
+        if (mob.isSleeping() || mob.isPassenger()) throw error("wake_and_dismount_before_flying");
+    }
+
+    private void flightBounds(Vec3 feet, net.minecraft.world.phys.AABB swept) {
+        var level = (ServerLevel) mob.level();
+        var limit = box.get();
+        if (swept.minY < level.getMinBuildHeight() || swept.maxY > level.getMaxBuildHeight()
+            || !level.getWorldBorder().isWithinBounds(swept)
+            || !level.hasChunksAt(BlockPos.containing(swept.minX, swept.minY, swept.minZ),
+                BlockPos.containing(swept.maxX, swept.maxY, swept.maxZ))
+            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(feet)))
+            throw error("creative_flight_execution_boundary");
+    }
+
+    private void flyStep(Vec3 delta) {
+        requireCreativeFlight();
+        flightBounds(mob.position().add(delta), mob.getBoundingBox().expandTowards(delta));
+        // Ordinary Entity.move owns collision and block callbacks. No persistent
+        // NoGravity flag is changed; only this lease omits ground travel/gravity.
+        mob.setJumping(false);
+        mob.setDeltaMovement(Vec3.ZERO);
+        mob.move(net.minecraft.world.entity.MoverType.SELF, delta);
+        mob.fallDistance = 0;
+    }
+
+    private void tickCreativeFlight() {
+        int forward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+        int left = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+        int up = (heldControls.contains("jump") ? 1 : 0) - (heldControls.contains("sneak") ? 1 : 0);
+        var input = new Vec3(left, up, forward);
+        if (input.lengthSqr() > 1) input = input.normalize();
+        double yaw = mob.getYRot() * Math.PI / 180;
+        var delta = new Vec3(input.x * Math.cos(yaw) - input.z * Math.sin(yaw), input.y,
+            input.z * Math.cos(yaw) + input.x * Math.sin(yaw)).scale(heldControls.contains("sprint") ? 0.2 : 0.1);
+        flyStep(delta);
+    }
+
+    private static String mainHandSetting(JsonObject request) {
+        if (!request.has("settings") || !request.get("settings").isJsonObject()) throw error("invalid_settings");
+        var settings = request.getAsJsonObject("settings");
+        if (settings.keySet().stream().anyMatch(key -> !key.equals("mainHand"))) throw error("unsupported_setting");
+        if (!settings.has("mainHand")) return null;
+        var hand = settings.get("mainHand");
+        if (!hand.isJsonPrimitive() || !hand.getAsJsonPrimitive().isString()
+            || !(hand.getAsString().equals("left") || hand.getAsString().equals("right"))) throw error("invalid_main_hand");
+        return hand.getAsString();
+    }
+
+    private void requireVehicleController() {
+        if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat) {
+            if (boat.getControllingPassenger() != mob) throw error("body_not_vehicle_controller");
+        } else {
+            hands.syncBody();
+            ScriptVehicleControls.requireEligible(mob, hands, mob.getVehicle());
+        }
+    }
+
+    private void mountedInput(float left, float forward) {
+        requireVehicleController();
+        if (mountedControls != null && !mountedControls.matches(mob.getVehicle())) {
+            clearControls();
+            throw error("vehicle_control_ownership_changed");
+        }
+        if (mountedControls == null) mountedControls = new ScriptVehicleControls(this, mob.getVehicle(), box, scriptId);
+        mountedControls.input(left, forward, heldControls.contains("jump"), heldControls.contains("sprint"));
+    }
+
+    boolean vehicleLeaseActive(String lease) {
+        expireScript();
+        return lease != null && controlsScript(lease);
+    }
+
+    void failVehicleControls(RuntimeException failure) {
+        try { clearControls(); }
+        finally { if (stateStream != null) stateStream.fail(failure); }
+    }
+
+    private void tickVehicleControls() {
+        if (mountedControls != null) mountedControls.poll();
+        var boat = controlledBoat;
+        if (boat == null) return;
+        if (boat.isRemoved() || mob.getVehicle() != boat || boat.getControllingPassenger() != mob) {
+            clearVehicleControls();
+            return;
+        }
+        boat.setInput(vehicleLeft > 0, vehicleLeft < 0, vehicleForward > 0, vehicleForward < 0);
+        // Vanilla performs this in the controlling player's client tick. Our
+        // native rider has no client, so apply input once before the next move.
+        boat.controlBoat();
+        var projected = boat.getBoundingBox().expandTowards(boat.getDeltaMovement()).inflate(0.1);
+        var level = (ServerLevel) mob.level();
+        var limit = box.get();
+        var nextFeet = mob.position().add(boat.getDeltaMovement());
+        if (!level.hasChunksAt(BlockPos.containing(projected.minX, projected.minY, projected.minZ),
+                BlockPos.containing(projected.maxX, projected.maxY, projected.maxZ))
+            || !level.getWorldBorder().isWithinBounds(projected)
+            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(nextFeet))) {
+            // Stop at the execution boundary without moving or snapping position.
+            boat.setDeltaMovement(0, boat.getDeltaMovement().y, 0);
+            clearVehicleControls();
+            if (stateStream != null) stateStream.fail(error("vehicle_execution_boundary"));
+        }
+    }
+
+    private void clearVehicleControls() {
+        if (mountedControls != null) {
+            var previous = mountedControls;
+            mountedControls = null;
+            previous.close();
+        }
+        if (controlledBoat != null && controlledBoat.getControllingPassenger() == mob) {
+            controlledBoat.setInput(false, false, false, false);
+            controlledBoat.setPaddleState(false, false);
+        }
+        controlledBoat = null;
+        vehicleLeft = vehicleForward = 0;
+    }
+
+    private void applyControls() {
+        if (mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat boat && boat.getControllingPassenger() == mob) {
+            controlledBoat = boat;
+            vehicleLeft = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+            vehicleForward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+            return;
+        }
+        if (mob.isPassenger()) {
+            try {
+                mountedInput((heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0),
+                    (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0));
+            } catch (RuntimeException failure) { failVehicleControls(failure); }
+            return;
+        }
+        if (mountedControls != null) { failVehicleControls(error("vehicle_control_ownership_changed")); return; }
+        mob.setSprinting(heldControls.contains("sprint"));
+        mob.setShiftKeyDown(heldControls.contains("sneak"));
+        float speed = (float) mob.getAttributeValue(Attributes.MOVEMENT_SPEED);
+        if (heldControls.contains("sneak")) speed *= 0.3F;
+        int forward = (heldControls.contains("forward") ? 1 : 0) - (heldControls.contains("back") ? 1 : 0);
+        int strafe = (heldControls.contains("left") ? 1 : 0) - (heldControls.contains("right") ? 1 : 0);
+        float scale = forward != 0 && strafe != 0 ? 0.70710677F : 1;
+        mob.setSpeed(speed);
+        mob.setZza(forward * speed * scale);
+        mob.setXxa(strafe * speed * scale);
+        mob.setYya(0);
+        // Normal LivingEntity.aiStep owns jump timing, fluid impulses and the
+        // repeat delay even for a NoAI body. Post-tick travel still runs once.
+        mob.setJumping(heldControls.contains("jump"));
+    }
+
+    private void stopMotion() {
+        var velocity = mob.getDeltaMovement();
+        GameAccess.stopFollowingMotion(mob);
+        // Preserve native gliding momentum while a script controls the body.
+        if (scripted() && (mob.isFallFlying() || "elytra_fly".equals(kind) && !mob.onGround()))
+            mob.setDeltaMovement(velocity);
+    }
+
+    private void stopElytraFlight() {
+        if (ownsElytraFlight) mob.setSharedFlag(7, false);
+        ownsElytraFlight = false;
+    }
+
+    private void clearControls() {
+        clearVehicleControls();
+        heldControls.clear();
+        mob.setSprinting(false);
+        mob.setShiftKeyDown(false);
+        mob.setJumping(false);
+        mob.setXxa(0); mob.setYya(0); mob.setZza(0);
     }
 
     private boolean pickupReachable(ItemEntity item) {
@@ -232,6 +956,28 @@ final class AgentActions {
     }
     private Vec3 target() { return args.has("entity") ? (kind.equals("look") ? entity().getEyePosition() : entity().position()) : position(args); }
 
+    private boolean ignoreLook() { return args.has("forceLook") && args.get("forceLook").isJsonPrimitive()
+        && args.get("forceLook").getAsString().equals("ignore"); }
+
+    private static Vec3 point(JsonObject value) { return new Vec3(number(value, "x"), number(value, "y"), number(value, "z")); }
+
+    private boolean lookAngles() {
+        double yawRadians = number(args, "yaw"), pitchRadians = number(args, "pitch");
+        if (Math.abs(pitchRadians) > Math.PI / 2) throw error("invalid_pitch");
+        float yaw = Mth.wrapDegrees((float) (180 - Math.toDegrees(yawRadians)));
+        float pitch = (float) -Math.toDegrees(pitchRadians);
+        boolean force = args.has("force") && args.get("force").getAsBoolean();
+        // A normal look rotates at most 30 degrees per native tick. Forced looks
+        // update the same real body orientation immediately.
+        float dy = Mth.wrapDegrees(yaw - mob.getYRot()), dp = pitch - mob.getXRot();
+        boolean done = force || (Math.abs(dy) <= 30 && Math.abs(dp) <= 30);
+        float nextYaw = done ? yaw : mob.getYRot() + Mth.clamp(dy, -30, 30);
+        float nextPitch = done ? pitch : mob.getXRot() + Mth.clamp(dp, -30, 30);
+        mob.setYRot(nextYaw); mob.setYHeadRot(nextYaw); mob.setYBodyRot(nextYaw); mob.setXRot(nextPitch);
+        hands.syncBody();
+        return done;
+    }
+
     private void face(Vec3 target) {
         var delta = target.subtract(mob.getEyePosition());
         float yaw = (float) (Math.toDegrees(Math.atan2(delta.z, delta.x)) - 90);
@@ -248,6 +994,7 @@ final class AgentActions {
         if (goal != target && mob.position().distanceToSqr(goal) < 0.81) throw error("target_out_of_reach_from_box");
         var pos = BlockPos.containing(goal);
         if (mob.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation && !mob.onGround()) {
+            travelled = true;
             GameAccess.travelFollowingBody(mob, confined);
             action.addProperty("phase","landing");
             return;
@@ -295,6 +1042,7 @@ final class AgentActions {
         if (path != null && !path.isDone() && !level.isPositionEntityTicking(path.getNextNodePos())) throw error("path_leaves_simulated_chunks");
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
         mob.getNavigation().tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
+        travelled = true;
         GameAccess.travelFollowingBody(mob, confined);
         action.addProperty("phase", "approaching");
         action.add("position", Observations.position(mob.position()));
@@ -331,13 +1079,27 @@ final class AgentActions {
     }
 
     private void finish(String status, String detail, JsonObject result) {
+        if ("creative_fly".equals(kind) && !"completed".equals(status)) creativeFlying = false;
+        if (suggestions != null) { suggestions.cancel(false); suggestions = null; }
+        if ("fish".equals(kind)) hands.cancelFishing();
         hands.cancelMine();
-        GameAccess.stopFollowingMotion(mob);
+        stopMotion();
         action.addProperty("terminal",true); action.addProperty("status",status); action.addProperty("detail",detail == null ? "action_failed" : detail);
         action.addProperty("ticks",ticks);
+        completedActionSequence = action.get("sequence").getAsLong();
         action.add("position", Observations.position(mob.position()));
         if (result != null) action.add("result",result.deepCopy());
+        completion.complete(action.deepCopy());
     }
+    private long menuGeneration() {
+        if (!args.has("generation") || !args.get("generation").isJsonPrimitive()
+            || !args.getAsJsonPrimitive("generation").isNumber()) throw error("menu_generation_required");
+        double value = args.get("generation").getAsDouble();
+        if (!Double.isFinite(value) || value < 0 || value > 9_007_199_254_740_991L || value != Math.rint(value))
+            throw error("invalid_menu_generation");
+        return (long) value;
+    }
+
     static Vec3 position(JsonObject args) {
         if (!args.has("position") || !args.get("position").isJsonObject()) throw error("position_must_be_xyz_object");
         var p = args.getAsJsonObject("position");
@@ -351,6 +1113,11 @@ final class AgentActions {
         return value;
     }
     private static int integer(JsonObject args,String key,int fallback) { if (!args.has(key)) return fallback; double n=number(args,key); if(n!=Math.rint(n)) throw error("invalid_"+key); return (int)n; }
+    private static boolean booleanOption(JsonObject args, String key) {
+        if (!args.has(key)) return false;
+        if (!args.get(key).isJsonPrimitive() || !args.getAsJsonPrimitive(key).isBoolean()) throw error("invalid_" + key);
+        return args.get(key).getAsBoolean();
+    }
     private static String text(JsonObject args,String key) { return args.has(key) ? args.get(key).getAsString() : ""; }
     private static JsonObject object(Object... values) { var result=new JsonObject(); var gson=new Gson(); for(int i=0;i<values.length;i+=2) result.add((String)values[i],gson.toJsonTree(values[i+1])); return result; }
     private static IllegalStateException error(String message) { return new IllegalStateException(message); }

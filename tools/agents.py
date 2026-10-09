@@ -29,7 +29,8 @@ def main():
     settings.add_argument('id')
     settings.add_argument('settings', help='JSON object of changed settings')
     dev = commands.add_parser('dev', help='Opt-in isolated development world checks')
-    dev.add_argument('operation', choices=['status', 'native-checks', 'pov', 'save'])
+    dev.add_argument('operation', choices=['status', 'native-checks', 'pov', 'save', 'presentation', 'sounds'])
+    dev.add_argument('--json', default='{}', help='Guarded development fixture arguments')
     spawn = commands.add_parser('spawn')
     spawn.add_argument('--provider', help='Native BB provider ID; omit to use BB defaults')
     spawn.add_argument('--permission-mode', help='Native BB permission mode; omit to use BB defaults')
@@ -116,7 +117,10 @@ def main():
         elif args.action == 'dev':
             path = '/v1/dev'
             if args.operation != 'status':
-                data = {'action': args.operation.replace('-', '_')}
+                data = json.loads(args.json)
+                if not isinstance(data, dict):
+                    raise ValueError('development arguments must be a JSON object')
+                data['action'] = args.operation.replace('-', '_')
         elif args.action == 'spawn':
             path += '/spawn'
             data = {key: getattr(args, key) for key in ('name', 'body', 'mode')}
