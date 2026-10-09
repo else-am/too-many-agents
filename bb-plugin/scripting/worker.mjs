@@ -94,10 +94,24 @@ function end(message) {
   runtime.dispose();
 }
 
+// The agent's code starts on this line of minecraft-script.js (see evalCode below).
+const sourceStart = 4;
+const sourceLines = source.split('\n');
+
 function guestError(handle) {
   const value = vm.dump(handle);
-  return typeof value === 'object' && value !== null
-    ? `${value.name ?? 'Error'}: ${value.message ?? 'Script failed'}` : String(value);
+  if (typeof value !== 'object' || value === null) return String(value);
+  return `${value.name ?? 'Error'}: ${value.message ?? 'Script failed'}${scriptLocation(value.stack)}`;
+}
+
+// Point at the first frame inside the agent's code, quoting that line.
+function scriptLocation(stack) {
+  for (const [, line, column] of String(stack ?? '').matchAll(/minecraft-script\.js:(\d+):(\d+)/g)) {
+    const index = Number(line) - sourceStart;
+    if (index < 0 || index >= sourceLines.length) continue;
+    return ` (at line ${index + 1}:${column}: ${sourceLines[index].trim().slice(0, 160)})`;
+  }
+  return '';
 }
 
 function pump() {
@@ -228,7 +242,9 @@ try {
   deadline = performance.now() + cpuSliceMs;
   const result = vm.evalCode(`
     ((serialize, finish) => (async () => {
-      const value = await (async () => { ${source} })();
+      const value = await (async () => {
+${source}
+})();
       if (finish) await finish();
       return serialize(value) ?? 'null';
     })())(JSON.stringify, typeof __mcFinish === 'function' ? __mcFinish : null)

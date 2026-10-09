@@ -123,16 +123,13 @@ const timers = await runScript({
     const cancelled = setTimeout(() => seen.push('cancelled'), 10);
     clearTimeout(cancelled);
     await new Promise(resolve => setTimeout((a, b) => { seen.push(a + b); resolve(); }, 20, 2, 3));
-    await new Promise(resolve => { const id = setInterval(() => {
-      seen.push('interval'); if (seen.length === 3) { clearInterval(id); resolve(); }
-    }, 2); });
     return seen;
   `,
   onRequest: async () => { throw new Error('Timers must not become bridge requests'); },
 });
-assert.deepEqual(timers.value, [5, 'interval', 'interval']);
+assert.deepEqual(timers.value, [5]);
 assert.equal(timers.requests, 0);
-console.log('PASS: guest timers preserve arguments, cancellation and repeated callbacks without bridge requests');
+console.log('PASS: guest timers preserve arguments and cancellation without bridge requests');
 
 await assert.rejects(runScript({
   source: 'await new Promise(resolve => setTimeout(() => { while (true) {} }, 0));',

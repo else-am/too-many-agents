@@ -10,6 +10,7 @@ import { selectRegistryData } from './registry-data.mjs';
 // Only this game's data belongs in the guest. Do not ship every historical
 // Minecraft protocol or give the guest a Node module loader.
 const data = JSON.stringify(selectRegistryData(minecraftData));
+const licenses = [];
 for (const name of ['minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
@@ -40,3 +41,4 @@ await build({
     build.onLoad({ filter: /.*/, namespace: 'minecraft-version-data' }, () => ({ contents: `export default ${data};`, loader: 'js' }));
   } }],
 });
+await writeFile(new URL('../dist/scripting/licenses.txt', import.meta.url), licenses.join('\n\n-----\n\n'));

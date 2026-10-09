@@ -22,6 +22,7 @@ import { installEntityQueries } from './entity-queries.mjs';
 import { installChatPatterns } from './chat-patterns.mjs';
 import { installBlockEvents } from './block-events.mjs';
 import { createRegistry } from './registry.mjs';
+import { guardBot } from './guard.mjs';
 
 // Only native observation fields may be copied onto a shared Entity instance.
 const entityFields = ['uuid', 'width', 'height', 'onGround', 'eyePosition', 'alive',
@@ -107,6 +108,9 @@ export function createBot(initial) {
     inventory: createWindow('minecraft:inventory', 'Inventory'),
     currentWindow: null,
     quickBarSlot: null,
+    // Filled once observed; declared so the guard treats them as part of the API.
+    spawnPoint: null,
+    experience: {},
     on(event, callback) { events.on(event, listener(callback)); return bot; },
     once(event, callback) { events.once(event, listener(callback)); return bot; },
     off(event, callback) { events.off(event, listener(callback)); return bot; },
@@ -460,5 +464,5 @@ export function createBot(initial) {
   async function drainControls() { await inventory.drainControls(); await actions.drainControls(); }
   lastPhysicsTick = initial.tick;
   installRecipeQueries(bot, recipeFactory);
-  return { bot, Vec3, Item, ChatMessage, MessageBuilder: ChatMessage.MessageBuilder, update, drainControls };
+  return { bot: guardBot(bot), Vec3, Item, ChatMessage, MessageBuilder: ChatMessage.MessageBuilder, update, drainControls };
 }
