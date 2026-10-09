@@ -1,11 +1,3 @@
-/*!
- * PC 1.21.1 adaptation of prismarine-item 1.18.0 (MIT), including anvil.js.
- * Item author: Romain Beaumont <romain.rom1@gmail.com>.
- * NBT builders/simplification from prismarine-nbt 2.8.0 (MIT), author:
- * roblabla <robinlambertz+dev@gmail.com>. See items.LICENSE for the original
- * license declarations and attribution. The npm packages supply no LICENSE.
- */
-
 // Plain build-time minecraft-data 3.117.0 fields: itemsArray and
 // enchantmentsByName. No host dependencies or guest module loader.
 //

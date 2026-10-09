@@ -1,5 +1,3 @@
-// PC Minecraft 1.21.1 adaptation of prismarine-windows 2.10.0.
-// Upstream attribution and license declaration: windows.LICENSE.
 import { EventEmitter } from 'events'
 
 // No host assertions or registry loader enters the guest bundle.

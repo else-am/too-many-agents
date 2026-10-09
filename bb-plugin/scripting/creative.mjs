@@ -1,6 +1,5 @@
 import { toNotch } from './items.mjs';
 // Creative inventory API adapted to authoritative native slots.
-// Public signatures follow Mineflayer 4.39.0; see mineflayer.LICENSE.
 import { encodeItemTransport } from 'minecraft-item-transport';
 
 export function installCreativeInventory(bot, io, Item) {

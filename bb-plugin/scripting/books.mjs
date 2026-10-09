@@ -1,4 +1,3 @@
-// Public book workflow adapted from Mineflayer 4.39.0 (MIT). See books.LICENSE.
 // io is the existing inventory module's private queue/action helpers, not a new
 // queue. Native edits and snapshots own all Item components and acknowledgements.
 export function installBooks(bot, io) {

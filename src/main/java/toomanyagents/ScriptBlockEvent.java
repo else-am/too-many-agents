@@ -32,7 +32,7 @@ public final class ScriptBlockEvent extends Event {
     }
 
     public static ScriptBlockEvent breaking(ServerLevel level, int breakerId, BlockPos position, int stage) {
-        // Mineflayer's pinned packet schema reads the native progress byte signed.
+        // pinned packet schema reads the native progress byte signed.
         return new ScriptBlockEvent(level, position, null, 0, 0, breakerId, (byte) stage);
     }
 

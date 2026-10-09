@@ -1,1 +1,0 @@
-const start=Date.now(); let ticks=0; bot.on("physicsTick",()=>ticks++); const entity=bot.entity; await bot.waitForTicks(400); return {ticks, elapsedMs:Date.now()-start, sameEntity:entity===bot.entity};

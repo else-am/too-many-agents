@@ -1,4 +1,3 @@
-// Adapted from Mineflayer 4.39.0 lib/particle.js; see mineflayer.LICENSE.
 import { Vec3 } from 'vec3';
 
 export function createParticleClass(registry) {

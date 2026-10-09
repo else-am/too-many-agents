@@ -1,4 +1,3 @@
-// Snapshot-driven PC1.21.1 state adapted from Mineflayer4.39.0; see state.LICENSE.
 export function installState(bot) {
   const time = bot.time = {
     doDaylightCycle: null, bigTime: null, timeOfDay: null,

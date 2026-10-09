@@ -1,8 +1,3 @@
-/*!
- * Bounded PC 1.21.1 Item wire codec. Portions adapted from ProtoDef 1.19.0
- * (MIT, Copyright (c) 2018 ProtoDef-io), prismarine-nbt 2.8.0 (MIT), and
- * minecraft-protocol 1.68.0 (BSD-3-Clause). See item-wire.LICENSE.
- */
 import items from 'minecraft-data/minecraft-data/data/pc/1.21.1/items.json' with { type: 'json' };
 import protocol from 'minecraft-data/minecraft-data/data/pc/1.21.1/protocol.json' with { type: 'json' };
 import protodef from 'protodef';

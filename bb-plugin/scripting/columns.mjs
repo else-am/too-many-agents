@@ -1,5 +1,3 @@
-// Observed WorldSync columns and Mineflayer's complete 5x5 loading wait.
-// Upstream contract: Mineflayer 4.39.0 waitForChunksToLoad (mineflayer.LICENSE).
 import { Vec3 } from 'vec3';
 
 export function installColumns(bot, ChunkColumn) {

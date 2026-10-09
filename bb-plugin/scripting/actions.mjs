@@ -1,5 +1,3 @@
-// Mineflayer 4.39.0 public action orchestration, adapted to native bodies.
-// See actions.LICENSE. No client packets, predicted block edits or mining timers.
 import { Vec3 } from 'vec3';
 
 const faces = ['down', 'up', 'north', 'south', 'west', 'east'];

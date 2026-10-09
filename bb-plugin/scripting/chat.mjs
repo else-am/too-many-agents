@@ -1,10 +1,3 @@
-// PC 1.21.1 ChatMessage / MessageBuilder, adapted from prismarine-chat 1.13.0.
-// See chat.LICENSE for upstream and parser attribution.
-// registry.language: translation key -> string. registry.chatFormattingById:
-// native chat-type ID -> { formatString, parameters: ['sender', 'content', ...] }.
-// Supply the world's actual chat formats before using fromNetwork. No defaults
-// are guessed. PC 1.21.1 fromNotch accepts decoded anonymous NBT components.
-//
 // Source quirks retained: getText can throw for numeric text / absent `with`;
 // toHTML throws for nonzero numeric text; append does not synchronize json and
 // thus clone; toMotd mutates/inherits styles even when the child says false.

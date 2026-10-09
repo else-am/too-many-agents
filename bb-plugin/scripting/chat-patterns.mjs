@@ -1,5 +1,3 @@
-// Pattern and message-wait API adapted from Mineflayer 4.39.0 chat.js.
-// Native chat transport is installed separately. See chat-patterns.LICENSE.
 function match(pattern, message) {
   const previous = pattern.lastIndex;
   try {

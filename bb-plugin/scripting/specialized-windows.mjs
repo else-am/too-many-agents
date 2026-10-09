@@ -1,6 +1,4 @@
 import { emitWindow } from './windows.mjs';
-// Public signatures/properties adapted from Mineflayer 4.39.0 furnace,
-// enchantment_table, anvil and villager plugins. See specialized-windows.LICENSE.
 // This adapter shares inventory's whole-operation queue and native cursor.
 export function installSpecializedWindows(bot, io) {
   const { queueWindow, check, send, pickup, storeCursor, reserveCursor, transfer, move, sourceSlot, recover,

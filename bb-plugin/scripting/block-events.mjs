@@ -1,7 +1,3 @@
-/*!
- * Mineflayer 4.39.0 block_actions callback adaptation.
- * MIT, Copyright (c) 2015 Andrew Kelley. See block-events.LICENSE.
- */
 import { Vec3 } from 'vec3';
 
 // ChestBlock.getConnectedDirection: RIGHT joins counter-clockwise from facing.

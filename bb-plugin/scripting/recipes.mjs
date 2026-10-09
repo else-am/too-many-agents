@@ -1,6 +1,3 @@
-// PC 1.21.1 adaptation of prismarine-recipe 1.5.0 and Mineflayer 4.39.0.
-// Attribution and upstream license declarations: recipes.LICENSE.
-//
 // registry: { recipes: { [resultItemId]: rawRecipe[] }, items?: { [id]:
 //   { variations?: { metadata: number }[] } } }. Use minecraft-data's tables.
 // No runtime imports, native actions, inventory mutation or recipe-book lookup.

@@ -10,26 +10,6 @@ import { selectRegistryData } from './registry-data.mjs';
 // Only this game's data belongs in the guest. Do not ship every historical
 // Minecraft protocol or give the guest a Node module loader.
 const data = JSON.stringify(selectRegistryData(minecraftData));
-const licenses = [];
-licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./state.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./registry-codecs.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./blocks.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./block-events.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./chunks.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./items.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./item-wire.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./windows.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./world-view.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./world-queries.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./recipes.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./chat.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./chat-patterns.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
-licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
-licenses.push('Mineflayer 4.39.0: adapted waitForTicks, creative inventory, scoreboard/team, boss bar and Particle object APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));
@@ -60,4 +40,3 @@ await build({
     build.onLoad({ filter: /.*/, namespace: 'minecraft-version-data' }, () => ({ contents: `export default ${data};`, loader: 'js' }));
   } }],
 });
-await writeFile(new URL('../dist/scripting/licenses.txt', import.meta.url), licenses.join('\n\n-----\n\n'));

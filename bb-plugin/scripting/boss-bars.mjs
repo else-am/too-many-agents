@@ -1,5 +1,3 @@
-// Adapted from Mineflayer 4.39.0 bossbar.js and plugins/boss_bar.js.
-// See mineflayer.LICENSE. Native snapshots replace packet arrival timing.
 const colors = ['pink', 'blue', 'red', 'green', 'yellow', 'purple', 'white'];
 const divisions = [0, 6, 10, 12, 20];
 

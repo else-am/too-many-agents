@@ -1,5 +1,3 @@
-// Adapted from Mineflayer 4.39.0 scoreboard/team objects and plugins.
-// See mineflayer.LICENSE. Native snapshots replace packet arrival timing.
 export function installScoreboards(bot, ChatMessage) {
   const own = (object, key) => Object.hasOwn(object, key);
   const dictionary = () => Object.create(null);

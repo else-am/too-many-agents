@@ -84,7 +84,7 @@ export function createBot(initial) {
       stack.slot = entry.slot < 9 ? entry.slot + 36 : entry.slot === 40 ? 45 : entry.slot < 36 ? entry.slot : 44 - entry.slot;
     return stack;
   };
-  // Listeners run with this === bot, as on a Mineflayer bot. Emission stays private.
+  // Listeners run with this === bot, Emission stays private.
   const events = new EventEmitter();
   const emit = (event, ...args) => events.emit(event, ...args);
   const bound = new WeakMap();
@@ -100,8 +100,7 @@ export function createBot(initial) {
     registry: { attributesByName, biomesByName, blockLoot, blocksByName, effects, effectsByName, enchantmentsByName,
       entitiesByName, entityLoot, foodsByName, items, itemsByName, particles },
     version: '1.21.1',
-    // Component holder IDs belong to this world's registries. Item IDs alone
-    // are translated to the pinned Mineflayer registry by the trusted decoder.
+    // Component holder IDs belong to this world's registries
     nativeRegistries: initial.itemRegistries.references,
     entities: {},
     players: Object.create(null),
@@ -129,7 +128,6 @@ export function createBot(initial) {
         block.entity = JSON.parse(JSON.stringify(snapshot.blocks.entities[index]));
       return block;
     },
-    // Adapted from Mineflayer 4.39.0 physics.js; see mineflayer.LICENSE.
     async waitForTicks(ticks) {
       if (ticks <= 0) return;
       // Count ticks after earlier controls reached native state, not queued frames

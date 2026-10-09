@@ -1,18 +1,4 @@
 import { fromNotch } from './items.mjs'
-// PC 1.21.1 prismarine-entity 2.6.0 object contract; see entities.LICENSE.
-// registry is reserved for the shared factory integration signature. No tables
-// are needed here: dropped-item metadata is index 8, custom-name metadata is 2.
-// Inject the guest's existing Item and ChatMessage classes to preserve identity.
-// Metadata must contain decoded protocol values: anonymous NBT for names and
-// decoded Slot data for dropped items, not already-created Item/Chat objects.
-//
-// Constructor defaults follow source, including five sparse equipment slots;
-// PC equipment updates can extend it to six (0 main hand, 1 offhand, 2 feet,
-// 3 legs, 4 torso, 5 head). Undefined name returns null; null name still throws
-// through upstream fromNotch. Health/food/type/etc are native hydration fields,
-// not invented defaults. Deprecated aliases warn using the available console.
-// No native actions or native event generation occurs in this class.
-
 import { Vec3 } from 'vec3'
 
 export function createEntityClass (registry, { Item, ChatMessage }) {

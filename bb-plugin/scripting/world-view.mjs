@@ -1,5 +1,3 @@
-// Synchronous ray/query subset adapted from prismarine-world 3.7.0.
-// Attribution and upstream license declaration: world-view.LICENSE.
 import { Vec3 } from 'vec3'
 
 const BlockFace = {

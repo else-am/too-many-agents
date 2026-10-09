@@ -1,8 +1,6 @@
 import { emitWindow } from './windows.mjs';
 import { installCreativeInventory } from './creative.mjs';
 import { installBooks } from './books.mjs';
-// Public orchestration adapted from Mineflayer 4.39.0 inventory,
-// simple_inventory, chest and craft plugins (MIT). See inventory.LICENSE.
 // Every mutation is native and authoritative; never call Window.acceptClick.
 import { Vec3 } from 'vec3';
 import { installSpecializedWindows } from './specialized-windows.mjs';
@@ -78,7 +76,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
   async function click(ctx, slot, button = 0, mode = 0) {
     check(ctx);
     requireValue(integer(mode) && mode >= 0 && mode <= 6, 'InvalidClick', 'Invalid click mode');
-    requireValue(mode < 5, 'UnsupportedClickMode', 'Drag and double-click modes are pending implementation, as in pinned Mineflayer');
+    requireValue(mode < 5, 'UnsupportedClickMode', 'Drag and double-click modes are pending implementation');
     requireValue(integer(button) && (mode === 2 ? (button >= 0 && button <= 8) || button === 40
       : mode === 3 ? button === 2 : button === 0 || button === 1), 'InvalidClick', 'Invalid click button');
     if (slot === -999) requireValue(mode === 0, 'InvalidClick', 'Outside clicks use PICKUP mode');

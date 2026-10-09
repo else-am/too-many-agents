@@ -1,4 +1,3 @@
-// Read-only Mineflayer 4.39.0 queries; attribution: world-queries.LICENSE.
 import { Vec3 } from 'vec3'
 import { createWorldView } from './world-view.mjs'
 

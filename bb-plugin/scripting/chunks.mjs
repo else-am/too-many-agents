@@ -1,4 +1,3 @@
-// PC 1.21.1, prismarine-chunk 1.41.0. See chunks.LICENSE.
 // Bundle only this selected implementation. Upstream free Buffer identifiers
 // require lexical browser Buffer injection; alias 'buffer' to 'buffer/'.
 import upstreamFactory from 'prismarine-chunk/src/pc/1.18/ChunkColumn.js'
