@@ -3,7 +3,6 @@
 // require lexical browser Buffer injection; alias 'buffer' to 'buffer/'.
 import upstreamFactory from 'prismarine-chunk/src/pc/1.18/ChunkColumn.js'
 import BitArray from 'prismarine-chunk/src/pc/common/BitArrayNoSpan.js'
-import BiomeSection from 'prismarine-chunk/src/pc/common/PaletteBiome.js'
 import { Buffer } from 'buffer/'
 
 const MAX_HEIGHT = 4096
@@ -31,27 +30,14 @@ export function createChunkClass (registry, Block) {
   const blocksByStateId = []
   for (const b of registry.blocksArray) for (let id = b.minStateId; id <= b.maxStateId; id++) blocksByStateId[id] = b
   const biomes = Object.fromEntries(registry.biomesArray.map(b => [b.id, b]))
-  const biomesByName = Object.fromEntries(registry.biomesArray.map(b => [b.name.replace('minecraft:', ''), b]))
   requireValue(registry.biomesArray.length > 0 && registry.biomesArray.every((b, i) => b.id === i), 'biomesArray must use contiguous native IDs')
-  const mcData = { ...registry, blocks, blocksByStateId, biomes, biomesByName,
+  const mcData = { ...registry, blocks, blocksByStateId, biomes,
     version: { type: 'pc', majorVersion: '1.21', minecraftVersion: '1.21.1', '>=': version => {
       // These are the only feature comparisons made by the pinned factory.
       requireValue(version === '1.21.5' || version === '26.1', `unexpected upstream version comparison ${version}`)
       return false
     } } }
   const Upstream = upstreamFactory(Block, mcData)
-  const Section = Upstream.section
-  // Upstream's direct palette JSON constructor discards its data option.
-  function restoreDirect (container, json) {
-    const parsed = JSON.parse(json)
-    if (parsed.type === 'direct') container.data = BitArray.fromJson(parsed.data)
-  }
-  const sectionFromJson = Section.fromJson
-  Section.fromJson = json => {
-    const section = sectionFromJson(json)
-    restoreDirect(section.data, JSON.parse(json).data)
-    return section
-  }
   function configureBiomes (column) {
     for (const section of column.biomes) {
       // Upstream defaults biome palette promotion to eight bits rather than
@@ -148,66 +134,7 @@ export function createChunkClass (registry, Block) {
       configureBiomes(this)
     }
 
-    static fromJson (json) {
-      const parsed = JSON.parse(json)
-      dimensions(parsed.minY, parsed.worldHeight)
-      const result = Upstream.fromJson(json)
-      Object.setPrototypeOf(result, this.prototype)
-      result.emptyBlockLightMask = BitArray.fromLongArray(parsed.emptyBlockLightMask, 1)
-      result.emptySkyLightMask = BitArray.fromLongArray(parsed.emptySkyLightMask, 1)
-      for (let i = 0; i < result.biomes.length; i++) restoreDirect(result.biomes[i].data, parsed.biomes[i])
-      configureBiomes(result)
-      return result
-    }
-
-    getBiomeData (pos) { return biomes[this.getBiome(pos)] }
-
-    loadBlockEntities (entities) {
-      for (const entity of entities) {
-        const value = entity.type === 'compound' ? entity.value : entity
-        this.setBlockEntity({ x: value.x.value & 15, y: value.y.value, z: value.z.value & 15 }, entity)
-      }
-    }
-
-    _loadBlockLightNibbles (y, buffer) {
-      const index = y - this.minY / 16 + 1
-      requireValue(index >= 0 && index < this.numSections + 2, 'light section outside column')
-      this.blockLightSections[index] = lightLayer(buffer)
-      this.blockLightMask.set(index, 1)
-      this.emptyBlockLightMask.set(index, 0)
-    }
-
-    _loadSkyLightNibbles (y, buffer) {
-      const index = y - this.minY / 16 + 1
-      requireValue(index >= 0 && index < this.numSections + 2, 'light section outside column')
-      this.skyLightSections[index] = lightLayer(buffer)
-      this.skyLightMask.set(index, 1)
-      this.emptySkyLightMask.set(index, 0)
-    }
-
-    loadSection (y, blockStates, biomeStates, blockLight, skyLight) {
-      const index = y - this.minY / 16
-      requireValue(Number.isInteger(index) && index >= 0 && index < this.numSections, 'section outside column')
-      const palette = blockStates.palette.map(entry => {
-        const block = Block.fromProperties(entry.Name.replace('minecraft:', ''), entry.Properties || {})
-        requireValue(block !== null && block !== undefined, `unknown block ${entry.Name}`)
-        return block.stateId
-      })
-      const biomePalette = biomeStates.palette.map(name => {
-        const biome = biomesByName[name.replace('minecraft:', '')]
-        requireValue(biome !== undefined, `unknown biome ${name}`)
-        return biome.id
-      })
-      this.sections[index] = Section.fromLocalPalette({ data: BitArray.fromLongArray(blockStates.data || [], blockStates.bitsPerBlock), palette })
-      if ('maxBitsPerBlock' in this.sections[index].data) this.sections[index].data.maxBitsPerBlock = this.maxBitsPerBlock
-      this.biomes[index] = BiomeSection.fromLocalPalette({ data: BitArray.fromLongArray(biomeStates.data || [], biomeStates.bitsPerBiome), palette: biomePalette })
-      configureBiomes(this)
-      if (blockLight) this._loadBlockLightNibbles(y, blockLight)
-      if (skyLight) this._loadSkyLightNibbles(y, skyLight)
-    }
-
-    // Integration extension. All public upstream setters above remain local
-    // library edits, never native world mutation. Publish only after this returns.
+    // Integration extension. Publish only after this returns.
     static fromSnapshot (row) {
       const column = new this({ minY: row.minY, worldHeight: row.worldHeight })
       column.load(fromBase64(row.data, MAX_DATA_BYTES))

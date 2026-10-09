@@ -763,9 +763,6 @@ final class GameAccess {
         worldState.addProperty("thunderState", level.thunderLevel);
         worldState.addProperty("difficulty", level.getDifficulty().getKey());
         worldState.addProperty("hardcore", current.isHardcore());
-        worldState.addProperty("levelType", level.isFlat() ? "flat" : "default");
-        worldState.addProperty("maxPlayers", current.getPlayerList().getMaxPlayers());
-        worldState.addProperty("serverViewDistance", current.getPlayerList().getViewDistance());
         var spawn = level.getSharedSpawnPos();
         worldState.add("spawnPoint", JsonState.object("x", spawn.getX(), "y", spawn.getY(), "z", spawn.getZ()));
         snapshot.add("worldState", worldState);
@@ -836,7 +833,6 @@ final class GameAccess {
                 var snapshot = scriptSnapshot(current, mob, controller);
                 if (operation.equals("begin")) {
                     snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
-                    snapshot.add("chatFormattingById", ScriptEntities.chatFormatting((ServerLevel) mob.level()));
                     snapshot.add("registryCodecs", ScriptRegistryData.snapshot((ServerLevel) mob.level()));
                 }
                 yield snapshot;
@@ -845,6 +841,7 @@ final class GameAccess {
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
             case "status" -> controller.status(args.has("id") ? string(args, "id", 80) : "");
             case "cancel" -> controller.cancel(args.has("id") ? string(args, "id", 80) : "");
+            case "stopMovement" -> controller.stopScriptMovement(args.has("id") ? string(args, "id", 80) : null);
             default -> throw error("unknown_script_operation");
         };
     }
@@ -1528,7 +1525,6 @@ final class GameAccess {
             case 7 -> "entityTamed";
             case 8 -> "entityShakingOffWater";
             case 10 -> "entityEatingGrass";
-            case 55 -> "entityHandSwap";
             default -> null;
         };
         // Damage/death and wake already have native or observed-state sources.

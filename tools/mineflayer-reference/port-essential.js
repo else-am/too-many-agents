@@ -10,7 +10,7 @@ assert(bot.supportFeature('doesNotExist')===false,'Unknown version feature');
 const clock=bot.time, age=clock.bigAge; await bot.waitForTicks(2);
 assert(bot.time===clock && clock.bigAge>age,'Time hydration/identity');
 out.state={health:bot.health,air:bot.oxygenLevel,age:String(clock.bigAge),xp:bot.experience.points};
-const chest=await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const chest=await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
 for(const [name,count] of [['iron_ore',1],['coal',1],['lapis_lazuli',3],['iron_sword',1],['emerald',2],['writable_book',1]]) await chest.withdraw(id(name),null,count);
 await chest.close();
 const furnace=await bot.openFurnace(bot.blockAt(new Vec3(12,-60,1)));
@@ -40,7 +40,7 @@ const enchanted=await enchant.enchant(0);assert(enchanted.components.some(c=>c.t
 await enchant.takeTargetItem();await enchant.close();out.enchantment={components:enchanted.components,xp:bot.experience.points};console.log('Enchant passed');
 const villager=Object.values(bot.entities).find(e=>e.name==='villager');
 const trade=await bot.openVillager(villager);const used=trade.trades[0].nbTradeUses;
-await bot.trade(trade,0,2);assert(trade.trades[0].nbTradeUses===used+2,'Native trade uses');await trade.close();
+await trade.trade(0,2);assert(trade.trades[0].nbTradeUses===used+2,'Native trade uses');await trade.close();
 assert(bot.inventory.count(id('apple'))===4 && bot.inventory.count(id('emerald'))===0,'Native trade items');out.trade={apples:4,uses:used+2};console.log('Trade passed');
 await bot.look(0,0,true);assert(Math.abs(bot.entity.pitch)<0.001,'Native look pitch');
 await bot.lookAt(new Vec3(15.5,-59.5,4.5),false);

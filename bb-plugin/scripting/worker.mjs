@@ -58,7 +58,7 @@ function fireTimer(id) {
   else schedulePump();
 }
 
-for (const [name, repeat] of [['setTimeout', false], ['setInterval', true]]) {
+for (const [name, repeat] of [['setTimeout', false]]) {
   const fn = vm.newFunction(name, (callback, delay, ...args) => {
     if (vm.typeof(callback) !== 'function') throw new TypeError('Timer callback must be a function');
     if (timers.size >= 1024 || nextTimer >= 10_000) throw new Error('Guest timer limit exceeded');
@@ -73,7 +73,7 @@ for (const [name, repeat] of [['setTimeout', false], ['setInterval', true]]) {
   vm.setProp(vm.global, name, fn);
   fn.dispose();
 }
-for (const name of ['clearTimeout', 'clearInterval']) {
+for (const name of ['clearTimeout']) {
   const fn = vm.newFunction(name, id => { if (id) clearGuestTimer(vm.getNumber(id)); });
   vm.setProp(vm.global, name, fn);
   fn.dispose();

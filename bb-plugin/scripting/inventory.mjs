@@ -1,3 +1,4 @@
+import { emitWindow } from './windows.mjs';
 import { installCreativeInventory } from './creative.mjs';
 import { installBooks } from './books.mjs';
 // Public orchestration adapted from Mineflayer 4.39.0 inventory,
@@ -152,7 +153,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
   async function transfer(ctx, options) {
     const w = ctx.window, { itemType, metadata, nbt } = options;
     const count = options.count ?? 1;
-    requireValue(integer(itemType) && bot.registry.itemsArray.some(item => item.id === itemType), 'InvalidItem', 'Invalid itemType');
+    requireValue(integer(itemType) && Object.hasOwn(bot.registry.items, itemType), 'InvalidItem', 'Invalid itemType');
     requireValue(integer(count) && count >= 0, 'InvalidCount', 'Transfer count must be a nonnegative safe integer');
     const [sourceStart, sourceEnd] = range(w, options.sourceStart, options.sourceEnd);
     const [destStart, destEnd] = options.destStart === -999 ? [-999, -998] : range(w, options.destStart, options.destEnd);
@@ -195,25 +196,6 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       if (ctx.window.selectedItem) await storeCursor(ctx, source, source + 1, source);
     }, () => source);
   }
-  async function putAway(ctx, slot) {
-    validSlot(ctx, slot);
-    const w = ctx.window;
-    if (!w.slots[slot]) return;
-    await recover(ctx, async () => {
-      await reserveCursor(ctx, [slot]);
-      const info = slotInfo(ctx, slot);
-      const result = slot === w.craftingResultSlot || (w.type === 'minecraft:merchant' && slot === 2) || info.role === 'result';
-      if (result) {
-        await pickup(ctx, slot);
-        await storeCursor(ctx, w.inventoryStart, w.inventoryEnd, null, [slot]);
-      } else {
-        const before = w.slots[slot], count = before.count;
-        await click(ctx, slot, 0, 1);
-        requireValue(!w.slots[slot] || !sameStack(before, w.slots[slot]) || w.slots[slot].count < count,
-          'NoProgress', 'Native quick-move made no progress');
-      }
-    }, () => slot);
-  }
   async function close(ctx) {
     check(ctx);
     await send({ type: 'menu_close', menuId: ctx.id, generation: ctx.generation });
@@ -234,19 +216,17 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
   async function select(slot, ticket) {
     if (!pendingSelection || pendingSelection.ticket <= ticket) {
       pendingSelection = { slot, ticket };
-      if (bot.quickBarSlot !== slot) { bot.quickBarSlot = slot; bot.updateHeldItem(); }
+      bot.quickBarSlot = slot;
     }
     try { if (snapshot().hands.selected !== slot) await send({ type: 'select_hotbar', slot }); }
     finally {
       if (pendingSelection?.ticket === ticket) {
         pendingSelection = undefined;
-        if (bot.quickBarSlot !== snapshot().hands.selected) { bot.quickBarSlot = snapshot().hands.selected; bot.updateHeldItem(); }
+        bot.quickBarSlot = snapshot().hands.selected;
       }
     }
   }
-  bot.QUICK_BAR_START = 36;
-  bot.updateHeldItem = () => { bot.emit('heldItemChanged', bot.heldItem); };
-  bot.getEquipmentDestSlot = destination => {
+  const equipmentSlot = destination => {
     const slot = destination === 'hand' ? 36 + bot.quickBarSlot : { head: 5, torso: 6, legs: 7, feet: 8, 'off-hand': 45 }[destination];
     requireValue(slot != null, 'InvalidEquipment', `invalid destination: ${destination}`);
     return slot;
@@ -256,32 +236,16 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     ready();
     if (bot.quickBarSlot === slot) return;
     const ticket = order + 1;
-    pendingSelection = { slot, ticket }; bot.quickBarSlot = slot; bot.updateHeldItem();
+    pendingSelection = { slot, ticket }; bot.quickBarSlot = slot;
     const pending = enqueue(order => select(slot, order));
     controls.add(pending);
     pending.then(() => controls.delete(pending), error => {
       controlFailure = error; controls.delete(pending);
-      if (pendingSelection?.ticket === ticket) { pendingSelection = undefined; bot.quickBarSlot = snapshot().hands.selected; bot.updateHeldItem(); }
+      if (pendingSelection?.ticket === ticket) { pendingSelection = undefined; bot.quickBarSlot = snapshot().hands.selected; }
     });
   };
   bot.clickWindow = (slot, button, mode) => queueWindow(current(), ctx => click(ctx, slot, button, mode));
-  bot.simpleClick = { leftMouse: slot => bot.clickWindow(slot, 0, 0), rightMouse: slot => bot.clickWindow(slot, 1, 0) };
-  bot.transfer = options => queueWindow(options?.window || current(), ctx => transfer(ctx, options));
-  bot.putAway = slot => queueWindow(current(), ctx => putAway(ctx, slot));
   bot.moveSlotItem = (source, dest) => queueWindow(current(), ctx => move(ctx, source, dest));
-  bot.putSelectedItemRange = (start, end, window = current(), slot = null) => queueWindow(window, async ctx => {
-    [start, end] = range(window, start, end); if (slot != null) validSlot(ctx, slot);
-    while (window.selectedItem) {
-      const dest = destination(ctx, start, end);
-      if (dest != null) await placeCursor(ctx, dest);
-      else {
-        // This explicit public API retains upstream's documented overflow path.
-        if (slot != null) { await click(ctx, slot); slot = null; }
-        if (window.selectedItem) await placeCursor(ctx, -999);
-      }
-    }
-  });
-  bot.closeWindow = window => queueWindow(window, close);
   bot.toss = (itemType, metadata, count) => queueWindow(current(), ctx => transfer(ctx, {
     itemType, metadata, count, sourceStart: ctx.window.inventoryStart, sourceEnd: ctx.window.inventoryEnd, destStart: -999,
   }));
@@ -297,9 +261,9 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     destination ??= 'hand';
     if (typeof item === 'number') item = bot.inventory.findInventoryItem(item);
     requireValue(item && typeof item === 'object', 'InvalidItem', 'Invalid item object in equip (item is null or typeof item is not object)');
-    bot.getEquipmentDestSlot(destination); // Validate before moving a cursor or closing a menu.
+    equipmentSlot(destination); // Validate before moving a cursor or closing a menu.
     const playerItem = bot.inventory.slots[item.slot] === item;
-    if (playerItem && destination !== 'hand' && item.slot === bot.getEquipmentDestSlot(destination)) return;
+    if (playerItem && destination !== 'hand' && item.slot === equipmentSlot(destination)) return;
     const armor = ['head', 'torso', 'legs', 'feet'].includes(destination);
     const sourceHidden = playerItem && !check(ctx).slots.some(entry => entry.inventorySlot === inventorySlot(item.slot));
     if (bot.currentWindow && (armor || sourceHidden)) {
@@ -319,7 +283,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     if (destination === 'hand') {
       const nativeSource = slotInfo(ctx, source).inventorySlot;
       if (integer(nativeSource) && nativeSource >= 0 && nativeSource < 9) { await select(nativeSource, ticket); return; }
-      let dest = bot.inventory.firstEmptySlotRange(36, 45);
+      let dest = bot.inventory.firstEmptyHotbarSlot();
       if (dest == null) { dest = 36 + nextQuickBarSlot; nextQuickBarSlot = (nextQuickBarSlot + 1) % 9; }
       const target = mappedSlot(ctx, dest);
       await select(dest - 36, ticket); await move(ctx, source, target);
@@ -327,16 +291,29 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       await reserveCursor(ctx, [source]);
       await click(ctx, source, 40, 2);
       requireValue(sameStack(item, bot.inventory.slots[45]), 'NoProgress', 'Native offhand swap did not equip the item');
-    } else await move(ctx, source, mappedSlot(ctx, bot.getEquipmentDestSlot(destination)));
+    } else await move(ctx, source, mappedSlot(ctx, equipmentSlot(destination)));
   });
+  // Quick-move one occupied non-result slot out, keeping the cursor recoverable.
+  async function putAway(ctx, slot) {
+    validSlot(ctx, slot);
+    const w = ctx.window;
+    if (!w.slots[slot]) return;
+    await recover(ctx, async () => {
+      await reserveCursor(ctx, [slot]);
+      const before = w.slots[slot], count = before.count;
+      await click(ctx, slot, 0, 1);
+      requireValue(!w.slots[slot] || !sameStack(before, w.slots[slot]) || w.slots[slot].count < count,
+        'NoProgress', 'Native quick-move made no progress');
+    }, () => slot);
+  }
   bot.unequip = destination => queueWindow(current(), async (ctx, ticket) => {
-    bot.getEquipmentDestSlot(destination);
-    if (destination !== 'hand' && !bot.inventory.slots[bot.getEquipmentDestSlot(destination)]) return;
+    equipmentSlot(destination);
+    if (destination !== 'hand' && !bot.inventory.slots[equipmentSlot(destination)]) return;
     if (bot.currentWindow && ['head', 'torso', 'legs', 'feet'].includes(destination)) {
       await reserveCursor(ctx); await close(ctx); ctx = capture(bot.inventory); check(ctx);
     }
     if (destination === 'hand') {
-      const empty = bot.inventory.firstEmptySlotRange(36, 45);
+      const empty = bot.inventory.firstEmptyHotbarSlot();
       if (empty != null) { await select(empty - 36, ticket); return; }
       const source = mappedSlot(ctx, 36 + snapshot().hands.selected);
       const dest = bot.inventory.firstEmptyInventorySlot();
@@ -349,7 +326,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       requireValue(dest != null, 'DestinationFull', 'No inventory room to unequip offhand');
       const slot = mappedSlot(ctx, dest); await reserveCursor(ctx, [slot]); await click(ctx, slot, 40, 2);
       requireValue(!bot.inventory.slots[45], 'NoProgress', 'Native offhand swap did not clear offhand');
-    } else await putAway(ctx, mappedSlot(ctx, bot.getEquipmentDestSlot(destination)));
+    } else await putAway(ctx, mappedSlot(ctx, equipmentSlot(destination)));
   });
   function vector(value, label) {
     requireValue(value && ['x', 'y', 'z'].every(key => Number.isFinite(value[key])), 'InvalidVector', `Invalid ${label}`);
@@ -392,7 +369,6 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       return Promise.reject(failure('NotContainer', 'containerToOpen is neither a block nor an entity'));
     return open(target, direction, cursorPos, kind === 'Entity', true);
   };
-  bot.openChest = bot.openDispenser = bot.openContainer;
 
   function craftingGrid(ctx) {
     const slots = check(ctx).slots;
@@ -414,7 +390,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     const cells = new Array(width * height).fill(null);
     const ingredient = value => {
       if (value == null || value.id === -1) return null;
-      requireValue(integer(value.id) && bot.registry.itemsArray.some(item => item.id === value.id),
+      requireValue(integer(value.id) && Object.hasOwn(bot.registry.items, value.id),
         'InvalidRecipe', 'Recipe contains an invalid ingredient');
       return { id: value.id, metadata: value.metadata };
     };
@@ -454,7 +430,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       // Nonpositive/NaN counts retain pinned's zero-iteration behavior.
       if (!(operations > 0)) return Promise.resolve();
       requireValue(integer(operations) && operations <= 256, 'OperationLimit', 'Craft is limited to 256 operations per call');
-      requireValue(integer(recipe.result?.id) && bot.registry.itemsArray.some(item => item.id === recipe.result.id),
+      requireValue(integer(recipe.result?.id) && Object.hasOwn(bot.registry.items, recipe.result.id),
         'InvalidRecipe', 'Recipe result has an invalid item id');
       craftingPlan(recipe, craftingTable ? 3 : 2, craftingTable ? 3 : 2);
       if (craftingTable) request = openRequest(craftingTable, null, null, false);
@@ -517,13 +493,13 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
       }
     });
   };
-  bot.on('windowClose', window => {
-    if (window && !closed.has(window)) { closed.add(window); window.emit('close'); }
-  });
+  function windowClosed(window) {
+    if (window && !closed.has(window)) { closed.add(window); emitWindow(window, 'close'); }
+  }
   // Shared internal operations stay unqueued; public adapters own one queue turn.
   const io = {
     queueWindow, check, send, pickup, storeCursor, reserveCursor, transfer, move, sourceSlot, recover,
-    requireValue, sameStack, sameData, isKnownActionError, decodeItem, assertReady: ready,
+    requireValue, sameStack, isKnownActionError, decodeItem, assertReady: ready,
     capture, current, close, select, snapshot, click,
   };
   const specialized = installSpecializedWindows(bot, io);
@@ -534,11 +510,11 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     const decorated = menus.has(window);
     menus.set(window, { id: menu.id, generation: menu.generation });
     if (!decorated) {
-      window.close = () => bot.closeWindow(window);
-      window.deposit = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
-        sourceStart: window.inventoryStart, sourceEnd: window.inventoryEnd, destStart: 0, destEnd: window.inventoryStart });
-      window.withdraw = (itemType, metadata, count, nbt) => bot.transfer({ window, itemType, metadata, count, nbt,
-        sourceStart: 0, sourceEnd: window.inventoryStart, destStart: window.inventoryStart, destEnd: window.inventoryEnd });
+      window.close = () => queueWindow(window, close);
+      window.deposit = (itemType, metadata, count, nbt) => queueWindow(window, ctx => transfer(ctx, { itemType, metadata, count, nbt,
+        sourceStart: window.inventoryStart, sourceEnd: window.inventoryEnd, destStart: 0, destEnd: window.inventoryStart }));
+      window.withdraw = (itemType, metadata, count, nbt) => queueWindow(window, ctx => transfer(ctx, { itemType, metadata, count, nbt,
+        sourceStart: 0, sourceEnd: window.inventoryStart, destStart: window.inventoryStart, destEnd: window.inventoryEnd }));
     }
     specialized.syncWindow(window, menu);
   }
@@ -554,7 +530,7 @@ export function installInventory(bot, { action, snapshot, decodeItem, Item, asse
     controls.add(pending);
     pending.then(() => controls.delete(pending), error => { controlFailure = error; controls.delete(pending); });
   }
-  return { syncWindow, enqueueControl, selection: () => pendingSelection?.slot,
+  return { syncWindow, windowClosed, enqueueControl, selection: () => pendingSelection?.slot,
     async drainControls() {
       while (controls.size) await Promise.allSettled([...controls]);
       if (controlFailure) throw controlFailure;

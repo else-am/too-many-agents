@@ -52,7 +52,6 @@ final class Observations {
             result.addProperty("health", living.getHealth());
             result.addProperty("mainHand", living.getMainArm() == net.minecraft.world.entity.HumanoidArm.LEFT ? "left" : "right");
             result.addProperty("isSleeping", living.isSleeping());
-            result.addProperty("effectTick", living.tickCount);
             result.addProperty("airSupply", living.getAirSupply());
             result.addProperty("maxAirSupply", living.getMaxAirSupply());
             var attributes = new JsonObject();

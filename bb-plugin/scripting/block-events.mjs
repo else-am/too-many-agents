@@ -12,17 +12,18 @@ const shulkerColors = ['white', 'orange', 'magenta', 'light_blue', 'yellow', 'li
 const lidNames = new Set(['chest', 'trapped_chest', 'ender_chest', 'shulker_box', ...shulkerColors.map(color => `${color}_shulker_box`)]);
 
 // The caller emits returned tuples only after complete frame hydration.
-export function installBlockEvents(bot) {
-  const instruments = new Map(Object.values(bot.registry.instruments).map(instrument => [instrument.name, instrument]));
+export function installBlockEvents(bot, instrumentsRegistry) {
+  const instruments = new Map(Object.values(instrumentsRegistry).map(instrument => [instrument.name, instrument]));
   const openCounts = new Map();
   const signature = block => {
     const properties = block.getProperties();
     return `${block.name}:${properties.type ?? ''}:${properties.facing ?? ''}`;
   };
-  bot.on('blockUpdate', (oldBlock, block) => {
+  // The caller reports each observed block change.
+  function blockUpdated(oldBlock, block) {
     if (!block || !oldBlock || signature(oldBlock) !== signature(block))
       openCounts.delete((block ?? oldBlock)?.position.toString());
-  });
+  }
 
   function update(records = []) {
     if (!Array.isArray(records) || records.length > 256) throw new Error('Invalid native block-event batch');
@@ -79,5 +80,5 @@ export function installBlockEvents(bot) {
     }
     return events;
   }
-  return { update };
+  return { update, blockUpdated };
 }

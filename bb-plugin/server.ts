@@ -79,7 +79,7 @@ export default async function minecraft(bb: BbPluginApi) {
       tools: physicalTools
         .filter((tool) => !tool.minecraft || pluginMetadata.minecraftAccess === true)
         .map((tool) => tool.name),
-      skills: ["minecraft-agents"],
+      skills: ["minecraft-agents", ...(pluginMetadata.minecraftAccess === true ? ["minecraft-scripting"] : [])],
       instructions,
     };
   });

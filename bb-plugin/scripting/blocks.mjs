@@ -40,7 +40,6 @@ export function createBlockClass (registry) {
     if (registry[field] == null) throw new Error(`Block registry is missing ${field}`)
   }
   const blocks = Object.fromEntries(registry.blocksArray.map(block => [block.id, block]))
-  const blocksByName = Object.fromEntries(registry.blocksArray.map(block => [block.name, block]))
   const blocksByStateId = []
   for (const block of registry.blocksArray) {
     for (let id = block.minStateId; id <= block.maxStateId; id++) blocksByStateId[id] = block
@@ -98,16 +97,16 @@ export function createBlockClass (registry) {
     }
   }
 
-  return class Block {
+  class Block {
+    #metadata; #properties; #harvestTools;
     constructor (type, biomeId, metadata, stateId) {
       this.type = type
-      this.metadata = metadata ?? 0
+      this.#metadata = metadata ?? 0
       this.light = 0
       this.skyLight = 0
       this.biome = new Biome(biomeId)
       this.position = null
       this.stateId = stateId
-      this.computedStates = {}
 
       if (stateId === undefined && type !== undefined) {
         const b = blocks[type]
@@ -117,19 +116,18 @@ export function createBlockClass (registry) {
 
       const blockEnum = blocksByStateId[this.stateId]
       if (blockEnum) {
-        this.metadata = this.stateId - blockEnum.minStateId
+        this.#metadata = this.stateId - blockEnum.minStateId
         this.type = blockEnum.id
         this.name = blockEnum.name
         this.hardness = blockEnum.hardness
         this.displayName = blockEnum.displayName
         this.shapes = blockEnum.shapes
         if (blockEnum.stateShapes) {
-          if (blockEnum.stateShapes[this.metadata] !== undefined) {
-            this.shapes = blockEnum.stateShapes[this.metadata]
+          if (blockEnum.stateShapes[this.#metadata] !== undefined) {
+            this.shapes = blockEnum.stateShapes[this.#metadata]
           } else {
             // Default to shape 0
             this.shapes = blockEnum.stateShapes[0]
-            this.missingStateShape = true
           }
         } else if (blockEnum.variations) {
           const variations = blockEnum.variations
@@ -144,7 +142,7 @@ export function createBlockClass (registry) {
         this.transparent = blockEnum.transparent
         this.diggable = blockEnum.diggable
         this.material = blockEnum.material
-        this.harvestTools = blockEnum.harvestTools
+        this.#harvestTools = blockEnum.harvestTools
         this.drops = blockEnum.drops
       } else {
         this.name = ''
@@ -156,16 +154,16 @@ export function createBlockClass (registry) {
         this.diggable = false
       }
 
-      this._properties = {}
+      this.#properties = {}
       if (blockEnum && blockEnum.states) {
-        let data = this.metadata
+        let data = this.#metadata
         for (let i = blockEnum.states.length - 1; i >= 0; i--) {
           const prop = blockEnum.states[i]
-          this._properties[prop.name] = propValue(prop, data % prop.num_values)
+          this.#properties[prop.name] = propValue(prop, data % prop.num_values)
           data = Math.floor(data / prop.num_values)
         }
       }
-      this.isWaterlogged = this._properties.waterlogged
+      this.isWaterlogged = this.#properties.waterlogged
 
       // Extras - Inject helper methods based on the specific block type.
       if (this.name.includes('sign')) {
@@ -177,56 +175,29 @@ export function createBlockClass (registry) {
       return new Block(undefined, biomeId, 0, stateId)
     }
 
-    static fromProperties (typeId, properties, biomeId) {
-      const block = typeof typeId === 'string' ? blocksByName[typeId] : blocks[typeId]
-      if (!block) throw new Error('No matching block id found for ' + typeId + ' with properties ' + JSON.stringify(properties))
-      let data = 0
-      for (const [key, value] of Object.entries(properties)) {
-        data += getStateValue(block.states, key, value)
-      }
-      return new Block(undefined, biomeId, 0, block.minStateId + data)
-    }
-
-    static fromString (str, biomeId) {
-      if (str.startsWith('minecraft:')) str = str.substring(10)
-      const name = str.split('[', 1)[0]
-      const propertiesStr = str.slice(name.length + 1, -1).split(',')
-      if (!str.includes('["')) {
-        // Example state: `minecraft:candle[lit=true]` -> candle, {lit: "true"}
-        return Block.fromProperties(name, Object.fromEntries(propertiesStr.map(property => property.split('='))), biomeId)
-      } else {
-        // Kept for backwards compatibility
-        // Example state: `minecraft:candle["lit":true]` -> candle, {lit: 1}
-        return Block.fromProperties(name, Object.fromEntries(propertiesStr.map(property => {
-          const [key, value] = property.split(':')
-          return [key.slice(1, -1), value.startsWith('"') ? value.slice(1, -1) : { true: 1, false: 0 }[value] ?? parseInt(value)]
-        })), biomeId)
-      }
-    }
-
     get blockEntity () {
       return this.entity ? simplifyNbt(this.entity) : undefined
     }
 
     getProperties () {
-      return Object.assign(this._properties, this.computedStates)
+      return { ...this.#properties }
     }
-
-    // Hashes are Bedrock-only; the PC upstream class returns undefined.
-    static getHash (name, states) {}
 
     canHarvest (heldItemType) {
-      if (!this.harvestTools) { return true }; // for blocks harvestable by hand
-      return heldItemType && this.harvestTools && this.harvestTools[heldItemType]
+      if (!this.#harvestTools) { return true }; // for blocks harvestable by hand
+      return heldItemType && this.#harvestTools && this.#harvestTools[heldItemType]
     }
+  }
 
-    // http://minecraft.gamepedia.com/Breaking#Calculation
-    // for more concrete information, look up following Minecraft methods (assuming yarn mappings):
-    // AbstractBlock#calcBlockBreakingDelta, PlayerEntity#getBlockBreakingSpeed, PlayerEntity#canHarvest
-    digTime (heldItemType, creative, inWater, notOnGround, enchantments = [], effects = {}) {
+  function propValue (state, value) {
+    if (state.type === 'enum' || state.values) return state.values[value]
+    if (state.type === 'bool') return !value
+    return value
+  }
+  function digTime (block, heldItemType, creative, inWater, notOnGround, enchantments = [], effects = {}) {
       if (creative) return 0
 
-      const materialToolMultipliers = registry.materials[this.material]
+      const materialToolMultipliers = registry.materials[block.material]
       const isBestTool = heldItemType && materialToolMultipliers && materialToolMultipliers[heldItemType]
 
       // Compute breaking speed multiplier
@@ -272,8 +243,8 @@ export function createBlockClass (registry) {
       }
 
       // Compute block breaking delta (breaking progress applied in a single tick)
-      const blockHardness = this.hardness
-      const matchingToolMultiplier = this.canHarvest(heldItemType) ? 30.0 : 100.0
+      const blockHardness = block.hardness
+      const matchingToolMultiplier = block.canHarvest(heldItemType) ? 30.0 : 100.0
 
       let blockBreakingDelta = blockBreakingSpeed / blockHardness / matchingToolMultiplier
 
@@ -298,40 +269,7 @@ export function createBlockClass (registry) {
       const ticksToBreakBlock = Math.ceil(1.0 / blockBreakingDelta)
       return ticksToBreakBlock * 50
     }
-  }
-
-  function parseValue (value, state) {
-    if (state.type === 'enum' || state.values) {
-      return state.values.indexOf(String(value))
-    }
-    if (state.type === 'bool') {
-      if (value === true || value === 'true') return 0
-      if (value === false || value === 'false') return 1
-    }
-    if (state.type === 'int') {
-      return value
-    }
-    // Assume by-name mapping for unknown properties
-    return state.values?.indexOf(value.toString()) ?? 0
-  }
-
-  function getStateValue (states, name, value) {
-    let offset = 1
-    for (let i = states.length - 1; i >= 0; i--) {
-      const state = states[i]
-      if (state.name === name) {
-        return offset * parseValue(value, state)
-      }
-      offset *= state.num_values
-    }
-    return 0
-  }
-
-  function propValue (state, value) {
-    if (state.type === 'enum' || state.values) return state.values[value]
-    if (state.type === 'bool') return !value
-    return value
-  }
+  return { Block, digTime };
 }
 
 // The typed object representation is identical to prismarine-nbt's builders.

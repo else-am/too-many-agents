@@ -1,3 +1,4 @@
+import { toNotch } from './items.mjs';
 // Creative inventory API adapted to authoritative native slots.
 // Public signatures follow Mineflayer 4.39.0; see mineflayer.LICENSE.
 import { encodeItemTransport } from 'minecraft-item-transport';
@@ -10,7 +11,7 @@ export function installCreativeInventory(bot, io, Item) {
     requireValue(Number.isFinite(waitTimeout) && waitTimeout >= 0, 'InvalidTimeout', 'waitTimeout must be nonnegative');
     requireValue(item == null || item instanceof Item, 'InvalidItem', 'Expected an Item or null');
     // Capture caller values before queuing. Mutating the Item later cannot change this request.
-    return { slot, item: encodeItemTransport(Item.toNotch(item)) };
+    return { slot, item: encodeItemTransport(toNotch(item)) };
   }
   async function write(ctx, value) {
     io.check(ctx);
@@ -23,7 +24,6 @@ export function installCreativeInventory(bot, io, Item) {
       const value = prepare(slot, item, waitTimeout);
       await io.queueWindow(io.current(), ctx => write(ctx, value));
     },
-    async clearSlot(slot) { await bot.creative.setInventorySlot(slot, null); },
     async clearInventory() {
       await io.queueWindow(io.current(), async ctx => {
         const slots = bot.inventory.slots.flatMap((item, slot) => item && slot > 0 ? [slot] : []);

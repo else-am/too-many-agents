@@ -43,7 +43,6 @@
     "minecraft-protocol": "1.68.0",
     "prismarine-chunk": "1.41.0",
     "prismarine-nbt": "2.8.0",
-    "prismarine-world": "3.7.0",
     "protodef": "1.19.0",
     "quickjs-emscripten": "0.32.0",
     "smart-buffer": "4.2.0"

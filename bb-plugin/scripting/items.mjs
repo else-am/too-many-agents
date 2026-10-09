@@ -15,10 +15,10 @@
 // "minecraft:"; data must have the protocol-decoded shape (including typed NBT,
 // numeric registry IDs, and nested Slots). Empty slots have itemCount: 0.
 // Supply the actual component patch, not resolved defaults or synthetic NBT.
-// Inventory integration sets item.slot separately. All setters and Item.anvil
+// Inventory integration sets item.slot separately. Setters
 // affect local objects only; no method here authorizes or performs a world edit.
 //
-// Preserve pinned quirks: equal compares NBT, not components; map setters do
+// Preserve pinned quirks: map setters do
 // not synchronize components; durability/enchant setters still write NBT;
 // component getters return upstream's raw data, even where typings disagree.
 export function createItemClass (registry) {
@@ -26,7 +26,6 @@ export function createItemClass (registry) {
     if (registry[field] == null) throw new Error(`Item registry is missing ${field}`)
   }
   const items = Object.fromEntries(registry.itemsArray.map(item => [item.id, item]))
-  const itemsByName = Object.fromEntries(registry.itemsArray.map(item => [item.name, item]))
   const enchantmentsByName = registry.enchantmentsByName
   class Item {
     constructor (type, count, metadata, nbt, stackId, sentByServer) {
@@ -47,8 +46,6 @@ export function createItemClass (registry) {
       this.components = []
       this.removedComponents = []
       this.componentMap = new Map()
-
-      this.stackId = null
 
       const itemEnum = items[type]
       if (itemEnum) {
@@ -72,59 +69,6 @@ export function createItemClass (registry) {
         this.displayName = 'unknown'
         this.stackSize = 1
       }
-    }
-
-    static equal (item1, item2, matchStackSize = true, matchNbt = true) {
-      if (item1 == null && item2 == null) {
-        return true
-      } else if (item1 == null) {
-        return false
-      } else if (item2 == null) {
-        return false
-      } else {
-        return (
-          item1.type === item2.type &&
-          item1.metadata === item2.metadata &&
-          (matchStackSize ? item1.count === item2.count : true) &&
-          (matchNbt ? JSON.stringify(item1.nbt) === JSON.stringify(item2.nbt) : true)
-        )
-      }
-    }
-
-    // The upstream factory keeps this counter per Item class, including on PC.
-    static currentStackId = 0
-    static nextStackId () {
-      return Item.currentStackId++
-    }
-
-    static toNotch (item, serverAuthoritative = true) {
-      // Upstream evaluates this even in component versions. Preserve malformed
-      // NBT errors instead of silently accepting input that upstream rejects.
-      if (item && item.nbt) Object.keys(item.nbt.value)
-      if (!item) return { itemCount: 0, components: [], removeComponents: [] }
-      return {
-        present: true,
-        itemCount: item.count,
-        itemId: item.type,
-        addedComponentCount: item.components.length,
-        removedComponentCount: item.removedComponents.length,
-        components: item.components,
-        removeComponents: item.removedComponents
-      }
-    }
-
-    static fromNotch (networkItem, stackId) {
-      if (networkItem.present === false) return null
-      if (networkItem.itemCount === 0) return null
-      // This argument order deliberately matches prismarine-item 1.18.0.
-      const item = new Item(networkItem.itemId, networkItem.itemCount, null, null, true)
-      item.components = networkItem.components
-      item.removedComponents = networkItem.removeComponents
-      item.componentMap = new Map()
-      if (item.components) {
-        for (const component of item.components) item.componentMap.set(component.type, component)
-      }
-      return item
     }
 
     get customName () {
@@ -178,13 +122,6 @@ export function createItemClass (registry) {
       }
       if (!this?.nbt) this.nbt = nbt.comp({})
       this.nbt.value.RepairCost = nbt.int(newRepairCost)
-    }
-
-    get customModel () {
-      if (this.componentMap?.has('custom_model')) {
-        return this.componentMap.get('custom_model').data
-      }
-      return this?.nbt?.value?.CustomModelData?.value ?? null
     }
 
     get enchants () {
@@ -284,7 +221,6 @@ export function createItemClass (registry) {
     }
   }
 
-  Item.anvil = createAnvil({ itemsByName, enchantmentsByName }, Item)
   return Item
 }
 
@@ -314,176 +250,32 @@ function simplify (data) {
   return transform(data.value, data.type)
 }
 
-function createAnvil (registry, Item) {
-  function combine (itemOne, itemTwo, creative, renamedName) {
-    const rename = typeof renamedName === 'string'
-    const data = {
-      finalEnchs: [],
-      fixedDurability: 0
-    }
-    let onlyRename = false // to tell if it's just a rename
-    if (!combinePossible(itemOne, itemTwo) && itemTwo !== null) return { xpCost: 0, item: null }
-    let cost = 0
-    if (rename) {
-      onlyRename = true
-      const renameCost = getRenameCost(itemOne)
-      if (renameCost === -1) return { xpCost: 0, item: null }
-      cost += renameCost
-    }
-    if (itemOne.durabilityUsed !== 0) {
-      onlyRename = false
-      const { xpLevelCost: repairCost, fixedDurability, usedMats } = getRepairCost(itemOne, itemTwo)
-      data.fixedDurability = fixedDurability
-      data.usedMats = usedMats
-      cost += repairCost
-    }
-    if (itemTwo && (itemTwo.name === itemOne.name || itemTwo.name === 'enchanted_book')) {
-      onlyRename = false
-      const { xpLevelCost: enchantCost, finalEnchs } = combineEnchants(itemOne, itemTwo, creative)
-      data.finalEnchs = finalEnchs
-      if (enchantCost === 0 && !rename && itemOne.metadata === 0) return { xpCost: 0, item: null } // no change
-      cost += enchantCost
-    }
-    if (itemTwo === null && itemOne.customName === renamedName) return { xpCost: 0, item: null } // no change
-    cost += itemOne.repairCost + (itemTwo?.repairCost ?? 0)
-
-    if (cost > 39 && onlyRename) cost = 39
-    else if (cost >= 40) return { xpCost: 0, item: null } // show too expensive message
-
-    let finalItem = null
-    if (itemOne) {
-      finalItem = new Item(itemOne.type, itemOne.count, 0, JSON.parse(JSON.stringify(itemOne.nbt)), null, true)
-      const resultDurability = itemOne.durabilityUsed - data.fixedDurability
-      const repairCost = Math.max(itemOne.repairCost, (itemTwo?.repairCost ?? 0)) * 2 + 1
-      if (data?.finalEnchs.length > 0) finalItem.enchants = data.finalEnchs
-      if (rename) finalItem.customName = renamedName
-      finalItem.repairCost = repairCost
-      if (resultDurability && itemOne.name !== 'enchanted_book') finalItem.durabilityUsed = resultDurability
-    }
-    return { xpCost: cost, item: finalItem, usedMats: data.usedMats }
-  }
-
-  /**
-   *
-   * @param {Item} itemOne left hand item
-   * @param {Item} itemTwo right hand item
-   * @param {boolean} creative whether the bot is in creative mode
-   * @returns {{finalEnchs: (*|[]|{lvl: *, name: *|null}[]|NormalizedEnchant[]), xpLevelCost: number}}
-   * xpLevelCost is enchant data that is strictly from combining enchants
-   * finalEnchs is the array of enchants on the final object
-   */
-  function combineEnchants (itemOne, itemTwo, creative) {
-    const rightIsBook = itemTwo.name === 'enchanted_book'
-    const finalEnchs = itemOne.enchants
-    const finalEnchsByName = finalEnchs.map(x => x.name)
-    const itemTwoEnch = itemTwo.enchants
-    let xpLevelCost = 0
-    for (const ench of itemTwoEnch) {
-      const enchOnItemOne = finalEnchs.find(x => x.name === ench.name)
-      let { exclude, maxLevel, category, weight } = registry.enchantmentsByName[ench.name]
-      const multiplier = getMultipliers(weight, rightIsBook)
-      if (!(itemOne.name === 'enchanted_book' && rightIsBook) && !registry.itemsByName[itemOne.name].enchantCategories.includes(category) && !creative) continue
-      else if (enchOnItemOne === undefined) { // first item doesn't have this ench
-        exclude = exclude.map(name => registry.enchantmentsByName[name].name)
-        if (exclude.some(excludedEnch => finalEnchsByName.includes(excludedEnch))) { // has an excluded enchant
-          xpLevelCost++
-        } else {
-          const finalLevel = ench.lvl
-          xpLevelCost += finalLevel * multiplier
-          finalEnchs.push({ name: ench.name, lvl: ench.lvl })
-        }
-      } else {
-        let finalLevel = 0
-        const itemOneLevel = enchOnItemOne.lvl
-        const itemTwoLevel = ench.lvl
-        if (itemOneLevel === itemTwoLevel) {
-          finalLevel = Math.min(itemOneLevel + 1, maxLevel)
-          enchOnItemOne.lvl = finalLevel
-        } else if (itemTwoLevel > itemOneLevel) {
-          finalLevel = itemTwoLevel
-          enchOnItemOne.lvl = finalLevel
-        } else if (itemOneLevel > itemTwoLevel) {
-          finalLevel = itemOneLevel
-        }
-        xpLevelCost += finalLevel * multiplier
+export function toNotch (item, serverAuthoritative = true) {
+      // Upstream evaluates this even in component versions. Preserve malformed
+      // NBT errors instead of silently accepting input that upstream rejects.
+      if (item && item.nbt) Object.keys(item.nbt.value)
+      if (!item) return { itemCount: 0, components: [], removeComponents: [] }
+      return {
+        present: true,
+        itemCount: item.count,
+        itemId: item.type,
+        addedComponentCount: item.components.length,
+        removedComponentCount: item.removedComponents.length,
+        components: item.components,
+        removeComponents: item.removedComponents
       }
     }
-    return { xpLevelCost, finalEnchs }
-  }
 
-  // converts enchant weight to enchant cost multiplier
-  function getMultipliers (weight, isBook) {
-    const itemMultiplier = {
-      10: 1,
-      5: 2,
-      2: 4,
-      1: 8
-    }[weight]
-    return isBook ? Math.max(1, itemMultiplier / 2) : itemMultiplier
-  }
-
-  /**
-   *
-   * @param {Item} itemOne left hand item
-   * @param {Item} itemTwo right hand item
-   * @returns {{usedMats: number, fixedDurability: number, xpLevelCost: number}|number}
-   * xpLevelCost is the number of xp levels used for repair (if any)
-   * fixedDurability is duribility after using the anvil
-   * usedMats is the number of materials used to fix the broken item (if many mats is used)
-   */
-  function getRepairCost (itemOne, itemTwo) {
-    if (itemTwo === null) return { xpLevelCost: 0, fixedDurability: 0, usedMats: 0 } // air
-    else if (itemTwo.name === 'enchanted_book') return { xpLevelCost: 0, fixedDurability: 0, usedMats: 0 }
-
-    const maxDurability = registry.itemsByName[itemOne.name].maxDurability
-    const durabilityLost = itemOne.durabilityUsed
-    const fixMaterials = registry.itemsByName[itemOne.name].repairWith.concat([itemOne.name])
-    if (!fixMaterials.includes(itemTwo.name) && itemOne.name !== itemTwo.name) {
-      return 0 // Enchanted book can't fix
-    }
-    let results = {
-      fixedDurability: 0,
-      xpLevelCost: 0,
-      usedMats: 0
-    }
-    if (itemTwo.name === itemOne.name) {
-      const possibleFixedDura = Math.floor(0.12 * maxDurability) + itemTwo.metadata
-      results = {
-        fixedDurability: itemOne.metadata < possibleFixedDura ? itemOne.durabilityUsed : possibleFixedDura,
-        xpLevelCost: 2,
-        usedMats: 1
+export function fromNotch (Item, networkItem) {
+      if (networkItem.present === false) return null
+      if (networkItem.itemCount === 0) return null
+      // This argument order deliberately matches prismarine-item 1.18.0.
+      const item = new Item(networkItem.itemId, networkItem.itemCount, null, null, true)
+      item.components = networkItem.components
+      item.removedComponents = networkItem.removeComponents
+      item.componentMap = new Map()
+      if (item.components) {
+        for (const component of item.components) item.componentMap.set(component.type, component)
       }
-    } else if (durabilityLost !== 0) {
-      const durabilityFixedPerMat = Math.floor(maxDurability * 0.25)
-      const matsToFullyRepair = Math.ceil(durabilityLost / durabilityFixedPerMat)
-      if (itemTwo.count > matsToFullyRepair) { // takeall of itemTwo
-        results = {
-          fixedDurability: maxDurability - itemOne.durabilityUsed,
-          xpLevelCost: matsToFullyRepair, // 1 exp lvl per mat used
-          usedMats: matsToFullyRepair
-        }
-      } else if (itemOne && itemTwo) {
-        results = {
-          fixedDurability: Math.min(itemOne.durabilityUsed, durabilityFixedPerMat * itemTwo.count),
-          xpLevelCost: itemTwo.count, // 1 exp lvl per mat used
-          usedMats: itemTwo.count
-        }
-      }
+      return item
     }
-    return results
-  }
-
-  function getRenameCost (item) {
-    if (item?.nbt?.value?.RepairCost?.value === 0x7fffffff) return -1
-    return 1
-  }
-
-  function combinePossible (itemOne, itemTwo) {
-    if (!itemOne?.name || !itemTwo?.name || (!itemOne?.name && !itemTwo?.name)) return false
-    let fixMaterials = (registry.itemsByName[itemOne.name].repairWith ?? []).concat([itemOne.name])
-    if (itemOne.name !== 'enchanted_book') fixMaterials = fixMaterials.concat(['enchanted_book'])
-    return fixMaterials.includes(itemTwo.name)
-  }
-
-  return combine
-}

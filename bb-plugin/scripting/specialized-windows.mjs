@@ -1,9 +1,10 @@
+import { emitWindow } from './windows.mjs';
 // Public signatures/properties adapted from Mineflayer 4.39.0 furnace,
 // enchantment_table, anvil and villager plugins. See specialized-windows.LICENSE.
 // This adapter shares inventory's whole-operation queue and native cursor.
 export function installSpecializedWindows(bot, io) {
   const { queueWindow, check, send, pickup, storeCursor, reserveCursor, transfer, move, sourceSlot, recover,
-    requireValue: need, sameStack, sameData, isKnownActionError, decodeItem, assertReady } = io;
+    requireValue: need, sameStack, isKnownActionError, decodeItem, assertReady } = io;
   const windows = new WeakMap();
   const furnaceType = type => ['minecraft:furnace', 'minecraft:blast_furnace', 'minecraft:smoker'].some(t => type.startsWith(t));
   const enchantType = type => type.startsWith('minecraft:enchant');
@@ -75,19 +76,15 @@ export function installSpecializedWindows(bot, io) {
       const second = decoded(offer.costB, trade.inputItem2), output = decoded(offer.result, trade.outputItem);
       need(first && cost && output, 'InvalidMerchantOffer', 'Native offer is missing an input or output');
       Object.assign(trade, { inputItem1: first, inputItem2: second, outputItem: output, costA: cost,
-        inputs: second ? [first, second] : [first], outputs: [output], hasItem2: !!second,
-        realPrice: cost.count, tradeDisabled: offer.outOfStock, nbTradeUses: offer.uses,
+        tradeDisabled: offer.outOfStock, nbTradeUses: offer.uses,
         maximumNbTradeUses: offer.maxUses, demand: offer.demand, specialPrice: offer.specialPrice,
         priceMultiplier: offer.priceMultiplier, xp: offer.xp, rewardExp: offer.rewardExp });
-      // Retain the older documented aliases alongside pinned source's names.
-      Object.assign(trade, { firstInput: first, secondaryInput: second, output, hasSecondItem: !!second,
-        disabled: trade.tradeDisabled, tooluses: trade.nbTradeUses, maxTradeuses: trade.maximumNbTradeUses });
       trades[index] = trade;
     }
     trades.length = merchant.offers.length;
     window.trades = trades;
     window.selectedTrade = trades[merchant.selectedTrade] ?? null;
-    if (!state.ready) { state.ready = true; window.emit('ready'); }
+    if (!state.ready) { state.ready = true; emitWindow(window, 'ready'); }
   }
   function decorate(window, state) {
     const queue = work => queueWindow(window, work);
@@ -140,7 +137,7 @@ export function installSpecializedWindows(bot, io) {
       };
     } else if (merchantType(window.type)) {
       window.trades = null; window.selectedTrade = null;
-      window.trade = (index, times) => bot.trade(window, index, times);
+      window.trade = (index, times) => queue(ctx => trade(ctx, index, times));
     }
   }
   async function trade(ctx, index, times) {
@@ -169,9 +166,9 @@ export function installSpecializedWindows(bot, io) {
           // Native autofill can give all of a shared payment item to A, starving
           // B. Split only A's surplus; the resulting native output still decides
           // whether B's component predicate accepts it.
-          const missingSecond = selected?.hasItem2 ? selected.inputItem2.count - (window.slots[1]?.count ?? 0) : 0;
+          const missingSecond = selected?.inputItem2 ? selected.inputItem2.count - (window.slots[1]?.count ?? 0) : 0;
           if (!window.slots[2] && missingSecond > 0 && window.slots[0]?.type === selected.inputItem2.type &&
-            window.slots[0].count >= selected.realPrice + missingSecond) {
+            window.slots[0].count >= selected.costA.count + missingSecond) {
             await put(ctx, 1, selected.inputItem2.type, selected.inputItem2.metadata, missingSecond, 0, 1);
           }
           const output = window.slots[2];
@@ -187,7 +184,6 @@ export function installSpecializedWindows(bot, io) {
       });
     } catch (error) { error.completedTrades = completedTrades; throw error; }
   }
-  bot.trade = (window, index, times) => queueWindow(window, ctx => trade(ctx, index, times));
   function open(block, matches, name) {
     return bot.openBlock(block).then(window => {
       need(matches(window.type), 'UnexpectedWindow', `Expected ${name}, got ${window.type}`);
@@ -206,7 +202,7 @@ export function installSpecializedWindows(bot, io) {
   };
   bot.openVillager = entity => {
     const type = bot.registry.entitiesByName?.villager?.id ?? bot.registry.entitiesByName?.Villager?.id;
-    try { need(type != null && entity?.entityType === type, 'InvalidEntity', 'Expected a villager entity'); }
+    try { need(type != null && entity?.name === 'villager', 'InvalidEntity', 'Expected a villager entity'); }
     catch (error) { return Promise.reject(error); }
     return bot.openEntity(entity).then(window => {
       need(merchantType(window.type), 'UnexpectedWindow', 'Expected a merchant window');
@@ -221,10 +217,10 @@ export function installSpecializedWindows(bot, io) {
       if (!propertyArray(menu, 4)) return;
       const values = menu.properties.slice(0, 4);
       const [fuel, totalFuel, progress, totalProgress] = values;
-      Object.assign(window, { totalFuel, totalFuelSeconds: totalFuel * .05, fuel: totalFuel ? fuel / totalFuel : 0,
-        fuelSeconds: totalFuel ? fuel * .05 : 0, totalProgress, totalProgressSeconds: totalProgress * .05,
+      Object.assign(window, { fuel: totalFuel ? fuel / totalFuel : 0,
+        fuelSeconds: totalFuel ? fuel * .05 : 0, totalProgress,
         progress: totalProgress ? progress / totalProgress : 0, progressSeconds: totalProgress ? (totalProgress - progress) * .05 : 0 });
-      if (!sameData(state.properties, values)) { state.properties = values; window.emit('update'); }
+      state.properties = values;
     } else if (enchantType(window.type)) {
       const valid = propertyArray(menu, 10);
       const values = valid ? menu.properties : new Array(10).fill(-1);
@@ -233,7 +229,7 @@ export function installSpecializedWindows(bot, io) {
       window.xpseed = values[3];
       const ready = valid && window.enchantments.every(option => option.level >= 0);
       const wasReady = state.ready; state.ready = ready;
-      if (ready && !wasReady) window.emit('ready');
+      if (ready && !wasReady) emitWindow(window, 'ready');
     } else if (merchantType(window.type)) syncTrades(window, menu, state);
   } };
 }

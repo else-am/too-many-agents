@@ -396,6 +396,19 @@ final class AgentActions {
         return status("");
     }
 
+    // Called only after GameAccess validates the current script lease.
+    JsonObject stopScriptMovement(String id) {
+        clearControls();
+        if (busy() && ("walk".equals(kind) || "creative_fly".equals(kind))
+            && id != null && id.equals(text(action, "id"))) {
+            boolean flying = creativeFlying;
+            finish("interrupted", "movement_stopped", null);
+            creativeFlying = flying;
+        }
+        stopMotion();
+        return object("status", "stopped");
+    }
+
     void close(String reason) {
         close(reason, false);
     }

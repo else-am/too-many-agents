@@ -1,7 +1,6 @@
 // Mineflayer 4.39.0 public action orchestration, adapted to native bodies.
 // See actions.LICENSE. No client packets, predicted block edits or mining timers.
 import { Vec3 } from 'vec3';
-import { performance } from 'perf_hooks'; // Existing trusted QuickJS clock alias.
 
 const faces = ['down', 'up', 'north', 'south', 'west', 'east'];
 const normals = [new Vec3(0,-1,0), new Vec3(0,1,0), new Vec3(0,0,-1), new Vec3(0,0,1), new Vec3(-1,0,0), new Vec3(1,0,0)];
@@ -22,13 +21,11 @@ function forceValue(force) {
   return force ?? false;
 }
 
-export function installActions(bot, { request, waitForActionState, action, snapshot, enqueueControl, drainControls = async () => {}, isKnownActionError = () => false }) {
+export function installActions(bot, { request, waitForActionState, action, digTime, snapshot, enqueueControl, drainControls = async () => {}, isKnownActionError = () => false, emit, raycast }) {
   const session = snapshot().session;
   let activeDig, activeConsume, activeFishing, targetOwner, poisoned, controlFailure;
   const stops = new Set();
   bot.targetDigBlock = null;
-  bot.targetDigFace = null;
-  bot.lastDigTime = null;
   function ready() {
     if (poisoned) throw poisoned;
     if (controlFailure) throw controlFailure;
@@ -56,10 +53,8 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return { position, expectedStateId: current.stateId };
   }
   function eyes() {
-    need(Number.isFinite(bot.entity.eyeHeight), 'MissingBodyEyes', 'Native body eye height is unavailable');
-    return vector(bot.entity.position, 'body position').offset(0, bot.entity.eyeHeight, 0);
+    return vector(bot.entity.eyePosition, 'body eye position');
   }
-  bot._getBlockAtEyeLevel = () => bot.blockAt(eyes());
   function miningEnchants(item) {
     const value = item?.enchants;
     if (Array.isArray(value)) return value;
@@ -67,10 +62,10 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return (value?.enchantments ?? []).map(entry => ({ name: names?.[entry.id], lvl: entry.level }));
   }
   bot.digTime = block => {
-    need(block && typeof block.digTime === 'function', 'InvalidBlock', 'digTime requires a Block');
-    const held = bot.heldItem, helmet = bot.inventory.slots[bot.getEquipmentDestSlot('head')];
-    return block.digTime(held?.type ?? null, bot.game.gameMode === 'creative',
-      ['water','flowing_water'].includes(bot._getBlockAtEyeLevel()?.name), !bot.entity.onGround,
+    need(block && Number.isInteger(block.stateId), 'InvalidBlock', 'digTime requires a Block');
+    const held = bot.heldItem, helmet = bot.inventory.slots[5];
+    return digTime(block, held?.type ?? null, bot.game.gameMode === 'creative',
+      ['water','flowing_water'].includes(bot.blockAt(eyes())?.name), !bot.entity.onGround,
       [...miningEnchants(held), ...miningEnchants(helmet)], bot.entity.effects);
   };
   bot.canDigBlock = block => {
@@ -90,7 +85,7 @@ export function installActions(bot, { request, waitForActionState, action, snaps
       const normal = normals[index];
       if (eye.minus(center).dot(normal) <= .5) continue;
       const point = center.plus(normal.scaled(.5)), delta = point.minus(eye);
-      const hit = bot.world.raycast(eye, delta.normalize(), delta.norm() + .01);
+      const hit = raycast(eye, delta.normalize(), delta.norm() + .01);
       if (hit?.position.equals(block.position) && Number.isInteger(hit.face) && hit.face >= 0 && hit.face < 6)
         candidates.push({ face: hit.face, distance: eye.distanceSquared(hit.intersect) });
     }
@@ -98,14 +93,6 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     need(candidates.length, 'BlockNotInView', 'No visible native candidate face in the loaded block snapshot');
     return candidates[0].face;
   }
-  function updateDigFace() {
-    const active = targetOwner, state = snapshot().action;
-    if (!active?.id || state?.id !== active.id || active.terminal) return;
-    const face = state.progress?.face;
-    const index = typeof face === 'string' ? faces.indexOf(face) : face;
-    if (Number.isInteger(index) && index >= 0 && index < 6) bot.targetDigFace = index;
-  }
-  bot.on('physicsTick', updateDigFace);
   function cancel(active) {
     if (!active || active.terminal || active.cancelRequested) return;
     active.cancelRequested = true;
@@ -143,13 +130,12 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     const active = { block, id: null, terminal: false, cancelRequested: false, control: null };
     activeDig = active;
     active.done = (async () => {
-      let completedBlock, knownFailure;
       try {
         if (previous) await previous.done.catch(() => {});
         ready(); await drainControls(); ready();
         if (active.cancelRequested) throw failure('DiggingAborted', 'Digging aborted');
         observed(block);
-        targetOwner = active; bot.targetDigBlock = block; bot.targetDigFace = face ?? null;
+        targetOwner = active; bot.targetDigBlock = block;
         const started = await native('startAction', { type: 'mine', ...target, forceLook: force, ...(face != null ? { face: faces[face] } : {}) });
         if (typeof started?.id !== 'string' || !started.id) {
           poisoned = failure('InvalidNativeReply', 'Native mine start did not return an action ID'); throw poisoned;
@@ -172,17 +158,10 @@ export function installActions(bot, { request, waitForActionState, action, snaps
         need(result.status === 'completed', 'NativeDigFailed', `Native digging failed: ${result.detail ?? result.status}`);
         const after = bot.blockAt(target.position);
         need(after && after.stateId !== target.expectedStateId, 'DigNotVerified', 'Native dig did not expose a changed target block');
-        completedBlock = after;
-      } catch (error) { knownFailure = !poisoned; throw error; }
-      finally {
+      } finally {
         active.terminal = true;
-        if (targetOwner === active) { targetOwner = undefined; bot.targetDigBlock = null; bot.targetDigFace = null; }
+        if (targetOwner === active) { targetOwner = undefined; bot.targetDigBlock = null; }
         if (activeDig === active) activeDig = undefined;
-        bot.lastDigTime = performance.now();
-        // Native action/control/state have drained before event handlers can
-        // synchronously start another mutation. Unknown outcome is not an abort.
-        if (completedBlock) bot.emit('diggingCompleted', completedBlock);
-        else if (knownFailure) bot.emit('diggingAborted', block);
       }
     })();
     return active.done;
@@ -216,7 +195,6 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     if (verify) {
       const after = bot.blockAt(destination);
       need(after && after.stateId !== before.stateId, 'PlacementNotVerified', 'Native placement did not change the requested destination');
-      bot.emit('blockPlaced', before, after);
     }
     return referenceBlock.position;
   }
@@ -234,7 +212,6 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     const matches = Object.values(bot.entities).filter(entity => ids.includes(entity.uuid) &&
       (boat ? ['boat', 'chest_boat'].includes(entity.name) : egg ? entity.name === held.spawnEggMobName : entity.name === name));
     need(matches.length === 1, 'EntityPlacementNotVerified', 'Native placement did not expose exactly one matching new entity');
-    bot.emit('entityPlaced', matches[0]);
     return matches[0];
   };
   bot.placeEntity = (block, face) => bot._placeEntityWithOptions(block, face);
@@ -258,11 +235,10 @@ export function installActions(bot, { request, waitForActionState, action, snaps
   bot.swingArm = (arm = 'right', showHand = true) => {
     control({ type: 'swing', offhand: arm !== 'right', showHand: !!showHand });
   };
-  bot.useOn = entity => { control({ type: 'interact', entity: entityId(entity), forceLook: 'ignore' }); };
   bot.updateSign = (block, text, back = false) => {
     const lines = text.split('\n');
     if (lines.length > 4 || lines.some(line => line.length > 45)) {
-      bot.emit('error', new Error('Signs require at most four lines of 45 characters')); return;
+      emit('error', new Error('Signs require at most four lines of 45 characters')); return;
     }
     while (lines.length < 4) lines.push('');
     control({ type: 'update_sign', ...observed(block), lines, front: !back });
@@ -273,7 +249,7 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     control({ type: 'vehicle_control', left: Math.max(-1, Math.min(1, left)), forward: Math.max(-1, Math.min(1, forward)) });
   };
   bot.dismount = () => {
-    if (!bot.vehicle) { bot.emit('error', new Error('dismount: not mounted')); return; }
+    if (!bot.vehicle) { emit('error', new Error('dismount: not mounted')); return; }
     control({ type: 'dismount' });
   };
   bot.activateItem = (offhand = false) => { control({ type: 'use', offhand: !!offhand }); };
@@ -322,9 +298,45 @@ export function installActions(bot, { request, waitForActionState, action, snaps
   bot.creative.startFlying = () => { control({ type: 'creative_flying', state: true }); };
   bot.elytraFly = async () => { await perform({ type: 'elytra_fly' }); };
   bot.creative.stopFlying = () => { control({ type: 'creative_flying', state: false }); };
-  bot.creative.flyTo = async destination => {
-    const position = vector(destination, 'flight destination');
-    await perform({ type: 'creative_fly', position });
+  let activeMovement;
+  function moveTo(destination, type) {
+    let position;
+    try {
+      ready(); position = vector(destination, 'movement destination');
+      need(!activeMovement, 'MovementAlreadyRunning', 'Await or stop the current movement first');
+    } catch (error) { return Promise.reject(error); }
+    const active = { id: null, stopRequested: false };
+    activeMovement = active;
+    active.done = (async () => {
+      try {
+        await drainControls(); ready();
+        if (active.stopRequested) throw failure('MovementStopped', 'Movement stopped before starting');
+        const started = await native('startAction', { type, position });
+        need(typeof started.id === 'string', 'InvalidNativeReply', 'Movement start lacks an action ID');
+        active.id = started.id;
+        if (active.stopRequested) await native('stopMovement', { id: active.id });
+        const result = await native('awaitAction', { id: active.id });
+        await waitForActionState(result);
+        const arrived = type === 'walk' ? 'arrived' : 'flight_arrived';
+        if (result.detail === 'movement_stopped') throw failure('MovementStopped', 'Movement stopped');
+        if (result.status !== 'completed' || result.detail !== arrived)
+          throw Object.assign(failure('MovementFailed', `Movement ${result.status}: ${result.detail}`),
+            { status: result.status, detail: result.detail, position: result.position });
+      } finally { if (activeMovement === active) activeMovement = undefined; }
+    })();
+    return active.done;
+  }
+  bot.moveTo = destination => moveTo(destination, 'walk');
+  bot.creative.flyTo = destination => moveTo(destination, 'creative_fly');
+  bot.stopMoving = async () => {
+    ready();
+    const active = activeMovement;
+    if (active) active.stopRequested = true;
+    // Flush earlier synchronous controls before clearing the native inputs.
+    await drainControls(); ready();
+    await native('stopMovement', active?.id ? { id: active.id } : {});
+    for (const name of Object.keys(heldControls)) heldControls[name] = false;
+    if (active) await active.done.catch(error => { if (error.code !== 'MovementStopped') throw error; });
   };
   bot.setCommandBlock = (position, command, options = {}) => {
     const pos = vector(position, 'command block position');
@@ -365,30 +377,25 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     need(typeof target === 'string' && target.length > 0, 'InvalidChatTarget', 'Whisper target must be a name');
     sendChat(message, target);
   };
-  bot.isABed = block => !!block && /^(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_bed$/.test(block.name);
-  bot.parseBedMetadata = block => {
-    need(bot.isABed(block), 'InvalidBed', 'wrong block : not a bed block');
-    const properties = block.getProperties();
-    const facing = ['south', 'west', 'north', 'east'].indexOf(properties.facing);
-    need(facing >= 0, 'InvalidBed', 'Unknown bed orientation');
-    return { part: properties.part === 'head', occupied: properties.occupied,
-      facing, headOffset: [new Vec3(0,0,1), new Vec3(-1,0,0), new Vec3(0,0,-1), new Vec3(1,0,0)][facing] };
-  };
+  function bedOccupied(block) {
+    need(!!block && /^(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_bed$/.test(block.name),
+      'InvalidBed', 'wrong block : not a bed block');
+    return block.getProperties().occupied;
+  }
   bot.sleep = async block => {
-    need(!bot.isSleeping, 'AlreadySleeping', 'already sleeping');
-    const metadata = bot.parseBedMetadata(block);
-    need(!metadata.occupied, 'BedOccupied', 'the bed is occupied');
+    need(!bot.entity.isSleeping, 'AlreadySleeping', 'already sleeping');
+    need(!bedOccupied(block), 'BedOccupied', 'the bed is occupied');
     const storm = bot.isRaining && bot.thunderState > 0;
     need(storm || bot.time.timeOfDay >= 12541 && bot.time.timeOfDay <= 23458, 'SleepTime', "it's not night and it's not a thunderstorm");
     const target = observed(block);
     bot.clearControlStates();
     await perform({ type: 'interact', ...target });
-    need(bot.isSleeping, 'SleepRejected', 'Native body did not enter sleep');
+    need(bot.entity.isSleeping, 'SleepRejected', 'Native body did not enter sleep');
   };
   bot.wake = async () => {
-    need(bot.isSleeping, 'AlreadyAwake', 'already awake');
+    need(bot.entity.isSleeping, 'AlreadyAwake', 'already awake');
     await perform({ type: 'wake' });
-    need(!bot.isSleeping, 'WakeRejected', 'Native body remained asleep');
+    need(!bot.entity.isSleeping, 'WakeRejected', 'Native body remained asleep');
   };
   bot.fish = () => {
     const previous = activeFishing;
@@ -446,10 +453,6 @@ export function installActions(bot, { request, waitForActionState, action, snaps
     return heldControls[name];
   };
   bot.clearControlStates = () => { for (const name of Object.keys(heldControls)) bot.setControlState(name, false); };
-  bot.controlState = {};
-  for (const name of Object.keys(heldControls)) Object.defineProperty(bot.controlState, name, {
-    get: () => heldControls[name], set: state => { bot.setControlState(name, state); },
-  });
   return { async drainControls() {
     while (stops.size) await Promise.allSettled([...stops]);
     ready();

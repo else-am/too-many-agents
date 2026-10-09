@@ -2,7 +2,7 @@
 // Request three one-plank button crafts: retain two real outputs, then fail honestly.
 const planks=bot.registry.itemsByName.oak_planks.id,button=bot.registry.itemsByName.oak_button.id;
 const before=bot.inventory.count(button);
-const w=await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const w=await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
 await w.withdraw(planks,null,2);await w.close();
 const recipe=bot.recipesFor(button,null,1)[0];
 let failed;

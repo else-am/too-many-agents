@@ -1,40 +1,27 @@
-// Selected PC registry indexes/version helpers adapted from minecraft-data
-// 3.117.0 lib/indexes.js and index.js; its MIT attribution is bundled by build.mjs.
+// Selected PC registry indexes adapted from minecraft-data 3.117.0 lib/indexes.js;
+// its MIT attribution is bundled by build.mjs. Only tables read by the Block,
+// Item, Chat, Particle, Chunk and Recipe factories and the retained public
+// registry names are kept.
 import { installRegistryCodecs } from './registry-codecs.mjs';
 
 export function createRegistry(data, nativeCodecs) {
-  const { versionDataVersions, ...registry } = data;
-  const index = (array, field) => array === undefined ? undefined
-    : Object.fromEntries(array.map(value => [value[field], value]));
-  for (const name of ['blocks', 'biomes', 'items', 'foods', 'enchantments', 'entities',
-    'windows', 'effects', 'particles', 'mapIcons', 'sounds']) {
-    registry[name] = index(registry[`${name}Array`], 'id');
-    registry[`${name}ByName`] = index(registry[`${name}Array`], 'name');
-  }
-  registry.instruments = index(registry.instrumentsArray, 'id');
-  registry.attributes = index(registry.attributesArray, 'resource');
-  registry.attributesByName = index(registry.attributesArray, 'name');
-  registry.blockLoot = index(registry.blockLootArray, 'block');
-  registry.entityLoot = index(registry.entityLootArray, 'entity');
-  registry.mobs = index(registry.entitiesArray?.filter(entity => entity.type === 'mob'), 'id');
-  registry.objects = index(registry.entitiesArray?.filter(entity => entity.type === 'object'), 'id');
-  registry.blocksByStateId = {};
-  for (const block of registry.blocksArray)
-    for (let id = block.minStateId; id <= block.maxStateId; id++) registry.blocksByStateId[id] = block;
-
-  const version = registry.version = { ...registry.version };
-  const current = version.dataVersion ?? 0;
-  const other = name => {
-    if (!Object.hasOwn(versionDataVersions, name)) throw new RangeError(`Unknown pinned PC version: ${name}`);
-    return versionDataVersions[name];
+  const index = (array, field) => Object.fromEntries(array.map(value => [value[field], value]));
+  const registry = {
+    blocksArray: data.blocksArray, itemsArray: data.itemsArray,
+    blockCollisionShapes: data.blockCollisionShapes, materials: data.materials,
+    language: data.language, recipes: data.recipes,
+    blocksByName: index(data.blocksArray, 'name'),
+    items: index(data.itemsArray, 'id'), itemsByName: index(data.itemsArray, 'name'),
+    effects: index(data.effectsArray, 'id'), effectsByName: index(data.effectsArray, 'name'),
+    enchantmentsByName: index(data.enchantmentsArray, 'name'),
+    entitiesByName: index(data.entitiesArray, 'name'),
+    foodsByName: index(data.foodsArray, 'name'),
+    particles: index(data.particlesArray, 'id'), particlesByName: index(data.particlesArray, 'name'),
+    attributesByName: index(data.attributesArray, 'name'),
+    instruments: index(data.instrumentsArray, 'id'),
+    blockLoot: index(data.blockLootArray, 'block'),
+    entityLoot: index(data.entityLootArray, 'entity'),
   };
-  version['>='] = name => current >= other(name);
-  version['>'] = name => current > other(name);
-  version['<'] = name => current < other(name);
-  version['<='] = name => current <= other(name);
-  version['=='] = name => current === other(name);
-  registry.isNewerOrEqualTo = name => version['>='](name);
-  registry.isOlderThan = name => version['<'](name);
   installRegistryCodecs(registry, data, nativeCodecs);
   return registry;
 }

@@ -3,24 +3,21 @@
 const stone = bot.registry.itemsByName.stone.id;
 const before = bot.inventory.count(stone);
 let opened = 0, closed = 0, storageClosed = 0;
-bot.on('windowOpen', window => {
-  if (window !== bot.currentWindow || window.countRange(0, window.inventoryStart, stone, null) !== 80)
-    throw new Error('Open event preceded complete native chest state');
-  opened++;
-});
-bot.on('windowClose', () => { if (bot.currentWindow) throw new Error('Close event preceded native closure'); closed++; });
 bot.setQuickBarSlot(6);
 if (bot.quickBarSlot !== 6 || bot.heldItem?.name !== 'diamond_pickaxe') throw new Error('Synchronous selection failed');
-const window = await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const window = await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
+opened++;
+if (window.containerCount(stone) !== 80) throw new Error('Incomplete chest state');
 window.on('close', () => storageClosed++);
-await bot.transfer({window, itemType:stone, metadata:null, count:20,
-  sourceStart:1, sourceEnd:2, destStart:window.inventoryStart, destEnd:window.inventoryEnd});
+await bot.moveSlotItem(1, window.firstEmptyInventorySlot());
 await window.deposit(stone, null, 10);
 if (window.slots[0]?.count !== 64 || window.slots[1]?.count !== 6) throw new Error('Deposit did not merge and split exactly');
 await window.withdraw(stone, null, 7);
 const chest = window.slots.slice(0, window.inventoryStart).filter(Boolean).map(item => ({slot:item.slot,name:item.name,count:item.count}));
 if (bot.inventory.count(stone) !== before+17 || window.selectedItem) throw new Error('Transfer state is incomplete');
 await window.close();
+closed++;
+if (bot.currentWindow) throw new Error('Window did not close');
 let stale;
 try { await window.withdraw(stone,null,1); } catch (error) { stale=error.code; }
 if (stale !== 'WindowChanged' || opened !== 1 || closed !== 1 || storageClosed !== 1) throw new Error('Window lifecycle mismatch');

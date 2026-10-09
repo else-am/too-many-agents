@@ -90,7 +90,7 @@ export function createChatMessageClass (registry) {
         this.json = { extra: message }
       } else if (typeof message === 'object') {
         // Patch: Remove empty string keys and fix float precision
-        this.json = ChatMessage._sanitizeJson(message)
+        this.json = ChatMessage.#sanitizeJson(message)
       } else {
         throw new Error('Expected String or Object for Message argument')
       }
@@ -99,8 +99,8 @@ export function createChatMessageClass (registry) {
     }
 
     // Patch: Sanitize JSON to fix empty string keys and float precision
-    static _sanitizeJson (obj) {
-      if (Array.isArray(obj)) return obj.map(ChatMessage._sanitizeJson)
+    static #sanitizeJson (obj) {
+      if (Array.isArray(obj)) return obj.map(ChatMessage.#sanitizeJson)
       if (obj && typeof obj === 'object') {
         const newObj = {}
         for (const [key, value] of Object.entries(obj)) {
@@ -112,7 +112,7 @@ export function createChatMessageClass (registry) {
             continue
           }
           // Recursively sanitize
-          newObj[key] = ChatMessage._sanitizeJson(value)
+          newObj[key] = ChatMessage.#sanitizeJson(value)
         }
         return newObj
       }

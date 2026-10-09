@@ -9,11 +9,11 @@ if(!bot.canSeeBlock(table) || bot.canSeeBlock(wall)) throw new Error('Native cac
 // Native interaction establishes view while this script owns the body; ambient
 // look controls may reset pitch between scripts.
 const window=await bot.openBlock(table);
-await bot.closeWindow(window);
+await window.close();
 const cursor=bot.blockAtCursor(8);
 if(!cursor?.position.equals(table.position)) throw new Error('Actual body cursor did not select table');
 let unknown;
-try {bot.blockAtEntityCursor({...bot.entity,yaw:0,pitch:0},100);} catch(error) {unknown=error.message;}
+try {bot.blockAtCursor(100,null,{...bot.entity,yaw:0,pitch:0});} catch(error) {unknown=error.message;}
 if(unknown!=='World query entered an unknown block cell') throw new Error('Unknown cache ray was not rejected');
 return {table:table.position,sign:sign.getSignText(),cursor:{name:cursor.name,face:cursor.face,intersect:cursor.intersect},
   eyeHeight:bot.entity.eyeHeight,width:bot.entity.width,unknown};

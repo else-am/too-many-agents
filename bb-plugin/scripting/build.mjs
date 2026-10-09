@@ -7,16 +7,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { decodeItemTransport, encodeItemTransport } from './item-wire.mjs';
 import { selectRegistryData } from './registry-data.mjs';
 
-const registry = minecraftData('1.21.1');
-const features = JSON.parse(await readFile(new URL('../node_modules/minecraft-data/minecraft-data/data/pc/common/features.json', import.meta.url), 'utf8'));
-const featureTable = Object.fromEntries(features.map(({ name }) => [name, registry.supportFeature(name)]));
 // Only this game's data belongs in the guest. Do not ship every historical
 // Minecraft protocol or give the guest a Node module loader.
-const data = JSON.stringify({
-  ...selectRegistryData(minecraftData),
-  featureTable,
-  protocolVersion: registry.version.version, majorVersion: registry.version.majorVersion,
-});
+const data = JSON.stringify(selectRegistryData(minecraftData));
 const licenses = [];
 licenses.push(await readFile(new URL('./actions.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./state.LICENSE', import.meta.url), 'utf8'));
@@ -36,7 +29,7 @@ licenses.push(await readFile(new URL('./entities.LICENSE', import.meta.url), 'ut
 licenses.push(await readFile(new URL('./inventory.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./specialized-windows.LICENSE', import.meta.url), 'utf8'));
 licenses.push(await readFile(new URL('./books.LICENSE', import.meta.url), 'utf8'));
-licenses.push('Mineflayer 4.39.0: adapted plugin_loader, waitForTicks, creative inventory, scoreboard/team, boss bar, Particle object and explosion estimate APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
+licenses.push('Mineflayer 4.39.0: adapted waitForTicks, creative inventory, scoreboard/team, boss bar and Particle object APIs\n' + await readFile(new URL('./mineflayer.LICENSE', import.meta.url), 'utf8'));
 for (const name of ['minecraft-data', 'vec3', 'events', 'prismarine-chunk', 'smart-buffer', 'buffer', 'base64-js', 'ieee754']) {
   const root = new URL(`../node_modules/${name}/`, import.meta.url);
   const metadata = JSON.parse(await readFile(new URL('package.json', root), 'utf8'));

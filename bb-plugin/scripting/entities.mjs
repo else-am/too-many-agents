@@ -1,3 +1,4 @@
+import { fromNotch } from './items.mjs'
 // PC 1.21.1 prismarine-entity 2.6.0 object contract; see entities.LICENSE.
 // registry is reserved for the shared factory integration signature. No tables
 // are needed here: dropped-item metadata is index 8, custom-name metadata is 2.
@@ -13,12 +14,10 @@
 // No native actions or native event generation occurs in this class.
 
 import { Vec3 } from 'vec3'
-import { EventEmitter } from 'events'
 
 export function createEntityClass (registry, { Item, ChatMessage }) {
-  class Entity extends EventEmitter {
+  class Entity {
     constructor (id) {
-      super()
       this.id = id
       this.position = new Vec3(0, 0, 0)
       this.velocity = new Vec3(0, 0, 0)
@@ -36,32 +35,8 @@ export function createEntityClass (registry, { Item, ChatMessage }) {
       this.vehicle = null
     }
 
-    get mobType () {
-      printMobTypeWarning()
-      return this.displayName
-    }
-
-    set mobType (name) {
-      printMobTypeWarning()
-      this.displayName = name
-    }
-
-    get objectType () {
-      printObjectTypeWarning()
-      return this.displayName
-    }
-
-    set objectType (name) {
-      printObjectTypeWarning()
-      this.displayName = name
-    }
-
     get heldItem () {
       return this.equipment[0]
-    }
-
-    setEquipment (index, item) {
-      this.equipment[index] = item
     }
 
     getCustomName () {
@@ -76,7 +51,7 @@ export function createEntityClass (registry, { Item, ChatMessage }) {
       if (this.name !== 'item' && this.name !== 'Item' && this.name !== 'item_stack') {
         return null // not a dropped item
       }
-      return Item.fromNotch(this.metadata[8])
+      return fromNotch(Item, this.metadata[8])
     }
   }
 

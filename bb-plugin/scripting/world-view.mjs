@@ -1,7 +1,6 @@
 // Synchronous ray/query subset adapted from prismarine-world 3.7.0.
 // Attribution and upstream license declaration: world-view.LICENSE.
 import { Vec3 } from 'vec3'
-import { EventEmitter } from 'events'
 
 const BlockFace = {
   UNKNOWN: -999,
@@ -152,12 +151,11 @@ function finiteVector (vector) {
  * behind-origin/out-of-range intersections, and handle parallel axes explicitly.
  * This retains upstream cell traversal, not native shape clipping: shapes that
  * extend into adjacent cells are tested only when their owning cell is visited.
- * Numeric getters preserve null for unknown cells instead of guessing zero.
- * Native column delivery and guest-local storage/mutations are installed separately.
+ * Native column delivery is installed separately (columns.mjs).
  */
-export function createWorldView (lookup, world = new EventEmitter()) {
+export function createWorldView (lookup) {
   if (typeof lookup !== 'function') throw new TypeError('World view requires a synchronous block lookup')
-  return Object.assign(world, {
+  return {
     getBlock (position) {
       if (!finiteVector(position)) throw new RangeError('Block position must be finite')
       const cell = position.floored()
@@ -167,12 +165,6 @@ export function createWorldView (lookup, world = new EventEmitter()) {
       block.position = cell
       return block
     },
-    getBlockStateId (position) { return this.getBlock(position)?.stateId ?? null },
-    getBlockType (position) { return this.getBlock(position)?.type ?? null },
-    getBlockData (position) { return this.getBlock(position)?.metadata ?? null },
-    getBlockLight (position) { return this.getBlock(position)?.light ?? null },
-    getSkyLight (position) { return this.getBlock(position)?.skyLight ?? null },
-    getBiome (position) { return this.getBlock(position)?.biome?.id ?? null },
     raycast (from, direction, range, matcher = null) {
       if (!finiteVector(from) || !finiteVector(direction) || !Number.isFinite(range) || range < 0) {
         throw new RangeError('Raycast requires finite vectors and a finite nonnegative range')
@@ -198,5 +190,5 @@ export function createWorldView (lookup, world = new EventEmitter()) {
       }
       return null
     }
-  })
+  }
 }

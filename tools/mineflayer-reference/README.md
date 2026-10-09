@@ -1,5 +1,7 @@
 # Mineflayer core reference
 
+These are historical compatibility probes, including APIs deliberately removed by `tools/api-review/decisions.json`. They are not the current usage contract; use `bb-plugin/skills/minecraft-scripting/`. Run only scenarios adapted to the reviewed subset, and do not restore removed APIs merely to satisfy old parity probes.
+
 Pinned Mineflayer 4.39.0 / Minecraft 1.21.1 dependencies, core library comparisons and isolated reference-server scenarios. Pathfinder and navigation fixtures were removed from this branch; their source and historical results remain on `feat/mineflayer-api`.
 
 Install dependencies with `npm ci` in this directory. Generate the core inventory with `npm run catalog`. This does not start Minecraft or BB. Coverage is evidence status, not an implementation percentage; a passing library comparison does not establish native gameplay.

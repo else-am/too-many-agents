@@ -19,7 +19,7 @@ const cursor = { name: window.selectedItem.name, count: window.selectedItem.coun
 await bot.clickWindow(0, 0, 0);
 if (window.selectedItem || JSON.stringify(window.slots[0]) !== saddle)
   throw new Error('Saddle return differs');
-await bot.closeWindow(window);
+await window.close();
 bot.setControlState('sneak', false);
 await bot.waitForTicks(1);
 if (bot.currentWindow || bot.inventory.selectedItem || bot.controlState.sneak ||

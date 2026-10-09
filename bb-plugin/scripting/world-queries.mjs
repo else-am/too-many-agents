@@ -21,11 +21,8 @@ function range (distance) {
 }
 
 function eyePosition (entity) {
-  finitePosition(entity?.position)
-  if (!Number.isFinite(entity.eyeHeight) || entity.eyeHeight < 0) {
-    throw new RangeError('World query requires observed entity.eyeHeight')
-  }
-  return entity.position.offset(0, entity.eyeHeight, 0)
+  finitePosition(entity?.eyePosition)
+  return new Vec3(entity.eyePosition.x, entity.eyePosition.y, entity.eyePosition.z)
 }
 
 function viewDirection (entity) {
@@ -61,9 +58,9 @@ function sectionOrder (a, b) {
  * bounded collision-shape raycast, including its documented upstream fixes.
  * Eye origin is observed eyeHeight, not a guessed player size or body height.
  */
-export function installWorldQueries (bot, { getLoadedBounds } = {}) {
+export function installWorldQueries (bot, { getBlock, getLoadedBounds } = {}) {
   const observedWorld = createWorldView(position => {
-    const block = bot.world.getBlock(position)
+    const block = getBlock(position)
     if (block === null) throw new Error('World query entered an unknown block cell')
     return block
   })
@@ -141,7 +138,7 @@ export function installWorldQueries (bot, { getLoadedBounds } = {}) {
     return positions.length ? bot.blockAt(positions[0]) : null
   }
 
-  bot.blockAtEntityCursor = (entity = bot.entity, maxDistance = 256, matcher = null) => {
+  bot.blockAtCursor = (maxDistance = 256, matcher = null, entity = bot.entity) => {
     range(maxDistance)
     const eye = eyePosition(entity)
     const direction = viewDirection(entity)
@@ -149,8 +146,6 @@ export function installWorldQueries (bot, { getLoadedBounds } = {}) {
     return observedWorld.raycast(eye, direction, maxDistance, matcher)
   }
 
-  bot.blockAtCursor = (maxDistance = 256, matcher = null) => bot.blockAtEntityCursor(bot.entity, maxDistance, matcher)
-  bot.blockInSight = (maxSteps = 256, vectorLength = 5 / 16) => bot.blockAtCursor(maxSteps * vectorLength) || undefined
 
   bot.canSeeBlock = block => {
     finitePosition(block?.position)

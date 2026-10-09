@@ -5,36 +5,35 @@ const divisions = [0, 6, 10, 12, 20];
 
 export function installBossBars(bot, ChatMessage) {
   class BossBar {
+    #title; #dividers; #color;
     constructor(uuid, title, health, dividers, color, flags) {
       this.entityUUID = uuid;
       this.title = title;
       this.health = health;
       this.dividers = dividers;
       this.color = color;
-      this.flags = flags;
+      setFlags(this, flags);
     }
     set title(value) {
-      this._title = value && typeof value === 'object' && value.type === 'string' && 'value' in value
+      this.#title = value && typeof value === 'object' && value.type === 'string' && 'value' in value
         ? value.value : ChatMessage.fromNotch(value) ?? (typeof value === 'string' ? value : '');
     }
-    get title() { return this._title; }
-    set dividers(value) { this._dividers = divisions[value]; }
-    get dividers() { return this._dividers; }
-    set color(value) { this._color = colors[value]; }
-    get color() { return this._color; }
-    set flags(value) {
-      this.shouldDarkenSky = !!(value & 1);
-      this.isDragonBar = !!(value & 2);
-      this.createFog = !!(value & 4);
-    }
-    get flags() { return (this.shouldDarkenSky ? 1 : 0) | (this.isDragonBar ? 2 : 0) | (this.createFog ? 4 : 0); }
-    get shouldCreateFog() { return this.createFog; }
+    get title() { return this.#title; }
+    set dividers(value) { this.#dividers = divisions[value]; }
+    get dividers() { return this.#dividers; }
+    set color(value) { this.#color = colors[value]; }
+    get color() { return this.#color; }
+  }
+  function setFlags(bar, value) {
+    bar.shouldDarkenSky = !!(value & 1);
+    bar.isDragonBar = !!(value & 2);
+    bar.createFog = !!(value & 4);
   }
   const bars = new Map(), previous = new Map();
   Object.defineProperty(bot, 'bossBars', { get: () => [...bars.values()] });
-  function update(rows, emit) {
-    if (!rows) return [];
-    const events = [], present = new Set();
+  function update(rows) {
+    if (!rows) return;
+    const present = new Set();
     for (const row of rows) {
       present.add(row.uuid);
       const key = JSON.stringify(row);
@@ -44,16 +43,11 @@ export function installBossBars(bot, ChatMessage) {
       if (old) {
         const last = JSON.parse(previous.get(row.uuid));
         if (JSON.stringify(last.title) !== JSON.stringify(row.title)) bar.title = row.title;
-        bar.health = row.health; bar.dividers = row.dividers; bar.color = row.color; bar.flags = row.flags;
+        bar.health = row.health; bar.dividers = row.dividers; bar.color = row.color; setFlags(bar, row.flags);
       }
       bars.set(row.uuid, bar); previous.set(row.uuid, key);
-      if (emit) events.push([old ? 'bossBarUpdated' : 'bossBarCreated', bar]);
     }
-    for (const [uuid, bar] of bars) if (!present.has(uuid)) {
-      bars.delete(uuid); previous.delete(uuid);
-      if (emit) events.push(['bossBarDeleted', bar]);
-    }
-    return events;
+    for (const uuid of bars.keys()) if (!present.has(uuid)) { bars.delete(uuid); previous.delete(uuid); }
   }
-  return { BossBar, update };
+  return { update };
 }

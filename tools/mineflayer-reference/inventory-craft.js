@@ -12,7 +12,7 @@ await bot.craft(first('oak_planks'),1);
 if(count('oak_planks')!==planksBefore+4) throw new Error('Native log craft did not produce four planks');
 await bot.craft(first('stick'),2);
 if(count('stick')!==sticksBefore+8 || count('oak_planks')!==planksBefore) throw new Error('Craft operation count differs from output count');
-const chest=await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const chest=await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
 for(const [name,amount] of [['milk_bucket',3],['sugar',2],['egg',1],['wheat',3]]) await chest.withdraw(id(name),null,amount);
 await chest.close();
 const before={cake:count('cake'),bucket:count('bucket')};

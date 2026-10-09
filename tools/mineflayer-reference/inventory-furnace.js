@@ -1,6 +1,6 @@
 // Specialized fixture: empty furnace (12,-60,1), chest (12,-60,2) ore1/coal1.
 const id=name=>bot.registry.itemsByName[name].id;
-const chest=await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const chest=await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
 await chest.withdraw(id('iron_ore'),null,1);await chest.withdraw(id('coal'),null,1);await chest.close();
 const furnace=await bot.openFurnace(bot.blockAt(new Vec3(12,-60,1)));
 if(furnace.fuel!==0 || furnace.progress!==0 || furnace.inputItem() || furnace.fuelItem() || furnace.outputItem())

@@ -25,7 +25,7 @@ final class ScriptRegistryData {
         var result = new JsonArray();
         var budget = new Budget();
         var ops = level.registryAccess().createSerializationContext(NbtOps.INSTANCE);
-        for (var key : java.util.List.of(Registries.DIMENSION_TYPE, Registries.BIOME, Registries.CHAT_TYPE)) {
+        for (var key : java.util.List.of(Registries.BIOME, Registries.CHAT_TYPE)) {
             var descriptors = RegistryDataLoader.SYNCHRONIZED_REGISTRIES.stream()
                 .filter(data -> data.key().equals(key)).toList();
             if (descriptors.size() != 1)

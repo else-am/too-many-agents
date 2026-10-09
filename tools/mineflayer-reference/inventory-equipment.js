@@ -11,7 +11,7 @@ if (bot.inventory.selectedItem?.count !== 8 || bot.inventory.slots[empty]?.count
 await bot.simpleClick.leftMouse(source.slot);
 await bot.moveSlotItem(empty, source.slot);
 if (bot.inventory.slots[source.slot]?.count !== 17 || bot.inventory.selectedItem) throw new Error('Split recovery failed');
-const window = await bot.openChest(bot.blockAt(new Vec3(12,-60,2)));
+const window = await bot.openContainer(bot.blockAt(new Vec3(12,-60,2)));
 await bot.equip(window.slots[3], 'off-hand');
 if (bot.currentWindow !== window || bot.inventory.slots[45]?.name !== 'shield') throw new Error('Container offhand mapping failed');
 await bot.equip(window.slots[2], 'head');

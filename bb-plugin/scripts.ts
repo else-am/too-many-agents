@@ -214,6 +214,16 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
         if (operation === 'startAction') return startAction(request, requestSignal);
         if (operation === 'awaitAction') return awaitAction(request.id, requestSignal);
         if (operation === 'action') return awaitAction((await startAction(request, requestSignal)).id, requestSignal);
+        if (operation === 'stopMovement') {
+          if (request.id != null && !actions.some(action => action.id === request.id && ['walk', 'creative_fly'].includes(String(action.type))))
+            throw new Error('Movement does not belong to this execution');
+          try {
+            const result = await call('stopMovement', request.id == null ? {} : { id: request.id }, requestSignal);
+            if (result.status !== 'stopped') throw new Error('Invalid movement stop acknowledgement; outcome is unknown');
+            return result;
+          }
+          catch (error) { controller.abort(error); throw error; }
+        }
         if (operation === 'cancelAction') {
           if (!actions.some(action => action.id === request.id)) throw new Error('Action does not belong to this execution');
           try { return await call('cancel', { id: request.id }, requestSignal); }
@@ -229,7 +239,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       };
       result = await runScript({
         source: input.code, initial,
-        bootstrap: `${bootstrap}\nconst { bot, Vec3, Block, Item, Entity, ChatMessage, MessageBuilder, BossBar, ChunkColumn, Particle, Recipe, RecipeItem, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
+        bootstrap: `${bootstrap}\nconst { bot, Vec3, Item, ChatMessage, MessageBuilder, update, drainControls } = MinecraftBot.createBot(JSON.parse(__mcInitial));
           function __mcUpdate(payload) { update(JSON.parse(payload), true); }
           async function __mcFinish() { await drainControls?.(); }`,
         workerUrl: pathToFileURL(join(plugin.rootDir, 'scripting/worker.mjs')),

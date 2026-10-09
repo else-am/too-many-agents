@@ -3,7 +3,6 @@ package toomanyagents;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.chat.ComponentSerialization;
 import net.minecraft.network.chat.Component;
@@ -95,23 +94,6 @@ final class ScriptEntities {
         var passengers = new JsonArray();
         for (var passenger : entity.getPassengers()) passengers.add(passenger.getId());
         result.add("passengers", passengers);
-    }
-
-    /** Numeric native chat-type IDs, in the shape consumed by ChatMessage.fromNetwork. */
-    static JsonObject chatFormatting(ServerLevel level) {
-        requireServerThread(level);
-        var result = new JsonObject();
-        var types = level.registryAccess().registryOrThrow(Registries.CHAT_TYPE);
-        for (var type : types) {
-            var decoration = type.chat();
-            var format = new JsonObject();
-            format.addProperty("formatString", decoration.translationKey());
-            var parameters = new JsonArray();
-            for (var parameter : decoration.parameters()) parameters.add(parameter.getSerializedName());
-            format.add("parameters", parameters);
-            result.add(Integer.toString(types.getId(type)), format);
-        }
-        return result;
     }
 
     private static JsonObject stack(ItemStack item, ScriptItems items) {

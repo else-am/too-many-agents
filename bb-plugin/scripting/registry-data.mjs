@@ -3,18 +3,11 @@
 export function selectRegistryData(minecraftData) {
   const registry = minecraftData('1.21.1');
   const fields = [
-    'blocksArray', 'blockMappings', 'blockStates', 'blockCollisionShapes',
+    'blocksArray', 'blockCollisionShapes',
     'biomesArray', 'itemsArray', 'foodsArray', 'recipes', 'instrumentsArray',
-    'materials', 'enchantmentsArray', 'entitiesArray', 'windowsArray',
-    'protocol', 'protocolComments', 'protocolYaml', 'defaultSkin', 'version',
+    'materials', 'enchantmentsArray', 'entitiesArray',
     'effectsArray', 'attributesArray', 'particlesArray', 'language',
-    'blockLootArray', 'entityLootArray', 'commands', 'loginPacket',
-    'mapIconsArray', 'tints', 'soundsArray', 'type',
+    'blockLootArray', 'entityLootArray',
   ];
-  return {
-    ...Object.fromEntries(fields.map(field => [field, registry[field]])),
-    // Comparisons need only names and ordering, never other versions' game data.
-    versionDataVersions: Object.fromEntries(Object.entries(minecraftData.versionsByMinecraftVersion.pc)
-      .map(([name, version]) => [name, version.dataVersion])),
-  };
+  return Object.fromEntries(fields.map(field => [field, registry[field]]));
 }
