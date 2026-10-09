@@ -8,15 +8,21 @@
 .mc-thread-menu { min-width: 260px; }
 .mc-subheading { display: block; padding: 6px 8px 9px; font-size: 10px; color: var(--muted-foreground); }
 .mc-menu-row { display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 8px; border-radius: 4px; outline: none; cursor: pointer; text-decoration: none; color: inherit; user-select: none; }
-.mc-menu-row[data-highlighted], .mc-menu-row[data-state="open"], .mc-menu-row[aria-current="page"] { background: var(--accent); color: var(--accent-foreground); }
-.mc-world-name, .mc-thread-title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mc-menu-row[data-highlighted], .mc-menu-row[data-state="open"] { background: var(--accent); color: var(--accent-foreground); }
+.mc-world-name { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Thread rows follow bb's sidebar thread row tokens. */
+.mc-thread { height: var(--bb-sidebar-row-height, 1.75rem); min-height: 0; padding: 0 8px; border-radius: var(--radius-md); font-size: var(--text-sm); color: var(--sidebar-foreground); transition: none; }
+.mc-thread[data-highlighted] { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+.mc-thread[aria-current="page"] { background: var(--state-active); }
+.mc-thread-title { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.mc-indicator { flex: 0 0 16px; width: 16px; height: 16px; color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
+.mc-indicator-error { color: var(--destructive); }
+.mc-indicator-waiting { color: color-mix(in oklab, var(--muted-foreground) 75%, transparent); }
+.mc-indicator-draft { color: var(--muted-foreground); }
+.mc-indicator-spinning { animation: mc-spin 1s linear infinite; }
+.mc-unread-dot { flex: 0 0 5px; width: 5px; height: 5px; margin-right: 6px; border-radius: 50%; background: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
 .mc-count { color: var(--muted-foreground); font-size: 10px; font-variant-numeric: tabular-nums; }
-.mc-thread-title[data-unread="true"] { font-weight: 600; }
-.mc-status { display: inline-block; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 50%; background: var(--muted-foreground); opacity: .3; }
-.mc-status[data-tone="attention"] { background: var(--warning, #b88941); opacity: 1; }
-.mc-status[data-tone="unread"] { background: currentColor; opacity: .85; }
-.mc-status[data-tone="working"] { background: #8caa7b; opacity: 1; animation: mc-breathe 1.8s ease-in-out infinite; }
 .mc-empty { padding: 8px; margin: 0; color: var(--muted-foreground); line-height: 1.6; }
 .mc-collection-trigger:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
-@keyframes mc-breathe { 50% { opacity: .35; } }
-@media (prefers-reduced-motion: reduce) { .mc-status { animation: none !important; } }
+@keyframes mc-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .mc-indicator-spinning { animation: none; } }

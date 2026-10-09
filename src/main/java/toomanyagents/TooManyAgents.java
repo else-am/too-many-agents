@@ -76,6 +76,7 @@ public final class TooManyAgents {
         BodyFishingHook.ENTITIES.register(modBus);
         modBus.addListener((net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
             event.registerEntityRenderer(BodyFishingHook.TYPE.get(), net.minecraft.client.renderer.entity.FishingHookRenderer::new));
+        toomanyagents.mobs.Mobs.register(modBus);
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));
         controls = new ClientControls(modBus, () -> agents);
