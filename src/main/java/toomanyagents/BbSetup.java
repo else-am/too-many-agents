@@ -209,6 +209,7 @@ public final class BbSetup {
                 var service = agents;
                 if (service != null) service.disconnectBb();
                 publish(development() ? "Reloading development plugin…" : "Installing Minecraft plugin…", installed, false, true, instances);
+                String replacedRoot = plugin == null ? "" : text(plugin,"rootDir");
                 installPlugin(url, plugin, found, developmentDirectory, generation);
                 // Verify rather than repeating a mutation whose outcome may be unknown.
                 for (int attempt=0; attempt<12; attempt++) {
@@ -220,6 +221,7 @@ public final class BbSetup {
                             developmentLoaded = development();
                             synchronized (this) { connection = new Connection(selected, loopback(candidate.url())); }
                             action = Action.NONE;
+                            if (developmentDirectory == null) pruneReleases(replacedRoot);
                             publish("Connected to BB", version(), true, false, discover()); return;
                         }
                     }
@@ -304,6 +306,27 @@ public final class BbSetup {
                 for (var path:paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
             }
         }
+    }
+
+    /** Keeps the release BB now uses, the one it replaced, and any release another running BB uses. */
+    private void pruneReleases(String replacedRoot) {
+        try {
+            Set<Path> keep = new HashSet<>();
+            for (String used : List.of(expectedPluginRoot, replacedRoot)) if (!used.isBlank()) keep.add(Path.of(used));
+            for (var instance : discover()) {
+                String used = text(request(instance.url(), "/api/v1/plugins/minecraft/http/v1/setup", null), "pluginRoot");
+                if (used.isBlank()) return; // An older plugin cannot say which release it uses.
+                keep.add(Path.of(used));
+            }
+            try (var releases = Files.newDirectoryStream(root.resolve("plugins"), path -> !path.getFileName().toString().startsWith("extract-"))) {
+                for (var release : releases) {
+                    if (keep.contains(release) || keep.contains(release.toRealPath())) continue;
+                    try (var paths = Files.walk(release)) {
+                        for (var path : paths.sorted(Comparator.reverseOrder()).toList()) Files.delete(path);
+                    }
+                }
+            }
+        } catch (Exception ignored) { /* Old releases only cost disk space; retry after the next install. */ }
     }
 
     private void publish(String message, String installed, boolean ready, boolean busy, List<Instance> instances) {
