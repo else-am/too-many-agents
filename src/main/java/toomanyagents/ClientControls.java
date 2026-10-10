@@ -72,6 +72,7 @@ public final class ClientControls {
         NeoForge.EVENT_BUS.addListener(this::interactSpecific);
         NeoForge.EVENT_BUS.addListener(this::interact);
         NeoForge.EVENT_BUS.addListener(this::frame);
+        ScreenSpike.register();
         toomanyagents.ui.ScreenScale.register();
         inventoryAgents = new toomanyagents.ui.InventoryAgents(() -> service.get(), id -> selectedAgent = id);
         survey = new toomanyagents.ui.SurveyMode(() -> service.get());
@@ -288,6 +289,7 @@ public final class ClientControls {
                         client.setScreen(new TitleScreen());
                         DevelopmentWorld.open(next);
                     }
+                    case "screen_spike" -> { result.complete(ScreenSpike.control(request)); return; }
                     case "vanilla_chat" -> client.setScreen(new ChatScreen(""));
                     case "mod_settings" -> client.setScreen(TooManyAgentsSettingsScreen.open(null));
                     case "archive_view" -> client.setScreen(new toomanyagents.ui.ArchiveScreen(agents, null));
@@ -532,7 +534,7 @@ public final class ClientControls {
 
     private static boolean ours(Screen screen) {
         return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
-            || screen instanceof toomanyagents.ui.SurveyScreen
+            || screen instanceof toomanyagents.ui.SurveyScreen || screen instanceof ScreenSpike.Focus
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQueueScreen
             || screen instanceof AgentInventoryScreen || screen instanceof TooManyAgentsSettingsScreen || screen instanceof ChatScreen || screen instanceof KeyBindsScreen;
