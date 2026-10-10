@@ -15,7 +15,7 @@ integrated server.
 
 - Minecraft 1.21.1 with NeoForge 21.1.251+, singleplayer.
 - Java 21 to build the mod.
-- Your installed, running BB 0.45.0 or newer.
+- Your installed, running BB 0.46.0 or newer.
 - Node.js and npm to build the bundled Minecraft TypeScript plugin; players do not need them.
 - At least one signed-in coding agent supported by BB, such as Codex or Claude Code.
 

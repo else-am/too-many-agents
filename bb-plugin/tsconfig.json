@@ -6,11 +6,9 @@
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "resolveJsonModule": true,
-    "jsx": "react-jsx"
+    "resolveJsonModule": true
   },
   "include": [
-    "server.ts",
-    "app.tsx"
+    "server.ts"
   ]
 }

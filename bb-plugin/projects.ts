@@ -1,7 +1,7 @@
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
+import { z } from "zod";
 import type { MinecraftWorlds } from "./minecraft.js";
-import { ApiError, object, string, type Session, type SpawnOptions } from "./protocol.js";
-import { isWorldWorkspace } from "./world-workspace.js";
+import { ApiError, describe, object, string, type Session, type SpawnOptions } from "./protocol.js";
 
 /** BB project/workspace choices for a world. The save owns only its project ID and folder. */
 export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
@@ -53,18 +53,37 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
         project.id === world.legacyWorldProjectId ||
         project.sources.some((source) => source.path === path && source.hostId === primaryHostId),
       );
-      const project =
-        existing ??
-        (await bb.sdk.projects.create({
+      let project = existing;
+      if (!project) {
+        project = await bb.sdk.projects.create({
           name: `Minecraft: ${world.name}`,
           source: { type: "local_path", hostId: primaryHostId, path },
-        }));
+        });
+        await hideInSidebar(project.id);
+      }
       await worlds.callback(live, "world.project", { projectId: project.id });
       return project.id;
     })();
     creating.set(live.worldId, work);
     // Keep a failed creation until plugin reload; never silently repeat a project mutation.
     return work;
+  }
+
+  // New worlds start in Thread list's More menu, where the user can show them again.
+  async function hideInSidebar(projectId: string) {
+    try {
+      const { preferences } = await bb.sdk.plugins.callRpc({
+        pluginId: "thread-list", method: "listPreferences", input: null,
+        outputSchema: z.object({ preferences: z.object({ hiddenGroups: z.array(z.string()) }) }),
+      });
+      await bb.sdk.plugins.callRpc({
+        pluginId: "thread-list", method: "setPreference",
+        input: { key: "hiddenGroups", value: [...preferences.hiddenGroups, `project:${projectId}`] },
+        outputSchema: z.unknown(),
+      });
+    } catch (error) {
+      bb.log.warn(`Could not hide world project ${projectId} in the sidebar: ${describe(error)}`);
+    }
   }
 
   async function creationOptions(live: Session, projectId: string) {
@@ -153,7 +172,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
           project.kind !== "personal" &&
           // World projects own this save-relative folder, even after a rename or move.
           !project.sources.some((source) =>
-            isWorldWorkspace(source.path),
+            /[\\/]too-many-agents[\\/]workspace[\\/]?$/.test(source.path),
           ),
       ),
       ...projects

@@ -81,13 +81,6 @@ def main():
     manifest.pop('scripts', None)
     files = {'package.json': (json.dumps(manifest, indent=2) + '\n').encode(),
              'server.js': (PLUGIN / 'dist/server.js').read_bytes()}
-    if manifest['bb'].get('app'):
-        # BB rebuilds frontends on local-path installation, even with a prebuilt
-        # bundle. These sources use only its shared runtime and local CSS.
-        for name in ['app.tsx', 'app.css', 'sidebar-dock.ts', 'world-workspace.ts']:
-            files[name] = (PLUGIN / name).read_bytes()
-        for name in ['app.js', 'app.css', 'app.meta.json']:
-            files['dist/' + name] = (PLUGIN / 'dist' / name).read_bytes()
     for item in ['skills', 'surface', 'assets', 'diagram-worker.mjs', 'scripting', 'dist/scripting']:
         path = PLUGIN / item
         for source in sorted(path.rglob('*')) if path.is_dir() else [path]:
