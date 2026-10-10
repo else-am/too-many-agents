@@ -21,6 +21,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.animal.Rabbit;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.storage.LevelResource;
@@ -1043,10 +1044,7 @@ final class GameAccess {
             stopFollowingMotion(mob);
             return;
         }
-        navigation.tick();
-        mob.getMoveControl().tick();
-        mob.getLookControl().tick();
-        mob.getJumpControl().tick();
+        steer(mob);
         travelFollowingBody(mob, box);
     }
 
@@ -1124,6 +1122,14 @@ final class GameAccess {
             entered |= in;
         }
         return true;
+    }
+
+    /** Advance navigation and the movement controls, in the order of a vanilla AI tick. */
+    static void steer(Mob mob) {
+        mob.getNavigation().tick();
+        // Rabbits only move by hopping, which their own AI step starts.
+        if (mob instanceof Rabbit rabbit) rabbit.customServerAiStep();
+        mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
     }
 
     static void stopFollowingMotion(Mob mob) {

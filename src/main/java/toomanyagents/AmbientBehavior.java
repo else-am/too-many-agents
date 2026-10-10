@@ -87,7 +87,7 @@ final class AmbientBehavior {
             if (path == null || !path.canReach() || !GameAccess.staysInside(path, box) || !navigation.moveTo(path, 1.0)) teleportInside(box);
         } else if (navigation.isDone() || returning > 20 * 30) teleportInside(box); // Allow 30 seconds to walk back.
         else {
-            navigation.tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
+            GameAccess.steer(mob);
             GameAccess.travelFollowingBody(mob, box);
         }
         return true;
@@ -118,7 +118,7 @@ final class AmbientBehavior {
             } else {
                 var path = navigation.getPath();
                 if (path != null && !path.isDone() && !mob.level().hasChunkAt(path.getNextNodePos())) { walking = 1; return; }
-                navigation.tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
+                GameAccess.steer(mob);
             }
             return;
         }

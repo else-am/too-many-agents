@@ -1041,7 +1041,7 @@ final class AgentActions {
         if (path != null && !path.isDone() && !level.hasChunkAt(path.getNextNodePos())) throw error("path_enters_unloaded_chunk");
         if (path != null && !path.isDone() && !level.isPositionEntityTicking(path.getNextNodePos())) throw error("path_leaves_simulated_chunks");
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
-        mob.getNavigation().tick(); mob.getMoveControl().tick(); mob.getLookControl().tick(); mob.getJumpControl().tick();
+        GameAccess.steer(mob);
         travelled = true;
         GameAccess.travelFollowingBody(mob, confined);
         action.addProperty("phase", "approaching");
