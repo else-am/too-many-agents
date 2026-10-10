@@ -4,7 +4,7 @@ import { Worker } from 'node:worker_threads';
 // the caller must validate every operation against the current body/session.
 export async function runScript({
   source, bootstrap = '', onRequest, onUpdates, signal, timeoutMs = 120_000,
-  cpuSliceMs = 250, maxOutputBytes = 64 * 1024, initial = null,
+  cpuSliceMs = 1000, maxOutputBytes = 64 * 1024, initial = null,
   workerUrl = new URL('./worker.mjs', import.meta.url),
 }) {
   if (typeof source !== 'string' || Buffer.byteLength(source) > 256 * 1024)

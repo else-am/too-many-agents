@@ -95,7 +95,7 @@ def main():
 
     # Archiving drops inventory; restoring the body must not duplicate those items.
     path = '/v1/agents/' + receiver_id
-    bb('thread', 'tell', receiver_thread, 'Use minecraft_action creative_item to create exactly 7 minecraft:diamond once. Poll minecraft_action_status until complete, then reply INVENTORY_READY. Do not repeat an action after an unknown outcome.', '--mode', 'auto')
+    bb('thread', 'tell', receiver_thread, 'Use minecraft_run with bot.creative.setInventorySlot to create exactly 7 minecraft:diamond once in an empty slot, then reply INVENTORY_READY. Do not repeat an action after an unknown outcome.', '--mode', 'auto')
     wait(lambda: (inv if 'minecraft:diamond' in json.dumps(inv := inventory_contents()) else None), 'Inventory stack')
     wait(lambda: get(receiver_id).get('thread', {}).get('status') == 'idle', 'Inventory turn completion')
     items_before = {e['uuid'] for e in request('/v1/state')['server']['entities'] if e['type'] == 'minecraft:item'}

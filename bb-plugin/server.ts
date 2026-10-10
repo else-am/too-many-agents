@@ -29,24 +29,20 @@ export default async function minecraft(bb: BbPluginApi) {
     name: string;
     description: string;
     minecraft?: boolean;
+    agent?: boolean;
     inputSchema: Record<string, unknown>;
   }>;
-  const physicalInstructions = await readFile(
-    new URL("./surface/minecraft.md", import.meta.url),
-    "utf8",
-  );
   const instructions = await readFile(new URL("./surface/agents.md", import.meta.url), "utf8");
   const scriptingInstructions = await readFile(new URL("./surface/scripting.md", import.meta.url), "utf8");
-  const physicalTools = tools.filter((tool) => tool.minecraft);
+  // Tools marked agent: false stay available to development diagnostics only.
+  const physicalTools = tools.filter((tool) => tool.minecraft && tool.agent !== false);
 
   for (const tool of physicalTools) {
     bb.agents.registerTool({
       name: tool.name,
       description: tool.description,
       parameters: tool.inputSchema,
-      ...(tool.name === "minecraft_observe"
-        ? { instructions: physicalInstructions.slice(0, 4096) }
-        : tool.name === "minecraft_run" ? { instructions: scriptingInstructions } : {}),
+      ...(tool.name === "minecraft_run" ? { instructions: scriptingInstructions } : {}),
       async execute(args, ctx): Promise<PluginAgentToolResult> {
         try {
           const { live, agent } = await worlds.caller(ctx.threadId);

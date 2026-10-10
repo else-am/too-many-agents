@@ -167,12 +167,22 @@ export function createBot(initial) {
   // Internal block reads and raycasts use the observed column cache.
   const world = createWorldView(position => columns.getBlock(position));
   const blockEvents = installBlockEvents(bot, registry.instruments);
-  installWorldQueries(bot, { getBlock: world.getBlock, getLoadedBounds() {
-    const full = columns.bounds();
-    if (full) return full;
-    const { min, size } = snapshot.blocks;
-    return { min: new Vec3(...min), max: new Vec3(...min.map((value, axis) => value + size[axis])) };
-  } });
+  installWorldQueries(bot, { getBlock: world.getBlock, Block, sectionStates: columns.sectionStates,
+    // The same sources as blockAt, by native state ID; -1 when unknown.
+    stateAt(x, y, z) {
+      const state = columns.stateId(x, y, z);
+      if (state >= 0) return state;
+      const { min, size, states } = snapshot.blocks;
+      const i = x - min[0], j = y - min[1], k = z - min[2];
+      if (i < 0 || j < 0 || k < 0 || i >= size[0] || j >= size[1] || k >= size[2]) return -1;
+      return states[(j * size[2] + k) * size[0] + i];
+    },
+    getLoadedBounds() {
+      const full = columns.bounds();
+      if (full) return full;
+      const { min, size } = snapshot.blocks;
+      return { min: new Vec3(...min), max: new Vec3(...min.map((value, axis) => value + size[axis])) };
+    } });
   class NativeActionError extends Error {}
   async function request(operation, value) {
     try { return JSON.parse(await __mcRequest(operation, JSON.stringify(value))); }

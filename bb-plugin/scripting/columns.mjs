@@ -36,6 +36,18 @@ export function installColumns(bot, ChunkColumn) {
     if (!extraInfos) block.entity = undefined;
     return block;
   }
+  // Native state ID at an integer cell, or -1 outside observed columns.
+  function stateId(x, y, z) {
+    if (y < minY || y >= minY + worldHeight) return -1;
+    const column = columns.get(key(x >> 4, z >> 4));
+    return column ? column.getBlockStateId({ x: x & 15, y, z: z & 15 }) : -1;
+  }
+  // State IDs a 16x16x16 section may contain, or null when unknown or unpaletted.
+  function sectionStates(x, y, z) {
+    const data = columns.get(key(x, z))?.sections[y - minY / 16]?.data;
+    if (!data) return null;
+    return 'value' in data ? [data.value] : data.palette ?? null;
+  }
   function update(view, trackBlocks, localBlocks, trackBlockEntities = false) {
     const changes = [], blockEntities = [];
     if (!view) return { changes, blockEntities };
@@ -102,5 +114,5 @@ export function installColumns(bot, ChunkColumn) {
     return { min: new Vec3(Math.min(...coordinates.map(p => p[0])) * 16, minY, Math.min(...coordinates.map(p => p[1])) * 16),
       max: new Vec3((Math.max(...coordinates.map(p => p[0])) + 1) * 16, minY + worldHeight, (Math.max(...coordinates.map(p => p[1])) + 1) * 16) };
   }
-  return { getBlock, update, patchLocal, bounds };
+  return { getBlock, stateId, sectionStates, update, patchLocal, bounds };
 }

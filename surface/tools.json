@@ -2,7 +2,7 @@
   {
     "name": "minecraft_run",
     "minecraft": true,
-    "description": "Run an awaited JavaScript procedure using your body's bot API. The body stays under script control between steps. Returns the script's JSON result and logs. Permissions and physical limits still apply; no automatic retry after uncertain outcomes. API coverage is in the scripting instructions.",
+    "description": "Do all world work here: inspect your body, inventory, entities, players and blocks, then move, mine, place, craft, use items and menus, chat and run commands, as one awaited JavaScript procedure using your body's bot API. Prefer one script per meaningful step over many small calls. The body stays under script control between steps. Returns the script's JSON result and logs. Permissions and physical limits still apply; no automatic retry after uncertain outcomes. API coverage is in the scripting instructions.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -15,8 +15,16 @@
     "operation": "SCRIPT"
   },
   {
+    "name": "minecraft_settings",
+    "minecraft": true,
+    "description": "Read your body's mod settings: name, species, game mode (survival, creative, creative_commands), activity behaviors, the box you must stay inside, and capabilities.",
+    "inputSchema": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
+    "operation": "SETTINGS"
+  },
+  {
     "name": "minecraft_observe",
     "minecraft": true,
+    "agent": false,
     "description": "Observe body, nearby entities, live player, inventory, settings and current action. Radius 1\u201364.",
     "inputSchema": {
       "type": "object",
@@ -47,6 +55,7 @@
   {
     "name": "minecraft_blocks",
     "minecraft": true,
+    "agent": false,
     "description": "Inspect a loaded inclusive block box, at most 4096 blocks.",
     "inputSchema": {
       "type": "object",
@@ -106,6 +115,7 @@
   {
     "name": "minecraft_action",
     "minecraft": true,
+    "agent": false,
     "description": "Start one physical intention. Walk/look target position or entity UUID/'player'. Mine position; place clicks supporting block position+face using held item. Equip inventory slot; creative_item item/count; pickup nearby or approach item entity/position; give entity/item/count; interact position/face or entity; menu inspect; menu_click menuId/slot/button/clickType; menu_close. Inspect results. Returns action ID; poll status. Local native control approaches targets. No retry on unknown outcome.",
     "inputSchema": {
       "type": "object",
@@ -190,6 +200,7 @@
   {
     "name": "minecraft_action_status",
     "minecraft": true,
+    "agent": false,
     "description": "Read current or historical action, without repeating it.",
     "inputSchema": {
       "type": "object",
@@ -206,6 +217,7 @@
   {
     "name": "minecraft_cancel",
     "minecraft": true,
+    "agent": false,
     "description": "Stop your current physical action or a specified ID.",
     "inputSchema": {
       "type": "object",
@@ -222,6 +234,7 @@
   {
     "name": "minecraft_command",
     "minecraft": true,
+    "agent": false,
     "description": "Run a Minecraft command only in creative_commands mode, using the human's existing permissions. @s is your body.",
     "inputSchema": {
       "type": "object",

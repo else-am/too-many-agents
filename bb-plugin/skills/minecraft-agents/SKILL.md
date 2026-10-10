@@ -45,7 +45,7 @@ copy Minecraft world mutations.
 
 ## Stations
 
-Use `minecraft_observe` for your block coordinates. Corners are inclusive:
+Read your block coordinates with `bot.entity.position` in `minecraft_run`. Corners are inclusive:
 
 ```sh
 bb minecraft station create --name desk --from 10,64,10 --to 14,67,14

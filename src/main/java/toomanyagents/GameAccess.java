@@ -53,7 +53,7 @@ import java.util.function.Supplier;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT }
+    enum Operation { OBSERVE, SETTINGS, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -806,6 +806,14 @@ final class GameAccess {
                 observation.add("action",controller.status(""));
                 yield observation;
             }
+            case SETTINGS -> {
+                cacheBody(body,mob);
+                var result = settings(body);
+                var box = box(mob);
+                result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());
+                result.add("capabilities", capabilities(mob));
+                yield result;
+            }
             case ACTION -> controller.start(arguments);
             case ACTION_STATUS -> controller.status(arguments.has("id") ? string(arguments,"id",80) : "");
             case CANCEL -> {
@@ -1349,6 +1357,16 @@ final class GameAccess {
         return level.hasChunksAt(BlockPos.containing(box.minX, box.minY, box.minZ), BlockPos.containing(box.maxX, box.maxY, box.maxZ));
     }
 
+    private static JsonObject capabilities(Mob mob) {
+        var mode = BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode"));
+        var capabilities = new JsonObject();
+        capabilities.addProperty("commandEditing",mode.commands);
+        capabilities.addProperty("povImages",true);
+        capabilities.addProperty("navigationRadius",64);
+        capabilities.addProperty("damageAndHunger",false);
+        return capabilities;
+    }
+
     private JsonObject observe(MinecraftServer current, Mob mob, JsonObject args) {
         double radius = args.has("radius") ? number(args.get("radius"), "radius") : OBSERVE_RADIUS;
         if (radius < 1 || radius > 64) throw error("radius_must_be_between_1_and_64");
@@ -1364,15 +1382,11 @@ final class GameAccess {
         result.add("localPlayer", Observations.entity(player(current)));
         result.addProperty("localPlayerDimension", player(current).level().dimension().location().toString());
         result.addProperty("radius", radius);
-        var capabilities = new JsonObject();
+        var capabilities = capabilities(mob);
         var availableActions = new JsonArray();
         var mode = BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode"));
         AgentActions.TYPES.stream().filter(type -> mode.creative || !type.equals("creative_item")).forEach(availableActions::add);
         capabilities.add("physicalActions",availableActions);
-        capabilities.addProperty("commandEditing",mode.commands);
-        capabilities.addProperty("povImages",true);
-        capabilities.addProperty("navigationRadius",64);
-        capabilities.addProperty("damageAndHunger",false);
         result.add("capabilities",capabilities);
         var nearby = mob.level().getEntities(mob, mob.getBoundingBox().inflate(radius), entity -> entity.isAlive() && mob.distanceToSqr(entity) <= radius * radius);
         nearby.sort(Comparator.comparingDouble(mob::distanceToSqr));

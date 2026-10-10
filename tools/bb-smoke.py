@@ -88,7 +88,7 @@ def main():
         raise RuntimeError('Body was not observed in the actual world; fixture retained.')
     print('PASS: NPC body observed in the world', flush=True)
     body_uuid = body['body']['entityUuid']
-    request(path + '/message', {'text': 'Call minecraft_observe five times sequentially. After all five succeed, reply exactly ' + first + '. Do not call other tools.', 'delivery': 'send'})
+    request(path + '/message', {'text': 'Call minecraft_run five times sequentially, each with the code `return { uuid: bot.entity.uuid }`. After all five succeed, reply exactly ' + first + '. Do not call other tools.', 'delivery': 'send'})
     # BB can combine messages during provisioning. Queue only after native execution starts.
     while time.monotonic() < deadline:
         current = request(path)
@@ -121,13 +121,13 @@ def main():
             if row.get('role') == 'assistant':
                 seen_first = seen_first or first in row.get('text', '')
                 seen_second = seen_second or second in row.get('text', '')
-            if row.get('workKind') == 'tool' and 'minecraft_observe' in row.get('toolName', ''):
+            if row.get('workKind') == 'tool' and 'minecraft_run' in row.get('toolName', ''):
                 try:
                     observation = json.loads(row.get('output', ''))
                 except ValueError:
                     observation = {}
-                if (row.get('status') == 'completed' and observation.get('session') == state['session']
-                        and observation.get('body', {}).get('uuid') == body_uuid):
+                if (row.get('status') == 'completed'
+                        and observation.get('result', {}).get('value', {}).get('uuid') == body_uuid):
                     physical_calls.add(row['callId'])
                 seen_tool = len(physical_calls) >= 5
         if seen_first and seen_second and seen_tool and current.get('status') not in ('active', 'pending', 'starting', 'stopping'):
@@ -149,7 +149,7 @@ def main():
     def callback(**fields):
         return send('/v1/bb', {'protocol': 3, 'connectionId': current['connectionId'], 'bbInstanceId': current['bbInstanceId'], 'worldId': world['id'], 'worldSessionId': state['session'],
                                'requestId': str(uuid.uuid4()), 'expiresAt': int(time.time() * 1000) + 10_000, **fields})
-    observe = {'op': 'tool', 'agentId': agent_id, 'tool': 'minecraft_observe', 'arguments': {}}
+    observe = {'op': 'tool', 'agentId': agent_id, 'tool': 'minecraft_settings', 'arguments': {}}
     status, reply = callback(**observe, threadId=str(uuid.uuid4()))
     if status == 200:
         raise RuntimeError('A tool call from a thread that is not the agent\'s conversation was accepted.')

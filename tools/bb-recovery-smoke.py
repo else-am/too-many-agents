@@ -72,8 +72,8 @@ def main():
     observation = request(path + '/tool', {'tool': 'minecraft_observe', 'arguments': {}})
     target = observation['body']['position'].copy()
     target['x'] += 50
-    request(path + '/message', {'text': 'Start minecraft_action walk to ' + json.dumps(target) +
-        '. Keep polling minecraft_action_status until complete. Do not stop it yourself; this is an external BB stop check.'})
+    request(path + '/message', {'text': 'Use one minecraft_run script to await bot.moveTo(new Vec3(' + ', '.join(str(target[k]) for k in 'xyz') +
+        ')). Do not stop it yourself; this is an external BB stop check.'})
     def action():
         return request(path + '/tool', {'tool': 'minecraft_action_status', 'arguments': {}})
     wait(lambda: (a if (a := action()).get('type') == 'walk' and a.get('status') == 'running' else None), 'Physical walk')

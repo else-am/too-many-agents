@@ -40,7 +40,7 @@ await moving;
 - **Queued calls** (`attack`, `activateItem`, `deactivateItem`, `mount`, `dismount`, `updateSign`, `chat`, `whisper`) return immediately; `await bot.waitForTicks(1)` before inspecting. Misuse of these emits an `error` event instead of throwing.
 - **Block reads** cover observed cells only. `null` from `blockAt` means unknown, not air. `waitForChunksToLoad` waits for delivery and never forces loading.
 - **Items**: use `null` metadata for modern items. Type-only filters can match several component variants. `toss` drops items deliberately. Recipes are pinned planning data; the native menu decides.
-- **Limits**: deadline 120 s by default, 300 s max; CPU, memory and output are bounded. Your script holds the body; physical tools wait until it ends.
+- **Limits**: deadline 120 s by default, 300 s max. Code may run at most 1 s without awaiting, or it stops with `CpuLimit`; memory and output are bounded. Your script holds the body until it ends.
 - **Permissions** are native: survival follows normal rules, creative allows creative edits/flight, only Creative + commands allows commands. A denial such as `creative_mode_required` ends the script and can bypass try/catch.
 - **Failures** reject with `error.code` and details; completed work remains. Inventory failures can leave items on the cursor or partial crafts/trades, so inspect `currentWindow` and slots. A lost native reply is an unknown outcome: execution stops. Inspect the world before acting again, because blindly replaying could repeat a mutation that already happened. Errors report the failing line of your script.
 

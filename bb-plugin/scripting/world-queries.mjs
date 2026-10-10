@@ -57,7 +57,7 @@ function sectionOrder (a, b) {
  * bounded collision-shape raycast, including its documented upstream fixes.
  * Eye origin is observed eyeHeight, not a guessed player size or body height.
  */
-export function installWorldQueries (bot, { getBlock, getLoadedBounds } = {}) {
+export function installWorldQueries (bot, { getBlock, getLoadedBounds, Block, stateAt, sectionStates } = {}) {
   const observedWorld = createWorldView(position => {
     const block = getBlock(position)
     if (block === null) throw new Error('World query entered an unknown block cell')
@@ -114,13 +114,30 @@ export function installWorldQueries (bot, { getBlock, getLoadedBounds } = {}) {
       }
     }
     sections.sort(sectionOrder)
+    // Like Mineflayer, test each block state once and skip sections whose
+    // palette cannot match. A matcher that needs a position is tried per cell.
+    const stateMatches = new Map()
+    const mayMatch = state => {
+      let result = stateMatches.get(state)
+      if (result === undefined) {
+        try { result = !!matcher(Block.fromStateId(state, 0)) } catch { result = true }
+        stateMatches.set(state, result)
+      }
+      return result
+    }
     const found = []
+    const radius = maxDistance * maxDistance
     for (const section of sections) {
+      const palette = sectionStates(section.x, section.y, section.z)
+      if (palette && !palette.some(mayMatch)) continue
       for (let x = Math.max(min.x, section.x * 16); x < Math.min(max.x, section.x * 16 + 16); x++) {
         for (let y = Math.max(min.y, section.y * 16); y < Math.min(max.y, section.y * 16 + 16); y++) {
           for (let z = Math.max(min.z, section.z * 16); z < Math.min(max.z, section.z * 16 + 16); z++) {
+            const dx = x - center.x, dy = y - center.y, dz = z - center.z
+            if (dx * dx + dy * dy + dz * dz > radius) continue
+            const state = stateAt(x, y, z)
+            if (state < 0 || !mayMatch(state)) continue
             const position = new Vec3(x, y, z)
-            if (position.distanceTo(center) > maxDistance) continue
             const block = bot.blockAt(position, extra !== false)
             if (block === null) continue
             if (matcher(block) && (typeof extra !== 'function' || extra(block))) found.push(position)

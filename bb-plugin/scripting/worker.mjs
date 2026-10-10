@@ -101,6 +101,9 @@ const sourceLines = source.split('\n');
 function guestError(handle) {
   const value = vm.dump(handle);
   if (typeof value !== 'object' || value === null) return String(value);
+  // QuickJS reports the CPU deadline from the interrupt handler only as "interrupted".
+  if (value.name === 'InternalError' && value.message === 'interrupted')
+    return `CpuLimit: code ran ${cpuSliceMs} ms without awaiting. Do less work between awaits, e.g. a smaller findBlocks maxDistance or await bot.waitForTicks(1) inside long loops${scriptLocation(value.stack)}`;
   return `${value.name ?? 'Error'}: ${value.message ?? 'Script failed'}${scriptLocation(value.stack)}`;
 }
 
