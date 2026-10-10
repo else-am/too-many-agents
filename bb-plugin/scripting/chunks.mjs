@@ -40,7 +40,7 @@ export function createChunkClass (registry, Block) {
   function configureBiomes (column) {
     for (const section of column.biomes) {
       // Upstream defaults biome palette promotion to eight bits rather than
-      // the actual native registry width (seven for vanilla 1.21.1).
+      // the actual native registry width (six for vanilla 1.21.1).
       if ('maxBitsPerBlock' in section.data) section.data.maxBitsPerBlock = column.maxBitsPerBiome
     }
   }
@@ -84,7 +84,8 @@ export function createChunkClass (registry, Block) {
     const counts = []
     for (let i = 0; i < column.numSections; i++) {
       const count = bytes.readInt16BE(take(2))
-      requireValue(count >= 0 && count <= 4096, 'invalid non-air count')
+      // Native counts a non-empty block and its non-empty fluid separately, so water reaches 8192.
+      requireValue(count >= 0 && count <= 8192, 'invalid non-air count')
       counts.push(count)
       container(4096, 8, column.maxBitsPerBlock, blocksByStateId)
       container(64, 3, column.maxBitsPerBiome, biomes)
@@ -114,6 +115,8 @@ export function createChunkClass (registry, Block) {
     constructor (options) {
       dimensions(options?.minY ?? -64, options?.worldHeight ?? 384)
       super(options)
+      // Native global palettes use ceil(log2(size)); upstream's neededBits(64) is 7, not 6.
+      this.maxBitsPerBiome = Math.ceil(Math.log2(registry.biomesArray.length))
       configureBiomes(this)
     }
 
