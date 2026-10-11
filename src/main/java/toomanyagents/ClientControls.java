@@ -72,7 +72,6 @@ public final class ClientControls {
         NeoForge.EVENT_BUS.addListener(this::interactSpecific);
         NeoForge.EVENT_BUS.addListener(this::interact);
         NeoForge.EVENT_BUS.addListener(this::frame);
-        ScreenSpike.register();
         toomanyagents.ui.ScreenScale.register();
         inventoryAgents = new toomanyagents.ui.InventoryAgents(() -> service.get(), id -> selectedAgent = id);
         survey = new toomanyagents.ui.SurveyMode(() -> service.get());
@@ -289,7 +288,7 @@ public final class ClientControls {
                         client.setScreen(new TitleScreen());
                         DevelopmentWorld.open(next);
                     }
-                    case "screen_spike" -> { result.complete(ScreenSpike.control(request)); return; }
+                    case "screens" -> { result.complete(toomanyagents.screens.ScreenDiagnostics.status()); return; }
                     case "vanilla_chat" -> client.setScreen(new ChatScreen(""));
                     case "mod_settings" -> client.setScreen(TooManyAgentsSettingsScreen.open(null));
                     case "archive_view" -> client.setScreen(new toomanyagents.ui.ArchiveScreen(agents, null));
@@ -311,7 +310,7 @@ public final class ClientControls {
                         survey.corner(blockPos(request));
                     }
                     case "survey_edit" -> { if (!survey.editAt(blockPos(request))) throw new IllegalArgumentException("No box holds that block"); }
-                    case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop" -> {
+                    case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop", "dev_command", "dev_aim", "dev_mouse", "dev_scroll", "dev_char", "dev_quit" -> {
                         var server = client.getSingleplayerServer();
                         if (!DevelopmentWorld.ENABLED || server == null || !server.getWorldPath(LevelResource.ROOT)
                             .toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME)) {
@@ -391,6 +390,10 @@ public final class ClientControls {
                             client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_PRESS, modifiers);
                             client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_RELEASE, modifiers);
                         }
+                        else if (action.equals("dev_command") || action.equals("dev_aim") || action.equals("dev_mouse") || action.equals("dev_scroll") || action.equals("dev_char")) {
+                            result.complete(toomanyagents.screens.ScreenDiagnostics.develop(action, request));
+                            return;
+                        }
                         else if (action.equals("dev_look")) client.player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, Vec3.atBottomCenterOf(blockPos(request).above()));
                         else if (action.equals("dev_press")) {
                             // Drives the attack/use key mappings the way a mouse button does, for survey click checks.
@@ -409,6 +412,8 @@ public final class ClientControls {
                             client.resizeDisplay();
                         }
                         else if (action.equals("dev_pause")) client.setScreen(new PauseScreen(true));
+                        // Quit Game and Cmd+Q both end here; the game disconnects and saves on its way out.
+                        else if (action.equals("dev_quit")) client.stop();
                         else if (action.equals("dev_leave")) {
                             // Follow the singleplayer PauseScreen disconnect lifecycle, including saving.
                             client.level.disconnect();
@@ -534,7 +539,7 @@ public final class ClientControls {
 
     private static boolean ours(Screen screen) {
         return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
-            || screen instanceof toomanyagents.ui.SurveyScreen || screen instanceof ScreenSpike.Focus
+            || screen instanceof toomanyagents.ui.SurveyScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQueueScreen
             || screen instanceof AgentInventoryScreen || screen instanceof TooManyAgentsSettingsScreen || screen instanceof ChatScreen || screen instanceof KeyBindsScreen;

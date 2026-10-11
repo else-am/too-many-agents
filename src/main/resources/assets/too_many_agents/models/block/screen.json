@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "front": "too_many_agents:block/screen_front",
+    "side": "too_many_agents:block/screen_side",
+    "top": "too_many_agents:block/screen_side"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": {"model": "too_many_agents:block/screen"},
+    "facing=east": {"model": "too_many_agents:block/screen", "y": 90},
+    "facing=south": {"model": "too_many_agents:block/screen", "y": 180},
+    "facing=west": {"model": "too_many_agents:block/screen", "y": 270}
+  }
+}

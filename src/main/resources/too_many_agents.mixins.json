@@ -17,7 +17,9 @@
   ],
   "client": [
     "KeyboardHandlerMixin",
-    "ScreenMixin"
+    "ScreenMixin",
+    "ScreenTypingMixin",
+    "MinecraftCloseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

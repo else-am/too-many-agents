@@ -3,6 +3,7 @@ package org.cef.browser;
 import java.awt.Component;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseWheelEvent;
 import java.awt.image.BufferedImage;
@@ -16,21 +17,27 @@ import org.cef.handler.CefRenderHandler;
 import org.cef.handler.CefScreenInfo;
 
 /**
- * Spike: an off-screen browser with no AWT window. jcef's own CefBrowserOsr draws through a JOGL canvas,
- * which Minecraft cannot host, so frames go straight to a paint callback instead.
+ * An off-screen browser with no AWT window. jcef's own CefBrowserOsr draws through a JOGL canvas, which Minecraft
+ * cannot host, so frames go straight to a {@link View} instead. It lives in jcef's package to extend its
+ * package-private base class.
  */
 public class ScreenBrowser extends CefBrowser_N implements CefRenderHandler {
-    /** Receives Chromium's BGRA frame and the regions that changed. Called on the platform's main thread. */
-    public interface Painter { void paint(Rectangle[] dirty, ByteBuffer frame, int width, int height); }
+    /** Receives Chromium's frames and state. Frames are BGRA and only valid during the call. */
+    public interface View {
+        void paint(boolean popup, Rectangle[] dirty, ByteBuffer frame, int width, int height);
+        void popup(boolean shown, Rectangle bounds);
+        void cursor(int type);
+    }
 
     // Synthetic AWT events need a source component; it is never shown.
     private static final Component SOURCE = new Component() {};
-    private final Painter painter;
+    private final View view;
     private Rectangle rect;
+    private Rectangle popupBounds = new Rectangle();
 
-    public ScreenBrowser(CefClient client, String url, int width, int height, int fps, Painter painter) {
+    public ScreenBrowser(CefClient client, String url, int width, int height, int fps, View view) {
         super(client, url, null, null, null, settings(fps));
-        this.painter = painter;
+        this.view = view;
         this.rect = new Rectangle(0, 0, width, height);
     }
 
@@ -49,17 +56,38 @@ public class ScreenBrowser extends CefBrowser_N implements CefRenderHandler {
         wasResized(width, height);
     }
 
+    /** Repaints the whole view, e.g. after frames were ignored while the screen was frozen. */
+    public void repaint() { invalidate(); }
+
     public void mouse(int id, int x, int y, int button, int modifiers, int clicks) {
         sendMouseEvent(new MouseEvent(SOURCE, id, System.currentTimeMillis(), modifiers, x, y, clicks, false, button));
     }
 
-    public void wheel(int x, int y, int amount) {
-        sendMouseWheelEvent(new MouseWheelEvent(SOURCE, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), 0, x, y, 0, false,
-            MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, amount));
+    public void wheel(int x, int y, int pixels, int modifiers) {
+        sendMouseWheelEvent(new MouseWheelEvent(SOURCE, MouseEvent.MOUSE_WHEEL, System.currentTimeMillis(), modifiers, x, y, 0, false,
+            MouseWheelEvent.WHEEL_UNIT_SCROLL, 1, pixels));
+    }
+
+    /** id is KEY_PRESSED, KEY_RELEASED or KEY_TYPED; modifiers are AWT's extended (*_DOWN_MASK) flags. */
+    public void key(int id, int keyCode, char keyChar, int modifiers) {
+        // AWT forbids a key code on typed events, but Chromium needs one to type Enter; jcef reads it through getKeyCode().
+        int code = id == KeyEvent.KEY_TYPED ? KeyEvent.VK_UNDEFINED : keyCode;
+        sendKeyEvent(new KeyEvent(SOURCE, id, System.currentTimeMillis(), modifiers, code, keyChar) {
+            @Override public int getKeyCode() { return keyCode; }
+        });
     }
 
     @Override public void onPaint(CefBrowser browser, boolean popup, Rectangle[] dirty, ByteBuffer frame, int width, int height) {
-        if (!popup) painter.paint(dirty, frame, width, height);
+        view.paint(popup, dirty, frame, width, height);
+    }
+    @Override public void onPopupShow(CefBrowser browser, boolean show) { view.popup(show, popupBounds); }
+    @Override public void onPopupSize(CefBrowser browser, Rectangle size) {
+        popupBounds = new Rectangle(size);
+        view.popup(true, popupBounds);
+    }
+    @Override public boolean onCursorChange(CefBrowser browser, int cursor) {
+        view.cursor(cursor);
+        return true;
     }
 
     @Override public Rectangle getViewRect(CefBrowser browser) { return rect; }
@@ -72,12 +100,9 @@ public class ScreenBrowser extends CefBrowser_N implements CefRenderHandler {
     @Override public CefRenderHandler getRenderHandler() { return this; }
     @Override protected CefBrowser_N createDevToolsBrowser(CefClient client, String url, CefRequestContext context, CefBrowser_N parent, Point at) { return null; }
     @Override public CompletableFuture<BufferedImage> createScreenshot(boolean nativeResolution) { return CompletableFuture.failedFuture(new UnsupportedOperationException()); }
-    @Override public void onPopupShow(CefBrowser browser, boolean show) {}
-    @Override public void onPopupSize(CefBrowser browser, Rectangle size) {}
     @Override public void addOnPaintListener(Consumer<CefPaintEvent> listener) {}
     @Override public void setOnPaintListener(Consumer<CefPaintEvent> listener) {}
     @Override public void removeOnPaintListener(Consumer<CefPaintEvent> listener) {}
-    @Override public boolean onCursorChange(CefBrowser browser, int cursor) { return true; }
     @Override public boolean startDragging(CefBrowser browser, CefDragData data, int mask, int x, int y) { return false; }
     @Override public void updateDragCursor(CefBrowser browser, int operation) {}
 }
