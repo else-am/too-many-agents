@@ -46,6 +46,22 @@ def bb_command(env):
     raise RuntimeError('Could not find the installed BB CLI. Install BB in Applications, add bb to PATH, or set BB_CLI.')
 
 
+def minecraft_data_files(data):
+    # minecraft-data carries every Java and Bedrock version (~430 MB). Ship the
+    # files its loader reads for this game: version tables and 1.21.1's data,
+    # which dataPaths.json may point at earlier version directories.
+    paths = json.loads((data / 'dataPaths.json').read_text())['pc']['1.21.1']
+    needed = {data / 'dataPaths.json'}
+    needed.update((data / 'pc/common').rglob('*'))
+    needed.update((data / 'bedrock/common').rglob('*'))
+    for key, directory in paths.items():
+        matches = [file for file in (data / directory).iterdir() if file.stem == key]
+        if not matches:
+            raise RuntimeError(f'minecraft-data has no 1.21.1 {key} in {directory}.')
+        needed.update(matches)
+    return needed
+
+
 def main():
     # BB validates tool instructions when loading, after its bundle has built.
     # Catch this limit here so a valid build cannot ship an unloadable plugin.
@@ -86,13 +102,18 @@ def main():
         for source in sorted(path.rglob('*')) if path.is_dir() else [path]:
             if source.is_file():
                 files[source.relative_to(PLUGIN).as_posix()] = source.read_bytes()
+    minecraft_data = PLUGIN / 'node_modules/minecraft-data/minecraft-data/data'
+    needed = minecraft_data_files(minecraft_data)
     for package in packages:
         directory = Path(package)
         if directory == PLUGIN:
             continue
         for source in sorted(directory.rglob('*')):
-            if source.is_file() and 'node_modules' not in source.relative_to(directory).parts:
-                files[source.relative_to(PLUGIN).as_posix()] = source.read_bytes()
+            if not source.is_file() or 'node_modules' in source.relative_to(directory).parts:
+                continue
+            if source.is_relative_to(minecraft_data) and source not in needed:
+                continue
+            files[source.relative_to(PLUGIN).as_posix()] = source.read_bytes()
     output = ROOT / 'build/bb-plugin.zip'
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED) as archive:
