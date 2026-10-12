@@ -21,9 +21,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 
 /**
- * Every screen placed in a world, including those in unloaded chunks, and the counter that names them s1, s2…
- * Ids are never reused, so an old reference can't land on a new screen. Server thread only; readers on other threads
- * use the published snapshot.
+ * Every placed screen, including unloaded chunks. Entity UUIDs identify screens; names are unique across the world.
+ * Server thread only; readers on other threads use the published snapshot.
  */
 final class ScreenIndex extends SavedData {
     private static final String FILE = "too_many_agents_screens";
@@ -32,7 +31,10 @@ final class ScreenIndex extends SavedData {
     record Entry(UUID entity, Screen screen, String dimension, BlockPos pos, String facing, int width, int height) {}
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
-    private long next = 1;
+    private static final String[] ADJECTIVES = {"slim", "quiet", "bright", "swift", "gentle", "calm", "bold", "clever",
+        "little", "merry", "nimble", "patient", "silver", "golden", "snowy", "sunny"};
+    private static final String[] ANIMALS = {"dolphin", "otter", "fox", "owl", "heron", "badger", "robin", "panda",
+        "finch", "rabbit", "turtle", "moth", "wren", "lynx", "seal", "deer"};
 
     /**
      * A thread's hold on a screen, kept in memory only. It lasts while any of its calls runs and for 20 seconds after
@@ -70,15 +72,11 @@ final class ScreenIndex extends SavedData {
 
     void added(ScreenEntity screen) {
         var record = screen.record();
-        var existing = entries.get(record.id());
-        if (record.id().isEmpty() || existing != null && !existing.entity.equals(screen.getUUID())) {
-            while (entries.containsKey("s" + next)) next++;
-            screen.setRecord(record.withId("s" + next++));
-        } else {
-            // A saved id still moves the counter past it.
-            if (record.id().matches("s[1-9]\\d{0,17}")) next = Math.max(next, Long.parseLong(record.id().substring(1)) + 1);
-            update(screen);
-        }
+        String id = screen.getUUID().toString();
+        var existing = entries.get(id);
+        // The index also reserves names for unloaded entities, including names normalized from older saves.
+        String name = existing != null ? existing.screen.name() : availableName(record.name(), screen.getUUID());
+        screen.setRecord(new Screen(id, name, record.url(), record.openedBy()));
         // Holders aren't saved, so a screen loaded again shows its lease from here.
         var lease = lease(screen.record().id());
         var entry = entries.get(screen.record().id());
@@ -86,6 +84,41 @@ final class ScreenIndex extends SavedData {
     }
 
     Collection<Entry> entries() { return entries.values(); }
+
+    static String validName(String name) {
+        name = name.strip();
+        if (name.isBlank() || name.codePointCount(0, name.length()) > ScreenInput.MAX_NAME
+            || name.codePoints().anyMatch(Character::isISOControl))
+            throw new ScreenTools.ScreenError("invalid_request", "A screen name needs 1 to " + ScreenInput.MAX_NAME + " characters, with no control characters.");
+        return name;
+    }
+
+    String requireName(String name, String id) {
+        name = validName(name);
+        if (nameTaken(name, id)) throw new ScreenTools.ScreenError("invalid_request", "That screen name is already in use. Choose another name.");
+        return name;
+    }
+
+    private boolean nameTaken(String name, String id) {
+        return entries.values().stream().anyMatch(entry -> !entry.screen.id().equals(id) && entry.screen.name().equalsIgnoreCase(name));
+    }
+
+    /** Saved items keep their name when possible. Blank items get a readable pair; collisions get a suffix. */
+    private String availableName(String preferred, UUID entity) {
+        String base;
+        try { base = validName(preferred); }
+        catch (ScreenTools.ScreenError ignored) {
+            int hash = entity.hashCode();
+            base = ADJECTIVES[Math.floorMod(hash, ADJECTIVES.length)] + "-" + ANIMALS[Math.floorMod(hash / ADJECTIVES.length, ANIMALS.length)];
+        }
+        String name = base;
+        for (int suffix = 2; nameTaken(name, entity.toString()); suffix++) {
+            String tail = "-" + suffix;
+            int length = Math.min(base.codePointCount(0, base.length()), ScreenInput.MAX_NAME - tail.length());
+            name = base.substring(0, base.offsetByCodePoints(0, length)) + tail;
+        }
+        return name;
+    }
 
     void update(ScreenEntity screen) {
         var record = screen.record();
@@ -165,7 +198,6 @@ final class ScreenIndex extends SavedData {
 
     private void publish(MinecraftServer server) {
         var result = new JsonObject();
-        result.addProperty("next", "s" + next);
         var screens = new JsonArray();
         for (var entry : entries.values()) {
             var row = new JsonObject();
@@ -194,7 +226,6 @@ final class ScreenIndex extends SavedData {
     }
 
     @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
-        tag.putLong("next", next);
         var list = new ListTag();
         for (var entry : entries.values()) {
             var row = new CompoundTag();
@@ -213,13 +244,15 @@ final class ScreenIndex extends SavedData {
 
     private static ScreenIndex load(CompoundTag tag, HolderLookup.Provider registries) {
         var index = new ScreenIndex();
-        index.next = Math.max(1, tag.getLong("next"));
         for (var item : tag.getList("screens", Tag.TAG_COMPOUND)) {
             var row = (CompoundTag) item;
             var screen = Screen.CODEC.parse(NbtOps.INSTANCE, row.get("screen")).result().orElse(null);
             var pos = NbtUtils.readBlockPos(row, "pos").orElse(null);
-            if (screen == null || screen.id().isEmpty() || pos == null || !row.hasUUID("entity")) continue;
-            index.entries.put(screen.id(), new Entry(row.getUUID("entity"), screen, row.getString("dimension"), pos,
+            if (screen == null || pos == null || !row.hasUUID("entity")) continue;
+            UUID entity = row.getUUID("entity");
+            var normalized = new Screen(entity.toString(), index.availableName(screen.name(), entity), screen.url(), screen.openedBy());
+            if (!normalized.equals(screen)) index.setDirty();
+            index.entries.put(normalized.id(), new Entry(entity, normalized, row.getString("dimension"), pos,
                 row.getString("facing"), row.getInt("width"), row.getInt("height")));
         }
         return index;

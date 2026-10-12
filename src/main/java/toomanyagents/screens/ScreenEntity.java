@@ -74,6 +74,11 @@ public final class ScreenEntity extends HangingEntity {
 
     /** Server only: changes the record and keeps the world's index in step. */
     void setRecord(Screen record) {
+        if (level() instanceof ServerLevel server && isAddedToLevel()) {
+            String id = getUUID().toString();
+            String name = ScreenIndex.get(server.getServer()).requireName(record.name(), id);
+            record = new Screen(id, name, record.url(), record.openedBy());
+        }
         boolean closed = !entityData.get(URL).isEmpty() && record.url().isEmpty();
         entityData.set(ID, record.id());
         entityData.set(NAME, record.name());
@@ -89,7 +94,7 @@ public final class ScreenEntity extends HangingEntity {
 
     @Override public void onAddedToLevel() {
         super.onAddedToLevel();
-        // Gives a new screen its id, and a copied one a fresh id if its own is already taken.
+        // Uses the entity's UUID and reserves a unique, readable name.
         if (level() instanceof ServerLevel server) ScreenIndex.get(server.getServer()).added(this);
     }
 

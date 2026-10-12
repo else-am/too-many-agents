@@ -113,7 +113,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         rect(buffers, matrix, 0, 0, view.pageWidth, bar, -0.002, BAR);
         var font = Minecraft.getInstance().font;
 
-        // The screen's id, then its name: click to rename.
+        // The screen's unique name: click to rename. Its UUID is only for agent references.
         var record = view.screen.record();
         double nameX = view.start(ScreenView.Part.NAME), nameW = view.end(ScreenView.Part.NAME) - nameX;
         String naming = ScreenInput.fieldText(view, ScreenView.Part.NAME);
@@ -121,12 +121,9 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         else {
             double size = bar * 0.42, y = (bar - size) / 2, x = nameX + pad * 1.5;
             int room = (int) ((nameW - pad * 2.5) / (size / 9));
-            text(pose, buffers, record.id(), x, y, size, ID, false, -0.003);
-            int idWidth = font.width(record.id() + " ");
             // While an agent holds the screen's lease, its name follows the screen's.
             String holder = view.screen.holder(), label = holder.isEmpty() ? record.name() : record.name().isEmpty() ? holder : record.name() + " - " + holder;
-            if (!label.isEmpty() && room > idWidth)
-                text(pose, buffers, font.plainSubstrByWidth(label, room - idWidth), x + idWidth * size / 9, y, size, TEXT, false, -0.003);
+            text(pose, buffers, font.plainSubstrByWidth(label, room), x, y, size, TEXT, false, -0.003);
         }
 
         double glyph = Math.min(bar * 0.5, view.unit * 0.7);

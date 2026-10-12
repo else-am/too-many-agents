@@ -252,7 +252,7 @@
   },
   {
     "name": "screen_list",
-    "description": "List the screens you can use: your project's screens and shared ones, yours first, then nearest the user, capped at 50 (`truncated` counts the rest). `mine: true` lists only your station's screens. `distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. A `lease` identifies the thread currently controlling the screen.",
+    "description": "List the screens you can use: your project's screens and shared ones, yours first, then nearest the user, capped at 50 (`truncated` counts the rest). `mine: true` lists only your station's screens. `distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. Each row has a stable UUID `id` and a unique readable `name`. Names can change; keep the UUID for future calls. Pickup ends that identity. A `lease` identifies the thread currently controlling the screen.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -268,13 +268,13 @@
   },
   {
     "name": "screen_open",
-    "description": "Show something on a screen: a URL, or a file path. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Name a screen when it's unnamed, or when its name no longer describes what you're now using it for; otherwise leave the name alone.",
+    "description": "Show something on a screen: a URL, or a file path. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Screens always have a unique name. Rename one when its name no longer describes what you are using it for; otherwise leave it alone.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
         },
         "kind": {
           "type": "string",
@@ -289,7 +289,7 @@
         },
         "name": {
           "type": "string",
-          "description": "Names the screen."
+          "description": "Unique nonblank name, at most 32 characters. Names are reserved across the world, including unloaded screens, ignoring capitalization. Omit to keep the name."
         }
       },
       "required": [
@@ -308,7 +308,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
         },
         "method": {
           "type": "string",
@@ -333,7 +333,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
         }
       },
       "required": [],
@@ -349,7 +349,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
         }
       },
       "required": [],

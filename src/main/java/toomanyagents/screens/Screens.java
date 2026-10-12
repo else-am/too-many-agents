@@ -112,6 +112,7 @@ public final class Screens {
         if (server == null || mc.level == null) return;
         var dimension = mc.level.dimension();
         UUID id = view.screen.getUUID();
+        UUID playerId = mc.player == null ? null : mc.player.getUUID();
         long deadline = System.nanoTime() + EXPIRY_NANOS;
         server.execute(() -> {
             if (System.nanoTime() > deadline || !server.isRunning()) return;
@@ -119,7 +120,12 @@ public final class Screens {
             if (level == null || !(level.getEntity(id) instanceof ScreenEntity screen)) return;
             var record = screen.record();
             var updated = change.apply(record);
-            if (!updated.equals(record)) screen.setRecord(updated);
+            try {
+                if (!updated.equals(record)) screen.setRecord(updated);
+            } catch (ScreenTools.ScreenError error) {
+                var player = playerId == null ? null : server.getPlayerList().getPlayer(playerId);
+                if (player != null) player.displayClientMessage(net.minecraft.network.chat.Component.literal(error.getMessage()), false);
+            }
         });
     }
 

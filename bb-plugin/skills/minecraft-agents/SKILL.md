@@ -117,8 +117,9 @@ watch and can take over in-game.
 - `screen_list { mine: true }` finds your station's screens. Without `mine`,
   `distance` from the user and from you tells screens apart when the user says
   "over here" or "by you".
-- Omit `screen` when your station has exactly one; otherwise pass its id (`s4`)
-  or name. `choose_screen` lists the candidates.
+- Omit `screen` when your station has exactly one; otherwise pass its UUID
+  or unique name. Keep the UUID for future calls: renaming preserves it, but
+  picking up and replacing a screen creates a new identity. `choose_screen` lists the candidates.
 - `screen_open` shows a URL or file; `screen_cdp` drives the page (usually
   `Runtime.evaluate`); `screen_screenshot` shows you what it looks like;
   `screen_close` makes it idle.

@@ -430,7 +430,7 @@ public final class ScreenInput {
                 var part = field;
                 String text = fieldText.toString();
                 stopTyping(false);
-                // An empty name clears it.
+                // The server checks that the name is nonblank and unique.
                 if (part == ScreenView.Part.NAME) {
                     view.rename(text.strip());
                     return;

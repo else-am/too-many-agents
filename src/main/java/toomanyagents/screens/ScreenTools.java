@@ -236,14 +236,19 @@ public final class ScreenTools {
         };
         String name = args.has("name") ? name(args) : null;
         String id = entry.screen().id(), thread = caller.threadId();
-        return () -> onClient(live, () -> {
+        if (name != null) ScreenIndex.get(server).requireName(name, id);
+        return () -> onServer(server, live, () -> {
+            // Reserve the name before navigating, so a conflicting rename cannot change the page.
+            if (name != null) edit(server, entry, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
+            return null;
+        }).thenCompose(ignored -> onClient(live, () -> {
             var view = view(entry);
             if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
             var loaded = wait(waiters, view.open(url), OPEN_SECONDS,
                 "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
             return new Opened(view, view.generation, loaded);
-        }).thenCompose(opened -> onServer(server, live, () -> {
-            edit(server, entry, record -> new Screen(record.id(), name == null ? record.name() : name, url, thread));
+        })).thenCompose(opened -> onServer(server, live, () -> {
+            edit(server, entry, record -> new Screen(record.id(), record.name(), url, thread));
             return opened;
         })).thenCompose(opened -> opened.loaded.thenCompose(ignored -> onClient(live, () -> result(page(opened.view, opened.generation, id)))));
     }
@@ -370,14 +375,15 @@ public final class ScreenTools {
             }
             rows.sort(Comparator.<Row>comparingInt(row -> row.yours ? 0 : 1)
                 .thenComparingDouble(row -> row.user == null ? Double.MAX_VALUE : row.user)
-                .thenComparingLong(row -> number(row.entry.screen().id())));
+                .thenComparing(row -> row.entry.screen().name(), String.CASE_INSENSITIVE_ORDER)
+                .thenComparing(row -> row.entry.screen().id()));
         }
 
         /** The screen a call names, or the caller's only station screen when it names none. */
         Row choose(JsonElement argument) {
             if (argument == null || argument.isJsonNull()) {
                 if (station == null)
-                    throw choose("You have no station, so pass `screen`: an id like s4, or a name. screen_list shows the screens you can use.", List.of());
+                    throw choose("You have no station, so pass `screen`: a UUID or unique name. screen_list shows the screens you can use.", List.of());
                 var mine = rows.stream().filter(row -> row.station == station).toList();
                 if (mine.size() == 1) return mine.getFirst();
                 throw choose(mine.isEmpty() ? "Your station has no screen. Pass `screen`; screen_list shows the screens you can use."
@@ -385,15 +391,14 @@ public final class ScreenTools {
             }
             if (!argument.isJsonPrimitive() || !argument.getAsJsonPrimitive().isString()) throw invalid("screen must be an id or a name.");
             String wanted = argument.getAsString().strip();
-            if (wanted.matches("s\\d+")) {
-                for (var row : rows) if (row.entry.screen().id().equals(wanted)) return row;
-                if (foreign.contains(wanted)) throw new ScreenError("no_access", "Screen " + wanted + " belongs to another project.");
+            if (wanted.matches("(?i)[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")) {
+                String id = UUID.fromString(wanted).toString();
+                for (var row : rows) if (row.entry.screen().id().equals(id)) return row;
+                if (foreign.contains(id)) throw new ScreenError("no_access", "Screen " + wanted + " belongs to another project.");
                 throw new ScreenError("not_found", "There is no screen " + wanted + ".");
             }
-            var named = rows.stream().filter(row -> row.entry.screen().name().equalsIgnoreCase(wanted)).toList();
-            if (named.size() == 1) return named.getFirst();
-            if (named.isEmpty()) throw new ScreenError("not_found", "No screen you can use is called \"" + wanted + "\".");
-            throw choose("Several screens are called \"" + wanted + "\". Pass one's id.", named);
+            for (var row : rows) if (row.entry.screen().name().equalsIgnoreCase(wanted)) return row;
+            throw new ScreenError("not_found", "No screen you can use is called \"" + wanted + "\".");
         }
 
         private ScreenError choose(String message, List<Row> candidates) {
@@ -551,14 +556,11 @@ public final class ScreenTools {
         return path.toUri().toString();
     }
 
-    /** The name a call gives a screen. Empty clears it, as it does for players. */
+    /** Explicit names must be nonblank. Uniqueness is checked on the server before changing the page. */
     private static String name(JsonObject args) {
         String name = string(args, "name");
         if (name == null) throw invalid("name must be text.");
-        name = name.strip();
-        if (name.codePointCount(0, name.length()) > ScreenInput.MAX_NAME || name.codePoints().anyMatch(Character::isISOControl))
-            throw invalid("A screen name has at most " + ScreenInput.MAX_NAME + " characters, with no control characters.");
-        return name;
+        return ScreenIndex.validName(name);
     }
 
     private static String string(JsonObject args, String key) {
@@ -603,10 +605,6 @@ public final class ScreenTools {
     private static String text(JsonObject row, String key) {
         var value = row.get(key);
         return value == null || value.isJsonNull() ? "" : value.getAsString();
-    }
-
-    private static long number(String id) {
-        try { return Long.parseLong(id.substring(1)); } catch (RuntimeException e) { return Long.MAX_VALUE; }
     }
 
     private static JsonObject object(Object... pairs) {

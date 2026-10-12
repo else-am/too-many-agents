@@ -8,7 +8,7 @@ import net.minecraft.network.codec.StreamCodec;
 
 /**
  * What a screen is. Placed, it has all of this; an item keeps only the name and url. An empty url means the screen
- * is idle and has no browser. openedBy is the thread that last opened the page.
+ * is idle and has no browser. id is the entity UUID; openedBy is the thread that last opened the page.
  */
 public record Screen(String id, String name, String url, String openedBy) {
     static final Screen BLANK = new Screen("", "", "", "");
@@ -26,6 +26,4 @@ public record Screen(String id, String name, String url, String openedBy) {
         ByteBufCodecs.STRING_UTF8, Screen::url,
         ByteBufCodecs.STRING_UTF8, Screen::openedBy,
         Screen::new);
-
-    Screen withId(String value) { return new Screen(value, name, url, openedBy); }
 }

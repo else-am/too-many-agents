@@ -25,9 +25,9 @@ You place a screen and ask an agent to set something up on it. You and agents us
 record Screen(String id, String name, String url, String openedBy) {}
 ```
 
-- ~~Ids are short and sayable: `s1`, `s2`… from a per-world counter in the mod's world state, never reused, so an old reference can't land on a new screen.~~
+- ~~Ids are entity UUIDs, stable across reloads and renames, hidden from the player-facing bar. Pickup ends the identity. Placed screens have nonblank, case-insensitively unique names across the world, including unloaded chunks. Blank items get readable adjective-animal names; saved-name collisions receive numeric suffixes. Explicit blank or duplicate renames are rejected.~~
 - ~~A small server-side index (id, name, URL, position) lets `screen_list` include placed screens in unloaded chunks. A screen in an item is not listed.~~
-- ~~Players name a screen by clicking the id on its bar; agents name one through `screen_open`.~~
+- ~~Players name a screen by clicking the name on its bar; agents name one through `screen_open`.~~
 - ~~`url` is empty when the screen is idle, meaning no Chromium browser exists for it.~~
 - ~~`openedBy` is the thread that last opened the page. It's set by `screen_open`, and cleared when a player navigates or the screen is closed.~~
 - Planned `terminal` and `review` pages will use our own `tma://` scheme; see Later.
@@ -40,7 +40,7 @@ record Screen(String id, String name, String url, String openedBy) {}
   - ~~If your station has exactly one screen, that's the one used.~~
   - ~~Otherwise the call fails with `choose_screen` and returns only your station's screens.~~
   - ~~Agents without a station always pass `screen`.~~
-- ~~**`screen` arguments** accept an id (`s4`) or a name (`whiteboard`). Names needn't be unique; a name matching several screens fails with `choose_screen`, listing the matches.~~
+- ~~**`screen` arguments** accept a UUID or unique name (`whiteboard`). Agents retain UUIDs for future calls so renaming does not change the target.~~
 
 ### Tools
 
@@ -59,7 +59,7 @@ record Screen(String id, String name, String url, String openedBy) {}
 {
   "you": { "station": { "id": "st_…", "label": "desk" }, "project": "prj_…" },  // station null if none
   "screens": [{
-    "id": "s4", "name": "whiteboard",
+    "id": "550e8400-e29b-41d4-a716-446655440000", "name": "whiteboard",
     "url": "https://…", "title": "Excalidraw",                       // url "" when idle
     "viewport": [1504, 915],                                          // page size in pixels
     "project": "prj_…",                                               // null = shared
@@ -86,7 +86,7 @@ Shows something on a screen.
 
 - ~~It waits for the page to load (up to about 15s), then returns `{ screen, url, title }`.~~
 - ~~It sets `openedBy` to the caller.~~
-- ~~Names tell agents at a glance what each screen is for. The description says: name a screen when it's unnamed, or when its name no longer describes what you're now using it for; otherwise leave the name alone.~~
+- ~~Names tell agents at a glance what each screen is for. The description says: rename a screen when its name no longer describes what you're now using it for; otherwise leave the name alone.~~
 - `terminal` and `review` kinds are planned; see Later.
 
 #### `screen_cdp`
@@ -122,7 +122,7 @@ A plain CDP passthrough to the screen's page.
 |---|---|
 | `screen` | optional, id or name |
 
-- ~~It closes the browser and clears `url` and `openedBy`, so the screen goes idle: dark surface, bar showing its id and name.~~
+- ~~It closes the browser and clears `url` and `openedBy`, so the screen goes idle: dark surface, bar showing its name.~~
 - ~~The record and the station link stay, and a later `screen_open` brings it back.~~
 - ~~Players get the same thing as **Turn off (clear page)** in the bar menu.~~
 
@@ -145,7 +145,7 @@ A plain CDP passthrough to the screen's page.
 
 | Code | When |
 |---|---|
-| `choose_screen` | Omitted screen and no single default, or an ambiguous name; includes the candidates |
+| `choose_screen` | Omitted screen and no single default, includes the candidates |
 | `not_found` / `no_access` | Unknown id/name, or another project's screen |
 | `leased` | Another thread holds it; includes `{ thread, secondsLeft, url }` |
 | `unavailable` | Idle, or not loaded on the user's client (out of range, game closed, world not trusted) |

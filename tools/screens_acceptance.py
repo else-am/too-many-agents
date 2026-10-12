@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -143,7 +144,8 @@ def foundation():
     first = fixture_screens(wait_for(lambda state: len(fixture_screens(state)) == 1))[0]
     assert first['blocks'] == '4x3' and not first['browser'] and first['url'] == ''
     screen_id = first['id']
-    assert screen_id.startswith('s') and screen_id[1:].isdigit()
+    assert str(uuid.UUID(screen_id)) == screen_id == first['entity']
+    assert first['name'].strip() and '-' in first['name']
     print('PASS: Native placement creates one idle 4 by 3 panel', flush=True)
 
     command('item replace entity @s weapon.mainhand with air')
@@ -192,7 +194,6 @@ def foundation():
 
     expected = {screen['id']: (screen['name'], screen['url'], screen['blocks'], screen['pos'])
                 for screen in fixture_screens(state)}
-    counter = state['index']['next']
     ui('dev_leave')
     ui('dev_open_world', name='too-many-agents-development')
     deadline = time.monotonic() + 20
@@ -207,8 +208,8 @@ def foundation():
     state = wait_for(lambda state: len(fixture_screens(state)) == len(expected), timeout=15)
     actual = {screen['id']: (screen['name'], screen['url'], screen['blocks'], screen['pos'])
               for screen in fixture_screens(state)}
-    assert actual == expected and state['index']['next'] == counter
-    print('PASS: Save and reopen preserve records, panel dimensions, and ID counter', flush=True)
+    assert actual == expected
+    print('PASS: Save and reopen preserve records, panel dimensions, and UUIDs', flush=True)
 
 
 def facings():
@@ -240,7 +241,7 @@ def controls():
     command('gamemode creative @s')
     command('tp @s 168 -60 165')
     command('item replace entity @s weapon.mainhand with air')
-    screen = next(row for row in fixture_screens(ui('screens')) if row['blocks'] == '4x3' and row['name'] == '')
+    screen = next(row for row in fixture_screens(ui('screens')) if row['blocks'] == '4x3' and row['name'] != 'Acceptance copy')
     screen_id = screen['id']
 
     def current():
@@ -259,8 +260,9 @@ def controls():
     control('name')
     ui('dev_key', key=259)
     ui('dev_key', key=257)
-    wait_for(lambda state: any(row['id'] == screen_id and row['name'] == '' for row in state['screens']))
-    print('PASS: Native bar edits and clears the screen name', flush=True)
+    time.sleep(.2)
+    assert screen_row(screen_id)['name'] == 'Acceptance board'
+    print('PASS: Native bar renames without changing identity and rejects blank names', flush=True)
 
     fixture = ROOT / 'run/too-many-agents/screens-acceptance'
     fixture.mkdir(parents=True, exist_ok=True)
@@ -426,34 +428,88 @@ def menu_actions():
     place((172.5, -57.5), (172.5, -57.5))
     state = wait_for(lambda state: any(row['blocks'] == '1x1' and row['id'] != screen_id for row in fixture_screens(state)))
     fresh = next(row for row in fixture_screens(state) if row['blocks'] == '1x1')
-    assert fresh['id'] != screen_id and not fresh['name'] and not fresh['url'] and not fresh['browser']
+    assert fresh['id'] != screen_id and fresh['name'].strip() and not fresh['url'] and not fresh['browser']
     assert not state['items']
     print('PASS: Creative reset drops one blank item; placing it creates a fresh idle screen', flush=True)
     command('gamemode creative @s')
+
+
+def unique_names():
+    command('gamemode creative @s')
+    command('tp @s 160 -60 164')
+    ids = []
+    for x in (158, 159):
+        before = {row['id'] for row in ui('screens')['screens']}
+        command('item replace entity @s weapon.mainhand with too_many_agents:screen'
+                '[too_many_agents:screen={name:"Identity board",url:""}]')
+        place((x + .5, -59.5), (x + .5, -59.5))
+        state = wait_for(lambda state: any(row['id'] not in before for row in state['screens']))
+        ids.append(next(row['id'] for row in state['screens'] if row['id'] not in before))
+    first, second = ids
+    assert screen_row(first)['name'] == 'Identity board'
+    assert screen_row(second)['name'] == 'Identity board-2'
+    command('item replace entity @s weapon.mainhand with air')
+    screen_control(second, 'name')
+    ui('dev_char', text='IDENTITY BOARD')
+    ui('dev_key', key=257)
+    time.sleep(.3)
+    assert screen_row(second)['name'] == 'Identity board-2'
+    screen_control(first, 'name')
+    ui('dev_char', text='Identity renamed')
+    ui('dev_key', key=257)
+    wait_for(lambda state: any(row['id'] == first and row['name'] == 'Identity renamed' for row in state['screens']))
+    print('PASS: Placement suffixes duplicate names; case-insensitive rename conflicts are rejected; UUID survives rename', flush=True)
+
+    # Origin and the main fixture are already generated. Unloading must not release their names.
+    command('tp @s 0 -60 0')
+    wait_for(lambda state: all(row['id'] not in ids for row in state['screens']), timeout=20)
+    assert all(any(row['id'] == sid for row in ui('screens')['index']['screens']) for sid in ids)
+    command('fill 6 -60 8 6 -56 8 stone')
+    command('tp @s 6 -60 4')
+    before = {row['id'] for row in ui('screens')['screens']}
+    command('item replace entity @s weapon.mainhand with too_many_agents:screen'
+            '[too_many_agents:screen={name:"Identity renamed",url:""}]')
+    place((6.5, -57.5, 8), (6.5, -57.5, 8))
+    placed = next(row for row in ui('screens')['screens'] if row['id'] not in before)
+    assert placed['name'] == 'Identity renamed-2'
+    command('item replace entity @s weapon.mainhand with air')
+    menu_action(placed['id'], 'reset', confirm=True)
+    wait_for(lambda state: all(row['id'] != placed['id'] for row in state['index']['screens']))
+    command('fill 6 -60 8 6 -56 8 air')
+    time.sleep(3)
+    command('tp @s 160 -60 164')
+    wait_for(lambda state: all(any(row['id'] == sid for row in state['screens']) for sid in ids), timeout=20)
+    assert screen_row(first)['name'] == 'Identity renamed'
+    print('PASS: Unloaded screens reserve names and return with the same UUID and name', flush=True)
+    for sid in ids:
+        menu_action(sid, 'reset', confirm=True)
+        wait_for(lambda state: all(row['id'] != sid for row in state['index']['screens']))
 
 
 def saved_items_and_crafting():
     command('gamemode creative @s')
     command('clear @s')
     ui('dev_key', key=49)
-    command('tp @s 172 -60 164')
+    command('tp @s 172 -60 162')
     pages = [('Twin', 'about:blank'), ('Twin', 'about:blank'),
              ('Twin', (ROOT / 'run/too-many-agents/screens-acceptance/index.html').as_uri()),
              ('Other', 'about:blank')]
     ids = []
     for x, (name, url) in zip(range(171, 175), pages):
+        command('tp @s 172 -60 164')
         before = {row['id'] for row in ui('screens')['screens']}
         command('item replace entity @s weapon.mainhand with too_many_agents:screen'
                 f'[too_many_agents:screen={{name:{json.dumps(name)},url:{json.dumps(url)}}}]')
         place((x + .5, -59.5), (x + .5, -59.5))
         state = wait_for(lambda state: any(row['id'] not in before for row in state['screens']))
-        ids.append(next(row['id'] for row in state['screens'] if row['id'] not in before))
-    assert len(set(ids)) == 4
-    command('clear @s')
-    command('tp @s 172 -60 162')
-    for screen_id in ids:
+        screen_id = next(row['id'] for row in state['screens'] if row['id'] not in before)
+        ids.append(screen_id)
+        # Pick up before placing the next copy: its name becomes available, and matching items still stack.
+        command('tp @s 172 -60 162')
+        command('item replace entity @s weapon.mainhand with air')
         menu_action(screen_id, 'pick_up')
         wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
+    assert len(set(ids)) == 4
     state = ui('screens')
     assert not state['items'], 'All four items must drop into the world first'
     for drop in state['droppedItems']:
@@ -502,3 +558,4 @@ if __name__ == '__main__':
     controls()
     menu_actions()
     saved_items_and_crafting()
+    unique_names()

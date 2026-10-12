@@ -63,7 +63,7 @@ def main():
     if args.foreign_screen:
         assert all(row['id'] != args.foreign_screen for row in listed['screens'])
         error('no_access', agent, 'screen_open', screen=args.foreign_screen, kind='url', target='about:blank')
-    error('not_found', agent, 'screen_close', screen='s99999999999999999')
+    error('not_found', agent, 'screen_close', screen='00000000-0000-0000-0000-000000000000')
     print('PASS: Listing, defaults, and explicit access checks', flush=True)
 
     fixture = native.ROOT / 'run/too-many-agents/screens-tool-acceptance.html'
@@ -74,6 +74,13 @@ def main():
     opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture), name='Tool acceptance')
     assert opened['screen'] == screen and opened['title'] == 'Screen tool acceptance', opened
     assert opened['url'] == fixture.as_uri(), opened
+    conflicting = next((r['name'] for r in listed['screens'] if r['id'] != screen), None)
+    for invalid_name in ('', '   ', conflicting):
+        if invalid_name is None:
+            continue
+        error('invalid_request', agent, 'screen_open', screen=screen, kind='url', target='about:blank', name=invalid_name.upper())
+        unchanged = next(r for r in success(agent, 'screen_list')['screens'] if r['id'] == screen)
+        assert unchanged['name'] == 'Tool acceptance' and unchanged['url'] == fixture.as_uri(), unchanged
     result = evaluate(agent, screen, '({answer:42,title:document.title})')
     assert result['result']['result']['value'] == {'answer': 42, 'title': 'Screen tool acceptance'}, result
     awaited = evaluate(agent, screen, 'new Promise(resolve=>setTimeout(()=>resolve(23),100))', awaitPromise=True)
@@ -105,11 +112,14 @@ def main():
     success(agent, 'screen_close', screen=screen)
     error('unavailable', other, 'screen_cdp', screen=screen, method='Runtime.evaluate', params={'expression': '1'})
     error('unavailable', other, 'screen_screenshot', screen=screen)
-    success(other, 'screen_open', screen=screen, kind='url', target='about:blank', name='')
+    error('invalid_request', other, 'screen_open', screen=screen, kind='url', target='about:blank', name='')
+    success(other, 'screen_open', screen=screen, kind='url', target='about:blank', name='Renamed acceptance')
     row = next(row for row in success(other, 'screen_list')['screens'] if row['id'] == screen)
-    assert row['name'] == '', row
+    assert row['name'] == 'Renamed acceptance', row
+    by_name = success(other, 'screen_cdp', screen='RENAMED ACCEPTANCE', method='Runtime.evaluate', params={'expression': '1'})
+    assert by_name['screen'] == screen, by_name
     success(other, 'screen_close', screen=screen)
-    print('PASS: Close releases the lease; idle CDP/screenshots fail; explicit empty name clears', flush=True)
+    print('PASS: Close releases the lease; idle CDP/screenshots fail; blank name rejected and unique name resolves to stable UUID', flush=True)
 
     success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
     # A pending CEF call must settle when the player powers off; it must not wait for its 30s timeout.
