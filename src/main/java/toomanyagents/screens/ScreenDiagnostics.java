@@ -52,12 +52,30 @@ public final class ScreenDiagnostics {
                 screen.addProperty("crashed", view.crashed);
                 screen.addProperty("editable", view.editable);
                 screen.addProperty("cursor", view.cursor);
+                screen.addProperty("stage", ScreenBreaking.stage(placed));
+                // Each bar control's local span and world-space centre, for aiming real clicks at it.
+                var controls = new JsonObject();
+                for (var part : ScreenView.Part.values()) {
+                    double x = (view.start(part) + view.end(part)) / 2;
+                    var center = view.topLeft.add(view.rightVector.scale(x)).add(0, view.barHeight / 2, 0);
+                    var control = new JsonObject();
+                    control.addProperty("start", view.start(part));
+                    control.addProperty("end", view.end(part));
+                    control.addProperty("x", center.x);
+                    control.addProperty("y", center.y);
+                    control.addProperty("z", center.z);
+                    controls.add(part.name().toLowerCase(), control);
+                }
+                screen.add("controls", controls);
+                var page = view.center();
+                screen.addProperty("pageCenter", page.x + "," + page.y + "," + page.z);
             }
             screens.add(screen);
         }
         result.add("screens", screens);
         result.addProperty("views", Screens.views().size());
         result.add("placement", ScreenPlacement.state());
+        result.add("breaking", ScreenBreaking.state());
         // The server's index, as last published from its own thread.
         var server = mc.getSingleplayerServer();
         var index = server == null ? null : ScreenIndex.snapshot(server);

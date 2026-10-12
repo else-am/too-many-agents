@@ -28,6 +28,7 @@ import org.cef.handler.CefLoadHandlerAdapter;
 import org.cef.handler.CefMessageRouterHandlerAdapter;
 import org.cef.handler.CefRequestHandler;
 import org.cef.handler.CefRequestHandlerAdapter;
+import org.cef.network.CefRequest;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
@@ -128,7 +129,7 @@ final class Chromium {
         client.addLoadHandler(new CefLoadHandlerAdapter() {
             @Override public void onLoadingStateChange(CefBrowser browser, boolean loading, boolean back, boolean forward) {
                 var view = views.get(browser);
-                if (view != null) view.loading(loading, back, forward);
+                if (view != null) view.loading((ScreenBrowser) browser, loading, back, forward);
             }
             @Override public void onLoadEnd(CefBrowser browser, CefFrame frame, int status) {
                 frame.executeJavaScript(PAGE_SCRIPT, "", 0);
@@ -137,13 +138,18 @@ final class Chromium {
         client.addDisplayHandler(new CefDisplayHandlerAdapter() {
             @Override public void onAddressChange(CefBrowser browser, CefFrame frame, String url) {
                 var view = views.get(browser);
-                if (view != null && frame.isMain()) view.address(url);
+                if (view != null && frame.isMain()) view.address((ScreenBrowser) browser, url);
             }
         });
         client.addRequestHandler(new CefRequestHandlerAdapter() {
             @Override public void onRenderProcessTerminated(CefBrowser browser, CefRequestHandler.TerminationStatus status, int code, String message) {
                 var view = views.get(browser);
-                if (view != null) view.crashed();
+                if (view != null) view.crashed((ScreenBrowser) browser);
+            }
+            @Override public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean userGesture, boolean redirect) {
+                var view = views.get(browser);
+                if (view != null && frame.isMain() && userGesture && !redirect) view.gesture((ScreenBrowser) browser);
+                return false;
             }
         });
         client.addKeyboardHandler(new CefKeyboardHandlerAdapter() {
@@ -169,7 +175,7 @@ final class Chromium {
             @Override public boolean onQuery(CefBrowser browser, CefFrame frame, long id, String request, boolean persistent, CefQueryCallback callback) {
                 if (!request.startsWith("screen-editing:")) return false;
                 var view = views.get(browser);
-                if (view != null) view.editing(request.endsWith("1"));
+                if (view != null) view.editing((ScreenBrowser) browser, request.endsWith("1"));
                 callback.success("");
                 return true;
             }

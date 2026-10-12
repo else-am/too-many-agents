@@ -5,6 +5,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.UnaryOperator;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.component.DataComponentType;
@@ -38,7 +39,7 @@ public final class Screens {
 
     /** Screens farther than this keep their last frame. */
     static final double LIVE_DISTANCE = 32;
-    /** A page change that hasn't reached the server by then is dropped. */
+    /** A record change that hasn't reached the server by then is dropped. */
     private static final long EXPIRY_NANOS = 2_000_000_000L;
 
     private static final Map<UUID, ScreenView> views = new HashMap<>();
@@ -57,6 +58,7 @@ public final class Screens {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         ScreenInput.register();
         ScreenPlacement.register();
+        ScreenBreaking.register();
     }
 
     /** The view drawn for a screen, created the first time it is seen. */
@@ -91,8 +93,13 @@ public final class Screens {
 
     static List<ScreenView> views() { return new ArrayList<>(views.values()); }
 
-    /** Persists a screen's page in the world. Singleplayer: the integrated server owns the entity. */
+    /** Persists a screen's page. A player navigating takes the page over from whichever thread opened it. */
     static void saveUrl(ScreenView view, String url, boolean byPlayer) {
+        edit(view, record -> new Screen(record.id(), record.name(), url, byPlayer ? "" : record.openedBy()));
+    }
+
+    /** Changes a screen's record. Singleplayer: the integrated server owns the entity, and the change syncs back. */
+    static void edit(ScreenView view, UnaryOperator<Screen> change) {
         var mc = Minecraft.getInstance();
         MinecraftServer server = mc.getSingleplayerServer();
         if (server == null || mc.level == null) return;
@@ -104,8 +111,7 @@ public final class Screens {
             var level = server.getLevel(dimension);
             if (level == null || !(level.getEntity(id) instanceof ScreenEntity screen)) return;
             var record = screen.record();
-            // A player navigating takes the page over from whichever thread opened it.
-            var updated = new Screen(record.id(), record.name(), url, byPlayer ? "" : record.openedBy());
+            var updated = change.apply(record);
             if (!updated.equals(record)) screen.setRecord(updated);
         });
     }

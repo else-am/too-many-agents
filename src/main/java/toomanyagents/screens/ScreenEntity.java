@@ -3,6 +3,7 @@ package toomanyagents.screens;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.protocol.Packet;
@@ -97,9 +98,12 @@ public final class ScreenEntity extends HangingEntity {
             axis == Direction.Axis.Z ? DEPTH : cells.getZsize());
     }
 
-    /** Bare hands use the page, so they never break a screen. */
+    /** Only items with vanilla's tool component break screens; anything else leaves them alone. */
+    static boolean isTool(ItemStack stack) { return stack.has(DataComponents.TOOL); }
+
+    /** Only a tool breaks a screen; bare hands use the page. The client times the breaking. */
     @Override public boolean skipAttackInteraction(Entity attacker) {
-        if (attacker instanceof Player player && player.getMainHandItem().isEmpty()) return true;
+        if (attacker instanceof Player player && !isTool(player.getMainHandItem())) return true;
         return super.skipAttackInteraction(attacker);
     }
 

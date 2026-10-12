@@ -37,8 +37,17 @@ final class ScreenView implements ScreenBrowser.View {
     final Vec3 normal, rightVector;
     private final Texture page = new Texture("page"), popup = new Texture("popup");
 
+    /** The bar's controls, left to right. */
+    enum Part { NAME, BACK, FORWARD, RELOAD, ADDRESS, POWER }
+    /** Each control's left and right edge across the bar, in blocks, and the width of a square button. */
+    private final double[] partStart = new double[Part.values().length], partEnd = new double[Part.values().length];
+    final double unit;
+
     ScreenBrowser browser;
     String url = "";
+    /** The player's last click or key on the page, and whether the page's next address is the player's doing. */
+    long inputAt;
+    private boolean playerNavigating;
     /** The page last read from the entity; our own saves reach it a tick later. */
     private String saved = "";
     boolean loading, canGoBack, canGoForward, crashed;
@@ -64,6 +73,14 @@ final class ScreenView implements ScreenBrowser.View {
         pixelHeight = (int) Math.round(pageHeight * PIXELS_PER_BLOCK * scale);
         normal = Vec3.atLowerCornerOf(facing.getNormal());
         rightVector = Vec3.atLowerCornerOf(right.getNormal());
+        // Buttons are bar-height squares, narrowed on small screens so the address field keeps some room.
+        unit = Math.min(barHeight, pageWidth / 8);
+        double x = place(Part.NAME, 0, Math.clamp(pageWidth * 0.2, unit * 1.6, unit * 6));
+        x = place(Part.BACK, x, unit);
+        x = place(Part.FORWARD, x, unit);
+        x = place(Part.RELOAD, x, unit);
+        x = place(Part.ADDRESS, x, pageWidth - x - unit);
+        place(Part.POWER, x, unit);
         topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
             .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN - barHeight, 0);
     }
@@ -84,10 +101,20 @@ final class ScreenView implements ScreenBrowser.View {
         return new double[] {offset.dot(rightVector), -offset.y, distance};
     }
 
-    /** The bar control under a point: 0 back, 1 forward, 2 reload, 3 address, or -1 when off the bar. */
-    int barPart(double x, double y) {
-        if (y < -barHeight || y >= 0 || x < 0 || x > pageWidth) return -1;
-        return Math.min(3, (int) (x / barHeight));
+    private double place(Part part, double x, double width) {
+        partStart[part.ordinal()] = x;
+        partEnd[part.ordinal()] = x + width;
+        return x + width;
+    }
+
+    double start(Part part) { return partStart[part.ordinal()]; }
+    double end(Part part) { return partEnd[part.ordinal()]; }
+
+    /** The bar control under a point, or null when off the bar. */
+    Part barPart(double x, double y) {
+        if (y < -barHeight || y >= 0) return null;
+        for (var part : Part.values()) if (x >= start(part) && x < end(part)) return part;
+        return null;
     }
 
     boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y <= pageHeight; }
@@ -128,6 +155,31 @@ final class ScreenView implements ScreenBrowser.View {
         if (browser != null) browser.reload();
     }
 
+    void back() {
+        if (browser == null || !canGoBack) return;
+        playerNavigating = true;
+        browser.goBack();
+    }
+
+    void forward() {
+        if (browser == null || !canGoForward) return;
+        playerNavigating = true;
+        browser.goForward();
+    }
+
+    /** Closes the browser and leaves the screen idle, keeping its id and name. */
+    void powerOff() {
+        close();
+        url = "";
+        crashed = loading = canGoBack = canGoForward = editable = false;
+        playerNavigating = false;
+        Screens.edit(this, record -> new Screen(record.id(), record.name(), "", ""));
+    }
+
+    void rename(String name) {
+        Screens.edit(this, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
+    }
+
     /** Distant or unseen screens keep their last frame; their pages tick over slowly. */
     void setLive(boolean value) {
         if (live == value || browser == null) return;
@@ -156,45 +208,69 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     // Chromium callbacks. They arrive on the render thread on macOS, and on Chromium's own thread elsewhere.
+    // Each names its browser, so a closed or replaced browser's late callbacks are ignored.
 
-    @Override public void paint(boolean isPopup, Rectangle[] dirty, ByteBuffer frame, int width, int height) {
+    @Override public void paint(ScreenBrowser source, boolean isPopup, Rectangle[] dirty, ByteBuffer frame, int width, int height) {
         if (!live) return;
         var target = isPopup ? popup : page;
         if (RenderSystem.isOnRenderThread()) {
-            target.upload(dirty, frame, width, height);
+            if (source == browser) target.upload(dirty, frame, width, height);
             return;
         }
         // The frame is only valid during this call, so copy it before handing it over.
         var copy = MemoryUtil.memAlloc(width * height * 4);
         MemoryUtil.memCopy(MemoryUtil.memAddress(frame), MemoryUtil.memAddress(copy), (long) width * height * 4);
         Minecraft.getInstance().execute(() -> {
-            if (browser != null) target.upload(new Rectangle[] {new Rectangle(0, 0, width, height)}, copy, width, height);
+            if (source == browser) target.upload(new Rectangle[] {new Rectangle(0, 0, width, height)}, copy, width, height);
             MemoryUtil.memFree(copy);
         });
     }
 
-    @Override public void popup(boolean shown, Rectangle bounds) {
-        onRender(() -> { popupShown = shown; popupBounds = bounds; });
-    }
-
-    @Override public void cursor(int type) { cursor = type; }
-
-    void loading(boolean value, boolean back, boolean forward) {
-        onRender(() -> { loading = value; canGoBack = back; canGoForward = forward; });
-    }
-
-    void address(String address) {
+    @Override public void popup(ScreenBrowser source, boolean shown, Rectangle bounds) {
         onRender(() -> {
-            if (browser == null || address.equals(url)) return;
-            url = address;
-            Screens.saveUrl(this, address, false);
+            if (source != browser) return;
+            popupShown = shown;
+            popupBounds = bounds;
         });
     }
 
-    void crashed() { onRender(() -> crashed = true); }
+    @Override public void cursor(ScreenBrowser source, int type) { if (source == browser) cursor = type; }
 
-    void editing(boolean value) {
+    void loading(ScreenBrowser source, boolean value, boolean back, boolean forward) {
         onRender(() -> {
+            if (source != browser) return;
+            loading = value;
+            canGoBack = back;
+            canGoForward = forward;
+            if (!value) playerNavigating = false;
+        });
+    }
+
+    /** A main-frame navigation the page started from a user gesture. Only the player's own recent input makes it theirs. */
+    void gesture(ScreenBrowser source) {
+        onRender(() -> {
+            if (source == browser && recentInput()) playerNavigating = true;
+        });
+    }
+
+    void address(ScreenBrowser source, String address) {
+        onRender(() -> {
+            if (source != browser || address.equals(url)) return;
+            url = address;
+            // Following a link the player clicked takes the page over; redirects and scripted changes don't.
+            Screens.saveUrl(this, address, playerNavigating || recentInput());
+            playerNavigating = false;
+        });
+    }
+
+    /** Same-page navigations skip the gesture check, so a click just before still counts. */
+    private boolean recentInput() { return System.nanoTime() - inputAt < 1_000_000_000L; }
+
+    void crashed(ScreenBrowser source) { onRender(() -> { if (source == browser) crashed = true; }); }
+
+    void editing(ScreenBrowser source, boolean value) {
+        onRender(() -> {
+            if (source != browser) return;
             editable = value;
             ScreenInput.editingChanged(this, value);
         });

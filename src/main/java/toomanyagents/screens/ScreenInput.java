@@ -11,7 +11,9 @@ import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
@@ -25,7 +27,7 @@ import org.lwjgl.glfw.GLFW;
 /**
  * With an empty hand, the crosshair is the mouse of the screen it points at: hover, click, drag and scroll go to the
  * page. Clicking into a text field starts typing mode, where keys go to the page until Esc or a click elsewhere.
- * Render thread only.
+ * The bar's own fields, the screen's name and address, are edited the same way. Render thread only.
  */
 public final class ScreenInput {
     static final double REACH = 8;
@@ -41,8 +43,11 @@ public final class ScreenInput {
     private static int lastClickButton = -1;
 
     private static ScreenView typing;
-    private static boolean typingAddress, addressSelected;
-    private static final StringBuilder address = new StringBuilder();
+    /** The bar field being edited (name or address), or null when keys go to the page. */
+    private static ScreenView.Part field;
+    private static boolean fieldSelected;
+    private static final StringBuilder fieldText = new StringBuilder();
+    private static final int MAX_NAME = 32;
 
     private ScreenInput() {}
 
@@ -59,9 +64,9 @@ public final class ScreenInput {
 
     // What the views and renderer ask.
 
-    static String addressText(ScreenView view) { return typing == view && typingAddress ? address.toString() : null; }
-    static boolean editingAddress(ScreenView view) { return addressText(view) != null; }
-    static boolean addressSelected() { return addressSelected; }
+    /** The text being edited in a bar field of this view, or null. */
+    static String fieldText(ScreenView view, ScreenView.Part part) { return typing == view && field == part ? fieldText.toString() : null; }
+    static boolean fieldSelected() { return fieldSelected; }
 
     static void forget(ScreenView view) {
         if (typing == view) typing = null;
@@ -76,8 +81,8 @@ public final class ScreenInput {
         if (editable && clicked == view && System.nanoTime() - lastClickAt < FOCUS_AFTER_CLICK_NANOS && (typing == null || typing == view)) {
             if (typing == null) KeyMapping.releaseAll();
             typing = view;
-            typingAddress = false;
-        } else if (!editable && typing == view && !typingAddress) {
+            field = null;
+        } else if (!editable && typing == view && field == null) {
             typing = null;
         }
     }
@@ -120,15 +125,19 @@ public final class ScreenInput {
         for (var view : Screens.views()) {
             double[] at = view.hit(eye, look);
             if (at == null || at[2] > bestDistance) continue;
-            if (!view.onPage(at[0], at[1]) && view.barPart(at[0], at[1]) < 0) continue;
+            if (!view.onPage(at[0], at[1]) && view.barPart(at[0], at[1]) == null) continue;
             best = new Aim(view, at[0], at[1]);
             bestDistance = at[2];
         }
         if (best == null) return null;
-        // Something solid in front of the screen blocks it.
+        // A block or a nearer entity in front of the screen blocks it.
         var mc = Minecraft.getInstance();
-        var blocked = mc.level.clip(new ClipContext(eye, eye.add(look.scale(bestDistance - 0.01)), ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player));
-        return blocked.getType() == HitResult.Type.MISS ? best : null;
+        Vec3 surface = eye.add(look.scale(bestDistance - 0.01));
+        if (mc.level.clip(new ClipContext(eye, surface, ClipContext.Block.OUTLINE, ClipContext.Fluid.NONE, mc.player)).getType() != HitResult.Type.MISS) return null;
+        var screen = best.view.screen;
+        var nearer = ProjectileUtil.getEntityHitResult(mc.player, eye, surface, new AABB(eye, surface).inflate(1),
+            entity -> entity != screen && !entity.isSpectator() && entity.isPickable(), bestDistance * bestDistance);
+        return nearer == null ? best : null;
     }
 
     private static void move(ScreenView view, double x, double y) {
@@ -153,23 +162,29 @@ public final class ScreenInput {
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) return;
-        if (typingAddress && (aim == null || aim.view != typing || aim.view.barPart(aim.x, aim.y) != 3)) stopTyping(false);
+        if (field != null && (aim == null || aim.view != typing || aim.view.barPart(aim.x, aim.y) != field)) stopTyping(false);
         if (aim == null) return;
         event.setCanceled(true);
         var view = aim.view;
-        int part = view.barPart(aim.x, aim.y);
-        if (part >= 0 || view.url.isBlank() || !Trust.allowedHere() || view.crashed || view.browser == null) {
+        var part = view.barPart(aim.x, aim.y);
+        if (part != null || view.url.isBlank() || !Trust.allowedHere() || view.crashed || view.browser == null) {
             // Our own controls; the page never sees these clicks.
             consumedButtons.add(button);
             if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
-            if (part == 0 && view.browser != null) view.browser.goBack();
-            else if (part == 1 && view.browser != null) view.browser.goForward();
-            else if (part == 2) view.reload();
-            else if (part == 3 || view.url.isBlank()) startAddress(view);
+            if (part == ScreenView.Part.NAME) startField(view, ScreenView.Part.NAME, view.screen.record().name());
+            else if (part == ScreenView.Part.BACK) view.back();
+            else if (part == ScreenView.Part.FORWARD) view.forward();
+            else if (part == ScreenView.Part.RELOAD) view.reload();
+            else if (part == ScreenView.Part.POWER) {
+                if (typing == view) stopTyping(false);
+                view.powerOff();
+            }
+            else if (part == ScreenView.Part.ADDRESS || view.url.isBlank()) startField(view, ScreenView.Part.ADDRESS, view.url);
             else if (!Trust.allowedHere()) Trust.allow(Minecraft.getInstance().getSingleplayerServer());
             else if (view.crashed) view.reload();
             return;
         }
+        view.inputAt = System.nanoTime();
         int px = view.pixelX(aim.x), py = view.pixelY(aim.y);
         long now = System.nanoTime();
         boolean again = clicked == view && button == lastClickButton && now - lastClickAt < DOUBLE_CLICK_NANOS
@@ -189,7 +204,7 @@ public final class ScreenInput {
     }
 
     private static void scroll(net.neoforged.neoforge.client.event.InputEvent.MouseScrollingEvent event) {
-        if (aim == null || aim.view.browser == null || aim.view.barPart(aim.x, aim.y) >= 0) return;
+        if (aim == null || aim.view.browser == null || aim.view.barPart(aim.x, aim.y) != null) return;
         event.setCanceled(true);
         double delta = event.getScrollDeltaY() != 0 ? event.getScrollDeltaY() : event.getScrollDeltaX();
         int mods = modifiers() | (event.getScrollDeltaY() == 0 ? InputEvent.SHIFT_DOWN_MASK : 0);
@@ -206,8 +221,8 @@ public final class ScreenInput {
             stopTyping(false);
             return false;
         }
-        if (typingAddress) {
-            if (action != GLFW.GLFW_RELEASE) addressKey(key, mods);
+        if (field != null) {
+            if (action != GLFW.GLFW_RELEASE) fieldKey(key, mods);
             return true;
         }
         var browser = typing.browser;
@@ -215,6 +230,7 @@ public final class ScreenInput {
             stopTyping(false);
             return false;
         }
+        typing.inputAt = System.nanoTime();
         if (key == GLFW.GLFW_KEY_ESCAPE) {
             if (action == GLFW.GLFW_PRESS) stopTyping(true);
             return true;
@@ -268,44 +284,46 @@ public final class ScreenInput {
     /** Called from the keyboard handler for typed text. True when the text went to a screen. */
     public static boolean charTyped(int codePoint, int mods) {
         if (typing == null || Minecraft.getInstance().screen != null) return false;
-        if (typingAddress) {
-            if (addressSelected) address.setLength(0);
-            addressSelected = false;
-            address.appendCodePoint(codePoint);
+        if (field != null) {
+            if (fieldSelected) fieldText.setLength(0);
+            fieldSelected = false;
+            if (field != ScreenView.Part.NAME || fieldText.length() < MAX_NAME) fieldText.appendCodePoint(codePoint);
             return true;
         }
         if (typing.browser == null) return false;
+        typing.inputAt = System.nanoTime();
         for (char c : Character.toChars(codePoint)) typing.browser.key(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, c, awtModifiers(mods));
         return true;
     }
 
-    private static void startAddress(ScreenView view) {
+    private static void startField(ScreenView view, ScreenView.Part part, String text) {
         if (typing == null) KeyMapping.releaseAll();
         typing = view;
-        typingAddress = true;
-        address.setLength(0);
-        address.append(view.url);
-        addressSelected = !view.url.isBlank();
+        field = part;
+        fieldText.setLength(0);
+        fieldText.append(text);
+        fieldSelected = !text.isBlank();
     }
 
     private static void stopTyping(boolean blurPage) {
         if (blurPage && typing != null && typing.browser != null)
             typing.browser.executeJavaScript("document.activeElement && document.activeElement.blur()", "", 0);
         typing = null;
-        typingAddress = false;
+        field = null;
     }
 
-    private static void addressKey(int key, int mods) {
+    private static void fieldKey(int key, int mods) {
         var keyboard = Minecraft.getInstance().keyboardHandler;
         if (shortcut(mods)) {
             switch (key) {
-                case GLFW.GLFW_KEY_A -> addressSelected = address.length() > 0;
-                case GLFW.GLFW_KEY_C -> keyboard.setClipboard(address.toString());
-                case GLFW.GLFW_KEY_X -> { keyboard.setClipboard(address.toString()); address.setLength(0); addressSelected = false; }
+                case GLFW.GLFW_KEY_A -> fieldSelected = fieldText.length() > 0;
+                case GLFW.GLFW_KEY_C -> keyboard.setClipboard(fieldText.toString());
+                case GLFW.GLFW_KEY_X -> { keyboard.setClipboard(fieldText.toString()); fieldText.setLength(0); fieldSelected = false; }
                 case GLFW.GLFW_KEY_V -> {
-                    if (addressSelected) address.setLength(0);
-                    addressSelected = false;
-                    address.append(keyboard.getClipboard().replaceAll("\\s+", " ").strip());
+                    if (fieldSelected) fieldText.setLength(0);
+                    fieldSelected = false;
+                    fieldText.append(keyboard.getClipboard().replaceAll("\\s+", " ").strip());
+                    if (field == ScreenView.Part.NAME && fieldText.length() > MAX_NAME) fieldText.setLength(MAX_NAME);
                 }
                 default -> {}
             }
@@ -315,19 +333,26 @@ public final class ScreenInput {
             case GLFW.GLFW_KEY_ESCAPE -> stopTyping(false);
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
                 var view = typing;
-                String target = target(address.toString());
+                var part = field;
+                String text = fieldText.toString();
                 stopTyping(false);
+                // An empty name clears it.
+                if (part == ScreenView.Part.NAME) {
+                    view.rename(text.strip());
+                    return;
+                }
+                String target = target(text);
                 if (target.isEmpty()) return;
                 // Entering an address yourself is consent to load pages here.
                 Trust.allow(Minecraft.getInstance().getSingleplayerServer());
                 view.navigate(target);
             }
             case GLFW.GLFW_KEY_BACKSPACE -> {
-                if (addressSelected) address.setLength(0);
-                else if (address.length() > 0) address.deleteCharAt(address.length() - 1);
-                addressSelected = false;
+                if (fieldSelected) fieldText.setLength(0);
+                else if (fieldText.length() > 0) fieldText.deleteCharAt(fieldText.length() - 1);
+                fieldSelected = false;
             }
-            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END -> addressSelected = false;
+            case GLFW.GLFW_KEY_LEFT, GLFW.GLFW_KEY_RIGHT, GLFW.GLFW_KEY_HOME, GLFW.GLFW_KEY_END -> fieldSelected = false;
             default -> {}
         }
     }
@@ -354,9 +379,9 @@ public final class ScreenInput {
         event.setCanceled(true);
         int shape = view.cursor;
         if (aim != null && pressed == null) {
-            int part = aim.view.barPart(aim.x, aim.y);
-            if (part == 3 || (part < 0 && view.url.isBlank())) shape = Cursor.TEXT_CURSOR;
-            else if (part >= 0 || view.browser == null || view.crashed || !Trust.allowedHere()) shape = Cursor.HAND_CURSOR;
+            var part = aim.view.barPart(aim.x, aim.y);
+            if (part == ScreenView.Part.ADDRESS || part == ScreenView.Part.NAME || (part == null && view.url.isBlank())) shape = Cursor.TEXT_CURSOR;
+            else if (part != null || view.browser == null || view.crashed || !Trust.allowedHere()) shape = Cursor.HAND_CURSOR;
         }
         var graphics = event.getGuiGraphics();
         CursorArt.draw(graphics, shape, graphics.guiWidth() / 2, graphics.guiHeight() / 2);
@@ -365,7 +390,8 @@ public final class ScreenInput {
     private static void hint(GuiGraphics graphics) {
         if (typing == null || Minecraft.getInstance().screen != null) return;
         var font = Minecraft.getInstance().font;
-        String text = typingAddress ? "Enter an address · Esc to cancel" : "Typing on screen · Esc to stop";
+        String text = field == ScreenView.Part.NAME ? "Name this screen · Enter to save · Esc to cancel"
+            : field == ScreenView.Part.ADDRESS ? "Enter an address · Esc to cancel" : "Typing on screen · Esc to stop";
         float scale = Minecraft.getInstance().getWindow().getGuiScale() >= 3 ? 0.5f : 1f;
         var pose = graphics.pose();
         pose.pushPose();
@@ -421,6 +447,6 @@ public final class ScreenInput {
     /** Status for development checks. */
     static String state() {
         if (typing == null) return aim == null ? "none" : "pointing";
-        return typingAddress ? "address" : "typing";
+        return field == ScreenView.Part.NAME ? "name" : field == ScreenView.Part.ADDRESS ? "address" : "typing";
     }
 }
