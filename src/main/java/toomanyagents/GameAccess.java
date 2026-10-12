@@ -281,14 +281,21 @@ final class GameAccess {
             };
             return ScreenTools.begin(current, WorldState.get(current).snapshot(), localPlayer.get(), caller, tool, arguments, live);
         });
-        var result = resolved.thenCompose(ScreenTools.Call::run);
-        resolved.thenAccept(call -> result.whenComplete((done, failure) -> call.finish()));
+        // Bounded overall, even if a game thread stalls before a step starts. Once the result is in, the scope closes,
+        // so no step still queued can run, and the call's waits and lease end.
+        var result = resolved.thenCompose(ScreenTools.Call::run).orTimeout(ScreenTools.CALL_SECONDS, TimeUnit.SECONDS);
+        var closed = result.whenComplete((done, failure) -> scope.close("tool_finished"));
+        resolved.thenAccept(call -> result.whenComplete((done, failure) -> {
+            scope.close("tool_finished");
+            call.finish();
+        }));
         synchronized (queueLock) {
             if (scope.closed != null) result.completeExceptionally(error(scope.closed));
             else scope.waits.add(result);
         }
         result.whenComplete((done, failure) -> { synchronized (queueLock) { scope.waits.remove(result); } });
-        return ScreenTools.settle(result);
+        // Settled only after the scope is closed, so nothing of the call runs after its answer.
+        return ScreenTools.settle(closed);
     }
 
     /** Ends a thread's screen leases early, or everyone's when thread is null. */

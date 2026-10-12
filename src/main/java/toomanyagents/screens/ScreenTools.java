@@ -25,6 +25,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -43,6 +44,8 @@ import net.minecraft.world.phys.Vec3;
  * own, so whoever waits on it never runs on either game thread. Nothing here retries.
  */
 public final class ScreenTools {
+    /** The longest any call takes, below the bridge's own wait. */
+    public static final long CALL_SECONDS = 40;
     private static final long CLIENT_START_NANOS = 2_000_000_000L, OPEN_SECONDS = 15, CDP_SECONDS = 30;
     private static final int CDP_LIMIT = 64 * 1024, PNG_LIMIT = 5 * 1024 * 1024, LIST_LIMIT = 50;
     /** A screen belongs to the nearest station within this many blocks. */
@@ -158,6 +161,8 @@ public final class ScreenTools {
             var cause = failure;
             while (cause instanceof CompletionException && cause.getCause() != null) cause = cause.getCause();
             if (cause instanceof ScreenError error) return error(error);
+            if (cause instanceof TimeoutException) return error(new ScreenError("timeout",
+                "The call didn't finish in " + CALL_SECONDS + "s. The outcome is unknown; check the screen before acting again."));
             if (cause instanceof IllegalStateException && cause.getMessage() != null) {
                 var lifecycle = lifecycle(cause.getMessage());
                 if (lifecycle != null) return error(lifecycle);
