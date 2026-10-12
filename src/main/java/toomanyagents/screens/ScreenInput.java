@@ -200,6 +200,7 @@ public final class ScreenInput {
 
     /** Called from the keyboard handler before Minecraft sees a key. True when the key went to a screen. */
     public static boolean keyPress(int key, int scancode, int action, int mods) {
+        if (ScreenPlacement.keyPress(key, action)) return true;
         if (typing == null) return false;
         if (Minecraft.getInstance().screen != null) {
             stopTyping(false);

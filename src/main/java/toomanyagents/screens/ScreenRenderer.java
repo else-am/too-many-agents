@@ -11,16 +11,15 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
-import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.renderer.entity.EntityRenderer;
+import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-/** Draws a complete screen from its anchor block: the page, any open dropdown, status, and the navigation bar. */
-final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEntity> {
-    private static final int SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
+/** Draws a screen: its panel, the page, any open dropdown, status, and the navigation bar. */
+final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
+    private static final int PANEL = 0xFF08090B, SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
     private static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B;
     private static final int LIGHT = LightTexture.FULL_BRIGHT;
     /** Like vanilla's text type, but filtered smoothly with mipmaps so distant pages don't shimmer. */
@@ -33,21 +32,25 @@ final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEntity> {
             .setLightmapState(RenderStateShard.LIGHTMAP)
             .createCompositeState(false)));
 
-    ScreenRenderer(BlockEntityRendererProvider.Context context) {}
+    ScreenRenderer(EntityRendererProvider.Context context) {
+        super(context);
+    }
 
-    @Override public void render(ScreenBlockEntity screen, float partialTick, PoseStack pose, MultiBufferSource buffers, int light, int overlay) {
-        if (!screen.isAnchor()) return;
+    @Override public ResourceLocation getTextureLocation(ScreenEntity screen) { return null; }
+
+    @Override public void render(ScreenEntity screen, float yaw, float partialTick, PoseStack pose, MultiBufferSource buffers, int light) {
         var view = Screens.view(screen);
         view.prepare();
         pose.pushPose();
         // Page space: x right and y down across the page in blocks from its top-left corner; -z comes toward the viewer.
-        var origin = view.topLeft.subtract(Vec3.atLowerCornerOf(screen.getBlockPos()));
+        var origin = view.topLeft.subtract(screen.position());
         pose.translate(origin.x, origin.y, origin.z);
         Vec3 r = view.rightVector, n = view.normal;
         pose.mulPose(new Matrix4f((float) r.x, (float) r.y, (float) r.z, 0, 0, -1, 0, 0, (float) -n.x, (float) -n.y, (float) -n.z, 0, 0, 0, 0, 1));
         var matrix = pose.last().pose();
         double w = view.pageWidth, h = view.pageHeight;
         boolean trusted = Trust.allowedHere();
+        panel(buffers, matrix, view, light);
 
         if (trusted && view.painted() && view.browser != null && !view.crashed) texture(buffers, matrix, view.pageTexture(), 0, 0, w, h, 0);
         else rect(buffers, matrix, 0, 0, w, h, 0, SURFACE);
@@ -65,6 +68,24 @@ final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEntity> {
         }
         bar(pose, buffers, view);
         pose.popPose();
+    }
+
+    /** The thin black panel behind the page: its bezel and edges, lit like the world around it. */
+    private static void panel(MultiBufferSource buffers, Matrix4f m, ScreenView view, int light) {
+        double margin = ScreenView.MARGIN, x0 = -margin, x1 = view.pageWidth + margin;
+        double y0 = -view.barHeight - margin, y1 = view.pageHeight + margin, front = 0.002, back = front + ScreenEntity.DEPTH;
+        var out = buffers.getBuffer(RenderType.textBackground());
+        double[][] faces = {
+            {x0, y0, front, x0, y1, front, x1, y1, front, x1, y0, front},
+            {x0, y0, front, x1, y0, front, x1, y0, back, x0, y0, back},
+            {x0, y1, front, x0, y1, back, x1, y1, back, x1, y1, front},
+            {x0, y0, front, x0, y0, back, x0, y1, back, x0, y1, front},
+            {x1, y0, front, x1, y1, front, x1, y1, back, x1, y0, back}};
+        for (var f : faces) {
+            // Edges are drawn both ways round so they show whichever way culling sees them.
+            for (int i = 0; i < 12; i += 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(PANEL).setLight(light);
+            if (f != faces[0]) for (int i = 9; i >= 0; i -= 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(PANEL).setLight(light);
+        }
     }
 
     private static String status(ScreenView view, boolean trusted) {
@@ -144,12 +165,4 @@ final class ScreenRenderer implements BlockEntityRenderer<ScreenBlockEntity> {
         pose.popPose();
     }
 
-    @Override public boolean shouldRenderOffScreen(ScreenBlockEntity screen) { return true; }
-    @Override public int getViewDistance() { return 128; }
-
-    @Override public AABB getRenderBoundingBox(ScreenBlockEntity screen) {
-        var right = ScreenBlock.right(screen.getBlockState().getValue(ScreenBlock.FACING));
-        var far = screen.getBlockPos().relative(right, Math.max(0, screen.width() - 1)).above(Math.max(0, screen.height() - 1));
-        return new AABB(screen.getBlockPos()).minmax(new AABB(far));
-    }
 }

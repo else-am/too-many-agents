@@ -4,83 +4,81 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.world.item.BlockItem;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
-import net.minecraft.world.level.block.SoundType;
-import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.minecraft.world.level.block.state.BlockBehaviour;
-import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
-import net.neoforged.neoforge.client.event.RenderHighlightEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
-import net.neoforged.neoforge.registries.DeferredBlock;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-/** Screen blocks, and the client's views of the complete screens around the player. */
+/** Screen entities and items, and the client's views of the screens around the player. */
 public final class Screens {
-    private static final DeferredRegister.Blocks BLOCKS = DeferredRegister.createBlocks("too_many_agents");
     private static final DeferredRegister.Items ITEMS = DeferredRegister.createItems("too_many_agents");
-    private static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES = DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, "too_many_agents");
+    private static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, "too_many_agents");
+    private static final DeferredRegister.DataComponents COMPONENTS = DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, "too_many_agents");
 
-    public static final DeferredBlock<ScreenBlock> SCREEN = BLOCKS.register("screen", () -> new ScreenBlock(BlockBehaviour.Properties.of()
-        .mapColor(MapColor.COLOR_BLACK).strength(1.5F).sound(SoundType.COPPER)));
-    public static final DeferredItem<BlockItem> SCREEN_ITEM = ITEMS.registerSimpleBlockItem(SCREEN, new Item.Properties());
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ScreenBlockEntity>> BLOCK_ENTITY = BLOCK_ENTITIES.register("screen",
-        () -> BlockEntityType.Builder.of(ScreenBlockEntity::new, SCREEN.get()).build(null));
+    public static final DeferredItem<ScreenItem> ITEM = ITEMS.register("screen", () -> new ScreenItem(new Item.Properties()));
+    public static final DeferredHolder<EntityType<?>, EntityType<ScreenEntity>> ENTITY = ENTITIES.register("screen",
+        () -> EntityType.Builder.<ScreenEntity>of(ScreenEntity::new, MobCategory.MISC).sized(0.5F, 0.5F)
+            .clientTrackingRange(10).updateInterval(Integer.MAX_VALUE).build("too_many_agents:screen"));
+    static final DeferredHolder<DataComponentType<?>, DataComponentType<Screen>> RECORD = COMPONENTS.registerComponentType("screen",
+        builder -> builder.persistent(Screen.CODEC).networkSynchronized(Screen.STREAM_CODEC));
 
     /** Screens farther than this keep their last frame. */
     static final double LIVE_DISTANCE = 32;
+    /** A page change that hasn't reached the server by then is dropped. */
+    private static final long EXPIRY_NANOS = 2_000_000_000L;
 
-    private static final Map<BlockPos, ScreenView> views = new HashMap<>();
+    private static final Map<UUID, ScreenView> views = new HashMap<>();
     private static ClientLevel viewsLevel;
 
     private Screens() {}
 
     public static void register(IEventBus modBus) {
-        BLOCKS.register(modBus);
         ITEMS.register(modBus);
-        BLOCK_ENTITIES.register(modBus);
+        ENTITIES.register(modBus);
+        COMPONENTS.register(modBus);
         modBus.addListener((BuildCreativeModeTabContentsEvent event) -> {
-            if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) event.accept(SCREEN_ITEM);
+            if (event.getTabKey() == CreativeModeTabs.FUNCTIONAL_BLOCKS) event.accept(ITEM);
         });
-        modBus.addListener((EntityRenderersEvent.RegisterRenderers event) ->
-            event.registerBlockEntityRenderer(BLOCK_ENTITY.get(), ScreenRenderer::new));
+        modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerEntityRenderer(ENTITY.get(), ScreenRenderer::new));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
-        // Bare hands use a complete screen as one surface, so it gets no block outline.
-        NeoForge.EVENT_BUS.addListener((RenderHighlightEvent.Block event) -> {
-            var player = Minecraft.getInstance().player;
-            if (player == null || !player.getMainHandItem().isEmpty()) return;
-            var pos = event.getTarget().getBlockPos();
-            if (views.values().stream().anyMatch(view -> view.contains(pos))) event.setCanceled(true);
-        });
         ScreenInput.register();
+        ScreenPlacement.register();
     }
 
-    /** The view drawn for a complete screen, created the first time it is seen. */
-    static ScreenView view(ScreenBlockEntity screen) {
+    /** The view drawn for a screen, created the first time it is seen. */
+    static ScreenView view(ScreenEntity screen) {
         var level = Minecraft.getInstance().level;
         if (level != viewsLevel) closeAll(level);
-        var view = views.get(screen.getBlockPos());
+        var view = views.get(screen.getUUID());
         if (view != null && !view.matches(screen)) {
+            ScreenInput.forget(view);
             view.close();
             view = null;
         }
         if (view == null) {
             view = new ScreenView(screen);
-            views.put(screen.getBlockPos(), view);
+            views.put(screen.getUUID(), view);
         }
-        Chromium.start();
-        view.sync(screen.url(), Trust.allowedHere());
+        // The same screen comes back as a new entity when it is tracked again.
+        view.screen = screen;
+        boolean trusted = Trust.allowedHere();
+        view.sync(screen.record().url(), trusted);
+        // An idle screen needs no browser, so it never starts Chromium.
+        if (trusted && !view.url.isBlank()) Chromium.start();
         view.lastSeen = System.nanoTime();
         return view;
     }
@@ -93,15 +91,22 @@ public final class Screens {
 
     static List<ScreenView> views() { return new ArrayList<>(views.values()); }
 
-    /** Persists a screen's page in the world. Singleplayer: the integrated server owns the blocks. */
-    static void saveUrl(BlockPos anchor, String url) {
+    /** Persists a screen's page in the world. Singleplayer: the integrated server owns the entity. */
+    static void saveUrl(ScreenView view, String url, boolean byPlayer) {
         var mc = Minecraft.getInstance();
-        var server = mc.getSingleplayerServer();
+        MinecraftServer server = mc.getSingleplayerServer();
         if (server == null || mc.level == null) return;
         var dimension = mc.level.dimension();
+        UUID id = view.screen.getUUID();
+        long deadline = System.nanoTime() + EXPIRY_NANOS;
         server.execute(() -> {
+            if (System.nanoTime() > deadline || !server.isRunning()) return;
             var level = server.getLevel(dimension);
-            if (level != null) ScreenBlock.setUrl(level, anchor, url);
+            if (level == null || !(level.getEntity(id) instanceof ScreenEntity screen)) return;
+            var record = screen.record();
+            // A player navigating takes the page over from whichever thread opened it.
+            var updated = new Screen(record.id(), record.name(), url, byPlayer ? "" : record.openedBy());
+            if (!updated.equals(record)) screen.setRecord(updated);
         });
     }
 
@@ -115,13 +120,15 @@ public final class Screens {
         for (var iterator = views.values().iterator(); iterator.hasNext(); ) {
             var view = iterator.next();
             double distance = view.center().distanceTo(camera);
-            boolean stillThere = mc.level.getBlockEntity(view.anchor) instanceof ScreenBlockEntity screen && view.matches(screen);
+            boolean stillThere = !view.screen.isRemoved() && view.matches(view.screen);
             if (!stillThere || distance > keep) {
                 ScreenInput.forget(view);
                 view.close();
                 iterator.remove();
                 continue;
             }
+            // Pages change on the server too; follow them even while the screen isn't drawn.
+            view.sync(view.screen.record().url(), Trust.allowedHere());
             view.setLive(distance <= LIVE_DISTANCE && now - view.lastSeen < 500_000_000L);
         }
     }

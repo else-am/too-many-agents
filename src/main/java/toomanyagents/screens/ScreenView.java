@@ -7,7 +7,6 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
@@ -18,7 +17,7 @@ import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 
-/** One complete screen on the client: its browser and the textures its frames land in. Render thread only. */
+/** One screen on the client: its browser and the textures its frames land in. Render thread only. */
 final class ScreenView implements ScreenBrowser.View {
     /** The frame around the page, in blocks. */
     static final double MARGIN = 1 / 16.0;
@@ -26,20 +25,21 @@ final class ScreenView implements ScreenBrowser.View {
     static final int MAX_PIXELS = 1920 * 1080;
     private static int nextId;
 
-    final BlockPos anchor;
+    /** The entity this view draws; replaced when the same screen is tracked again. */
+    ScreenEntity screen;
     final Direction facing, right;
     final int blocksWide, blocksHigh;
     /** The navigation bar's height across the top of the screen, and the page's size below it, in blocks and pixels. */
     final double barHeight, pageWidth, pageHeight;
     final int pixelWidth, pixelHeight;
-    /** The page's top-left corner in the world, just under the bar and in front of the blocks. */
+    /** The page's top-left corner in the world, just under the bar and on the panel's front. */
     final Vec3 topLeft;
     final Vec3 normal, rightVector;
     private final Texture page = new Texture("page"), popup = new Texture("popup");
 
     ScreenBrowser browser;
     String url = "";
-    /** The page last read from the blocks; our own saves reach them a tick later. */
+    /** The page last read from the entity; our own saves reach it a tick later. */
     private String saved = "";
     boolean loading, canGoBack, canGoForward, crashed;
     /** The focused element takes text. */
@@ -50,10 +50,10 @@ final class ScreenView implements ScreenBrowser.View {
     private boolean live = true;
     long lastSeen;
 
-    ScreenView(ScreenBlockEntity screen) {
-        anchor = screen.getBlockPos();
-        facing = screen.getBlockState().getValue(ScreenBlock.FACING);
-        right = ScreenBlock.right(facing);
+    ScreenView(ScreenEntity screen) {
+        this.screen = screen;
+        facing = screen.facing();
+        right = ScreenEntity.right(facing);
         blocksWide = screen.width();
         blocksHigh = screen.height();
         pageWidth = blocksWide - 2 * MARGIN;
@@ -64,20 +64,12 @@ final class ScreenView implements ScreenBrowser.View {
         pixelHeight = (int) Math.round(pageHeight * PIXELS_PER_BLOCK * scale);
         normal = Vec3.atLowerCornerOf(facing.getNormal());
         rightVector = Vec3.atLowerCornerOf(right.getNormal());
-        topLeft = Vec3.atCenterOf(anchor).add(normal.scale(0.5 + 0.002))
+        topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
             .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN - barHeight, 0);
     }
 
-    boolean matches(ScreenBlockEntity screen) {
-        return screen.isAnchor() && screen.width() == blocksWide && screen.height() == blocksHigh
-            && screen.getBlockState().getValue(ScreenBlock.FACING) == facing;
-    }
-
-    boolean contains(BlockPos pos) {
-        var offset = pos.subtract(anchor);
-        int along = offset.getX() * right.getStepX() + offset.getZ() * right.getStepZ();
-        int depth = offset.getX() * facing.getStepX() + offset.getZ() * facing.getStepZ();
-        return depth == 0 && along >= 0 && along < blocksWide && offset.getY() >= 0 && offset.getY() < blocksHigh;
+    boolean matches(ScreenEntity other) {
+        return other.width() == blocksWide && other.height() == blocksHigh && other.facing() == facing && other.getPos().equals(screen.getPos());
     }
 
     Vec3 center() { return topLeft.add(rightVector.scale(pageWidth / 2)).add(0, -pageHeight / 2, 0); }
@@ -102,7 +94,7 @@ final class ScreenView implements ScreenBrowser.View {
     int pixelX(double x) { return Math.clamp((int) Math.floor(x / pageWidth * pixelWidth), 0, pixelWidth - 1); }
     int pixelY(double y) { return Math.clamp((int) Math.floor(y / pageHeight * pixelHeight), 0, pixelHeight - 1); }
 
-    /** Keeps the browser in step with the block's saved page. */
+    /** Keeps the browser in step with the screen's saved page. An idle screen has no browser. */
     void sync(String value, boolean trusted) {
         if (!value.equals(saved)) {
             saved = value;
@@ -112,6 +104,7 @@ final class ScreenView implements ScreenBrowser.View {
                 if (browser != null && !url.isBlank()) browser.loadURL(url);
             }
         }
+        if (url.isBlank() && browser != null) close();
         if (browser == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY) {
             browser = Chromium.open(this, url, pixelWidth, pixelHeight);
             live = true;
@@ -127,7 +120,7 @@ final class ScreenView implements ScreenBrowser.View {
         url = target;
         crashed = false;
         if (browser != null) browser.loadURL(target);
-        Screens.saveUrl(anchor, target);
+        Screens.saveUrl(this, target, true);
     }
 
     void reload() {
@@ -194,7 +187,7 @@ final class ScreenView implements ScreenBrowser.View {
         onRender(() -> {
             if (browser == null || address.equals(url)) return;
             url = address;
-            Screens.saveUrl(anchor, address);
+            Screens.saveUrl(this, address, false);
         });
     }
 

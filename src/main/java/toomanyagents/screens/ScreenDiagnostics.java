@@ -16,31 +16,71 @@ public final class ScreenDiagnostics {
         result.addProperty("chromium", Chromium.phase().name());
         result.addProperty("progress", Chromium.progress());
         result.addProperty("trusted", Trust.allowedHere());
+        result.addProperty("browsers", Chromium.browsers());
         result.addProperty("input", ScreenInput.state());
         result.addProperty("pid", ProcessHandle.current().pid());
         var helpers = new JsonArray();
         ProcessHandle.current().descendants().forEach(process -> helpers.add(process.pid()));
         result.add("helpers", helpers);
+        var mc = Minecraft.getInstance();
+        // Every screen entity the client has, drawn or not, with the browser its view holds.
         var screens = new JsonArray();
-        for (var view : Screens.views()) {
+        if (mc.level != null) for (var entity : mc.level.entitiesForRendering()) {
+            if (!(entity instanceof ScreenEntity placed)) continue;
+            var record = placed.record();
             var screen = new JsonObject();
-            screen.addProperty("anchor", view.anchor.toShortString());
-            screen.addProperty("facing", view.facing.getName());
-            screen.addProperty("blocks", view.blocksWide + "x" + view.blocksHigh);
-            screen.addProperty("pixels", view.pixelWidth + "x" + view.pixelHeight);
-            screen.addProperty("url", view.url);
-            screen.addProperty("browserUrl", view.browser == null ? "" : view.browser.getURL());
-            screen.addProperty("painted", view.painted());
-            screen.addProperty("live", view.live());
-            screen.addProperty("loading", view.loading);
-            screen.addProperty("back", view.canGoBack);
-            screen.addProperty("forward", view.canGoForward);
-            screen.addProperty("crashed", view.crashed);
-            screen.addProperty("editable", view.editable);
-            screen.addProperty("cursor", view.cursor);
+            screen.addProperty("id", record.id());
+            screen.addProperty("name", record.name());
+            screen.addProperty("url", record.url());
+            screen.addProperty("openedBy", record.openedBy());
+            screen.addProperty("entity", placed.getUUID().toString());
+            screen.addProperty("pos", placed.getPos().toShortString());
+            screen.addProperty("facing", placed.facing().getName());
+            screen.addProperty("blocks", placed.width() + "x" + placed.height());
+            var view = Screens.views().stream().filter(candidate -> candidate.screen == placed).findFirst().orElse(null);
+            screen.addProperty("view", view != null);
+            screen.addProperty("browser", view != null && view.browser != null);
+            if (view != null) {
+                screen.addProperty("pixels", view.pixelWidth + "x" + view.pixelHeight);
+                screen.addProperty("viewUrl", view.url);
+                screen.addProperty("browserUrl", view.browser == null ? "" : view.browser.getURL());
+                screen.addProperty("painted", view.painted());
+                screen.addProperty("live", view.live());
+                screen.addProperty("loading", view.loading);
+                screen.addProperty("back", view.canGoBack);
+                screen.addProperty("forward", view.canGoForward);
+                screen.addProperty("crashed", view.crashed);
+                screen.addProperty("editable", view.editable);
+                screen.addProperty("cursor", view.cursor);
+            }
             screens.add(screen);
         }
         result.add("screens", screens);
+        result.addProperty("views", Screens.views().size());
+        result.add("placement", ScreenPlacement.state());
+        // The server's index, as last published from its own thread.
+        var server = mc.getSingleplayerServer();
+        var index = server == null ? null : ScreenIndex.snapshot(server);
+        if (index != null) result.add("index", index);
+        // Records carried by screen items in the player's inventory.
+        var items = new JsonArray();
+        if (mc.player != null) {
+            var inventory = mc.player.getInventory();
+            for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
+                var stack = inventory.getItem(slot);
+                if (!(stack.getItem() instanceof ScreenItem)) continue;
+                var record = ScreenItem.record(stack);
+                var item = new JsonObject();
+                item.addProperty("slot", slot);
+                item.addProperty("count", stack.getCount());
+                item.addProperty("id", record.id());
+                item.addProperty("name", record.name());
+                item.addProperty("url", record.url());
+                item.addProperty("openedBy", record.openedBy());
+                items.add(item);
+            }
+        }
+        result.add("items", items);
         return result;
     }
 
@@ -50,9 +90,14 @@ public final class ScreenDiagnostics {
         switch (action) {
             case "dev_command" -> {
                 var server = mc.getSingleplayerServer();
-                var player = server.getPlayerList().getPlayer(mc.player.getUUID());
+                var playerId = mc.player.getUUID();
                 String command = request.get("command").getAsString();
-                server.execute(() -> server.getCommands().performPrefixedCommand(player.createCommandSourceStack().withPermission(4), command));
+                long deadline = System.nanoTime() + 2_000_000_000L;
+                server.execute(() -> {
+                    var player = server.getPlayerList().getPlayer(playerId);
+                    if (System.nanoTime() > deadline || !server.isRunning() || player == null) return;
+                    server.getCommands().performPrefixedCommand(player.createCommandSourceStack().withPermission(4), command);
+                });
             }
             case "dev_aim" -> mc.player.lookAt(EntityAnchorArgument.Anchor.EYES,
                 new Vec3(request.get("x").getAsDouble(), request.get("y").getAsDouble(), request.get("z").getAsDouble()));

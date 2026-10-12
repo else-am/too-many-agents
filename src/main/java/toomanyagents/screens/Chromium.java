@@ -75,6 +75,7 @@ final class Chromium {
         """;
 
     static Phase phase() { return phase; }
+    static int browsers() { return views.size(); }
     static String progress() { return progress; }
 
     static void start() {

@@ -8,13 +8,13 @@ You place a screen and ask an agent to set something up on it. You and agents us
 
 ### Screens in the world
 
-- A screen is one entity, like a painting: a thin black panel with a slim bezel, extending vanilla's `HangingEntity`. Same crafting recipe as now; one item makes one screen.
-- Painting rules for support, from `HangingEntity.survives()`: each block behind must be solid (or a repeater/comparator), nothing may collide with it, and it can't overlap another hanging entity. Whatever works for paintings works for screens.
-- Placing: right-click a wall to set one corner. The screen is then partly placed: a preview rectangle follows your aim along that wall, in any direction, up to 16x16. Cells that fail the support rules show as invalid. Right-click again to confirm; switching items or Esc cancels.
+- ~~A screen is one entity, like a painting: a thin black panel with a slim bezel, extending vanilla's `HangingEntity`. Same crafting recipe as now; one item makes one screen.~~
+- ~~Painting rules for support, from `HangingEntity.survives()`: each block behind must be solid (or a repeater/comparator), nothing may collide with it, and it can't overlap another hanging entity. Whatever works for paintings works for screens.~~
+- ~~Placing: right-click a wall to set one corner. The screen is then partly placed: a preview rectangle follows your aim along that wall, in any direction, up to 16x16. Cells that fail the support rules show as invalid. Right-click again to confirm; switching items or Esc cancels.~~
 - Breaking: hold attack with a tool. Progress builds each tick with arm swings, hit sounds and vanilla's destroy-stage cracks over the panel. Speed comes from vanilla's own math (player.getDestroySpeed against a reference block), so efficiency, Haste and underwater all apply: a pickaxe is fast, other tools about wood speed. Bare hands click the page and never break it. Creative breaks instantly. At 100% the client sends an ordinary attack and the server breaks it (trusting the client is fine for singleplayer; multiplayer would need server timing).
-- A broken screen, or one whose wall is removed, drops its item carrying the record. Placing it again restores the screen with the same id, name and URL.
-- If a placed item's id is already used by another live screen (e.g. a copied item), the new screen gets a new id.
-- No migration: block screens and screens built before this design are discarded, not converted.
+- ~~A broken screen, or one whose wall is removed, drops its item carrying the record. Placing it again restores the screen with the same id, name and URL.~~
+- ~~If a placed item's id is already used by another live screen (e.g. a copied item), the new screen gets a new id.~~
+- ~~No migration: block screens and screens built before this design are discarded, not converted.~~
 
 ### Screen record
 
@@ -24,10 +24,10 @@ The screen's id, name, URL and `openedBy` are saved on the screen entity and rea
 record Screen(String id, String name, String url, String openedBy) {}
 ```
 
-- Ids are short and sayable: `s1`, `s2`… from a per-world counter in the mod's world state, never reused, so an old reference can't land on a new screen.
+- ~~Ids are short and sayable: `s1`, `s2`… from a per-world counter in the mod's world state, never reused, so an old reference can't land on a new screen.~~
 - A small server-side index (id, name, URL, position) lets `screen_list` include placed screens in unloaded chunks. A screen in an item is not listed.
 - Players name a screen by clicking the id on its bar; agents name one through `screen_open`.
-- `url` is empty when the screen is idle, meaning no Chromium browser exists for it.
+- ~~`url` is empty when the screen is idle, meaning no Chromium browser exists for it.~~
 - `openedBy` is the thread that last opened the page. It's set by `screen_open`, and cleared when a player navigates or the screen is closed.
 - Planned `terminal` and `review` pages will use our own `tma://` scheme; see Later.
 
@@ -161,8 +161,8 @@ None of these are retried automatically:
 - Chromium's browser process runs inside Minecraft's process (libcef via JNI), so a bug there kills the game without saving. Keep every CEF call on its proper thread, do no blocking work in callbacks, and handle shutdown order carefully.
 - Screenshots reuse `minecraft_pov`'s save path in `bb-plugin/images.ts`.
 - The game and its world records own leases, access checks and `openedBy`.
-- The record syncs to the client as the entity's own synced data; no custom packet. Input targets the entity hit instead of a block hit.
-- To check while building: a screen with an empty URL must create no browser. I believe the current code still creates one for a blank screen.
+- ~~The record syncs to the client as the entity's own synced data; no custom packet. Input targets the entity hit instead of a block hit.~~
+- ~~To check while building: a screen with an empty URL must create no browser. I believe the current code still creates one for a blank screen.~~
 
 ## Later
 
