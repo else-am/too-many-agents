@@ -59,7 +59,6 @@ public final class Screens {
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         ScreenInput.register();
         ScreenPlacement.register();
-        ScreenBreaking.register();
         // Leases run out on the server's clock.
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> {
             if (event.getServer().getTickCount() % 10 == 0) ScreenIndex.get(event.getServer()).expire(event.getServer());
@@ -121,6 +120,29 @@ public final class Screens {
             var record = screen.record();
             var updated = change.apply(record);
             if (!updated.equals(record)) screen.setRecord(updated);
+        });
+    }
+
+    /**
+     * Takes a screen down into the player's inventory: with its record, or blank when reset. The server checks the
+     * player can still reach it, and a screen already taken can't be taken again.
+     */
+    static void pickUp(ScreenView view, boolean reset) {
+        var mc = Minecraft.getInstance();
+        MinecraftServer server = mc.getSingleplayerServer();
+        if (server == null || mc.level == null || mc.player == null) return;
+        var dimension = mc.level.dimension();
+        UUID id = view.screen.getUUID(), playerId = mc.player.getUUID();
+        long deadline = System.nanoTime() + EXPIRY_NANOS;
+        server.execute(() -> {
+            if (System.nanoTime() > deadline || !server.isRunning()) return;
+            var level = server.getLevel(dimension);
+            var player = server.getPlayerList().getPlayer(playerId);
+            if (level == null || player == null || player.level() != level || !player.isAlive() || player.isSpectator()) return;
+            if (!(level.getEntity(id) instanceof ScreenEntity screen) || screen.isRemoved()) return;
+            double reach = ScreenInput.REACH + 1;
+            if (screen.getBoundingBox().distanceToSqr(player.getEyePosition()) > reach * reach) return;
+            screen.pickUp(player, reset);
         });
     }
 

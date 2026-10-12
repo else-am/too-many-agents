@@ -60,6 +60,27 @@ def place(first, second):
     wait_for(lambda state: not state['placement']['active'])
 
 
+def screen_row(screen_id):
+    return next(row for row in ui('screens')['screens'] if row['id'] == screen_id)
+
+
+def screen_control(screen_id, name):
+    at = screen_row(screen_id)['controls'][name]
+    aim(at['x'], at['y'], at['z'])
+    click(0)
+
+
+def menu_action(screen_id, action, confirm=False):
+    screen_control(screen_id, 'menu')
+    assert ui('screens')['menu']['screen'] == screen_id
+    at = next(row for row in screen_row(screen_id)['menuRows'] if row['action'] == action)
+    aim(at['x'], at['y'], at['z'])
+    click(0)
+    if confirm:
+        assert ui('screens')['menu']['confirmingReset']
+        click(0)
+
+
 def fixture_screens(state):
     def in_fixture(screen):
         x, y, z = map(int, screen['pos'].split(', '))
@@ -270,9 +291,9 @@ a{position:absolute;left:20px;top:280px}</style>
     wait_for(lambda state: any(row['id'] == screen_id and row['url'].endswith('next.html') for row in state['screens']))
     control('reload')
     wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') and not row['loading'] for row in state['screens']))
-    control('power')
+    menu_action(screen_id, 'turn_off')
     wait_for(lambda state: any(row['id'] == screen_id and row['url'] == '' and row['openedBy'] == '' and not row['browser'] for row in state['screens']))
-    print('PASS: Address, back, forward, reload and power work through native clicks', flush=True)
+    print('PASS: Address, back, forward, reload and menu turn-off work through native clicks', flush=True)
 
     # A one-block panel still leaves every control an independently clickable span.
     command('tp @s 172 -60 165')
@@ -290,40 +311,100 @@ a{position:absolute;left:20px;top:280px}</style>
     ui('dev_char', text=url)
     ui('dev_key', key=257)
     wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') for row in state['screens']))
-    control('power')
+    menu_action(screen_id, 'turn_off')
     wait_for(lambda state: any(row['id'] == screen_id and row['name'] == 'Tiny' and not row['browser'] for row in state['screens']))
-    print('PASS: One-block panel supports name, address and power', flush=True)
+    print('PASS: One-block panel supports name, address and menu turn-off', flush=True)
 
 
-def breaking():
+def menu_actions():
     command('tp @s 172 -60 166')
-    command('gamemode survival @s')
-    command('item replace entity @s weapon.mainhand with minecraft:stick')
-    aim(172.5, -57.5, 167.9355)
     screen_id = next(row['id'] for row in fixture_screens(ui('screens')) if row['name'] == 'Tiny')
-    ui('dev_press', button=0, ticks=5)
-    time.sleep(.4)
-    assert any(row['id'] == screen_id for row in ui('screens')['screens'])
-    print('PASS: Non-tool attacks leave the screen intact', flush=True)
+    for mode in ('survival', 'creative'):
+        command(f'gamemode {mode} @s')
+        for item in ('air', 'minecraft:stick', 'minecraft:wooden_axe', 'minecraft:diamond_pickaxe'):
+            command(f'item replace entity @s weapon.mainhand with {item}')
+            aim(172.5, -57.5, 167.9355)
+            # Native button, then the held key mapping, covers initial and continuous attacks.
+            click(0)
+            if ui('screens')['input'] in ('address', 'name', 'typing'):
+                ui('dev_key', key=256)
+            ui('dev_press', button=0, ticks=65)
+            time.sleep(3.5)
+            state = ui('screens')
+            assert any(row['id'] == screen_id for row in state['screens'])
+            assert 'breaking' not in state and 'stage' not in screen_row(screen_id)
+        print(f'PASS: All held items and bare hands leave screens intact in {mode}', flush=True)
 
-    command('item replace entity @s weapon.mainhand with minecraft:wooden_axe')
-    ui('dev_press', button=0, ticks=45)
-    state = wait_for(lambda state: state['breaking']['progress'] > .3)
-    assert state['breaking']['target'] == screen_id
-    assert 0 < state['breaking']['progress'] < 1
-    assert next(row for row in state['screens'] if row['id'] == screen_id)['stage'] >= 3
+    command('clear @s')
+    ui('dev_key', key=49)
+    screen_control(screen_id, 'menu')
+    assert ui('screens')['menu']['screen'] == screen_id
     ui('screenshot')
-    ui('dev_mouse', button=0, phase='release')
-    wait_for(lambda state: state['breaking']['progress'] == 0)
-    assert any(row['id'] == screen_id for row in ui('screens')['screens'])
-    print('PASS: Holding a tool builds cracks; releasing resets without breaking', flush=True)
+    ui('dev_key', key=256)
+    assert not ui('screens')['menu']['screen'] and ui('widgets')['screen'] == 'game'
+    screen_control(screen_id, 'menu')
+    ui('dev_key', key=50)
+    wait_for(lambda state: not state['menu']['screen'])
+    screen_control(screen_id, 'menu')
+    ui('dev_pause')
+    ui('dev_resume')
+    assert not ui('screens')['menu']['screen']
+    screen_control(screen_id, 'menu')
+    at = screen_row(screen_id)['pageCenter']
+    x, y, z = map(float, at.split(','))
+    aim(x, y - .3, z)
+    click(0)
+    assert not ui('screens')['menu']['screen']
+    assert ui('screens')['input'] != 'address', 'Outside click must only dismiss the menu'
+    print('PASS: Esc, empty-slot switch, GUI and outside click dismiss the menu', flush=True)
 
-    command('item replace entity @s weapon.mainhand with minecraft:diamond_pickaxe')
-    ui('dev_press', button=0, ticks=12)
-    wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
-    assert all(row['id'] != screen_id for row in ui('screens')['index']['screens'])
-    print('PASS: A pickaxe completes the ordinary attack and removes the index entry', flush=True)
-    time.sleep(.7)
+    menu_action(screen_id, 'reset')
+    assert ui('screens')['menu']['confirmingReset']
+    ui('dev_key', key=256)
+    assert screen_row(screen_id)['name'] == 'Tiny'
+    menu_action(screen_id, 'reset')
+    time.sleep(3.3)
+    click(0)
+    assert screen_row(screen_id)['name'] == 'Tiny', 'An expired reset click must not remove the screen'
+    ui('dev_key', key=256)
+    print('PASS: Reset cancellation and expired confirmation preserve the screen', flush=True)
+
+    url = (ROOT / 'run/too-many-agents/screens-acceptance/index.html').as_uri()
+    screen_control(screen_id, 'address')
+    ui('dev_char', text=url)
+    ui('dev_key', key=257)
+    wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') and row['url'] == url for row in state['screens']))
+    saved = {key: screen_row(screen_id)[key] for key in ('id', 'name', 'url', 'openedBy')}
+    command('gamemode survival @s')
+    menu_action(screen_id, 'pick_up')
+    state = wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
+    assert all(row['id'] != screen_id for row in state['index']['screens'])
+    items = [row for row in state['items'] if row['id'] == screen_id]
+    assert len(items) == 1 and items[0]['count'] == 1
+    assert {key: items[0][key] for key in saved} == saved
+    assert items[0]['slot'] < 9
+    ui('dev_key', key=49 + items[0]['slot'])
+    place((172.5, -57.5), (172.5, -57.5))
+    state = wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') for row in state['screens']))
+    assert {key: screen_row(screen_id)[key] for key in saved} == saved
+    assert not state['items'], 'Survival placement must consume the one returned item'
+    print('PASS: Pickup returns exactly one saved record; survival placement restores its page and ID', flush=True)
+
+    command('gamemode creative @s')
+    menu_action(screen_id, 'reset', confirm=True)
+    state = wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
+    assert all(row['id'] != screen_id for row in state['index']['screens'])
+    assert len(state['items']) == 1 and state['items'][0]['count'] == 1
+    blank = state['items'][0]
+    assert all(blank[key] == '' for key in ('id', 'name', 'url', 'openedBy')), blank
+    ui('dev_key', key=49 + blank['slot'])
+    command('gamemode survival @s')
+    place((172.5, -57.5), (172.5, -57.5))
+    state = wait_for(lambda state: any(row['blocks'] == '1x1' and row['id'] != screen_id for row in fixture_screens(state)))
+    fresh = next(row for row in fixture_screens(state) if row['blocks'] == '1x1')
+    assert fresh['id'] != screen_id and not fresh['name'] and not fresh['url'] and not fresh['browser']
+    assert not state['items']
+    print('PASS: Creative reset returns one blank item; replacing it allocates a fresh idle ID', flush=True)
     command('gamemode creative @s')
 
 
@@ -331,4 +412,4 @@ if __name__ == '__main__':
     foundation()
     facings()
     controls()
-    breaking()
+    menu_actions()

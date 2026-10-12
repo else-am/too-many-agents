@@ -3,7 +3,6 @@ package toomanyagents.screens;
 import javax.annotation.Nullable;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.network.protocol.Packet;
@@ -14,7 +13,9 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.HangingEntity;
@@ -108,13 +109,25 @@ public final class ScreenEntity extends HangingEntity {
             axis == Direction.Axis.Z ? DEPTH : cells.getZsize());
     }
 
-    /** Only items with vanilla's tool component break screens; anything else leaves them alone. */
-    static boolean isTool(ItemStack stack) { return stack.has(DataComponents.TOOL); }
-
-    /** Only a tool breaks a screen; bare hands use the page. The client times the breaking. */
+    /** Players never break a screen by hitting it: bare hands use the page, and its menu picks it up. */
     @Override public boolean skipAttackInteraction(Entity attacker) {
-        if (attacker instanceof Player player && !isTool(player.getMainHandItem())) return true;
-        return super.skipAttackInteraction(attacker);
+        return attacker instanceof Player || super.skipAttackInteraction(attacker);
+    }
+
+    /** Nor by anything they shoot or throw. */
+    @Override public boolean hurt(DamageSource source, float amount) {
+        return !(source.getEntity() instanceof Player) && super.hurt(source, amount);
+    }
+
+    /** Server: the player takes the screen down. Removing it closes its page, fails waiting calls and ends its lease. */
+    void pickUp(ServerPlayer player, boolean reset) {
+        var stack = reset ? new ItemStack(Screens.ITEM.get()) : ScreenItem.stack(record());
+        playSound(SoundEvents.COPPER_BREAK, 1, 1);
+        discard();
+        // Exactly one item, in creative too, where adding to a full inventory would quietly delete it.
+        var inventory = player.getInventory();
+        if (inventory.getSlotWithRemainingSpace(stack) >= 0 || inventory.getFreeSlot() >= 0) inventory.add(stack);
+        if (!stack.isEmpty()) player.drop(stack, false);
     }
 
     @Override public void dropItem(@Nullable Entity breaker) {

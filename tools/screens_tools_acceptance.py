@@ -2,7 +2,7 @@
 """Live screen-tool checks using two dedicated test agents and a north-facing fixture panel.
 
 Launch the isolated development world and create the agents first. This changes the specified
-screen and uses the player's native power button; it never creates or restarts agent turns.
+screen and uses the player's native screen menu; it never creates or restarts agent turns.
 """
 import argparse
 import base64
@@ -120,16 +120,13 @@ def main():
         native.command('gamemode creative @s')
         native.command('tp @s 168 -60 165')
         native.command('item replace entity @s weapon.mainhand with air')
-        row = next(row for row in native.ui('screens')['screens'] if row['id'] == screen)
-        power = row['controls']['power']
-        native.aim(power['x'], power['y'], power['z'])
-        native.click(0)
+        native.menu_action(screen, 'turn_off')
         value, envelope = pending.result(timeout=5)
         assert envelope.get('isError') and value['error']['code'] == 'unavailable', value
     native.wait_for(lambda state: any(row['id'] == screen and not row['browser'] and not row['url'] and not row['openedBy'] for row in state['screens']))
     success(other, 'screen_open', screen=screen, kind='file', target=str(fixture))
     success(other, 'screen_close', screen=screen)
-    print('PASS: Player power closes pending CDP promptly and releases the lease', flush=True)
+    print('PASS: Player menu turn-off closes pending CDP promptly and releases the lease', flush=True)
 
     success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
     error('leased', other, 'screen_close', screen=screen)

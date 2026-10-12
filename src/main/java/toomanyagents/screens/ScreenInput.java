@@ -27,7 +27,8 @@ import org.lwjgl.glfw.GLFW;
 /**
  * With an empty hand, the crosshair is the mouse of the screen it points at: hover, click, drag and scroll go to the
  * page. Clicking into a text field starts typing mode, where keys go to the page until Esc or a click elsewhere.
- * The bar's own fields, the screen's name and address, are edited the same way. Render thread only.
+ * The bar's own fields, the screen's name and address, are edited the same way. The bar's ⋯ opens a menu over the
+ * page, which takes every click until it closes. Render thread only.
  */
 public final class ScreenInput {
     static final double REACH = 8;
@@ -49,6 +50,12 @@ public final class ScreenInput {
     private static final StringBuilder fieldText = new StringBuilder();
     static final int MAX_NAME = 32;
 
+    /** The screen whose menu is open, the hotbar slot it opened with, and until when a reset waits for its second click. */
+    private static ScreenView menu;
+    private static int menuSlot;
+    private static long confirmUntil;
+    private static final long CONFIRM_NANOS = 3_000_000_000L;
+
     private ScreenInput() {}
 
     static void register() {
@@ -59,6 +66,7 @@ public final class ScreenInput {
         NeoForge.EVENT_BUS.addListener((RenderGuiEvent.Post event) -> hint(event.getGuiGraphics()));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
             if (typing != null && Minecraft.getInstance().screen != null) stopTyping(false);
+            if (menu != null && !menuStillOpen()) closeMenu();
         });
     }
 
@@ -74,6 +82,7 @@ public final class ScreenInput {
     }
 
     static void forget(ScreenView view) {
+        if (menu == view) closeMenu();
         if (typing == view) typing = null;
         if (hovered == view) hovered = null;
         if (pressed == view) { pressed = null; pressedButtons.clear(); }
@@ -81,9 +90,17 @@ public final class ScreenInput {
         if (aim != null && aim.view == view) aim = null;
     }
 
+    static boolean menuOpen(ScreenView view) { return menu == view; }
+    static boolean confirmingReset() { return menu != null && System.nanoTime() < confirmUntil; }
+
+    /** The menu row the crosshair is on, or null. */
+    static ScreenView.Action menuHovered(ScreenView view) {
+        return menu == view && aim != null && aim.view == view ? view.menuAction(aim.x, aim.y) : null;
+    }
+
     /** The page reports whether its focused element takes text. Only a click of yours starts typing. */
     static void editingChanged(ScreenView view, boolean editable) {
-        if (editable && clicked == view && System.nanoTime() - lastClickAt < FOCUS_AFTER_CLICK_NANOS && (typing == null || typing == view)) {
+        if (editable && menu == null && clicked == view && System.nanoTime() - lastClickAt < FOCUS_AFTER_CLICK_NANOS && (typing == null || typing == view)) {
             if (typing == null) KeyMapping.releaseAll();
             typing = view;
             field = null;
@@ -114,11 +131,13 @@ public final class ScreenInput {
             if (at != null) move(pressed, at[0], at[1]);
             return;
         }
-        if (hovered != null && (aim == null || aim.view != hovered)) {
+        // The open menu covers the page beneath it.
+        boolean onPage = aim != null && aim.view.onPage(aim.x, aim.y) && menuHovered(aim.view) == null;
+        if (hovered != null && (!onPage || aim.view != hovered)) {
             if (hovered.browser != null) hovered.browser.mouse(MouseEvent.MOUSE_EXITED, lastX, lastY, MouseEvent.NOBUTTON, 0, 0);
             hovered = null;
         }
-        if (aim != null) {
+        if (onPage) {
             hovered = aim.view;
             move(aim.view, aim.x, aim.y);
         }
@@ -167,6 +186,15 @@ public final class ScreenInput {
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) return;
+        if (menu != null) {
+            // An open menu takes the click: a row acts, anything else closes it.
+            event.setCanceled(true);
+            consumedButtons.add(button);
+            var action = menuHovered(menu);
+            if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && action != null) choose(menu, action);
+            else closeMenu();
+            return;
+        }
         if (field != null && (aim == null || aim.view != typing || aim.view.barPart(aim.x, aim.y) != field)) stopTyping(false);
         if (aim == null) return;
         event.setCanceled(true);
@@ -180,10 +208,7 @@ public final class ScreenInput {
             else if (part == ScreenView.Part.BACK) view.back();
             else if (part == ScreenView.Part.FORWARD) view.forward();
             else if (part == ScreenView.Part.RELOAD) view.reload();
-            else if (part == ScreenView.Part.POWER) {
-                if (typing == view) stopTyping(false);
-                view.powerOff();
-            }
+            else if (part == ScreenView.Part.MENU) openMenu(view);
             else if (part == ScreenView.Part.ADDRESS || view.url.isBlank()) startField(view, ScreenView.Part.ADDRESS, view.url);
             else if (!Trust.allowedHere()) Trust.allow(Minecraft.getInstance().getSingleplayerServer());
             else if (view.crashed) view.reload();
@@ -209,11 +234,60 @@ public final class ScreenInput {
     }
 
     private static void scroll(net.neoforged.neoforge.client.event.InputEvent.MouseScrollingEvent event) {
-        if (aim == null || aim.view.browser == null || aim.view.barPart(aim.x, aim.y) != null) return;
+        if (aim == null) return;
+        if (menu != null) {
+            event.setCanceled(true);
+            return;
+        }
+        if (aim.view.browser == null || aim.view.barPart(aim.x, aim.y) != null) return;
         event.setCanceled(true);
         double delta = event.getScrollDeltaY() != 0 ? event.getScrollDeltaY() : event.getScrollDeltaX();
         int mods = modifiers() | (event.getScrollDeltaY() == 0 ? InputEvent.SHIFT_DOWN_MASK : 0);
         aim.view.browser.wheel(aim.view.pixelX(aim.x), aim.view.pixelY(aim.y), (int) Math.round(delta * 100), mods);
+    }
+
+    // The menu.
+
+    private static void openMenu(ScreenView view) {
+        if (typing != null) stopTyping(false);
+        // A page click just before can't start typing once the menu is open.
+        clicked = null;
+        menu = view;
+        menuSlot = Minecraft.getInstance().player.getInventory().selected;
+        confirmUntil = 0;
+    }
+
+    private static void closeMenu() {
+        menu = null;
+        confirmUntil = 0;
+    }
+
+    /** Opening a GUI, holding an item, changing slot or walking away closes the menu. */
+    private static boolean menuStillOpen() {
+        var mc = Minecraft.getInstance();
+        if (!pointing() || mc.level == null || mc.player.getInventory().selected != menuSlot) return false;
+        if (menu.screen.isRemoved() || Screens.existing(menu.screen.getUUID()) != menu) return false;
+        return menu.screen.getBoundingBox().distanceToSqr(mc.player.getEyePosition()) <= REACH * REACH;
+    }
+
+    private static void choose(ScreenView view, ScreenView.Action action) {
+        switch (action) {
+            case OFF -> {
+                closeMenu();
+                view.powerOff();
+            }
+            case PICKUP -> {
+                closeMenu();
+                Screens.pickUp(view, false);
+            }
+            case RESET -> {
+                // Reset forgets the screen's id, name and page, so it asks twice.
+                if (System.nanoTime() < confirmUntil) {
+                    closeMenu();
+                    Screens.pickUp(view, true);
+                } else confirmUntil = System.nanoTime() + CONFIRM_NANOS;
+            }
+        }
     }
 
     // Typing.
@@ -221,6 +295,10 @@ public final class ScreenInput {
     /** Called from the keyboard handler before Minecraft sees a key. True when the key went to a screen. */
     public static boolean keyPress(int key, int scancode, int action, int mods) {
         if (ScreenPlacement.keyPress(key, action)) return true;
+        if (menu != null && key == GLFW.GLFW_KEY_ESCAPE && Minecraft.getInstance().screen == null) {
+            if (action == GLFW.GLFW_PRESS) closeMenu();
+            return true;
+        }
         if (typing == null) return false;
         if (Minecraft.getInstance().screen != null) {
             stopTyping(false);
@@ -385,7 +463,8 @@ public final class ScreenInput {
         int shape = view.cursor;
         if (aim != null && pressed == null) {
             var part = aim.view.barPart(aim.x, aim.y);
-            if (part == ScreenView.Part.ADDRESS || part == ScreenView.Part.NAME || (part == null && view.url.isBlank())) shape = Cursor.TEXT_CURSOR;
+            if (menuHovered(aim.view) != null) shape = Cursor.HAND_CURSOR;
+            else if (part == ScreenView.Part.ADDRESS || part == ScreenView.Part.NAME || (part == null && view.url.isBlank())) shape = Cursor.TEXT_CURSOR;
             else if (part != null || view.browser == null || view.crashed || !Trust.allowedHere()) shape = Cursor.HAND_CURSOR;
         }
         var graphics = event.getGuiGraphics();
@@ -451,6 +530,7 @@ public final class ScreenInput {
 
     /** Status for development checks. */
     static String state() {
+        if (menu != null) return "menu";
         if (typing == null) return aim == null ? "none" : "pointing";
         return field == ScreenView.Part.NAME ? "name" : field == ScreenView.Part.ADDRESS ? "address" : "typing";
     }

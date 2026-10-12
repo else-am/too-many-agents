@@ -13,7 +13,6 @@ import net.minecraft.client.renderer.RenderStateShard;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRenderer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.client.resources.model.ModelBakery;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
@@ -21,7 +20,7 @@ import org.joml.Matrix4f;
 /** Draws a screen: its panel, the page, any open dropdown, status, and the navigation bar. */
 final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     private static final int PANEL = 0xFF08090B, SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
-    private static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B, ID = 0xFFE2D4A7, CRACK = 0xC0FFFFFF;
+    private static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B, ID = 0xFFE2D4A7, MENU = 0xFF1C1F24, WARN = 0xFFE8A27C;
     private static final int LIGHT = LightTexture.FULL_BRIGHT;
     /** Like vanilla's text type, but filtered smoothly with mipmaps so distant pages don't shimmer. */
     private static final Function<ResourceLocation, RenderType> PAGE = Util.memoize(texture -> RenderType.create(
@@ -29,15 +28,6 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         RenderType.CompositeState.builder()
             .setShaderState(RenderStateShard.RENDERTYPE_TEXT_SHADER)
             .setTextureState(new RenderStateShard.TextureStateShard(texture, true, true))
-            .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
-            .setLightmapState(RenderStateShard.LIGHTMAP)
-            .createCompositeState(false)));
-    /** Crack textures stay crisp, like vanilla's own. */
-    private static final Function<ResourceLocation, RenderType> CRACKS = Util.memoize(texture -> RenderType.create(
-        "too_many_agents_screen_cracks", DefaultVertexFormat.POSITION_COLOR_TEX_LIGHTMAP, VertexFormat.Mode.QUADS, 256, false, true,
-        RenderType.CompositeState.builder()
-            .setShaderState(RenderStateShard.RENDERTYPE_TEXT_SHADER)
-            .setTextureState(new RenderStateShard.TextureStateShard(texture, false, false))
             .setTransparencyState(RenderStateShard.TRANSLUCENT_TRANSPARENCY)
             .setLightmapState(RenderStateShard.LIGHTMAP)
             .createCompositeState(false)));
@@ -77,12 +67,11 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             text(pose, buffers, status, w / 2, h / 2 - size / 2, size, STATUS, true, -0.002);
         }
         bar(pose, buffers, view);
-        int stage = ScreenBreaking.stage(screen);
-        if (stage >= 0) cracks(buffers, matrix, view, stage);
+        if (ScreenInput.menuOpen(view)) menu(pose, buffers, view);
         pose.popPose();
     }
 
-    /** The thin black panel behind the page: its bezel and edges, lit like the world around it. */
+    /** The thin black panel behind the page: its bezel, edges and back, lit like the world around it. */
     private static void panel(MultiBufferSource buffers, Matrix4f m, ScreenView view, int light) {
         double margin = ScreenView.MARGIN, x0 = -margin, x1 = view.pageWidth + margin;
         double y0 = -view.barHeight - margin, y1 = view.pageHeight + margin, front = 0.002, back = front + ScreenEntity.DEPTH;
@@ -92,7 +81,9 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             {x0, y0, front, x1, y0, front, x1, y0, back, x0, y0, back},
             {x0, y1, front, x0, y1, back, x1, y1, back, x1, y1, front},
             {x0, y0, front, x0, y0, back, x0, y1, back, x0, y1, front},
-            {x1, y0, front, x1, y1, front, x1, y1, back, x1, y0, back}};
+            {x1, y0, front, x1, y1, front, x1, y1, back, x1, y0, back},
+            // The back, so nothing shows through from behind, e.g. a screen hung on glass.
+            {x0, y0, back, x1, y0, back, x1, y1, back, x0, y1, back}};
         for (var f : faces) {
             // Edges are drawn both ways round so they show whichever way culling sees them.
             for (int i = 0; i < 12; i += 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(PANEL).setLight(light);
@@ -147,8 +138,41 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         String typed = ScreenInput.fieldText(view, ScreenView.Part.ADDRESS);
         if (view.url.isBlank()) field(pose, buffers, addressX, addressW, bar, pad, typed, "Enter an address", DIM);
         else field(pose, buffers, addressX, addressW, bar, pad, typed, view.url, TEXT);
-        power(buffers, matrix, view, bar);
+        // ⋯ opens the menu.
+        double cx = (view.start(ScreenView.Part.MENU) + view.end(ScreenView.Part.MENU)) / 2, dot = Math.min(bar, view.unit) * 0.09;
+        for (int i = -1; i <= 1; i++)
+            rect(buffers, matrix, cx + i * dot * 2.6 - dot / 2, bar / 2 - dot / 2, cx + i * dot * 2.6 + dot / 2, bar / 2 + dot / 2, -0.003,
+                ScreenInput.menuOpen(view) ? ID : TEXT);
         pose.popPose();
+    }
+
+    /** The open menu, hanging from the bar's right end over the page: an icon and a label per row. */
+    private static void menu(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
+        var m = pose.last().pose();
+        var font = Minecraft.getInstance().font;
+        double x0 = view.menuX, row = view.menuRow, width = view.menuWidth, z = -0.006;
+        var actions = ScreenView.Action.values();
+        rect(buffers, m, x0, 0, x0 + width, row * actions.length, z, MENU);
+        var hovered = ScreenInput.menuHovered(view);
+        boolean confirming = ScreenInput.confirmingReset();
+        // One text size for every row, narrowed so the longest label fits.
+        double icon = row * 0.36, labelX = row * 0.95, room = width - labelX - row * 0.25;
+        int longest = 0;
+        for (var action : actions) longest = Math.max(longest, font.width(action.label));
+        double size = Math.min(row * 0.38, room * 9 / longest);
+        for (var action : actions) {
+            double top = action.ordinal() * row, cx = x0 + row * 0.5, cy = top + row / 2;
+            if (action == hovered) rect(buffers, m, x0, top, x0 + width, top + row, z - 0.001, FIELD);
+            boolean warn = action == ScreenView.Action.RESET && confirming;
+            int color = warn ? WARN : TEXT;
+            switch (action) {
+                case OFF -> power(buffers, m, cx, cy, icon, color);
+                case PICKUP -> pickUp(buffers, m, cx, cy, icon, color);
+                case RESET -> reset(buffers, m, cx, cy, icon, color);
+            }
+            String label = warn ? "Click again to reset" : action.label;
+            text(pose, buffers, font.plainSubstrByWidth(label, (int) (room * 9 / size)), x0 + labelX, cy - size / 2, size, color, false, z - 0.002);
+        }
     }
 
     /** A bar text field: the text being typed with its caret, or else what it shows at rest. */
@@ -170,31 +194,53 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         }
     }
 
-    /** The power symbol: a ring open at the top with a stroke through the gap. Lit while a page is open. */
-    private static void power(MultiBufferSource buffers, Matrix4f m, ScreenView view, double bar) {
-        double cx = (view.start(ScreenView.Part.POWER) + view.end(ScreenView.Part.POWER)) / 2, cy = bar / 2;
-        double r = Math.min(bar, view.unit) * 0.22, t = r * 0.28, z = -0.003;
-        int color = view.url.isBlank() ? DIM : TEXT;
-        rect(buffers, m, cx - r, cy - r * 0.6, cx - r + t, cy + r, z, color);
-        rect(buffers, m, cx + r - t, cy - r * 0.6, cx + r, cy + r, z, color);
-        rect(buffers, m, cx - r, cy + r - t, cx + r, cy + r, z, color);
-        rect(buffers, m, cx - r, cy - r * 0.6, cx - r * 0.45, cy - r * 0.6 + t, z, color);
-        rect(buffers, m, cx + r * 0.45, cy - r * 0.6, cx + r, cy - r * 0.6 + t, z, color);
+    /** The power symbol: a ring open at the top with a stroke through the gap. */
+    private static void power(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
+        double t = r * 0.28, z = -0.008;
+        // Angles run clockwise from the right, since y points down; -90° is straight up.
+        arc(buffers, m, cx, cy, r, t, -55, 235, z, color);
         rect(buffers, m, cx - t / 2, cy - r * 1.1, cx + t / 2, cy + r * 0.1, z, color);
     }
 
-    /** Vanilla's destroy-stage cracks over the whole panel, one tile per block. */
-    private static void cracks(MultiBufferSource buffers, Matrix4f m, ScreenView view, int stage) {
-        var out = buffers.getBuffer(CRACKS.apply(ModelBakery.BREAKING_LOCATIONS.get(stage)));
-        double x0 = -ScreenView.MARGIN, y0 = -view.barHeight - ScreenView.MARGIN, z = -0.006;
-        for (int i = 0; i < view.blocksWide; i++)
-            for (int j = 0; j < view.blocksHigh; j++) {
-                float a = (float) (x0 + i), b = (float) (y0 + j), c = a + 1, d = b + 1;
-                out.addVertex(m, a, b, (float) z).setColor(CRACK).setUv(0, 0).setLight(LIGHT);
-                out.addVertex(m, a, d, (float) z).setColor(CRACK).setUv(0, 1).setLight(LIGHT);
-                out.addVertex(m, c, d, (float) z).setColor(CRACK).setUv(1, 1).setLight(LIGHT);
-                out.addVertex(m, c, b, (float) z).setColor(CRACK).setUv(1, 0).setLight(LIGHT);
-            }
+    /** A circular arrow: most of a ring, with its head at the end. */
+    private static void reset(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
+        double t = r * 0.28, z = -0.008, end = Math.toRadians(250);
+        arc(buffers, m, cx, cy, r, t, -30, 250, z, color);
+        // The head points along the ring at its end: d is the way round, n points outward.
+        double px = cx + (r - t / 2) * Math.cos(end), py = cy + (r - t / 2) * Math.sin(end);
+        double dx = -Math.sin(end), dy = Math.cos(end), nx = Math.cos(end), ny = Math.sin(end), w = t * 1.8, h = t * 2.2;
+        quad(buffers, m, new double[] {px + nx * w, py + ny * w, px - nx * w, py - ny * w, px + dx * h, py + dy * h, px + dx * h, py + dy * h}, z, color);
+    }
+
+    /** A ring's stroke from one angle to another, in degrees, t thick inside radius r. */
+    private static void arc(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, double t, double from, double to, double z, int color) {
+        int steps = 24;
+        for (int i = 0; i < steps; i++) {
+            double a = Math.toRadians(from + (to - from) * i / steps), b = Math.toRadians(from + (to - from) * (i + 1) / steps), in = r - t;
+            quad(buffers, m, new double[] {cx + r * Math.cos(a), cy + r * Math.sin(a), cx + in * Math.cos(a), cy + in * Math.sin(a),
+                cx + in * Math.cos(b), cy + in * Math.sin(b), cx + r * Math.cos(b), cy + r * Math.sin(b)}, z, color);
+        }
+    }
+
+    /** Any four corners, drawn both ways round so their order doesn't matter. */
+    private static void quad(MultiBufferSource buffers, Matrix4f m, double[] xy, double z, int color) {
+        var out = buffers.getBuffer(RenderType.textBackground());
+        for (int i = 0; i < 8; i += 2) out.addVertex(m, (float) xy[i], (float) xy[i + 1], (float) z).setColor(color).setLight(LIGHT);
+        for (int i = 6; i >= 0; i -= 2) out.addVertex(m, (float) xy[i], (float) xy[i + 1], (float) z).setColor(color).setLight(LIGHT);
+    }
+
+    /** An arrow rising out of a tray. */
+    private static void pickUp(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
+        double t = r * 0.28, z = -0.008;
+        rect(buffers, m, cx - r, cy + r - t, cx + r, cy + r, z, color);
+        rect(buffers, m, cx - r, cy + r * 0.3, cx - r + t, cy + r, z, color);
+        rect(buffers, m, cx + r - t, cy + r * 0.3, cx + r, cy + r, z, color);
+        rect(buffers, m, cx - t / 2, cy - r * 0.7, cx + t / 2, cy + r * 0.5, z, color);
+        // The head, in steps narrowing to its point.
+        for (int i = 0; i < 3; i++) {
+            double half = r * (0.55 - i * 0.2), y = cy - r * 0.55 - i * t;
+            rect(buffers, m, cx - half, y - t, cx + half, y, z, color);
+        }
     }
 
     private static void texture(MultiBufferSource buffers, Matrix4f m, ResourceLocation texture, double x0, double y0, double x1, double y1, double z) {

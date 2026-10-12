@@ -43,10 +43,19 @@ final class ScreenView implements ScreenBrowser.View {
     private final Texture page = new Texture("page"), popup = new Texture("popup");
 
     /** The bar's controls, left to right. */
-    enum Part { NAME, BACK, FORWARD, RELOAD, ADDRESS, POWER }
+    enum Part { NAME, BACK, FORWARD, RELOAD, ADDRESS, MENU }
+    /** The ⋯ menu's rows, top to bottom. */
+    enum Action {
+        OFF("Turn off (clear page)"), PICKUP("Pick up (save page)"), RESET("Reset and pick up");
+
+        final String label;
+        Action(String label) { this.label = label; }
+    }
     /** Each control's left and right edge across the bar, in blocks, and the width of a square button. */
     private final double[] partStart = new double[Part.values().length], partEnd = new double[Part.values().length];
     final double unit;
+    /** The menu hangs from the bar's right end over the page: its left edge, width and row height, in blocks. */
+    final double menuX, menuWidth, menuRow;
 
     ScreenBrowser browser;
     String url = "", title = "";
@@ -97,7 +106,11 @@ final class ScreenView implements ScreenBrowser.View {
         x = place(Part.FORWARD, x, unit);
         x = place(Part.RELOAD, x, unit);
         x = place(Part.ADDRESS, x, pageWidth - x - unit);
-        place(Part.POWER, x, unit);
+        place(Part.MENU, x, unit);
+        // Rows fit three to the page, even on the smallest screen.
+        menuRow = Math.min(barHeight * 1.2, pageHeight / Action.values().length);
+        menuWidth = Math.min(pageWidth, menuRow * 9);
+        menuX = pageWidth - menuWidth;
         topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
             .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN - barHeight, 0);
     }
@@ -139,6 +152,18 @@ final class ScreenView implements ScreenBrowser.View {
         if (y < -barHeight || y >= 0) return null;
         for (var part : Part.values()) if (x >= start(part) && x < end(part)) return part;
         return null;
+    }
+
+    /** The menu row under a point, or null. Only meaningful while the menu is open. */
+    Action menuAction(double x, double y) {
+        if (x < menuX || x >= menuX + menuWidth || y < 0) return null;
+        int row = (int) (y / menuRow);
+        return row < Action.values().length ? Action.values()[row] : null;
+    }
+
+    /** A menu row's centre in the world, for development checks. */
+    Vec3 menuCenter(Action action) {
+        return topLeft.add(rightVector.scale(menuX + menuWidth / 2)).add(0, -(action.ordinal() + 0.5) * menuRow, 0);
     }
 
     boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y <= pageHeight; }

@@ -55,7 +55,6 @@ public final class ScreenDiagnostics {
                 screen.addProperty("crashed", view.crashed);
                 screen.addProperty("editable", view.editable);
                 screen.addProperty("cursor", view.cursor);
-                screen.addProperty("stage", ScreenBreaking.stage(placed));
                 // Each bar control's local span and world-space centre, for aiming real clicks at it.
                 var controls = new JsonObject();
                 for (var part : ScreenView.Part.values()) {
@@ -70,6 +69,19 @@ public final class ScreenDiagnostics {
                     controls.add(part.name().toLowerCase(), control);
                 }
                 screen.add("controls", controls);
+                // The menu's rows, where they are whether or not it's open.
+                var rows = new JsonArray();
+                for (var action : ScreenView.Action.values()) {
+                    var center = view.menuCenter(action);
+                    var row = new JsonObject();
+                    row.addProperty("action", switch (action) { case OFF -> "turn_off"; case PICKUP -> "pick_up"; case RESET -> "reset"; });
+                    row.addProperty("label", action.label);
+                    row.addProperty("x", center.x);
+                    row.addProperty("y", center.y);
+                    row.addProperty("z", center.z);
+                    rows.add(row);
+                }
+                screen.add("menuRows", rows);
                 var page = view.center();
                 screen.addProperty("pageCenter", page.x + "," + page.y + "," + page.z);
             }
@@ -78,7 +90,14 @@ public final class ScreenDiagnostics {
         result.add("screens", screens);
         result.addProperty("views", Screens.views().size());
         result.add("placement", ScreenPlacement.state());
-        result.add("breaking", ScreenBreaking.state());
+        var menu = new JsonObject();
+        var open = Screens.views().stream().filter(ScreenInput::menuOpen).findFirst().orElse(null);
+        menu.addProperty("screen", open == null ? "" : open.screen.record().id());
+        menu.addProperty("entity", open == null ? "" : open.screen.getUUID().toString());
+        var hovered = open == null ? null : ScreenInput.menuHovered(open);
+        menu.addProperty("hovered", hovered == null ? -1 : hovered.ordinal());
+        menu.addProperty("confirmingReset", ScreenInput.confirmingReset());
+        result.add("menu", menu);
         // The server's index, as last published from its own thread.
         var server = mc.getSingleplayerServer();
         var index = server == null ? null : ScreenIndex.snapshot(server);
