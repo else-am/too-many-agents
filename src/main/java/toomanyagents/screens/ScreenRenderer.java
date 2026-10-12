@@ -20,6 +20,7 @@ import org.joml.Matrix4f;
 /** Draws a screen: its panel, the page, any open dropdown, status, and the navigation bar. */
 final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     private static final int PANEL = 0xFF08090B, SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
+    private static final int BEZEL_HOVER = 0xFF383838, BEZEL_TYPING = 0xFF909090;
     private static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B, ID = 0xFFE2D4A7, MENU = 0xFF1C1F24, WARN = 0xFFE8A27C;
     private static final int LIGHT = LightTexture.FULL_BRIGHT;
     /** Like vanilla's text type, but filtered smoothly with mipmaps so distant pages don't shimmer. */
@@ -71,11 +72,12 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         pose.popPose();
     }
 
-    /** The thin black panel behind the page: its bezel, edges and back, lit like the world around it. */
+    /** The front bezel shows input focus; the edges and back stay black and lit by the world. */
     private static void panel(MultiBufferSource buffers, Matrix4f m, ScreenView view, int light) {
         double margin = ScreenView.MARGIN, x0 = -margin, x1 = view.pageWidth + margin;
         double y0 = -margin, y1 = view.pageHeight + view.barHeight + margin, front = 0.002, back = front + ScreenEntity.DEPTH;
         var out = buffers.getBuffer(RenderType.textBackground());
+        int bezel = ScreenInput.typing(view) ? BEZEL_TYPING : ScreenInput.pointing(view) ? BEZEL_HOVER : PANEL;
         double[][] faces = {
             {x0, y0, front, x0, y1, front, x1, y1, front, x1, y0, front},
             {x0, y0, front, x1, y0, front, x1, y0, back, x0, y0, back},
@@ -86,7 +88,9 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             {x0, y0, back, x1, y0, back, x1, y1, back, x0, y1, back}};
         for (var f : faces) {
             // Edges are drawn both ways round so they show whichever way culling sees them.
-            for (int i = 0; i < 12; i += 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(PANEL).setLight(light);
+            int color = f == faces[0] ? bezel : PANEL;
+            int faceLight = f == faces[0] && bezel != PANEL ? LIGHT : light;
+            for (int i = 0; i < 12; i += 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(color).setLight(faceLight);
             if (f != faces[0]) for (int i = 9; i >= 0; i -= 3) out.addVertex(m, (float) f[i], (float) f[i + 1], (float) f[i + 2]).setColor(PANEL).setLight(light);
         }
     }

@@ -57,7 +57,7 @@ public final class Screens {
         });
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerEntityRenderer(ENTITY.get(), ScreenRenderer::new));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
-        ScreenInput.register();
+        ScreenInput.register(modBus);
         ScreenPlacement.register();
         // Leases run out on the server's clock.
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> {

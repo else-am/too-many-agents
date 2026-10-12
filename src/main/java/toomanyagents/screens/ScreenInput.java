@@ -11,6 +11,7 @@ import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
@@ -19,7 +20,8 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
@@ -59,12 +61,13 @@ public final class ScreenInput {
 
     private ScreenInput() {}
 
-    static void register() {
+    static void register(IEventBus modBus) {
         NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Pre event) -> frame(event.getPartialTick().getGameTimeDeltaPartialTick(true)));
         NeoForge.EVENT_BUS.addListener(ScreenInput::mouseButton);
         NeoForge.EVENT_BUS.addListener(ScreenInput::scroll);
         NeoForge.EVENT_BUS.addListener(ScreenInput::crosshair);
-        NeoForge.EVENT_BUS.addListener((RenderGuiEvent.Post event) -> hint(event.getGuiGraphics()));
+        modBus.addListener((RegisterGuiLayersEvent event) -> event.registerAboveAll(
+            ResourceLocation.fromNamespaceAndPath("too_many_agents", "screen_typing"), (graphics, tick) -> hint(graphics)));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> {
             if (typing != null && Minecraft.getInstance().screen != null) stopTyping(false);
             if (menu != null && !menuStillOpen()) closeMenu();
@@ -76,6 +79,8 @@ public final class ScreenInput {
     /** The text being edited in a bar field of this view, or null. */
     static String fieldText(ScreenView view, ScreenView.Part part) { return typing == view && field == part ? fieldText.toString() : null; }
     static boolean fieldSelected() { return fieldSelected; }
+    static boolean typing(ScreenView view) { return typing == view && Minecraft.getInstance().screen == null; }
+    static boolean pointing(ScreenView view) { return aim != null && aim.view == view && pointing(); }
 
     /** A page is closing under the player: stop typing into it. */
     static void closing(ScreenView view) {
@@ -480,13 +485,10 @@ public final class ScreenInput {
     private static void hint(GuiGraphics graphics) {
         if (typing == null || Minecraft.getInstance().screen != null) return;
         var font = Minecraft.getInstance().font;
-        String text = field == ScreenView.Part.NAME ? "Name this screen: Enter to save, Esc to cancel"
-            : field == ScreenView.Part.ADDRESS ? "Enter an address, or Esc to cancel" : "Typing on screen, Esc to stop";
-        float scale = Minecraft.getInstance().getWindow().getGuiScale() >= 3 ? 0.5f : 1f;
+        String text = "Typing on screen, press Esc to release";
         var pose = graphics.pose();
         pose.pushPose();
         pose.translate(graphics.guiWidth() / 2f, graphics.guiHeight() - 52, 0);
-        pose.scale(scale, scale, 1);
         int x = -font.width(text) / 2;
         graphics.fill(x - 5, -4, x + font.width(text) + 5, 12, 0xB0101114);
         graphics.drawString(font, text, x, 0, 0xFFE6E8EB, false);
