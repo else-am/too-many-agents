@@ -11,6 +11,7 @@ import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
@@ -186,6 +187,11 @@ public final class ScreenInput {
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) return;
+        // Captured clicks bypass vanilla's swing along with its attack/use handling.
+        if (menu != null || aim != null) {
+            var player = Minecraft.getInstance().player;
+            if (player != null) player.swing(InteractionHand.MAIN_HAND);
+        }
         if (menu != null) {
             // An open menu takes the click: a row acts, anything else closes it.
             event.setCanceled(true);
