@@ -37,6 +37,7 @@ public final class ScreenDiagnostics {
             screen.addProperty("pos", placed.getPos().toShortString());
             screen.addProperty("facing", placed.facing().getName());
             screen.addProperty("blocks", placed.width() + "x" + placed.height());
+            screen.addProperty("holder", placed.holder());
             var view = Screens.views().stream().filter(candidate -> candidate.screen == placed).findFirst().orElse(null);
             screen.addProperty("view", view != null);
             screen.addProperty("browser", view != null && view.browser != null);
@@ -47,6 +48,8 @@ public final class ScreenDiagnostics {
                 screen.addProperty("painted", view.painted());
                 screen.addProperty("live", view.live());
                 screen.addProperty("loading", view.loading);
+                screen.addProperty("title", view.title == null ? "" : view.title);
+                screen.addProperty("pendingCalls", view.pendingCalls());
                 screen.addProperty("back", view.canGoBack);
                 screen.addProperty("forward", view.canGoForward);
                 screen.addProperty("crashed", view.crashed);

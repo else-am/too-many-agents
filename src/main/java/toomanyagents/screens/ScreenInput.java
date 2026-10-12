@@ -47,7 +47,7 @@ public final class ScreenInput {
     private static ScreenView.Part field;
     private static boolean fieldSelected;
     private static final StringBuilder fieldText = new StringBuilder();
-    private static final int MAX_NAME = 32;
+    static final int MAX_NAME = 32;
 
     private ScreenInput() {}
 
@@ -67,6 +67,11 @@ public final class ScreenInput {
     /** The text being edited in a bar field of this view, or null. */
     static String fieldText(ScreenView view, ScreenView.Part part) { return typing == view && field == part ? fieldText.toString() : null; }
     static boolean fieldSelected() { return fieldSelected; }
+
+    /** A page is closing under the player: stop typing into it. */
+    static void closing(ScreenView view) {
+        if (typing == view) stopTyping(false);
+    }
 
     static void forget(ScreenView view) {
         if (typing == view) typing = null;
@@ -184,7 +189,7 @@ public final class ScreenInput {
             else if (view.crashed) view.reload();
             return;
         }
-        view.inputAt = System.nanoTime();
+        view.playerInput();
         int px = view.pixelX(aim.x), py = view.pixelY(aim.y);
         long now = System.nanoTime();
         boolean again = clicked == view && button == lastClickButton && now - lastClickAt < DOUBLE_CLICK_NANOS
@@ -230,7 +235,7 @@ public final class ScreenInput {
             stopTyping(false);
             return false;
         }
-        typing.inputAt = System.nanoTime();
+        typing.playerInput();
         if (key == GLFW.GLFW_KEY_ESCAPE) {
             if (action == GLFW.GLFW_PRESS) stopTyping(true);
             return true;
@@ -291,7 +296,7 @@ public final class ScreenInput {
             return true;
         }
         if (typing.browser == null) return false;
-        typing.inputAt = System.nanoTime();
+        typing.playerInput();
         for (char c : Character.toChars(codePoint)) typing.browser.key(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, c, awtModifiers(mods));
         return true;
     }

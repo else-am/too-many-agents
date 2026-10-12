@@ -17,6 +17,7 @@ import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
@@ -59,6 +60,10 @@ public final class Screens {
         ScreenInput.register();
         ScreenPlacement.register();
         ScreenBreaking.register();
+        // Leases run out on the server's clock.
+        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> {
+            if (event.getServer().getTickCount() % 10 == 0) ScreenIndex.get(event.getServer()).expire(event.getServer());
+        });
     }
 
     /** The view drawn for a screen, created the first time it is seen. */
@@ -92,6 +97,9 @@ public final class Screens {
     }
 
     static List<ScreenView> views() { return new ArrayList<>(views.values()); }
+
+    /** The view already made for a screen, if any. */
+    static ScreenView existing(UUID screen) { return views.get(screen); }
 
     /** Persists a screen's page. A player navigating takes the page over from whichever thread opened it. */
     static void saveUrl(ScreenView view, String url, boolean byPlayer) {

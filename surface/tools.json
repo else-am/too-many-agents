@@ -249,5 +249,112 @@
       "additionalProperties": false
     },
     "operation": "COMMAND"
+  },
+  {
+    "name": "screen_list",
+    "description": "List the screens you can use: your project's screens and shared ones, yours first, then nearest the user, capped at 50 (`truncated` counts the rest). `mine: true` lists only your station's screens. `distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. A `lease` identifies the thread currently controlling the screen.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "mine": {
+          "type": "boolean",
+          "description": "Only your station's screens."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "SCREEN_LIST"
+  },
+  {
+    "name": "screen_open",
+    "description": "Show something on a screen: a URL, or a file path. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Name a screen when it's unnamed, or when its name no longer describes what you're now using it for; otherwise leave the name alone.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "screen": {
+          "type": "string",
+          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "url",
+            "file"
+          ]
+        },
+        "target": {
+          "type": "string",
+          "description": "URL, or file path (relative paths resolve from your working directory)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Names the screen."
+        }
+      },
+      "required": [
+        "kind",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "SCREEN_OPEN"
+  },
+  {
+    "name": "screen_cdp",
+    "description": "A plain Chrome DevTools Protocol passthrough to a screen's page. To run JS: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }`. Returns the method's result plus the current `{ url, title }`. One call, one result; events aren't streamed. Results are capped at about 64 KB (use `screen_screenshot` for images). Times out after about 30s. Fails with `unavailable` on an idle screen.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "screen": {
+          "type": "string",
+          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+        },
+        "method": {
+          "type": "string",
+          "description": "e.g. `Runtime.evaluate`, `Network.getResponseBody`."
+        },
+        "params": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "method"
+      ],
+      "additionalProperties": false
+    },
+    "operation": "SCREEN_CDP"
+  },
+  {
+    "name": "screen_screenshot",
+    "description": "Capture the frame already painted for a screen, at its viewport size. Saves the PNG and returns `{ path, url, title }`; open the path with your image tool. Doesn't need the lease. Fails with `unavailable` on an idle screen.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "screen": {
+          "type": "string",
+          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "SCREEN_SCREENSHOT"
+  },
+  {
+    "name": "screen_close",
+    "description": "Close a screen's page so it goes idle. Its id, name and station link stay, and a later `screen_open` brings it back. Releases your lease.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "screen": {
+          "type": "string",
+          "description": "Screen id (`s4`) or name. Omit to use your station's only screen."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "SCREEN_CLOSE"
   }
 ]

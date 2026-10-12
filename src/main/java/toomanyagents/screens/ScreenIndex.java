@@ -2,16 +2,21 @@ package toomanyagents.screens;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.saveddata.SavedData;
 
@@ -28,6 +33,25 @@ final class ScreenIndex extends SavedData {
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private long next = 1;
+
+    /**
+     * A thread's hold on a screen, kept in memory only. It lasts while any of its calls runs and for 20 seconds after
+     * the last one ends. Each call keeps the lease it took, so ending a call never touches a newer lease.
+     */
+    static final class Lease {
+        static final long AFTER_MILLIS = 20_000;
+        final String thread, holder;
+        int running;
+        long until;
+
+        private Lease(String thread, String holder) {
+            this.thread = thread;
+            this.holder = holder;
+        }
+
+        int secondsLeft() { return running > 0 ? (int) (AFTER_MILLIS / 1000) : (int) Math.max(0, (until - System.currentTimeMillis() + 999) / 1000); }
+    }
+    private final Map<String, Lease> leases = new HashMap<>();
 
     private record Published(MinecraftServer server, JsonObject snapshot) {}
     private static volatile Published published;
@@ -55,7 +79,13 @@ final class ScreenIndex extends SavedData {
             if (record.id().matches("s[1-9]\\d{0,17}")) next = Math.max(next, Long.parseLong(record.id().substring(1)) + 1);
             update(screen);
         }
+        // Holders aren't saved, so a screen loaded again shows its lease from here.
+        var lease = lease(screen.record().id());
+        var entry = entries.get(screen.record().id());
+        screen.setHolder(lease != null && entry != null && entry.entity.equals(screen.getUUID()) ? lease.holder : "");
     }
+
+    Collection<Entry> entries() { return entries.values(); }
 
     void update(ScreenEntity screen) {
         var record = screen.record();
@@ -72,7 +102,60 @@ final class ScreenIndex extends SavedData {
         var existing = entries.get(screen.record().id());
         if (existing == null || !existing.entity.equals(screen.getUUID())) return;
         entries.remove(screen.record().id());
+        leases.remove(screen.record().id());
         changed(screen.getServer());
+    }
+
+    /** The screen's current lease, or null once it has ended. */
+    Lease lease(String id) {
+        var lease = leases.get(id);
+        return lease != null && lease.running == 0 && System.currentTimeMillis() >= lease.until ? null : lease;
+    }
+
+    /** Starts a call under this thread's lease, taking it if the screen is free. The caller checks it is free. */
+    Lease take(MinecraftServer server, String id, String thread, String holder) {
+        var lease = lease(id);
+        if (lease == null || !lease.thread.equals(thread)) {
+            lease = new Lease(thread, holder);
+            leases.put(id, lease);
+            showHolder(server, id, holder);
+        }
+        lease.running++;
+        publish(server);
+        return lease;
+    }
+
+    /** A call under this lease has ended, however it ended. */
+    void ended(MinecraftServer server, String id, Lease lease) {
+        if (leases.get(id) != lease) return;
+        lease.running--;
+        if (lease.running == 0) lease.until = System.currentTimeMillis() + Lease.AFTER_MILLIS;
+        publish(server);
+    }
+
+    /** Ends a lease early: the page was closed, or its holder stopped. */
+    void release(MinecraftServer server, String id) {
+        if (leases.remove(id) == null) return;
+        showHolder(server, id, "");
+        publish(server);
+    }
+
+    /** Ends every lease a thread holds, or every lease when thread is null. */
+    void releaseThread(MinecraftServer server, String thread) {
+        for (var id : leases.entrySet().stream().filter(e -> thread == null || e.getValue().thread.equals(thread)).map(Map.Entry::getKey).toList())
+            release(server, id);
+    }
+
+    /** Drops leases whose time is up. */
+    void expire(MinecraftServer server) {
+        for (var id : leases.keySet().stream().filter(id -> lease(id) == null).toList()) release(server, id);
+    }
+
+    private void showHolder(MinecraftServer server, String id, String holder) {
+        var entry = entries.get(id);
+        if (entry == null) return;
+        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension)));
+        if (level != null && level.getEntity(entry.entity) instanceof ScreenEntity screen) screen.setHolder(holder);
     }
 
     private void changed(MinecraftServer server) {
@@ -95,6 +178,15 @@ final class ScreenIndex extends SavedData {
             row.addProperty("pos", entry.pos.toShortString());
             row.addProperty("facing", entry.facing);
             row.addProperty("size", entry.width + "x" + entry.height);
+            var lease = lease(entry.screen.id());
+            if (lease != null) {
+                var held = new JsonObject();
+                held.addProperty("thread", lease.thread);
+                held.addProperty("holder", lease.holder);
+                held.addProperty("running", lease.running);
+                held.addProperty("secondsLeft", lease.secondsLeft());
+                row.add("lease", held);
+            }
             screens.add(row);
         }
         result.add("screens", screens);

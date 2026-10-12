@@ -18,32 +18,32 @@ You place a screen and ask an agent to set something up on it. You and agents us
 
 ### Screen record
 
-The screen's id, name, URL and `openedBy` are saved on the screen entity and reach the client as ordinary synced entity data:
+~~The screen's id, name, URL and `openedBy` are saved on the screen entity and reach the client as ordinary synced entity data:~~
 
 ```java
 record Screen(String id, String name, String url, String openedBy) {}
 ```
 
 - ~~Ids are short and sayable: `s1`, `s2`… from a per-world counter in the mod's world state, never reused, so an old reference can't land on a new screen.~~
-- A small server-side index (id, name, URL, position) lets `screen_list` include placed screens in unloaded chunks. A screen in an item is not listed.
-- ~~Players name a screen by clicking the id on its bar~~; agents name one through `screen_open`.
+- ~~A small server-side index (id, name, URL, position) lets `screen_list` include placed screens in unloaded chunks. A screen in an item is not listed.~~
+- ~~Players name a screen by clicking the id on its bar; agents name one through `screen_open`.~~
 - ~~`url` is empty when the screen is idle, meaning no Chromium browser exists for it.~~
-- `openedBy` is the thread that last opened the page. It's set by `screen_open`, and cleared when a player navigates or the screen is closed.
+- ~~`openedBy` is the thread that last opened the page. It's set by `screen_open`, and cleared when a player navigates or the screen is closed.~~
 - Planned `terminal` and `review` pages will use our own `tma://` scheme; see Later.
 
 ### Access and defaults
 
-- **Which screens an agent can use:** screens in its project's box, plus shared screens (outside any project box). Never another project's screens.
-- **"Yours":** a screen linked to your station. Links are worked out live: a screen belongs to the nearest station within about 4 blocks.
-- **When `screen` is omitted:**
-  - If your station has exactly one screen, that's the one used.
-  - Otherwise the call fails with `choose_screen` and returns only your station's screens.
-  - Agents without a station always pass `screen`.
-- **`screen` arguments** accept an id (`s4`) or a name (`whiteboard`). Names needn't be unique; a name matching several screens fails with `choose_screen`, listing the matches.
+- ~~**Which screens an agent can use:** screens in its project's box, plus shared screens (outside any project box). Never another project's screens.~~
+- ~~**"Yours":** a screen linked to your station. Links are worked out live: a screen belongs to the nearest station within about 4 blocks.~~
+- ~~**When `screen` is omitted:**~~
+  - ~~If your station has exactly one screen, that's the one used.~~
+  - ~~Otherwise the call fails with `choose_screen` and returns only your station's screens.~~
+  - ~~Agents without a station always pass `screen`.~~
+- ~~**`screen` arguments** accept an id (`s4`) or a name (`whiteboard`). Names needn't be unique; a name matching several screens fails with `choose_screen`, listing the matches.~~
 
 ### Tools
 
-All five are ungated, so every mod agent gets them, with or without Minecraft access. Responses avoid Minecraft details: threads are identified by id, and sizes are in pixels.
+~~All five are ungated, so every mod agent gets them, with or without Minecraft access. Responses avoid Minecraft details: threads are identified by id, and sizes are in pixels.~~
 
 #### `screen_list`
 
@@ -51,8 +51,8 @@ All five are ungated, so every mod agent gets them, with or without Minecraft ac
 |---|---|
 | `mine` | optional boolean: only your station's screens |
 
-- Without `mine`: every screen you can use, sorted yours first, then nearest the user, capped at 50, with `truncated: n` when there are more.
-- The description includes: "`distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'."
+- ~~Without `mine`: every screen you can use, sorted yours first, then nearest the user, capped at 50, with `truncated: n` when there are more.~~
+- ~~The description includes: "`distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'."~~
 
 ```jsonc
 {
@@ -83,9 +83,9 @@ Shows something on a screen.
 | `target` | URL · file path |
 | `name` | optional: names the screen |
 
-- It waits for the page to load (up to about 15s), then returns `{ screen, url, title }`.
-- It sets `openedBy` to the caller.
-- Names tell agents at a glance what each screen is for. The description says: name a screen when it's unnamed, or when its name no longer describes what you're now using it for; otherwise leave the name alone.
+- ~~It waits for the page to load (up to about 15s), then returns `{ screen, url, title }`.~~
+- ~~It sets `openedBy` to the caller.~~
+- ~~Names tell agents at a glance what each screen is for. The description says: name a screen when it's unnamed, or when its name no longer describes what you're now using it for; otherwise leave the name alone.~~
 - `terminal` and `review` kinds are planned; see Later.
 
 #### `screen_cdp`
@@ -98,11 +98,11 @@ A plain CDP passthrough to the screen's page.
 | `method` | e.g. `Runtime.evaluate`, `Network.getResponseBody` |
 | `params` | optional object |
 
-- The description names the common call: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }` for running JS.
-- It returns the method's result plus the current `{ url, title }`.
-- Results are capped at about 64 KB. An oversized `Page.captureScreenshot` result points to `screen_screenshot`.
-- One call, one result. Events aren't streamed. Timeout about 30s.
-- It fails with `unavailable` on an idle screen.
+- ~~The description names the common call: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }` for running JS.~~
+- ~~It returns the method's result plus the current `{ url, title }`.~~
+- ~~Results are capped at about 64 KB. An oversized `Page.captureScreenshot` result points to `screen_screenshot`.~~
+- ~~One call, one result. Events aren't streamed. Timeout about 30s.~~
+- ~~It fails with `unavailable` on an idle screen.~~
 
 #### `screen_screenshot`
 
@@ -110,10 +110,10 @@ A plain CDP passthrough to the screen's page.
 |---|---|
 | `screen` | optional, id or name |
 
-- It takes the frame already painted for the screen, at its viewport size.
-- Like `minecraft_pov`, it saves the PNG to the thread's Attachments folder and returns `{ path, url, title }` with "open this with your image tool".
-- It doesn't need the lease, since it only reads.
-- It fails with `unavailable` on an idle screen.
+- ~~It takes the frame already painted for the screen, at its viewport size.~~
+- ~~Like `minecraft_pov`, it saves the PNG to the thread's Attachments folder and returns `{ path, url, title }` with "open this with your image tool".~~
+- ~~It doesn't need the lease, since it only reads.~~
+- ~~It fails with `unavailable` on an idle screen.~~
 
 #### `screen_close`
 
@@ -121,26 +121,26 @@ A plain CDP passthrough to the screen's page.
 |---|---|
 | `screen` | optional, id or name |
 
-- It closes the browser and clears `url` and `openedBy`, so the screen goes idle: dark surface, bar showing its id and name.
-- The record and the station link stay, and a later `screen_open` brings it back.
+- ~~It closes the browser and clears `url` and `openedBy`, so the screen goes idle: dark surface, bar showing its id and name.~~
+- ~~The record and the station link stay, and a later `screen_open` brings it back.~~
 - ~~Players get the same thing as a power button on the bar.~~
 
 ### Agent instructions
 
-Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `minecraft-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list { mine: true }` finds yours, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.
+~~Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `minecraft-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list { mine: true }` finds yours, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.~~
 
 ### Lease
 
-- `screen_open`, `screen_cdp` and `screen_close` take the screen's lease, or renew it if you already hold it. The lease lasts **20s after your last call ends**, and is also held while a call is running. `screen_close` releases it afterwards.
-- While someone else holds it, other threads' calls fail with `leased: { thread, secondsLeft, url }`. Agents decide whether to wait.
-- Players are never blocked, and `screen_list` and `screen_screenshot` always work.
-- The lease is released early when the holder's thread stops or is archived, or when the screen breaks or is closed.
-- It lives in the game's memory only and is never saved.
-- While leased, the screen's bar shows the holder's name.
+- ~~`screen_open`, `screen_cdp` and `screen_close` take the screen's lease, or renew it if you already hold it. The lease lasts **20s after your last call ends**, and is also held while a call is running. `screen_close` releases it afterwards.~~
+- ~~While someone else holds it, other threads' calls fail with `leased: { thread, secondsLeft, url }`. Agents decide whether to wait.~~
+- ~~Players are never blocked, and `screen_list` and `screen_screenshot` always work.~~
+- ~~The lease is released early when the holder's thread stops or is archived, or when the screen breaks or is closed.~~
+- ~~It lives in the game's memory only and is never saved.~~
+- ~~While leased, the screen's bar shows the holder's name.~~
 
 ### Errors
 
-None of these are retried automatically:
+~~None of these are retried automatically:~~
 
 | Code | When |
 |---|---|
@@ -153,16 +153,17 @@ None of these are retried automatically:
 
 ### Plumbing
 
-- The tool definitions go in `surface/tools.json` without the `minecraft` flag.
-- Calls go from the plugin to Java over the existing connection, then onto the client thread. `screen_cdp` uses the screen's `CefDevToolsClient`, and `screen_screenshot` reads its painted frame.
-- `screen_cdp` calls `browser.getDevToolsClient().executeDevToolsMethod(method, params)`, in-process with no debugging port. Verified live on macOS (jcefmaven 152, off-screen): evaluate and awaited promises return values, page exceptions come back as normal results with `exceptionDetails` (only protocol errors fail the call), the client survives navigation and renderer crash/reload, large results (8 MiB) and console events work.
-- A call pending when the browser closes never completes. Every call gets our own timeout, and closing a screen fails its pending calls.
-- Results and events arrive on Minecraft's render thread. Never block there; hand results off.
-- Chromium's browser process runs inside Minecraft's process (libcef via JNI), so a bug there kills the game without saving. Keep every CEF call on its proper thread, do no blocking work in callbacks, and handle shutdown order carefully.
-- Screenshots reuse `minecraft_pov`'s save path in `bb-plugin/images.ts`.
-- The game and its world records own leases, access checks and `openedBy`.
+- ~~The tool definitions go in `surface/tools.json` without the `minecraft` flag.~~
+- ~~Calls go from the plugin to Java over the existing connection, then onto the client thread. `screen_cdp` uses the screen's `CefDevToolsClient`, and `screen_screenshot` reads its painted frame.~~
+- ~~`screen_cdp` calls `browser.getDevToolsClient().executeDevToolsMethod(method, params)`, in-process with no debugging port. Verified live on macOS (jcefmaven 152, off-screen): evaluate and awaited promises return values, page exceptions come back as normal results with `exceptionDetails` (only protocol errors fail the call), the client survives navigation and renderer crash/reload, large results (8 MiB) and console events work.~~
+- ~~A call pending when the browser closes never completes. Every call gets our own timeout, and closing a screen fails its pending calls.~~
+- ~~Results and events arrive on Minecraft's render thread. Never block there; hand results off.~~
+- ~~Chromium's browser process runs inside Minecraft's process (libcef via JNI), so a bug there kills the game without saving. Keep every CEF call on its proper thread, do no blocking work in callbacks, and handle shutdown order carefully.~~
+- ~~Screenshots reuse `minecraft_pov`'s save path in `bb-plugin/images.ts`.~~
+- ~~The game and its world records own leases, access checks and `openedBy`.~~
 - ~~The record syncs to the client as the entity's own synced data; no custom packet. Input targets the entity hit instead of a block hit.~~
 - ~~To check while building: a screen with an empty URL must create no browser. I believe the current code still creates one for a blank screen.~~
+
 
 ## Later
 

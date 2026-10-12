@@ -8,6 +8,7 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import toomanyagents.ui.AgentUiAccess;
 import static toomanyagents.JsonState.*;
+import toomanyagents.screens.ScreenTools;
 
 /** Minecraft owns agents and bodies; BB owns conversations, providers, projects and queues. */
 final class AgentService implements AgentUiAccess, AutoCloseable {
@@ -24,6 +25,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private final Map<String,String> scopeScripts = new HashMap<>();
     // A cancel can arrive before the call it cancels.
     private final Set<String> cancelled = new HashSet<>();
+    /** Requests that are screen calls, whose cancellation must not stop the body's physical work. */
+    private final Set<String> screenScopes = new HashSet<>();
 
     private JsonArray projectRows = new JsonArray();
     private Path records;
@@ -488,7 +491,31 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             .thenCompose(done -> game.worldCommand(object("operation","station-release","agentId",agent.id),session)).thenApply(done -> null);
     }
     synchronized CompletableFuture<JsonObject> call(String id,String tool,JsonObject arguments) {
-        return guarded(() -> { var agent=require(id); return AgentSurface.call(agent.minecraftAccess,game,agent.body,loadedSession,null,tool,arguments); });
+        return guarded(() -> {
+            var agent=require(id);
+            if(tool.startsWith("screen_")) {
+                // The same screen call an agent's thread makes, so development checks exercise its access and leases.
+                if(agent.archived || agent.deleted || agent.threadId.isBlank()) return failed("This agent has no active conversation.");
+                var requestId=UUID.randomUUID().toString();
+                var scope=game.newToolScope(loadedSession);
+                scopes.put(requestId,scope); scopeAgents.put(requestId,agent.id); screenScopes.add(requestId);
+                return game.screen(scope,screenCaller(agent),tool,arguments,Long.MAX_VALUE).whenComplete((done,failure) -> screenFinished(requestId,scope));
+            }
+            return AgentSurface.call(agent.minecraftAccess,game,agent.body,loadedSession,null,tool,arguments);
+        });
+    }
+
+    private synchronized void screenFinished(String requestId,GameAccess.ToolScope scope) {
+        if(scopes.remove(requestId)!=null) scope.close("tool_finished");
+        scopeAgents.remove(requestId); screenScopes.remove(requestId);
+    }
+
+    /** Who is calling a screen tool. Screens need no body; one that is present gives distances from it. */
+    private ScreenTools.Caller screenCaller(Agent agent) {
+        var threads=new HashMap<String,String>();
+        for(var other:agents.values()) if(!other.deleted && !other.threadId.isBlank()) threads.put(other.id,other.threadId);
+        boolean present=!agent.removed && agent.body!=null && game.belongsToCurrentWorld(agent.body);
+        return new ScreenTools.Caller(agent.id,agent.threadId,agent.name,agent.projectId,present?UUID.fromString(agent.body.entityUuid()):null,threads);
     }
 
     static final class StaleSessionException extends IllegalStateException {
@@ -597,11 +624,26 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                         var agent=agents.get(scopeAgents.remove(target));
                         var scriptId=scopeScripts.remove(target);
                         scope.close("tool_cancelled");
-                        if(agent!=null) game.requestActionStop(agent.body,session,scriptId);
+                        // A screen call has nothing physical to stop, and the body may be busy with other work.
+                        if(agent!=null && !screenScopes.remove(target)) game.requestActionStop(agent.body,session,scriptId);
                     }
                     return CompletableFuture.completedFuture(new JsonObject());
                 }
                 case "world_metadata": return CompletableFuture.completedFuture(worldView());
+                case "screen": {
+                    // Screen tools are for every agent, with or without a body or Minecraft access.
+                    // Refusals are lifecycle failures, which the agent reads as screen errors.
+                    if(expiresAt<System.currentTimeMillis()) return ScreenTools.settle(failed("expired_before_execution"));
+                    var agent=require(text(request,"agentId"));
+                    if(agent.archived || agent.deleted || agent.threadId.isBlank() || !agent.threadId.equals(text(request,"threadId")))
+                        return ScreenTools.settle(failed("conversation_unavailable"));
+                    UUID.fromString(requestId);
+                    if(cancelled.remove(requestId) || scopes.containsKey(requestId)) return ScreenTools.settle(failed("tool_cancelled"));
+                    var scope=game.newToolScope(session);
+                    scopes.put(requestId,scope); scopeAgents.put(requestId,agent.id); screenScopes.add(requestId);
+                    return game.screen(scope,screenCaller(agent),text(request,"tool"),obj(request,"arguments"),expiresAt)
+                        .whenComplete((done,failure) -> screenFinished(requestId,scope));
+                }
             }
             if(expiresAt<System.currentTimeMillis()) return failed("expired_before_execution");
             String actor=text(request,"agentId");
@@ -675,8 +717,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     }
     private synchronized void closeScopes(String agentId,String reason) {
         var keys=scopes.keySet().stream().filter(key -> agentId==null || agentId.equals(scopeAgents.get(key))).toList();
-        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); scopeScripts.remove(key); }
+        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); scopeScripts.remove(key); screenScopes.remove(key); }
         for(var agent:agents.values()) if(agentId==null || agentId.equals(agent.id)) game.requestActionStop(agent.body,loadedSession);
+        // A thread that stops, is archived or loses its connection gives up its screens at once.
+        var holder=agentId==null?null:agents.get(agentId);
+        if(agentId==null) game.releaseScreenLeases(null,loadedSession);
+        else if(holder!=null && !holder.threadId.isBlank()) game.releaseScreenLeases(holder.threadId,loadedSession);
     }
     synchronized void disconnectBb() {
         connectionId=UUID.randomUUID().toString();

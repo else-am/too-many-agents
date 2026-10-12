@@ -1,16 +1,21 @@
 package toomanyagents.screens;
 
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.systems.RenderSystem;
 import java.awt.Rectangle;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.phys.Vec3;
+import org.cef.browser.CefDevToolsClient;
 import org.cef.browser.ScreenBrowser;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -44,10 +49,22 @@ final class ScreenView implements ScreenBrowser.View {
     final double unit;
 
     ScreenBrowser browser;
-    String url = "";
-    /** The player's last click or key on the page, and whether the page's next address is the player's doing. */
-    long inputAt;
-    private boolean playerNavigating;
+    String url = "", title = "";
+    /**
+     * The player's last click or key on the page, unless an agent's call has come since, and whether the page's next
+     * address is the player's doing.
+     */
+    private long inputAt;
+    private boolean playerInput, playerNavigating;
+    /** Agent calls waiting on this page; closing it fails them. An open waits for its page's load to finish. */
+    private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
+    private CompletableFuture<Void> opening;
+    private boolean openingStarted;
+    /** The page an open replaced, whose late loads mustn't complete it. */
+    private String superseded = "";
+    /** Changes whenever an agent opens a page or the browser closes, so a call's answer can't come from another page. */
+    long generation;
+    private CefDevToolsClient devTools;
     /** The page last read from the entity; our own saves reach it a tick later. */
     private String saved = "";
     boolean loading, canGoBack, canGoForward, crashed;
@@ -68,9 +85,9 @@ final class ScreenView implements ScreenBrowser.View {
         pageWidth = blocksWide - 2 * MARGIN;
         barHeight = Math.clamp((blocksHigh - 2 * MARGIN) * 0.08, 0.14, 0.3);
         pageHeight = blocksHigh - 2 * MARGIN - barHeight;
-        double scale = Math.min(1, Math.sqrt(MAX_PIXELS / (pageWidth * pageHeight * PIXELS_PER_BLOCK * PIXELS_PER_BLOCK)));
-        pixelWidth = (int) Math.round(pageWidth * PIXELS_PER_BLOCK * scale);
-        pixelHeight = (int) Math.round(pageHeight * PIXELS_PER_BLOCK * scale);
+        var pixels = viewport(blocksWide, blocksHigh);
+        pixelWidth = pixels[0];
+        pixelHeight = pixels[1];
         normal = Vec3.atLowerCornerOf(facing.getNormal());
         rightVector = Vec3.atLowerCornerOf(right.getNormal());
         // Buttons are bar-height squares, narrowed on small screens so the address field keeps some room.
@@ -83,6 +100,13 @@ final class ScreenView implements ScreenBrowser.View {
         place(Part.POWER, x, unit);
         topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
             .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN - barHeight, 0);
+    }
+
+    /** The page's size in pixels for a screen this many blocks across and high. */
+    static int[] viewport(int blocksWide, int blocksHigh) {
+        double width = blocksWide - 2 * MARGIN, height = blocksHigh - 2 * MARGIN - Math.clamp((blocksHigh - 2 * MARGIN) * 0.08, 0.14, 0.3);
+        double scale = Math.min(1, Math.sqrt(MAX_PIXELS / (width * height * PIXELS_PER_BLOCK * PIXELS_PER_BLOCK)));
+        return new int[] {(int) Math.round(width * PIXELS_PER_BLOCK * scale), (int) Math.round(height * PIXELS_PER_BLOCK * scale)};
     }
 
     boolean matches(ScreenEntity other) {
@@ -150,9 +174,11 @@ final class ScreenView implements ScreenBrowser.View {
         Screens.saveUrl(this, target, true);
     }
 
+    /** The player reloading takes the page over, like navigating. */
     void reload() {
         crashed = false;
         if (browser != null) browser.reload();
+        Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
     }
 
     void back() {
@@ -169,16 +195,74 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** Closes the browser and leaves the screen idle, keeping its id and name. */
     void powerOff() {
+        shutDown();
+        Screens.edit(this, record -> new Screen(record.id(), record.name(), "", ""));
+    }
+
+    /** powerOff without the record change, for callers that make it themselves. */
+    void shutDown() {
         close();
         url = "";
         crashed = loading = canGoBack = canGoForward = editable = false;
         playerNavigating = false;
-        Screens.edit(this, record -> new Screen(record.id(), record.name(), "", ""));
     }
 
     void rename(String name) {
         Screens.edit(this, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
     }
+
+    /** The player clicked or typed on the page. */
+    void playerInput() {
+        inputAt = System.nanoTime();
+        playerInput = true;
+    }
+
+    /** An agent is acting on the page, so what it does next isn't the player's, whatever they did just before. */
+    private void agentInput() {
+        playerInput = false;
+        playerNavigating = false;
+    }
+
+    /** An agent shows a page here. Completes once that page has loaded. */
+    CompletableFuture<Void> open(String target) {
+        agentInput();
+        if (opening != null) opening.completeExceptionally(new ScreenTools.ScreenError("unavailable", "Another page was opened on this screen."));
+        // Ready before Chromium is asked, in case it answers at once.
+        var waiter = track(new CompletableFuture<Void>());
+        opening = waiter;
+        openingStarted = false;
+        superseded = browser == null ? "" : url;
+        generation++;
+        url = target;
+        title = "";
+        crashed = false;
+        if (browser != null) browser.loadURL(target);
+        else Chromium.start();
+        return waiter;
+    }
+
+    /** Runs one DevTools method on the page. */
+    CompletableFuture<String> devTools(String method, String params) {
+        agentInput();
+        if (devTools == null) devTools = browser.getDevToolsClient();
+        var result = track(new CompletableFuture<String>());
+        devTools.executeDevToolsMethod(method, params).whenComplete((value, failure) -> {
+            if (failure != null) result.completeExceptionally(failure);
+            else result.complete(value);
+        });
+        return result;
+    }
+
+    /** The page's last painted frame, exactly as painted. Owned by the caller. */
+    NativeImage frame() { return page.read(); }
+
+    private <T> CompletableFuture<T> track(CompletableFuture<T> call) {
+        pending.add(call);
+        call.whenComplete((value, failure) -> pending.remove(call));
+        return call;
+    }
+
+    int pendingCalls() { return pending.size(); }
 
     /** Distant or unseen screens keep their last frame; their pages tick over slowly. */
     void setLive(boolean value) {
@@ -195,10 +279,17 @@ final class ScreenView implements ScreenBrowser.View {
     ResourceLocation popupTexture() { return popup.location; }
 
     void close() {
+        if (devTools != null) devTools.close();
+        devTools = null;
         if (browser != null) Chromium.close(browser);
         browser = null;
+        generation++;
+        opening = null;
+        title = "";
         page.release();
         popup.release();
+        var failure = new ScreenTools.ScreenError("unavailable", "The screen's page was closed.");
+        for (var call : pending) call.completeExceptionally(failure);
     }
 
     /** Regenerates the distance mip levels after new frames, once per drawn frame. */
@@ -242,8 +333,33 @@ final class ScreenView implements ScreenBrowser.View {
             loading = value;
             canGoBack = back;
             canGoForward = forward;
-            if (!value) playerNavigating = false;
+            if (value) return;
+            playerNavigating = false;
+            if (opening != null && !opening.isDone() && openingStarted) {
+                opening.complete(null);
+                opening = null;
+            }
         });
+    }
+
+    /**
+     * The main frame started loading; an open waits for the load that starts after it. A late load of the page it
+     * replaced doesn't count. Redirects can change the address, so any other page does.
+     */
+    void loadStarted(ScreenBrowser source, String address) {
+        onRender(() -> {
+            if (source != browser || opening == null || opening.isDone()) return;
+            String loaded = trimSlash(address);
+            if (loaded.equals(trimSlash(url)) || !loaded.equals(trimSlash(superseded))) openingStarted = true;
+        });
+    }
+
+    private static String trimSlash(String address) {
+        return address == null ? "" : address.endsWith("/") ? address.substring(0, address.length() - 1) : address;
+    }
+
+    void title(ScreenBrowser source, String value) {
+        onRender(() -> { if (source == browser) title = value == null ? "" : value; });
     }
 
     /** A main-frame navigation the page started from a user gesture. Only the player's own recent input makes it theirs. */
@@ -264,7 +380,7 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** Same-page navigations skip the gesture check, so a click just before still counts. */
-    private boolean recentInput() { return System.nanoTime() - inputAt < 1_000_000_000L; }
+    private boolean recentInput() { return playerInput && System.nanoTime() - inputAt < 1_000_000_000L; }
 
     void crashed(ScreenBrowser source) { onRender(() -> { if (source == browser) crashed = true; }); }
 
@@ -318,6 +434,14 @@ final class ScreenView implements ScreenBrowser.View {
             GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
             GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
             mipmapsStale = true;
+        }
+
+        /** Reads the frame back from the GPU. Render thread only. */
+        NativeImage read() {
+            var image = new NativeImage(width, height, false);
+            GlStateManager._bindTexture(getId());
+            image.downloadTexture(0, false);
+            return image;
         }
 
         void updateMipmaps() {

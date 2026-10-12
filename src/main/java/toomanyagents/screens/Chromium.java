@@ -131,6 +131,15 @@ final class Chromium {
                 var view = views.get(browser);
                 if (view != null) view.loading((ScreenBrowser) browser, loading, back, forward);
             }
+            @Override public void onLoadStart(CefBrowser browser, CefFrame frame, CefRequest.TransitionType transition) {
+                var view = views.get(browser);
+                if (view != null && frame.isMain()) view.loadStarted((ScreenBrowser) browser, frame.getURL());
+            }
+            @Override public void onLoadError(CefBrowser browser, CefFrame frame, ErrorCode code, String text, String failedUrl) {
+                // An aborted load is only the previous page giving way to the next.
+                var view = views.get(browser);
+                if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED) view.loadStarted((ScreenBrowser) browser, failedUrl);
+            }
             @Override public void onLoadEnd(CefBrowser browser, CefFrame frame, int status) {
                 frame.executeJavaScript(PAGE_SCRIPT, "", 0);
             }
@@ -139,6 +148,10 @@ final class Chromium {
             @Override public void onAddressChange(CefBrowser browser, CefFrame frame, String url) {
                 var view = views.get(browser);
                 if (view != null && frame.isMain()) view.address((ScreenBrowser) browser, url);
+            }
+            @Override public void onTitleChange(CefBrowser browser, String title) {
+                var view = views.get(browser);
+                if (view != null) view.title((ScreenBrowser) browser, title);
             }
         });
         client.addRequestHandler(new CefRequestHandlerAdapter() {

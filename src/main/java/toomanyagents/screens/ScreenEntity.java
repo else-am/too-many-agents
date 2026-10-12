@@ -39,6 +39,8 @@ public final class ScreenEntity extends HangingEntity {
     private static final EntityDataAccessor<String> OPENED_BY = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> WIDTH = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> HEIGHT = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.INT);
+    /** The name of whoever holds the screen's lease, for its bar. Never saved: leases live in memory. */
+    private static final EntityDataAccessor<String> HOLDER = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.STRING);
 
     public ScreenEntity(EntityType<? extends ScreenEntity> type, Level level) {
         super(type, level);
@@ -53,7 +55,7 @@ public final class ScreenEntity extends HangingEntity {
     }
 
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder) {
-        builder.define(ID, "").define(NAME, "").define(URL, "").define(OPENED_BY, "").define(WIDTH, 1).define(HEIGHT, 1);
+        builder.define(ID, "").define(NAME, "").define(URL, "").define(OPENED_BY, "").define(WIDTH, 1).define(HEIGHT, 1).define(HOLDER, "");
     }
 
     @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
@@ -63,17 +65,25 @@ public final class ScreenEntity extends HangingEntity {
     public Screen record() { return new Screen(entityData.get(ID), entityData.get(NAME), entityData.get(URL), entityData.get(OPENED_BY)); }
     public int width() { return entityData.get(WIDTH); }
     public int height() { return entityData.get(HEIGHT); }
+    String holder() { return entityData.get(HOLDER); }
+    void setHolder(String holder) { entityData.set(HOLDER, holder); }
     public Direction facing() { return direction; }
     /** The viewer's right when looking at the front of a screen facing this way. */
     static Direction right(Direction facing) { return facing.getCounterClockWise(); }
 
     /** Server only: changes the record and keeps the world's index in step. */
     void setRecord(Screen record) {
+        boolean closed = !entityData.get(URL).isEmpty() && record.url().isEmpty();
         entityData.set(ID, record.id());
         entityData.set(NAME, record.name());
         entityData.set(URL, record.url());
         entityData.set(OPENED_BY, record.openedBy());
-        if (level() instanceof ServerLevel server && isAddedToLevel()) ScreenIndex.get(server.getServer()).update(this);
+        if (level() instanceof ServerLevel server && isAddedToLevel()) {
+            var index = ScreenIndex.get(server.getServer());
+            index.update(this);
+            // Closing the page, by a player or an agent, ends its lease.
+            if (closed) index.release(server.getServer(), record.id());
+        }
     }
 
     @Override public void onAddedToLevel() {

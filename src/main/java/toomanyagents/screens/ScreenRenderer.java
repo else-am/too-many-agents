@@ -128,8 +128,10 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             int room = (int) ((nameW - pad * 2.5) / (size / 9));
             text(pose, buffers, record.id(), x, y, size, ID, false, -0.003);
             int idWidth = font.width(record.id() + " ");
-            if (!record.name().isEmpty() && room > idWidth)
-                text(pose, buffers, font.plainSubstrByWidth(record.name(), room - idWidth), x + idWidth * size / 9, y, size, TEXT, false, -0.003);
+            // While an agent holds the screen's lease, its name follows the screen's.
+            String holder = view.screen.holder(), label = holder.isEmpty() ? record.name() : record.name().isEmpty() ? holder : record.name() + " · " + holder;
+            if (!label.isEmpty() && room > idWidth)
+                text(pose, buffers, font.plainSubstrByWidth(label, room - idWidth), x + idWidth * size / 9, y, size, TEXT, false, -0.003);
         }
 
         double glyph = Math.min(bar * 0.5, view.unit * 0.7);
