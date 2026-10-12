@@ -124,8 +124,8 @@ public final class Screens {
     }
 
     /**
-     * Takes a screen down into the player's inventory: with its record, or blank when reset. The server checks the
-     * player can still reach it, and a screen already taken can't be taken again.
+     * Takes a screen down as an item, with its name and page or blank when reset. The server checks the player can
+     * still reach it, and a screen already taken can't be taken again.
      */
     static void pickUp(ScreenView view, boolean reset) {
         var mc = Minecraft.getInstance();
@@ -142,7 +142,7 @@ public final class Screens {
             if (!(level.getEntity(id) instanceof ScreenEntity screen) || screen.isRemoved()) return;
             double reach = ScreenInput.REACH + 1;
             if (screen.getBoundingBox().distanceToSqr(player.getEyePosition()) > reach * reach) return;
-            screen.pickUp(player, reset);
+            screen.pickUp(reset);
         });
     }
 

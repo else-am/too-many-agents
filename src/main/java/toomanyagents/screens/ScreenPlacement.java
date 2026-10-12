@@ -228,7 +228,7 @@ final class ScreenPlacement {
     private static void hint(GuiGraphics graphics) {
         var mc = Minecraft.getInstance();
         if (corner == null || mc.screen != null || mc.options.hideGui) return;
-        String text = width() + " × " + height() + (invalid.isEmpty() ? " · Right-click to place" : " · Something is in the way") + " · Esc to cancel";
+        String text = width() + " × " + height() + (invalid.isEmpty() ? ": right-click to place" : ": something is in the way") + ", Esc to cancel";
         float scale = mc.getWindow().getGuiScale() >= 3 ? 0.5f : 1f;
         var pose = graphics.pose();
         pose.pushPose();

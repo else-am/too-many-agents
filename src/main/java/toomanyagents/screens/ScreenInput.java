@@ -474,8 +474,8 @@ public final class ScreenInput {
     private static void hint(GuiGraphics graphics) {
         if (typing == null || Minecraft.getInstance().screen != null) return;
         var font = Minecraft.getInstance().font;
-        String text = field == ScreenView.Part.NAME ? "Name this screen · Enter to save · Esc to cancel"
-            : field == ScreenView.Part.ADDRESS ? "Enter an address · Esc to cancel" : "Typing on screen · Esc to stop";
+        String text = field == ScreenView.Part.NAME ? "Name this screen: Enter to save, Esc to cancel"
+            : field == ScreenView.Part.ADDRESS ? "Enter an address, or Esc to cancel" : "Typing on screen, Esc to stop";
         float scale = Minecraft.getInstance().getWindow().getGuiScale() >= 3 ? 0.5f : 1f;
         var pose = graphics.pose();
         pose.pushPose();

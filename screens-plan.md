@@ -12,9 +12,9 @@ You place a screen and ask an agent to set something up on it. You and agents us
 - ~~Painting rules for support, from `HangingEntity.survives()`: each block behind must be solid (or a repeater/comparator), nothing may collide with it, and it can't overlap another hanging entity. Whatever works for paintings works for screens.~~
 - ~~Placing: right-click a wall to set one corner. The screen is then partly placed: a preview rectangle follows your aim along that wall, in any direction, up to 16x16. Cells that fail the support rules show as invalid. Right-click again to confirm; switching items or Esc cancels.~~
 - ~~Screens cannot be broken by attacking, with any item or in creative. Bare hands interact with the page. The panel has an opaque black back.~~
-- ~~The bar's ⋯ menu offers **Turn off (clear page)** (power icon), **Pick up (save page)** (arrow out of a tray), and **Reset and pick up** (reset arrow). Turn off keeps the id/name. Pick up returns an item with the complete record. Reset asks for a second click and returns a blank item. Pickup goes into inventory, or drops beside the player if full, including in creative.~~
-- ~~A screen whose wall is removed drops its item carrying the record, using vanilla's periodic support check unchanged. Placing it again restores the screen with the same id, name and URL.~~
-- ~~If a placed item's id is already used by another live screen (e.g. a copied item), the new screen gets a new id.~~
+- ~~The bottom bar's ⋯ menu opens upward and offers **Turn off (clear page)** (power icon), **Pick up (save page)** (arrow out of a tray), and **Reset and pick up** (reset arrow). Turn off keeps the id/name. Pick up saves only name and URL; reset asks for a second click and saves neither. Both pop one item off the panel into the world, including in creative. Icons are pixel art at the same pixel scale as text.~~
+- ~~A screen whose wall is removed drops its item carrying name and URL, using vanilla's periodic support check unchanged. Every placement allocates a fresh id and starts with no openedBy; a placed screen retains its id across reloads.~~
+- ~~Items never carry an id or openedBy. Matching name and URL stack. Their tooltip shows name - URL (or whichever is set). Any single screen item can be crafted into one plain screen.~~
 - ~~No migration: block screens and screens built before this design are discarded, not converted.~~
 
 ### Screen record

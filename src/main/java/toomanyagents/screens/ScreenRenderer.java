@@ -74,7 +74,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     /** The thin black panel behind the page: its bezel, edges and back, lit like the world around it. */
     private static void panel(MultiBufferSource buffers, Matrix4f m, ScreenView view, int light) {
         double margin = ScreenView.MARGIN, x0 = -margin, x1 = view.pageWidth + margin;
-        double y0 = -view.barHeight - margin, y1 = view.pageHeight + margin, front = 0.002, back = front + ScreenEntity.DEPTH;
+        double y0 = -margin, y1 = view.pageHeight + view.barHeight + margin, front = 0.002, back = front + ScreenEntity.DEPTH;
         var out = buffers.getBuffer(RenderType.textBackground());
         double[][] faces = {
             {x0, y0, front, x0, y1, front, x1, y1, front, x1, y0, front},
@@ -94,7 +94,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     private static String status(ScreenView view, boolean trusted) {
         if (view.url.isBlank()) return ScreenInput.fieldText(view, ScreenView.Part.ADDRESS) != null ? null : "Click to enter an address";
         if (!trusted) return "Click to load pages in this world";
-        if (view.crashed) return "Page crashed · click to reload";
+        if (view.crashed) return "Page crashed, click to reload";
         if (Chromium.phase() == Chromium.Phase.FAILED) return "The browser failed to start";
         if (Chromium.phase() != Chromium.Phase.READY) return Chromium.progress();
         if (!view.painted()) return "Loading";
@@ -103,7 +103,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
 
     private static void bar(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
         pose.pushPose();
-        pose.translate(0, -view.barHeight, 0);
+        pose.translate(0, view.pageHeight, 0);
         var matrix = pose.last().pose();
         double bar = view.barHeight, pad = bar * 0.16;
         rect(buffers, matrix, 0, 0, view.pageWidth, bar, -0.002, BAR);
@@ -120,7 +120,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             text(pose, buffers, record.id(), x, y, size, ID, false, -0.003);
             int idWidth = font.width(record.id() + " ");
             // While an agent holds the screen's lease, its name follows the screen's.
-            String holder = view.screen.holder(), label = holder.isEmpty() ? record.name() : record.name().isEmpty() ? holder : record.name() + " · " + holder;
+            String holder = view.screen.holder(), label = holder.isEmpty() ? record.name() : record.name().isEmpty() ? holder : record.name() + " - " + holder;
             if (!label.isEmpty() && room > idWidth)
                 text(pose, buffers, font.plainSubstrByWidth(label, room - idWidth), x + idWidth * size / 9, y, size, TEXT, false, -0.003);
         }
@@ -146,33 +146,62 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         pose.popPose();
     }
 
-    /** The open menu, hanging from the bar's right end over the page: an icon and a label per row. */
+    /** The open menu, rising from the bar's right end over the page: an icon and a label per row. */
     private static void menu(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
         var m = pose.last().pose();
         var font = Minecraft.getInstance().font;
-        double x0 = view.menuX, row = view.menuRow, width = view.menuWidth, z = -0.006;
+        double x0 = view.menuX, row = view.menuRow, width = view.menuWidth, pad = row * 0.25, z = -0.006;
         var actions = ScreenView.Action.values();
-        rect(buffers, m, x0, 0, x0 + width, row * actions.length, z, MENU);
+        rect(buffers, m, x0, view.menuTop, x0 + width, view.pageHeight, z, MENU);
         var hovered = ScreenInput.menuHovered(view);
         boolean confirming = ScreenInput.confirmingReset();
-        // One text size for every row, narrowed so the longest label fits.
-        double icon = row * 0.36, labelX = row * 0.95, room = width - labelX - row * 0.25;
+        // One text size for every row, narrowed so the longest label and its icon fit. Icons are drawn in the font's
+        // own pixels, ICON wide with a gap after.
         int longest = 0;
         for (var action : actions) longest = Math.max(longest, font.width(action.label));
-        double size = Math.min(row * 0.38, room * 9 / longest);
+        double size = Math.min(row * 0.38, (width - pad * 2) * 9 / (longest + ICON + 4)), pixel = size / 9;
         for (var action : actions) {
-            double top = action.ordinal() * row, cx = x0 + row * 0.5, cy = top + row / 2;
+            double top = view.menuTop + action.ordinal() * row, textY = top + (row - size) / 2;
             if (action == hovered) rect(buffers, m, x0, top, x0 + width, top + row, z - 0.001, FIELD);
             boolean warn = action == ScreenView.Action.RESET && confirming;
             int color = warn ? WARN : TEXT;
-            switch (action) {
-                case OFF -> power(buffers, m, cx, cy, icon, color);
-                case PICKUP -> pickUp(buffers, m, cx, cy, icon, color);
-                case RESET -> reset(buffers, m, cx, cy, icon, color);
-            }
+            // Glyphs' capitals span font pixels 1 to 8, so the icon sits on the same rows.
+            icon(buffers, m, ICONS[action.ordinal()], x0 + pad, textY + pixel, pixel, color, z - 0.002);
             String label = warn ? "Click again to reset" : action.label;
-            text(pose, buffers, font.plainSubstrByWidth(label, (int) (room * 9 / size)), x0 + labelX, cy - size / 2, size, color, false, z - 0.002);
+            double labelX = x0 + pad + (ICON + 4) * pixel;
+            text(pose, buffers, font.plainSubstrByWidth(label, (int) ((x0 + width - pad - labelX) / pixel)), labelX, textY, size, color, false, z - 0.002);
         }
+    }
+
+    /** The menu's icons as pixel art, in the menu's row order: power, an arrow rising out of a tray, a circular arrow. */
+    private static final int ICON = 7;
+    private static final String[][] ICONS = {
+        {"...#...",
+         ".#.#.#.",
+         "#..#..#",
+         "#.....#",
+         "#.....#",
+         ".#...#.",
+         "..###.."},
+        {"...#...",
+         "..###..",
+         ".#.#.#.",
+         "...#...",
+         "#..#..#",
+         "#.....#",
+         "#######"},
+        {".####.#",
+         "#....##",
+         "#...###",
+         "#......",
+         "#.....#",
+         ".#...#.",
+         "..###.."}};
+
+    private static void icon(MultiBufferSource buffers, Matrix4f m, String[] mask, double x, double y, double pixel, int color, double z) {
+        for (int j = 0; j < mask.length; j++)
+            for (int i = 0; i < mask[j].length(); i++)
+                if (mask[j].charAt(i) == '#') rect(buffers, m, x + i * pixel, y + j * pixel, x + (i + 1) * pixel, y + (j + 1) * pixel, z, color);
     }
 
     /** A bar text field: the text being typed with its caret, or else what it shows at rest. */
@@ -191,55 +220,6 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             if (Util.getMillis() / 530 % 2 == 0) rect(buffers, matrix, end + size * 0.05, textY - size * 0.1, end + size * 0.15, textY + size * 1.05, -0.005, TEXT);
         } else {
             text(pose, buffers, font.plainSubstrByWidth(resting, room), fieldX + inset, textY, size, restingColor, false, -0.004);
-        }
-    }
-
-    /** The power symbol: a ring open at the top with a stroke through the gap. */
-    private static void power(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
-        double t = r * 0.28, z = -0.008;
-        // Angles run clockwise from the right, since y points down; -90° is straight up.
-        arc(buffers, m, cx, cy, r, t, -55, 235, z, color);
-        rect(buffers, m, cx - t / 2, cy - r * 1.1, cx + t / 2, cy + r * 0.1, z, color);
-    }
-
-    /** A circular arrow: most of a ring, with its head at the end. */
-    private static void reset(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
-        double t = r * 0.28, z = -0.008, end = Math.toRadians(250);
-        arc(buffers, m, cx, cy, r, t, -30, 250, z, color);
-        // The head points along the ring at its end: d is the way round, n points outward.
-        double px = cx + (r - t / 2) * Math.cos(end), py = cy + (r - t / 2) * Math.sin(end);
-        double dx = -Math.sin(end), dy = Math.cos(end), nx = Math.cos(end), ny = Math.sin(end), w = t * 1.8, h = t * 2.2;
-        quad(buffers, m, new double[] {px + nx * w, py + ny * w, px - nx * w, py - ny * w, px + dx * h, py + dy * h, px + dx * h, py + dy * h}, z, color);
-    }
-
-    /** A ring's stroke from one angle to another, in degrees, t thick inside radius r. */
-    private static void arc(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, double t, double from, double to, double z, int color) {
-        int steps = 24;
-        for (int i = 0; i < steps; i++) {
-            double a = Math.toRadians(from + (to - from) * i / steps), b = Math.toRadians(from + (to - from) * (i + 1) / steps), in = r - t;
-            quad(buffers, m, new double[] {cx + r * Math.cos(a), cy + r * Math.sin(a), cx + in * Math.cos(a), cy + in * Math.sin(a),
-                cx + in * Math.cos(b), cy + in * Math.sin(b), cx + r * Math.cos(b), cy + r * Math.sin(b)}, z, color);
-        }
-    }
-
-    /** Any four corners, drawn both ways round so their order doesn't matter. */
-    private static void quad(MultiBufferSource buffers, Matrix4f m, double[] xy, double z, int color) {
-        var out = buffers.getBuffer(RenderType.textBackground());
-        for (int i = 0; i < 8; i += 2) out.addVertex(m, (float) xy[i], (float) xy[i + 1], (float) z).setColor(color).setLight(LIGHT);
-        for (int i = 6; i >= 0; i -= 2) out.addVertex(m, (float) xy[i], (float) xy[i + 1], (float) z).setColor(color).setLight(LIGHT);
-    }
-
-    /** An arrow rising out of a tray. */
-    private static void pickUp(MultiBufferSource buffers, Matrix4f m, double cx, double cy, double r, int color) {
-        double t = r * 0.28, z = -0.008;
-        rect(buffers, m, cx - r, cy + r - t, cx + r, cy + r, z, color);
-        rect(buffers, m, cx - r, cy + r * 0.3, cx - r + t, cy + r, z, color);
-        rect(buffers, m, cx + r - t, cy + r * 0.3, cx + r, cy + r, z, color);
-        rect(buffers, m, cx - t / 2, cy - r * 0.7, cx + t / 2, cy + r * 0.5, z, color);
-        // The head, in steps narrowing to its point.
-        for (int i = 0; i < 3; i++) {
-            double half = r * (0.55 - i * 0.2), y = cy - r * 0.55 - i * t;
-            rect(buffers, m, cx - half, y - t, cx + half, y, z, color);
         }
     }
 

@@ -75,7 +75,7 @@ final class ScreenIndex extends SavedData {
             while (entries.containsKey("s" + next)) next++;
             screen.setRecord(record.withId("s" + next++));
         } else {
-            // An id from an item or an older save still moves the counter past it.
+            // A saved id still moves the counter past it.
             if (record.id().matches("s[1-9]\\d{0,17}")) next = Math.max(next, Long.parseLong(record.id().substring(1)) + 1);
             update(screen);
         }

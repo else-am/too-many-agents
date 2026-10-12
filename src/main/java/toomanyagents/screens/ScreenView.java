@@ -34,17 +34,17 @@ final class ScreenView implements ScreenBrowser.View {
     ScreenEntity screen;
     final Direction facing, right;
     final int blocksWide, blocksHigh;
-    /** The navigation bar's height across the top of the screen, and the page's size below it, in blocks and pixels. */
+    /** The navigation bar's height across the bottom of the screen, and the page's size above it, in blocks and pixels. */
     final double barHeight, pageWidth, pageHeight;
     final int pixelWidth, pixelHeight;
-    /** The page's top-left corner in the world, just under the bar and on the panel's front. */
+    /** The page's top-left corner in the world, on the panel's front. The bar runs along the page's bottom. */
     final Vec3 topLeft;
     final Vec3 normal, rightVector;
     private final Texture page = new Texture("page"), popup = new Texture("popup");
 
     /** The bar's controls, left to right. */
     enum Part { NAME, BACK, FORWARD, RELOAD, ADDRESS, MENU }
-    /** The ⋯ menu's rows, top to bottom. */
+    /** The ⋯ menu's rows, top to bottom. It opens upward from the bar. */
     enum Action {
         OFF("Turn off (clear page)"), PICKUP("Pick up (save page)"), RESET("Reset and pick up");
 
@@ -54,8 +54,8 @@ final class ScreenView implements ScreenBrowser.View {
     /** Each control's left and right edge across the bar, in blocks, and the width of a square button. */
     private final double[] partStart = new double[Part.values().length], partEnd = new double[Part.values().length];
     final double unit;
-    /** The menu hangs from the bar's right end over the page: its left edge, width and row height, in blocks. */
-    final double menuX, menuWidth, menuRow;
+    /** The menu rises from the bar's right end over the page: its left edge, top, width and row height, in blocks. */
+    final double menuX, menuTop, menuWidth, menuRow;
 
     ScreenBrowser browser;
     String url = "", title = "";
@@ -111,8 +111,9 @@ final class ScreenView implements ScreenBrowser.View {
         menuRow = Math.min(barHeight * 1.2, pageHeight / Action.values().length);
         menuWidth = Math.min(pageWidth, menuRow * 9);
         menuX = pageWidth - menuWidth;
+        menuTop = pageHeight - menuRow * Action.values().length;
         topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
-            .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN - barHeight, 0);
+            .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN, 0);
     }
 
     /** The page's size in pixels for a screen this many blocks across and high. */
@@ -149,24 +150,29 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** The bar control under a point, or null when off the bar. */
     Part barPart(double x, double y) {
-        if (y < -barHeight || y >= 0) return null;
+        if (y < pageHeight || y >= pageHeight + barHeight) return null;
         for (var part : Part.values()) if (x >= start(part) && x < end(part)) return part;
         return null;
     }
 
     /** The menu row under a point, or null. Only meaningful while the menu is open. */
     Action menuAction(double x, double y) {
-        if (x < menuX || x >= menuX + menuWidth || y < 0) return null;
-        int row = (int) (y / menuRow);
+        if (x < menuX || x >= menuX + menuWidth || y < menuTop) return null;
+        int row = (int) ((y - menuTop) / menuRow);
         return row < Action.values().length ? Action.values()[row] : null;
     }
 
     /** A menu row's centre in the world, for development checks. */
     Vec3 menuCenter(Action action) {
-        return topLeft.add(rightVector.scale(menuX + menuWidth / 2)).add(0, -(action.ordinal() + 0.5) * menuRow, 0);
+        return topLeft.add(rightVector.scale(menuX + menuWidth / 2)).add(0, -(menuTop + (action.ordinal() + 0.5) * menuRow), 0);
     }
 
-    boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y <= pageHeight; }
+    /** A bar control's centre in the world, for development checks. */
+    Vec3 barCenter(Part part) {
+        return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(0, -(pageHeight + barHeight / 2), 0);
+    }
+
+    boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y < pageHeight; }
     int pixelX(double x) { return Math.clamp((int) Math.floor(x / pageWidth * pixelWidth), 0, pixelWidth - 1); }
     int pixelY(double y) { return Math.clamp((int) Math.floor(y / pageHeight * pixelHeight), 0, pixelHeight - 1); }
 

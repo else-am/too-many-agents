@@ -13,11 +13,11 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.decoration.HangingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -119,15 +119,19 @@ public final class ScreenEntity extends HangingEntity {
         return !(source.getEntity() instanceof Player) && super.hurt(source, amount);
     }
 
-    /** Server: the player takes the screen down. Removing it closes its page, fails waiting calls and ends its lease. */
-    void pickUp(ServerPlayer player, boolean reset) {
+    /**
+     * Server: the screen is taken down and pops off the wall as an item, saving its name and page, or blank when
+     * reset. Removing it closes its page, fails waiting calls and ends its lease.
+     */
+    void pickUp(boolean reset) {
         var stack = reset ? new ItemStack(Screens.ITEM.get()) : ScreenItem.stack(record());
+        var out = Vec3.atLowerCornerOf(direction.getNormal());
+        var at = getBoundingBox().getCenter().add(out.scale(0.3));
+        var item = new ItemEntity(level(), at.x, at.y, at.z, stack, out.x * 0.12, 0.1, out.z * 0.12);
+        item.setDefaultPickUpDelay();
         playSound(SoundEvents.COPPER_BREAK, 1, 1);
         discard();
-        // Exactly one item, in creative too, where adding to a full inventory would quietly delete it.
-        var inventory = player.getInventory();
-        if (inventory.getSlotWithRemainingSpace(stack) >= 0 || inventory.getFreeSlot() >= 0) inventory.add(stack);
-        if (!stack.isEmpty()) player.drop(stack, false);
+        level().addFreshEntity(item);
     }
 
     @Override public void dropItem(@Nullable Entity breaker) {

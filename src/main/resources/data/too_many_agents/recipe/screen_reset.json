@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "redstone",
+  "ingredients": [{"item": "too_many_agents:screen"}],
+  "result": {"id": "too_many_agents:screen", "count": 1}
+}

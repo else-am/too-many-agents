@@ -19,7 +19,11 @@ def cli(*arguments):
 
 
 def ui(action, **fields):
-    return cli('ui', action, '--json', json.dumps(fields))
+    result = cli('ui', action, '--json', json.dumps(fields))
+    if action == 'dev_key' and 49 <= fields.get('key', 0) <= 57:
+        # The held-slot packet must reach the server before a fixture command replaces mainhand.
+        time.sleep(.15)
+    return result
 
 
 def command(text):
@@ -90,6 +94,7 @@ def fixture_screens(state):
 
 def foundation():
     command('gamemode creative @s')
+    command('clear @s too_many_agents:screen')
     command('tp @s 168 -60 164')
     # Let generation settle before leaving these chunks again; rapid out-and-back travel can
     # leave vanilla's shutdown unload queue waiting on unfinished generation.
@@ -149,9 +154,9 @@ def foundation():
         ui('dev_key', key=256)
     print('PASS: Bare hands cannot break the panel', flush=True)
 
-    # Place a copy of the existing record next to it; the original must keep its identity.
-    command(f'item replace entity @s weapon.mainhand with too_many_agents:screen'
-            f'[too_many_agents:screen={{id:"{screen_id}",name:"Acceptance copy",url:"",openedBy:""}}]')
+    # A saved item supplies content; placement supplies a new identity.
+    command('item replace entity @s weapon.mainhand with too_many_agents:screen'
+            '[too_many_agents:screen={name:"Acceptance copy",url:""}]')
     command('tp @s 164 -60 164')
     place((164.5, -57.5), (161.5, -55.5))
     screens = fixture_screens(wait_for(lambda state: len(fixture_screens(state)) == 2))
@@ -165,13 +170,14 @@ def foundation():
     print('PASS: Copied records get fresh IDs; overlapping panels are rejected', flush=True)
 
     # Remove support and collect the real dropped entity rather than manufacturing a replacement.
+    command('item replace entity @s weapon.mainhand with air')
     command('setblock 162 -57 168 air')
     wait_for(lambda state: all(screen['id'] != copied['id'] for screen in state['screens']))
     assert all(screen['id'] != copied['id'] for screen in ui('screens')['index']['screens'])
     command('tp @s 163 -60 167')
-    state = wait_for(lambda state: any(item['id'] == copied['id'] for item in state['items']))
-    item = next(item for item in state['items'] if item['id'] == copied['id'])
-    assert item['name'] == 'Acceptance copy'
+    state = wait_for(lambda state: any(item['name'] == 'Acceptance copy' for item in state['items']))
+    item = next(item for item in state['items'] if item['name'] == 'Acceptance copy')
+    assert item['name'] == 'Acceptance copy' and 'id' not in item and 'openedBy' not in item
     if item['slot'] < 9:
         ui('dev_key', key=49 + item['slot'])
     else:
@@ -179,10 +185,10 @@ def foundation():
     command('setblock 162 -57 168 stone')
     command('tp @s 164 -60 164')
     place((164.5, -57.5), (161.5, -55.5))
-    state = wait_for(lambda state: any(screen['id'] == copied['id'] for screen in state['screens']))
-    restored = next(screen for screen in state['screens'] if screen['id'] == copied['id'])
-    assert restored['name'] == 'Acceptance copy'
-    print('PASS: Support loss drops a record that restores its ID and name', flush=True)
+    state = wait_for(lambda state: any(screen['name'] == 'Acceptance copy' for screen in state['screens']))
+    restored = next(screen for screen in state['screens'] if screen['name'] == 'Acceptance copy')
+    assert restored['id'] not in (screen_id, copied['id'])
+    print('PASS: Support loss saves the name; replacing the item allocates a fresh ID', flush=True)
 
     expected = {screen['id']: (screen['name'], screen['url'], screen['blocks'], screen['pos'])
                 for screen in fixture_screens(state)}
@@ -352,7 +358,7 @@ def menu_actions():
     screen_control(screen_id, 'menu')
     at = screen_row(screen_id)['pageCenter']
     x, y, z = map(float, at.split(','))
-    aim(x, y - .3, z)
+    aim(x, y + .3, z)
     click(0)
     assert not ui('screens')['menu']['screen']
     assert ui('screens')['input'] != 'address', 'Outside click must only dismiss the menu'
@@ -374,37 +380,119 @@ def menu_actions():
     ui('dev_char', text=url)
     ui('dev_key', key=257)
     wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') and row['url'] == url for row in state['screens']))
-    saved = {key: screen_row(screen_id)[key] for key in ('id', 'name', 'url', 'openedBy')}
+    saved = {key: screen_row(screen_id)[key] for key in ('name', 'url')}
     command('gamemode survival @s')
+    command('tp @s 172 -60 164')
     menu_action(screen_id, 'pick_up')
     state = wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
     assert all(row['id'] != screen_id for row in state['index']['screens'])
-    items = [row for row in state['items'] if row['id'] == screen_id]
-    assert len(items) == 1 and items[0]['count'] == 1
-    assert {key: items[0][key] for key in saved} == saved
-    assert items[0]['slot'] < 9
-    ui('dev_key', key=49 + items[0]['slot'])
+    assert not state['items'], 'Pickup must pop off the panel, not go straight to inventory'
+    dropped = state['droppedItems']
+    assert len(dropped) == 1 and dropped[0]['count'] == 1, dropped
+    assert {key: dropped[0][key] for key in saved} == saved
+    assert 'id' not in dropped[0] and 'openedBy' not in dropped[0]
+    command('tp @s 172.5 -60 167')
+    state = wait_for(lambda state: bool(state['items']))
+    item = state['items'][0]
+    assert item['count'] == 1 and {key: item[key] for key in saved} == saved
+    assert 'id' not in item and 'openedBy' not in item
+    assert item['slot'] < 9
+    ui('dev_key', key=49 + item['slot'])
+    command('tp @s 172 -60 165')
     place((172.5, -57.5), (172.5, -57.5))
-    state = wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') for row in state['screens']))
-    assert {key: screen_row(screen_id)[key] for key in saved} == saved
-    assert not state['items'], 'Survival placement must consume the one returned item'
-    print('PASS: Pickup returns exactly one saved record; survival placement restores its page and ID', flush=True)
+    state = wait_for(lambda state: any(row['name'] == 'Tiny' and row.get('painted') for row in state['screens']))
+    restored = next(row for row in state['screens'] if row['name'] == 'Tiny')
+    assert restored['id'] != screen_id and not restored['openedBy']
+    assert {key: restored[key] for key in saved} == saved
+    screen_id = restored['id']
+    assert not state['items'], 'Survival placement must consume the returned item'
+    print('PASS: Pickup drops saved name/URL; replacing it creates a fresh ID without agent attribution', flush=True)
 
     command('gamemode creative @s')
+    command('tp @s 172 -60 164')
     menu_action(screen_id, 'reset', confirm=True)
     state = wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
     assert all(row['id'] != screen_id for row in state['index']['screens'])
-    assert len(state['items']) == 1 and state['items'][0]['count'] == 1
+    assert not state['items']
+    dropped = state['droppedItems']
+    assert len(dropped) == 1 and dropped[0]['count'] == 1 and not dropped[0]['name'] and not dropped[0]['url']
+    command('tp @s 172.5 -60 167')
+    state = wait_for(lambda state: bool(state['items']))
     blank = state['items'][0]
-    assert all(blank[key] == '' for key in ('id', 'name', 'url', 'openedBy')), blank
+    assert blank['count'] == 1 and not blank['name'] and not blank['url'], blank
     ui('dev_key', key=49 + blank['slot'])
     command('gamemode survival @s')
+    command('tp @s 172 -60 165')
     place((172.5, -57.5), (172.5, -57.5))
     state = wait_for(lambda state: any(row['blocks'] == '1x1' and row['id'] != screen_id for row in fixture_screens(state)))
     fresh = next(row for row in fixture_screens(state) if row['blocks'] == '1x1')
     assert fresh['id'] != screen_id and not fresh['name'] and not fresh['url'] and not fresh['browser']
     assert not state['items']
-    print('PASS: Creative reset returns one blank item; replacing it allocates a fresh idle ID', flush=True)
+    print('PASS: Creative reset drops one blank item; placing it creates a fresh idle screen', flush=True)
+    command('gamemode creative @s')
+
+
+def saved_items_and_crafting():
+    command('gamemode creative @s')
+    command('clear @s')
+    ui('dev_key', key=49)
+    command('tp @s 172 -60 164')
+    pages = [('Twin', 'about:blank'), ('Twin', 'about:blank'),
+             ('Twin', (ROOT / 'run/too-many-agents/screens-acceptance/index.html').as_uri()),
+             ('Other', 'about:blank')]
+    ids = []
+    for x, (name, url) in zip(range(171, 175), pages):
+        before = {row['id'] for row in ui('screens')['screens']}
+        command('item replace entity @s weapon.mainhand with too_many_agents:screen'
+                f'[too_many_agents:screen={{name:{json.dumps(name)},url:{json.dumps(url)}}}]')
+        place((x + .5, -59.5), (x + .5, -59.5))
+        state = wait_for(lambda state: any(row['id'] not in before for row in state['screens']))
+        ids.append(next(row['id'] for row in state['screens'] if row['id'] not in before))
+    assert len(set(ids)) == 4
+    command('clear @s')
+    command('tp @s 172 -60 162')
+    for screen_id in ids:
+        menu_action(screen_id, 'pick_up')
+        wait_for(lambda state: all(row['id'] != screen_id for row in state['screens']))
+    state = ui('screens')
+    assert not state['items'], 'All four items must drop into the world first'
+    for drop in state['droppedItems']:
+        if drop['name'] in ('Twin', 'Other'):
+            command(f'tp @s {drop["x"]} -60 {drop["z"]}')
+            time.sleep(.3)
+    state = wait_for(lambda state: sum(item['count'] for item in state['items']) == 4)
+    actual = {(item['name'], item['url']): item['count'] for item in state['items']}
+    assert actual == {pages[0]: 2, pages[2]: 1, pages[3]: 1}, actual
+    for item in state['items']:
+        assert item['saved'] == {'name': item['name'], 'url': item['url']}, item
+        assert item['tooltip'] == ['Screen', item['name'] + ' - ' + item['url']], item
+    print('PASS: Matching name/URL drops stack; different names or URLs stay separate, with no ID/provenance', flush=True)
+    print('PASS: Saved-item tooltip uses name - URL', flush=True)
+
+    # A real two-by-two crafting interaction: one saved item in, one component-free item out.
+    command('gamemode survival @s')
+    command('clear @s')
+    command('give @s too_many_agents:screen[too_many_agents:screen={name:"Craft test",url:"about:blank"}] 2')
+    ui('list')
+    widgets = ui('widgets')
+    assert widgets['screen'] == 'InventoryScreen', widgets
+    recipe = next(row for row in widgets['widgets'] if row['type'] == 'ImageButton' and row['width'] == 20 and row['height'] == 18)
+    left, top = recipe['x'] - 104, (widgets['height'] - 166) // 2
+    def slot(x, y, button=0):
+        ui('click', x=left + x + 8, y=top + y + 8, button=button)
+        time.sleep(.2)
+    slot(8, 142)      # Pick up the stack of two saved screens.
+    slot(98, 18, 1)   # Put one in the crafting grid.
+    slot(8, 142)      # Return the other to the hotbar.
+    slot(154, 28)     # Take the recipe's actual output.
+    slot(26, 142)     # Put the plain screen in the next hotbar slot.
+    state = wait_for(lambda state: len(state['items']) == 2)
+    plain = next(item for item in state['items'] if not item['name'])
+    saved = next(item for item in state['items'] if item['name'] == 'Craft test')
+    assert plain['count'] == 1 and plain.get('saved') is None and plain['url'] == '' and plain['tooltip'] == ['Screen'], plain
+    assert saved['count'] == 1 and saved['url'] == 'about:blank', saved
+    ui('dev_key', key=256)
+    print('PASS: Native crafting consumes one saved screen and produces exactly one plain component-free screen', flush=True)
     command('gamemode creative @s')
 
 
@@ -413,3 +501,4 @@ if __name__ == '__main__':
     facings()
     controls()
     menu_actions()
+    saved_items_and_crafting()

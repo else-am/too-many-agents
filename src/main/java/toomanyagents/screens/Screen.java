@@ -7,8 +7,8 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
 /**
- * What a screen is, wherever it is: placed in the world or carried as an item.
- * An empty url means the screen is idle and has no browser. openedBy is the thread that last opened the page.
+ * What a screen is. Placed, it has all of this; an item keeps only the name and url. An empty url means the screen
+ * is idle and has no browser. openedBy is the thread that last opened the page.
  */
 public record Screen(String id, String name, String url, String openedBy) {
     static final Screen BLANK = new Screen("", "", "", "");

@@ -7,24 +7,31 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 
-/** A screen in an inventory. A broken screen's item carries its record, so placing it again restores the screen. */
+/**
+ * A screen in an inventory. A screen taken down with its page saved carries its name and URL; ids belong only to
+ * placed screens, so every placement gets a fresh one.
+ */
 public final class ScreenItem extends Item {
     ScreenItem(Properties properties) {
         super(properties);
     }
 
+    /** An item saving a screen's name and page. Same name and page, same stack. */
     static ItemStack stack(Screen record) {
         var stack = new ItemStack(Screens.ITEM.get());
-        if (!record.id().isEmpty()) stack.set(Screens.RECORD.get(), record);
+        var saved = saved(record);
+        if (!saved.equals(Screen.BLANK)) stack.set(Screens.RECORD.get(), saved);
         return stack;
     }
 
-    static Screen record(ItemStack stack) { return stack.getOrDefault(Screens.RECORD.get(), Screen.BLANK); }
+    /** What a placement from this item starts with: never an id or who opened its page. */
+    static Screen record(ItemStack stack) { return saved(stack.getOrDefault(Screens.RECORD.get(), Screen.BLANK)); }
+
+    private static Screen saved(Screen record) { return new Screen("", record.name(), record.url(), ""); }
 
     @Override public void appendHoverText(ItemStack stack, TooltipContext context, List<Component> lines, TooltipFlag flag) {
         var record = record(stack);
-        if (record.id().isEmpty()) return;
-        lines.add(Component.literal(record.name().isEmpty() ? record.id() : record.id() + " · " + record.name()).withStyle(ChatFormatting.GRAY));
-        if (!record.url().isEmpty()) lines.add(Component.literal(record.url()).withStyle(ChatFormatting.DARK_GRAY));
+        String line = record.name().isEmpty() ? record.url() : record.url().isEmpty() ? record.name() : record.name() + " - " + record.url();
+        if (!line.isEmpty()) lines.add(Component.literal(line).withStyle(ChatFormatting.GRAY));
     }
 }

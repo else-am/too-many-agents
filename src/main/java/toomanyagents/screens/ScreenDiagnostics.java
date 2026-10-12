@@ -1,9 +1,15 @@
 package toomanyagents.screens;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
+import com.mojang.serialization.JsonOps;
 import net.minecraft.client.Minecraft;
 import net.minecraft.commands.arguments.EntityAnchorArgument;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.phys.Vec3;
 import org.lwjgl.glfw.GLFW;
 
@@ -58,8 +64,7 @@ public final class ScreenDiagnostics {
                 // Each bar control's local span and world-space centre, for aiming real clicks at it.
                 var controls = new JsonObject();
                 for (var part : ScreenView.Part.values()) {
-                    double x = (view.start(part) + view.end(part)) / 2;
-                    var center = view.topLeft.add(view.rightVector.scale(x)).add(0, view.barHeight / 2, 0);
+                    var center = view.barCenter(part);
                     var control = new JsonObject();
                     control.addProperty("start", view.start(part));
                     control.addProperty("end", view.end(part));
@@ -109,19 +114,42 @@ public final class ScreenDiagnostics {
             for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
                 var stack = inventory.getItem(slot);
                 if (!(stack.getItem() instanceof ScreenItem)) continue;
-                var record = ScreenItem.record(stack);
-                var item = new JsonObject();
+                var item = describe(stack);
                 item.addProperty("slot", slot);
-                item.addProperty("count", stack.getCount());
-                item.addProperty("id", record.id());
-                item.addProperty("name", record.name());
-                item.addProperty("url", record.url());
-                item.addProperty("openedBy", record.openedBy());
                 items.add(item);
             }
         }
         result.add("items", items);
+        // Screen items lying in the world, e.g. one just popped off a wall. age is client ticks since it appeared.
+        var dropped = new JsonArray();
+        if (mc.level != null) for (var entity : mc.level.entitiesForRendering()) {
+            if (!(entity instanceof ItemEntity lying) || !(lying.getItem().getItem() instanceof ScreenItem)) continue;
+            var item = describe(lying.getItem());
+            item.addProperty("entity", lying.getUUID().toString());
+            item.addProperty("x", lying.getX());
+            item.addProperty("y", lying.getY());
+            item.addProperty("z", lying.getZ());
+            item.addProperty("age", lying.getAge());
+            dropped.add(item);
+        }
+        result.add("droppedItems", dropped);
         return result;
+    }
+
+    /** A screen item: what it saves, exactly as stored, and its tooltip as the player sees it. */
+    private static JsonObject describe(ItemStack stack) {
+        var mc = Minecraft.getInstance();
+        var item = new JsonObject();
+        item.addProperty("count", stack.getCount());
+        item.add("saved", stack.has(Screens.RECORD.get())
+            ? Screen.CODEC.encodeStart(JsonOps.INSTANCE, stack.get(Screens.RECORD.get())).result().orElse(JsonNull.INSTANCE) : JsonNull.INSTANCE);
+        var record = ScreenItem.record(stack);
+        item.addProperty("name", record.name());
+        item.addProperty("url", record.url());
+        var tooltip = new JsonArray();
+        for (var line : stack.getTooltipLines(Item.TooltipContext.of(mc.level), mc.player, TooltipFlag.Default.NORMAL)) tooltip.add(line.getString());
+        item.add("tooltip", tooltip);
+        return item;
     }
 
     public static JsonObject develop(String action, JsonObject request) {
