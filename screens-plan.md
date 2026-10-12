@@ -168,7 +168,7 @@ A plain CDP passthrough to the screen's page.
 
 ## Later
 
-- Dyeable screen frames (screen + dye), to tell project screens apart.
+- Figure out some way to handle URLs in world downloads as a potential security problem?
 - Sign-ins through opt-in cookie import (untested).
 - Make survey mode more obvious, so stations, project boxes and screen links are easy to see. Ideas: holding a screen item highlights the station it would link to; survey mode draws screen-to-station links in the station's color; the bar shows the station and its agent.
 - Consider blocking file reads outside project folders, with one rule in onBeforeBrowse (screens run outside agents' sandboxes, so file:// could read what a sandbox denies).
