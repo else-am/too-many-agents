@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -63,6 +64,8 @@ public final class StationIndex extends SavedData {
     private final Set<String> removedProjects = new HashSet<>();
     /** Projects a station or project block may name now, with their colors: BB's projects except world projects. */
     private Map<String, String> projects = Map.of();
+    /** The project ids each BB instance last listed, so a project deleted in BB, even while the game was closed, is noticed. */
+    private final Map<String, Set<String>> catalogs = new HashMap<>();
     private final Set<ProjectBlockEntity> loadedProjectBlocks = Collections.newSetFromMap(new WeakHashMap<>());
     private boolean orphansReleased;
 
@@ -248,6 +251,18 @@ public final class StationIndex extends SavedData {
         changed(server);
     }
 
+    /**
+     * A BB instance's complete project list, from a successful sync. A project that instance listed before and no
+     * longer does was deleted. Only the same instance's listings are compared; disconnects never reach here.
+     */
+    public void catalog(MinecraftServer server, String instanceId, Set<String> projectIds) {
+        if (instanceId.isEmpty()) return;
+        var previous = catalogs.put(instanceId, Set.copyOf(projectIds));
+        if (projectIds.equals(previous)) return;
+        if (previous != null) for (var id : previous) if (!projectIds.contains(id)) projectRemoved(server, id);
+        setDirty();
+    }
+
     /** A project block joined the level. One naming a removed project becomes blank. */
     void projectBlockLoaded(ProjectBlockEntity block) {
         loadedProjectBlocks.add(block);
@@ -316,6 +331,13 @@ public final class StationIndex extends SavedData {
         var removed = new ListTag();
         removedProjects.forEach(id -> removed.add(StringTag.valueOf(id)));
         tag.put("removedProjects", removed);
+        var catalogs = new CompoundTag();
+        this.catalogs.forEach((instance, ids) -> {
+            var listed = new ListTag();
+            ids.forEach(id -> listed.add(StringTag.valueOf(id)));
+            catalogs.put(instance, listed);
+        });
+        tag.put("catalogs", catalogs);
         return tag;
     }
 
@@ -329,6 +351,12 @@ public final class StationIndex extends SavedData {
             index.entries.put(station.id(), new Entry(station, row.getString("dimension"), pos));
         }
         for (var id : tag.getList("removedProjects", Tag.TAG_STRING)) index.removedProjects.add(id.getAsString());
+        var catalogs = tag.getCompound("catalogs");
+        for (var instance : catalogs.getAllKeys()) {
+            var ids = new HashSet<String>();
+            for (var id : catalogs.getList(instance, Tag.TAG_STRING)) ids.add(id.getAsString());
+            index.catalogs.put(instance, Set.copyOf(ids));
+        }
         return index;
     }
 }

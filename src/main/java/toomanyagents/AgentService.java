@@ -78,6 +78,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             synchronized(this) {
                 if(!currentSession(session) || !attachment.equals(connectionId) || !BbSetup.get().isCurrent(instance)) return;
                 projectRows(array(state,"projects")); connected=true; error="";
+                game.projectCatalog(instance,projectRows,session);
                 // Old drafts have no conversation metadata. Their existing project can
                 // identify the BB that owns their saved execution choices.
                 var projects=new HashSet<String>();
@@ -153,7 +154,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         }
         loadedSession=session; loadedWorldId=worldId;
         for(var agent:agents.values()) {
-            BodySettings.forProject(agent.settings,minecraftAccess(agent));
+            settleKind(agent,agent.settings);
             if(agent.archived || agent.removed || agent.deleted) game.releaseStation(agent.id,session);
         }
         save();
@@ -205,11 +206,23 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         });
     }
     private void projectRows(JsonArray rows) { projectRows=rows; game.stationProjects(rows); }
-    /** World agents, in this world's own project, have Minecraft access; project agents never do. */
+    /** Whether a project is this world's own project in the selected BB. */
     private boolean worldProject(String projectId) {
         return !projectId.isBlank() && projectId.equals(text(worldView(),"worldProjectId"));
     }
-    private boolean minecraftAccess(Agent agent) { return worldProject(agent.projectId); }
+    /** This world's project in the agent's own BB, or "" until that BB has mapped one. */
+    private String ownWorldProject(Agent agent) {
+        return agent.bbInstanceId.isBlank() ? "" : text(obj(game.worldInfo(),"bbProjects"),agent.bbInstanceId);
+    }
+    /** World agents, in their world's own project, have Minecraft access; project agents never do. */
+    private boolean minecraftAccess(Agent agent) {
+        String own=ownWorldProject(agent);
+        return !own.isBlank() && own.equals(agent.projectId);
+    }
+    /** Drops the other kind's settings once the agent's kind is known. An unmapped world or copy keeps both. */
+    private void settleKind(Agent agent,JsonObject settings) {
+        if(!ownWorldProject(agent).isBlank() && !agent.projectId.equals("minecraft")) BodySettings.forProject(settings,minecraftAccess(agent));
+    }
     /** The station this agent occupies, from the index's published snapshot, or "". */
     private String stationId(Agent agent) {
         for(var row:array(game.worldInfo(),"stations")) if(text(row.getAsJsonObject(),"agentId").equals(agent.id)) return text(row.getAsJsonObject(),"id");
@@ -337,9 +350,9 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 if(!currentSession(loadedSession) || !Objects.equals(loadedWorldId,text(world,"id"))
                     || !Objects.equals(loadedWorldId,game.currentWorldId())) throw new IllegalStateException("world_session_changed");
                 if(worldProject(project)) throw new IllegalArgumentException("This world's project has no removable project settings.");
-                // Only bodies in the world block removal. Its stations stay, blank; archived bodies are suspended, not present.
-                var bodies=agents.values().stream().filter(a -> !a.removed && !a.archived && a.projectId.equals(project)).map(a -> a.name).toList();
-                if(!bodies.isEmpty()) throw new IllegalStateException("Cannot remove project. First archive or remove its bodies ("+String.join(", ",bodies)+").");
+                // Its bodies block removal, archived ones too, since restoring brings them back. Its stations stay, blank.
+                var bodies=agents.values().stream().filter(a -> !a.removed && !a.deleted && a.projectId.equals(project)).map(a -> a.name).toList();
+                if(!bodies.isEmpty()) throw new IllegalStateException("Cannot remove project. First remove its bodies ("+String.join(", ",bodies)+").");
                 removal=request.deepCopy(); removal.addProperty("op","project.remove");
                 removal.addProperty("worldId",loadedWorldId); removal.addProperty("worldSessionId",loadedSession);
             }
@@ -440,11 +453,11 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     /** The body's saved settings; a project agent has no game mode. */
     private void adopt(Agent agent,JsonObject body) {
         for(var entry:body.entrySet()) agent.settings.add(entry.getKey(),entry.getValue());
-        BodySettings.forProject(agent.settings,minecraftAccess(agent));
+        settleKind(agent,agent.settings);
     }
     private CompletableFuture<Void> updateBodySettings(Agent agent,JsonObject settings,String session) {
         var physical=BodySettings.copy(settings);
-        BodySettings.forProject(physical,minecraftAccess(agent));
+        settleKind(agent,physical);
         validateBody(physical);
         return game.updateSettings(agent.body,session,physical).thenCompose(body -> {
             synchronized(this) {
@@ -616,7 +629,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     String project=text(request,"projectId");
                     if(!project.isBlank() && !project.equals(agent.projectId)) {
                         agent.projectId=project;
-                        BodySettings.forProject(agent.settings,minecraftAccess(agent));
+                        settleKind(agent,agent.settings);
                         return game.releaseStation(agent.id,session).thenCompose(done -> save())
                             .thenCompose(done -> applyBodyState(agent,text(request,"state"),flag(request,"running"),session))
                             .thenApply(done -> new JsonObject());

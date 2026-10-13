@@ -146,12 +146,12 @@ def main():
     print('PASS: native Worktree checkbox and project-folder choice use BB environments correctly', flush=True)
     personal = next(p['id'] for p in projects['projects'] if p.get('kind') == 'personal')
     no_project = request('/v1/agents/spawn', {'name': marker + '-personal', 'projectId': personal,
-        'providerId': 'codex', 'model': args.model, 'reasoningLevel': 'low', 'minecraftAccess': False,
+        'providerId': 'codex', 'model': args.model, 'reasoningLevel': 'low',
         'initialTask': 'Reply PERSONAL_READY. Do not call tools.'})['id']
     state = idle(no_project)
     assert state['projectId'] == personal and not state['minecraftAccess'] and state['bodyLoaded']
     archive(no_project)
-    print('PASS: Personal project uses BB defaults with Minecraft access disabled', flush=True)
+    print('PASS: Personal project derives no Minecraft access from its project', flush=True)
     result = ROOT / 'run/too-many-agents/bb-boundary-result.json'
     result.write_text(json.dumps({'agentId': agent, 'threadId': first['threadId'], 'projectId': project,
         'fixtures': [draft, worktree, checkout, no_project]}, indent=2) + '\n')

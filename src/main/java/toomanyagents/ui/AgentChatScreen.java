@@ -37,6 +37,8 @@ public final class AgentChatScreen extends Screen {
     // A random starter name clears when the field is first clicked, until something is typed.
     private String suggestedName = "";
     private boolean nameSuggested;
+    /** A station draft reports pins its model can't honor once, on its first catalog. */
+    private boolean stationPinsChecked;
     private Button providerButton, bodyButton;
     private List<PickerChoice> bodyChoices;
     private Screen dockParent;
@@ -692,7 +694,10 @@ public final class AgentChatScreen extends Screen {
                     }
                     if (!available && !selected.isBlank()) {
                         creationSettings.addProperty("providerId", selected);
+                        // Keep a station's pins until its provider's catalog can check them.
+                        String model = models.model, effort = models.effort, tier = models.serviceTier;
                         models.load(new JsonObject());
+                        if (!AgentModels.text(creationSettings, "stationId").isBlank()) { models.model = model; models.effort = effort; models.serviceTier = tier; }
                         requestModels(change);
                         return;
                     }
@@ -719,10 +724,25 @@ public final class AgentChatScreen extends Screen {
                     if (!bodies.contains(body)) creationSettings.addProperty("body", bodies.isEmpty() ? "" : bodies.getFirst());
                 }
                 feedback = models.available() ? "" : "No models available";
+                if (draft() && models.available() && !stationPinsChecked && !AgentModels.text(creationSettings, "stationId").isBlank()) {
+                    stationPinsChecked = true;
+                    feedback = stationPinNotice();
+                }
                 if (models.available()) change.run();
             }
             refreshButtons();
         }));
+    }
+
+    /** Names any station pin the catalog replaced, so the draft never changes one silently. */
+    private String stationPinNotice() {
+        var changed = new ArrayList<String>();
+        String[][] pins = {{"model", models.model, "model"}, {"reasoningLevel", models.effort, "reasoning"}, {"serviceTier", models.serviceTier, "speed"}};
+        for (var pin : pins) {
+            String pinned = AgentModels.text(creationSettings, pin[0]);
+            if (!pinned.isBlank() && !pinned.equals(pin[1])) changed.add("station " + pin[2] + " " + pinned + " → " + pin[1]);
+        }
+        return changed.isEmpty() ? "" : "Not available for this model: " + String.join(", ", changed) + ". Edit the station to fix it.";
     }
 
     private void selectProject(String id) {

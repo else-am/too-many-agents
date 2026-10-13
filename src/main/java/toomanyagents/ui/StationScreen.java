@@ -12,7 +12,7 @@ public final class StationScreen extends BlockSettingsScreen {
     private JsonObject draft, saved;
     private String areaWidth, areaHeight;
     private JsonObject catalog=new JsonObject();
-    private String catalogKey=null,effectiveProvider="";
+    private String catalogKey=null,effectiveProvider="",inheritedModel="";
     private boolean loadingCatalog;
     private String liveLinks="";
     private int ticks;
@@ -104,7 +104,8 @@ public final class StationScreen extends BlockSettingsScreen {
             providers.add(new Choice(AgentModels.text(provider,"id"),AgentModels.text(provider,"displayName"),provider.has("available")&&provider.get("available").getAsBoolean()));
         }
         pinnedChoice("Provider","providerId",providers,enabled&&!loadingCatalog);
-        models.model=text("model");models.load(catalog);
+        // A blank model is the one BB would pick, so its reasoning and tier choices apply.
+        models.model=text("model").isBlank()?inheritedModel:text("model");models.load(catalog);
         var modelChoices=defaults("BB default");
         for(var model:models.choices()) {
             String id=AgentModels.text(model,"model"),name=AgentModels.text(model,"displayName");
@@ -128,10 +129,13 @@ public final class StationScreen extends BlockSettingsScreen {
         var defaults=project.isBlank()?java.util.concurrent.CompletableFuture.completedFuture(new JsonObject()):access.projectExecutionOptions(project,true);
         defaults.thenCompose(options->{
             String provider=pinned.isBlank()?AgentModels.text(options,"providerId"):pinned;
-            return access.catalog(provider).thenApply(result->{var copy=result.deepCopy();copy.addProperty("stationCatalogProvider",provider);return copy;});
+            // As at spawn: the project's model is inherited only on the project's own provider.
+            String model=provider.equals(AgentModels.text(options,"providerId"))?AgentModels.text(options,"model"):"";
+            return access.catalog(provider).thenApply(result->{var copy=result.deepCopy();copy.addProperty("stationCatalogProvider",provider);
+                copy.addProperty("stationInheritedModel",model);return copy;});
         }).whenComplete((result,error)->net.minecraft.client.Minecraft.getInstance().execute(()->{
             if(!key.equals(catalogKey))return;loadingCatalog=false;
-            if(error==null){catalog=result;effectiveProvider=AgentModels.text(result,"stationCatalogProvider");}
+            if(error==null){catalog=result;effectiveProvider=AgentModels.text(result,"stationCatalogProvider");inheritedModel=AgentModels.text(result,"stationInheritedModel");}
             else feedback="Choices unavailable: "+AgentModels.error(error);
             if(minecraft!=null&&minecraft.screen==this)rebuildForm();
         }));

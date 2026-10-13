@@ -94,7 +94,15 @@ final class WorldState {
                     String worldProject = JsonState.text(JsonState.obj(data,"bbProjects"),JsonState.text(agent,"bbInstanceId"));
                     if(worldProject.isBlank()) worldProject=JsonState.text(data,"worldProjectId");
                     if (!worldProject.isBlank() && JsonState.text(agent,"projectId").equals(worldProject)) agent.addProperty("projectId","minecraft");
-                    if (!worldProject.isBlank() && JsonState.text(JsonState.obj(agent,"spawn"),"projectId").equals(worldProject)) JsonState.obj(agent,"spawn").addProperty("projectId","minecraft");
+                    var spawn = JsonState.obj(agent,"spawn");
+                    if (!worldProject.isBlank() && JsonState.text(spawn,"projectId").equals(worldProject)) {
+                        // The original world's environment stays with the original; the copy's project chooses its own.
+                        spawn.addProperty("projectId","minecraft");
+                        spawn.remove("environment");
+                        agent.add("spawn",spawn);
+                    }
+                    // A start still pending in the original belongs to the original.
+                    agent.addProperty("startNonce","");
                     if (JsonState.text(agent,"threadId").isBlank()) continue;
                     agent.addProperty("threadId","");
                     agent.add("spawn",JsonState.object("projectId",JsonState.text(agent,"projectId")));

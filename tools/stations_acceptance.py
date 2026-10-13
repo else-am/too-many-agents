@@ -300,6 +300,8 @@ def spawning(game):
     game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id}, error=True)
     passed('archive releases the station; restore is loose; remaining body prevents project removal')
     game.request(path + '/archive', {})
+    game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id}, error=True)
+    game.request(path + '/remove', {})
     game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id})
     deadline = time.monotonic() + 10
     while row(game.station('read', pos=pos), pos)['projectId']:

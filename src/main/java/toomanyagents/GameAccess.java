@@ -375,6 +375,16 @@ final class GameAccess {
         stationProjects = Map.copyOf(colors);
     }
 
+    /** One BB's complete project listing, from a successful sync. Stations remember it to notice deletions. */
+    CompletableFuture<Void> projectCatalog(String instanceId, JsonArray rows, String expectedSession) {
+        var ids = new HashSet<String>();
+        for (var value : rows) {
+            var row = value.getAsJsonObject();
+            if (!JsonState.text(row, "kind").equals("world")) ids.add(JsonState.text(row, "id"));
+        }
+        return schedule(expectedSession, current -> { StationIndex.get(current).catalog(current, instanceId, ids); return null; });
+    }
+
     /** Frees the agent's station, if any. Archiving, deleting and removing a body all end its occupancy. */
     CompletableFuture<Void> releaseStation(String agentId, String expectedSession) {
         return schedule(expectedSession, current -> { StationIndex.get(current).release(current, agentId); return null; });
