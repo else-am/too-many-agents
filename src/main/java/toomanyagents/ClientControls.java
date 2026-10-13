@@ -85,7 +85,6 @@ public final class ClientControls {
 
     private void registerKeys(RegisterKeyMappingsEvent event) {
         event.register(chatKey);
-        event.register(survey.key);
     }
 
     private void registerCommands(RegisterClientCommandsEvent event) {
@@ -352,7 +351,7 @@ public final class ClientControls {
                         boolean on = request.has("on") ? request.get("on").getAsBoolean() : !survey.on();
                         survey.setOn(on);
                     }
-                    case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop", "dev_command", "dev_aim", "dev_mouse", "dev_scroll", "dev_char", "dev_quit" -> {
+                    case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop", "dev_command", "dev_aim", "dev_mouse", "dev_mouse_move", "dev_scroll", "dev_char", "dev_quit" -> {
                         var server = client.getSingleplayerServer();
                         if (!DevelopmentWorld.ENABLED || server == null || !server.getWorldPath(LevelResource.ROOT)
                             .toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME)) {
@@ -410,7 +409,13 @@ public final class ClientControls {
                             result.complete(input);
                             return;
                         }
-                        else if (action.equals("dev_focus")) GLFW.glfwFocusWindow(client.getWindow().getWindow());
+                        else if (action.equals("dev_focus")) {
+                            if (request.has("active")) {
+                                // Exercise the native focus callback without taking over the user's desktop.
+                                client.setWindowActive(request.get("active").getAsBoolean());
+                                if (client.isWindowActive()) client.mouseHandler.grabMouse();
+                            } else GLFW.glfwFocusWindow(client.getWindow().getWindow());
+                        }
                         else if (action.equals("dev_window_size")) {
                             int width = request.get("width").getAsInt(), height = request.get("height").getAsInt();
                             if (width < 640 || width > 2560 || height < 480 || height > 1600) throw new IllegalArgumentException("Use a window between 640×480 and 2560×1600");
@@ -430,10 +435,11 @@ public final class ClientControls {
                             if (key < GLFW.GLFW_KEY_SPACE || key > GLFW.GLFW_KEY_LAST) throw new IllegalArgumentException("Invalid key");
                             long window = client.getWindow().getWindow();
                             int modifiers = request.has("modifiers") ? request.get("modifiers").getAsInt() : 0;
-                            client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_PRESS, modifiers);
-                            client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_RELEASE, modifiers);
+                            String phase = request.has("phase") ? request.get("phase").getAsString() : "click";
+                            if (!phase.equals("release")) client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_PRESS, modifiers);
+                            if (!phase.equals("press")) client.keyboardHandler.keyPress(window, key, 0, GLFW.GLFW_RELEASE, modifiers);
                         }
-                        else if (action.equals("dev_command") || action.equals("dev_aim") || action.equals("dev_mouse") || action.equals("dev_scroll") || action.equals("dev_char")) {
+                        else if (action.equals("dev_command") || action.equals("dev_aim") || action.equals("dev_mouse") || action.equals("dev_mouse_move") || action.equals("dev_scroll") || action.equals("dev_char")) {
                             result.complete(toomanyagents.screens.ScreenDiagnostics.develop(action, request));
                             return;
                         }

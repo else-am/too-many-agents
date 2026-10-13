@@ -73,6 +73,12 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         }
         bar(pose, buffers, view);
         if (ScreenInput.menuOpen(view)) menu(pose, buffers, view);
+        if (ScreenInput.capturedCursor(view)) {
+            double sx = w / view.pixelWidth, sy = h / view.pixelHeight;
+            double cx = ScreenInput.cursorX(), cy = ScreenInput.cursorY();
+            CursorArt.pixels(ScreenInput.cursorShape(view), (x, y, color) -> rect(buffers, matrix,
+                (cx + x * 2) * sx, (cy + y * 2) * sy, (cx + x * 2 + 2) * sx, (cy + y * 2 + 2) * sy, -0.010, color));
+        }
         pose.popPose();
     }
 

@@ -51,6 +51,7 @@ public final class StationScreen extends BlockSettingsScreen {
             note("Project stays fixed while occupied. Archive the agent to free this station.");
         } else action("Agent","Spawn agent here",()->saveThen(this::spawn),enabled&&!text("projectId").isBlank());
         section("Area");
+        action("", "Show station areas", () -> saveThen(SurveyMode::start), enabled);
         input("Width (odd, 1–99)",areaWidth,2,v->areaWidth=v,enabled).setHint(Component.literal("3 = 3×3"));
         input("Height (1–99)",areaHeight,2,v->areaHeight=v,enabled);
         section("Behaviors");
@@ -61,13 +62,13 @@ public final class StationScreen extends BlockSettingsScreen {
                 if(v.equals("look"))behavior.addProperty("target","player");all.add(state[0],behavior);draft.add("behaviors",all);rebuildForm();
             },enabled);
         }
-        section(occupied?"Execution · next spawn":"Execution");
+        section(occupied?"Execution - next spawn":"Execution");
         note("Leave blank to use BB’s project defaults. Filled fields are pinned.");
         executionRows(enabled);
         var bodies=defaults("Random");
         for(var body:AgentModels.array(catalog,"bodies"))bodies.add(new Choice(body.getAsString(),body.getAsString().replace("minecraft:","")));
-        pinnedChoice(occupied?"Body · next spawn":"Body","body",bodies,enabled&&!loadingCatalog);
-        section(occupied?"Instructions · next spawn":"Instructions");
+        pinnedChoice(occupied?"Body - next spawn":"Body","body",bodies,enabled&&!loadingCatalog);
+        section(occupied?"Instructions - next spawn":"Instructions");
         var instructions=new MultiLineEditBox(font,left,0,contentWidth,84,Component.literal("Prepended to the first task"),Component.literal("Instructions"));
         instructions.setCharacterLimit(64000);instructions.setValue(text("instructions"));instructions.setValueListener(v->change("instructions",v));instructions.active=enabled;
         place(instructions,rowY);rowY+=90;

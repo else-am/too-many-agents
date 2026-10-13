@@ -137,7 +137,7 @@ public final class ProjectScreen extends SettingsFormScreen {
             .bounds(left,0,contentWidth,20).build(),rowY);
         surveyButton.active=!busy&&minecraft.level!=null;rowY+=24;
     }
-    private static String surveyCaption(){return "Show station areas ("+SurveyMode.keyLabel()+")";}
+    private static String surveyCaption(){return "Show station areas";}
     private String distance(JsonObject box){
         if(minecraft.player==null||minecraft.level==null)return "Not in world";
         String dimension=text(box,"dimension");

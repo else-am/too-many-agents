@@ -274,6 +274,17 @@ final class ScreenView implements ScreenBrowser.View {
         return waiter;
     }
 
+    /** Physical input uses Chromium's complete keyboard mapping, while retaining player navigation ownership. */
+    void playerInput(String method, com.google.gson.JsonObject params) {
+        playerInput();
+        if (devTools == null) devTools = browser.getDevToolsClient();
+        devTools.executeDevToolsMethod(method, params.toString()).exceptionally(error -> {
+            onRender(() -> ScreenInput.closing(this));
+            com.mojang.logging.LogUtils.getLogger().warn("Screen input failed", error);
+            return null;
+        });
+    }
+
     /** Runs one DevTools method on the page. */
     CompletableFuture<String> devTools(String method, String params) {
         agentInput();
@@ -312,6 +323,7 @@ final class ScreenView implements ScreenBrowser.View {
     ResourceLocation popupTexture() { return popup.location; }
 
     void close() {
+        ScreenInput.closing(this);
         if (devTools != null) devTools.close();
         devTools = null;
         if (browser != null) Chromium.close(browser);
@@ -381,7 +393,9 @@ final class ScreenView implements ScreenBrowser.View {
      */
     void loadStarted(ScreenBrowser source, String address) {
         onRender(() -> {
-            if (source != browser || opening == null || opening.isDone()) return;
+            if (source != browser) return;
+            ScreenInput.pageLoading(this);
+            if (opening == null || opening.isDone()) return;
             String loaded = trimSlash(address);
             if (loaded.equals(trimSlash(url)) || !loaded.equals(trimSlash(superseded))) openingStarted = true;
         });

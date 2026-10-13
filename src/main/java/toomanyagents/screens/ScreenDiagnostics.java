@@ -29,6 +29,17 @@ public final class ScreenDiagnostics {
         ProcessHandle.current().descendants().forEach(process -> helpers.add(process.pid()));
         result.add("helpers", helpers);
         var mc = Minecraft.getInstance();
+        result.addProperty("windowActive", mc.isWindowActive());
+        result.addProperty("mouseGrabbed", mc.mouseHandler.isMouseGrabbed());
+        if (mc.player != null) {
+            var player = new JsonObject();
+            player.addProperty("x", mc.player.getX());
+            player.addProperty("y", mc.player.getY());
+            player.addProperty("z", mc.player.getZ());
+            player.addProperty("yaw", mc.player.getYRot());
+            player.addProperty("pitch", mc.player.getXRot());
+            result.add("player", player);
+        }
         // Every screen entity the client has, drawn or not, with the browser its view holds.
         var screens = new JsonArray();
         if (mc.level != null) for (var entity : mc.level.entitiesForRendering()) {
@@ -50,6 +61,9 @@ public final class ScreenDiagnostics {
             screen.addProperty("browser", view != null && view.browser != null);
             if (view != null) {
                 screen.addProperty("pixels", view.pixelWidth + "x" + view.pixelHeight);
+                screen.addProperty("pageWidth", view.pageWidth);
+                screen.addProperty("pageHeight", view.pageHeight);
+                screen.addProperty("barHeight", view.barHeight);
                 screen.addProperty("viewUrl", view.url);
                 screen.addProperty("browserUrl", view.browser == null ? "" : view.browser.getURL());
                 screen.addProperty("painted", view.painted());
@@ -175,6 +189,14 @@ public final class ScreenDiagnostics {
                 String phase = request.has("phase") ? request.get("phase").getAsString() : "click";
                 if (!phase.equals("release")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, 0);
                 if (!phase.equals("press")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, 0);
+            }
+            case "dev_mouse_move" -> {
+                double dx = request.get("x").getAsDouble(), dy = request.get("y").getAsDouble();
+                if (!Double.isFinite(dx) || !Double.isFinite(dy) || Math.abs(dx) > 10000 || Math.abs(dy) > 10000)
+                    throw new IllegalArgumentException("Mouse deltas must be finite and at most 10000");
+                mc.mouseHandler.onMove(window, mc.mouseHandler.xpos(), mc.mouseHandler.ypos());
+                mc.mouseHandler.onMove(window, mc.mouseHandler.xpos() + dx, mc.mouseHandler.ypos() + dy);
+                mc.mouseHandler.handleAccumulatedMovement();
             }
             case "dev_scroll" -> mc.mouseHandler.onScroll(window, 0, request.get("y").getAsDouble());
             case "dev_char" -> request.get("text").getAsString().codePoints().forEach(c -> mc.keyboardHandler.charTyped(window, c, 0));

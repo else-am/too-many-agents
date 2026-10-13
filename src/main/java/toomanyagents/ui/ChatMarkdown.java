@@ -133,7 +133,7 @@ final class ChatMarkdown {
             for (Node child = node.getFirstChild(); child != null; child = child.getNext()) {
                 int first = rows.size();
                 blocks(child, Math.min(inset + 16, width / 2), depth + 1);
-                String marker = node instanceof OrderedList ? ordinal++ + "." : "•";
+                String marker = node instanceof OrderedList ? ordinal++ + "." : "-";
                 for (Node part = child.getFirstChild(); part != null; part = part.getNext())
                     if (part instanceof TaskListItemMarker task) marker = task.isChecked() ? "☑" : "☐";
                 if (first < rows.size()) {

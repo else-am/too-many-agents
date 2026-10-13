@@ -2,7 +2,6 @@ package toomanyagents.ui;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.mojang.blaze3d.platform.InputConstants;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -13,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.function.Supplier;
-import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -29,7 +27,6 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.common.NeoForge;
 import org.lwjgl.glfw.GLFW;
 import toomanyagents.ProjectColor;
@@ -52,8 +49,6 @@ public final class SurveyMode {
     }
 
     private final Supplier<AgentUiAccess> access;
-    public final KeyMapping key = new KeyMapping("Show station areas", KeyConflictContext.IN_GAME,
-        InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_B, "Too Many Agents");
     private boolean on;
     private JsonObject data = new JsonObject();
     private List<Box> boxes = List.of();
@@ -77,7 +72,7 @@ public final class SurveyMode {
                 .createCompositeState(false));
     }
 
-    /** Shows station areas, from the project screen. */
+    /** Shows station areas from station or project settings. */
     public static void start() {
         if (instance == null) return;
         instance.setOn(true);
@@ -86,7 +81,12 @@ public final class SurveyMode {
 
     public boolean on() { return on; }
 
-    public static String keyLabel() { return instance==null ? "Unbound" : instance.key.getTranslatedKeyMessage().getString(); }
+    public static boolean keyPress(int key, int action) {
+        if (instance == null || !instance.on || Minecraft.getInstance().screen != null
+                || key != GLFW.GLFW_KEY_ESCAPE) return false;
+        if (action == GLFW.GLFW_PRESS) instance.setOn(false);
+        return true;
+    }
 
     public void setOn(boolean value) {
         on = value;
@@ -137,7 +137,6 @@ public final class SurveyMode {
 
     private void tick(ClientTickEvent.Post event) {
         var client = Minecraft.getInstance();
-        while (key.consumeClick()) if (client.screen == null && client.level != null) setOn(!on);
         if (client.level == null && on) setOn(false);
         if ((on || client.screen instanceof StationScreen) && ++refreshTicks >= 10) refresh();
     }
@@ -243,7 +242,7 @@ public final class SurveyMode {
         if (client.screen != null || client.options.hideGui || !on) return;
         var g = event.getGuiGraphics();
         var font = client.font;
-        String mark = "◇ Station areas", hint = "press " + keyLabel() + " to hide";
+        String mark = "◇ Station areas", hint = "Esc - Hide station areas";
         int gap = 8, width = font.width(mark) + gap + font.width(hint), x = (g.guiWidth() - width) / 2, y = g.guiHeight() - 78;
         g.fill(x - 6, y - 4, x + width + 6, y + 12, 0xD0101010);
         g.fill(x - 6, y + 12, x + width + 6, y + 13, 0xFF000000 | ACCENT);

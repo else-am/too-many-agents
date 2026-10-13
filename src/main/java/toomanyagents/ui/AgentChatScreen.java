@@ -2041,7 +2041,7 @@ public final class AgentChatScreen extends Screen {
             var image=chatImages.get(media.kind(),media.source());
             if(image.texture!=null)ChatImages.draw(graphics,image,x,y,media.width(),height);
             else {
-                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":"Click to retry · "+image.error;
+                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":"Click to retry - "+image.error;
                 var wrapped=font.split(Component.literal(status),Math.max(24,media.width()));
                 for(int i=0;i<Math.min(wrapped.size(),height/LINE_HEIGHT);i++)
                     graphics.drawString(font,wrapped.get(i),x,y+i*LINE_HEIGHT,0xBDB5A6);
