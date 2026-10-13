@@ -125,19 +125,26 @@ public final class SurveyMode {
         var level = Minecraft.getInstance().level;
         if (level == null) return List.of();
         String dimension = level.dimension().location().toString();
-        return boxes.stream().filter(box -> box.dimension().equals(dimension)).toList();
+        var shown=new ArrayList<Box>();
+        if(on)shown.addAll(boxes.stream().filter(box -> box.dimension().equals(dimension)).toList());
+        if(Minecraft.getInstance().screen instanceof StationScreen screen) {
+            var row=screen.outline();
+            shown.removeIf(box->AgentModels.text(box.row(),"id").equals(AgentModels.text(row,"id")));
+            if(AgentModels.text(row,"dimension").equals(dimension))shown.add(new Box(row,AgentModels.text(row,"projectId"),dimension,pos(row.getAsJsonArray("min")),pos(row.getAsJsonArray("max"))));
+        }
+        return shown;
     }
 
     private void tick(ClientTickEvent.Post event) {
         var client = Minecraft.getInstance();
         while (key.consumeClick()) if (client.screen == null && client.level != null) setOn(!on);
         if (client.level == null && on) setOn(false);
-        if (on && ++refreshTicks >= 40) refresh();
+        if ((on || client.screen instanceof StationScreen) && ++refreshTicks >= 10) refresh();
     }
 
     private void renderLevel(RenderLevelStageEvent event) {
         var client = Minecraft.getInstance();
-        if (!on || event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || client.level == null) return;
+        if ((!on && !(client.screen instanceof StationScreen)) || event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || client.level == null) return;
         Vec3 camera = event.getCamera().getPosition();
         var pose = new PoseStack();
         pose.mulPose(event.getModelViewMatrix());
@@ -152,6 +159,7 @@ public final class SurveyMode {
 
         var lines = buffers.getBuffer(LINES);
         for (var box : shown) outline(pose, lines, box.area().inflate(0.004).move(camera.reverse()), color(box.projectId()), 0.85F);
+        linkedScreens(pose,lines,camera,shown);
         buffers.endBatch(LINES);
 
         // Faint copies through blocks keep areas readable behind walls and floors.
@@ -167,6 +175,29 @@ public final class SurveyMode {
             if (alpha > 0) label(pose, buffers, event, camera, at, title(box), alpha);
         }
         buffers.endBatch();
+    }
+
+    /** Uses the same published links as ScreenTools, never a second geometric linking rule. */
+    private void linkedScreens(PoseStack pose,VertexConsumer lines,Vec3 camera,List<Box> shown) {
+        var level=Minecraft.getInstance().level;
+        if(level==null)return;
+        var links=AgentModels.array(AgentModels.object(data,"world"),"screenLinks");
+        for(var entity:level.entitiesForRendering()) {
+            if(!(entity instanceof toomanyagents.screens.ScreenEntity screen))continue;
+            for(var value:links) {
+                var link=value.getAsJsonObject();if(!AgentModels.text(link,"screenId").equals(screen.record().id()))continue;
+                for(var station:shown) {
+                    if(!AgentModels.text(link,"stationId").equals(AgentModels.text(station.row(),"id")))continue;
+                    int color=color(station.projectId());
+                    outline(pose,lines,screen.getBoundingBox().inflate(.025).move(camera.reverse()),color,1);
+                    var from=station.area().getCenter().subtract(camera);var to=screen.getBoundingBox().getCenter().subtract(camera);
+                    var normal=to.subtract(from).normalize();var matrix=pose.last();
+                    for(var point:List.of(from,to))lines.addVertex(matrix,(float)point.x,(float)point.y,(float)point.z)
+                        .setColor((color>>16&255)/255F,(color>>8&255)/255F,(color&255)/255F,.75F)
+                        .setNormal(matrix,(float)normal.x,(float)normal.y,(float)normal.z);
+                }
+            }
+        }
     }
 
     private Component title(Box box) {
@@ -225,6 +256,7 @@ public final class SurveyMode {
         var result = new JsonObject();
         result.addProperty("on", on);
         result.addProperty("visibleBoxes", visible().size());
+        result.add("screenLinks", AgentModels.array(AgentModels.object(data,"world"),"screenLinks").deepCopy());
         return result;
     }
 }

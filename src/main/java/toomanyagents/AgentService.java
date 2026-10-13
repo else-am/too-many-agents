@@ -307,7 +307,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public CompletableFuture<JsonObject> backendConfig() { return rpc("system.config",new JsonObject()).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> setDefaultProvider(String providerId) { return rpc("system.defaultProvider.set",object("providerId",providerId)).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> projectExecutionOptions(String projectId) {
-        return rpc("project.executionOptions",object("projectId",projectId)).thenApply(value -> value.isJsonObject()?value.getAsJsonObject():new JsonObject());
+        return projectExecutionOptions(projectId,false);
+    }
+    @Override public CompletableFuture<JsonObject> projectExecutionOptions(String projectId,boolean station) {
+        return rpc("project.executionOptions",object("projectId",projectId,"station",station)).thenApply(value -> value.isJsonObject()?value.getAsJsonObject():new JsonObject());
     }
     @Override public CompletableFuture<JsonObject> usage() { return rpc("usage",new JsonObject()).thenApply(JsonElement::getAsJsonObject); }
     @Override public CompletableFuture<JsonObject> catalog() { return catalog(""); }
@@ -320,6 +323,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     @Override public CompletableFuture<JsonObject> projectCreationOptions(String projectId) {
         return rpc("project.creationOptions",object("projectId",projectId)).thenApply(JsonElement::getAsJsonObject);
     }
+    @Override public CompletableFuture<JsonObject> blockAction(JsonObject request) { return game.blockUi(request.deepCopy(),worldSession.get()); }
+
     @Override public synchronized JsonObject projects() { return object("projects",projectRows,"world",worldView()); }
     @Override public CompletableFuture<JsonObject> projectCommand(JsonObject request) { return guarded(() -> {
         String operation=text(request,"operation");
@@ -341,6 +346,12 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             // BB owns deletion. Do not hold the body lock while contacting it.
             response=rpc("project.remove",removal).thenCompose(done -> game.projectRemoved(project,session).thenApply(cleared -> done));
         } else response=rpc("project."+operation,request);
+        if(operation.equals("create")) return response.thenApplyAsync(done -> {
+            // Publish the new project before a block screen tries to bind it. sync reports its own errors;
+            // a catalog failure must not turn a completed creation into an invitation to create it again.
+            sync();
+            return done.getAsJsonObject();
+        },polling);
         return response.thenApply(JsonElement::getAsJsonObject).whenComplete((done,failure) -> polling.execute(this::sync));
     }); }
 

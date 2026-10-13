@@ -292,6 +292,6 @@ export function minecraftAgents(
     );
     return { projects: rows };
   }
-  return { get, create, send, settings, archive, sync, draftDefaults, station };
+  return { get, create, send, settings, archive, sync, draftDefaults, projectDefaults, station };
 }
 export type MinecraftAgents = ReturnType<typeof minecraftAgents>;

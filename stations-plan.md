@@ -6,10 +6,10 @@
 - [x] ~~Station occupancy, project-derived access, spawning, and execution defaults.~~
 - [x] ~~Station scripting, world/project behaviors, and confinement.~~
 - [x] ~~Screen linking, access, and listing.~~
-- [ ] Pointing context.
-- [ ] Station/project block screens, item slots, settings, and survey UI.
-- [ ] Remove obsolete roles, boxes, commands, settings, and documentation.
-- [ ] Live acceptance, packaged JAR checks, and persistence after reopening.
+- [x] ~~Pointing context.~~
+- [x] ~~Station/project block screens, item slots, settings, and survey UI.~~
+- [x] ~~Remove obsolete roles, boxes, commands, settings, and documentation.~~
+- [x] ~~Live acceptance, packaged JAR checks, and persistence after reopening.~~
 
 A station is a block you place in the world. A project agent works at a station: it stays inside the station's area, uses the station's screens, and starts with the station's instructions and settings. You can pick a station up with its settings intact and place it somewhere else, the way you can with a shulker box.
 

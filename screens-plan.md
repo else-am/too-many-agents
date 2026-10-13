@@ -34,37 +34,39 @@ record Screen(String id, String name, String url, String openedBy) {}
 
 ### Access and defaults
 
-- ~~**Which screens an agent can use:** screens in its project's box, plus shared screens (outside any project box). Never another project's screens.~~
-- ~~**"Yours":** a screen linked to your station. Links are worked out live: a screen belongs to the nearest station within about 4 blocks.~~
-- ~~**When `screen` is omitted:**~~
-  - ~~If your station has exactly one screen, that's the one used.~~
-  - ~~Otherwise the call fails with `choose_screen` and returns only your station's screens.~~
-  - ~~Agents without a station always pass `screen`.~~
-- ~~**`screen` arguments** accept a UUID or unique name (`whiteboard`). Agents retain UUIDs for future calls so renaming does not change the target.~~
+Superseded by the [stations decision](stations-plan.md#screens). Screens link live
+by intersection with station areas, nearest to the screen's center winning overlaps
+(ties: lower station id). Linked screens are exclusive to the occupant; a free
+station's screens are off-limits to every agent. Unlinked screens are shared, and
+players can always use any screen. Projects do not own screens.
+
+Omitting `screen` uses the caller's sole linked screen. Several linked screens
+return `choose_screen` with candidates; without one, pass a UUID or unique name.
+Keep UUIDs across renames; pickup and replacement creates a new identity.
 
 ### Tools
 
-~~All five are ungated, so every mod agent gets them, with or without Minecraft access. Responses avoid Minecraft details: threads are identified by id, and sizes are in pixels.~~
+~~All five are ungated, so every mod agent gets them, in either world or other projects. Responses avoid Minecraft details: threads are identified by id, and sizes are in pixels.~~
 
 #### `screen_list`
 
 | Arg | |
 |---|---|
-| `mine` | optional boolean: only your station's screens |
+| `limit` | optional integer: default 20, maximum 50 |
 
-- ~~Without `mine`: every screen you can use, sorted yours first, then nearest the user, capped at 50, with `truncated: n` when there are more.~~
+- Only usable screens, sorted yours first, then unlinked screens by the smaller distance to the user or agent; other dimensions last. `truncated` counts rows omitted by `limit`. See the [station screen-tool decision](stations-plan.md#screen-tools).
 - ~~The description includes: "`distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'."~~
 
 ```jsonc
 {
-  "you": { "station": { "id": "st_…", "label": "desk" }, "project": "prj_…" },  // station null if none
+  "you": { "station": { "id": "st_…", "name": "desk" }, "project": "prj_…" },  // station null if none
   "screens": [{
     "id": "550e8400-e29b-41d4-a716-446655440000", "name": "whiteboard",
     "url": "https://…", "title": "Excalidraw",                       // url "" when idle
     "viewport": [1504, 915],                                          // page size in pixels
-    "project": "prj_…",                                               // null = shared
-    "station": { "id": "st_…", "label": "desk", "thread": "thr_…" },  // null if unlinked; thread null if the station is free
+    "station": { "id": "st_…", "name": "desk" },                   // null if unlinked
     "yours": true,
+    "openedByYou": true,
     "available": true,                                                // false if not currently running for the user
     "lease": { "thread": "thr_…", "secondsLeft": 12 },                // null if free
     "distance": { "user": 4, "you": 3 }                               // rounded; you null if your body isn't present
@@ -128,13 +130,13 @@ A plain CDP passthrough to the screen's page.
 
 ### Agent instructions
 
-~~Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `minecraft-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list { mine: true }` finds yours, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.~~
+~~Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `minecraft-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list {}` lists usable screens with yours first, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.~~
 
 ### Lease
 
 - ~~`screen_open`, `screen_cdp` and `screen_close` take the screen's lease, or renew it if you already hold it. The lease lasts **20s after your last call ends**, and is also held while a call is running. `screen_close` releases it afterwards.~~
 - ~~While someone else holds it, other threads' calls fail with `leased: { thread, secondsLeft, url }`. Agents decide whether to wait.~~
-- ~~Players are never blocked, and `screen_list` and `screen_screenshot` always work.~~
+- ~~Players are never blocked, and `screen_list` and `screen_screenshot` do not require a lease but still enforce station access.~~
 - ~~The lease is released early when the holder's thread stops or is archived, or when the screen breaks or is closed.~~
 - ~~It lives in the game's memory only and is never saved.~~
 - ~~While leased, the screen's bar shows the holder's name.~~
@@ -146,7 +148,7 @@ A plain CDP passthrough to the screen's page.
 | Code | When |
 |---|---|
 | `choose_screen` | Omitted screen and no single default, includes the candidates |
-| `not_found` / `no_access` | Unknown id/name, or another project's screen |
+| `not_found` / `no_access` | Unknown id/name, or a screen linked to a station you do not occupy |
 | `leased` | Another thread holds it; includes `{ thread, secondsLeft, url }` |
 | `unavailable` | Idle, or not loaded on the user's client (out of range, game closed, world not trusted) |
 | `too_large` | Result over the cap |
@@ -170,7 +172,7 @@ A plain CDP passthrough to the screen's page.
 
 - Figure out some way to handle URLs in world downloads as a potential security problem?
 - Sign-ins through opt-in cookie import (untested).
-- Make survey mode more obvious, so stations, project boxes and screen links are easy to see. Ideas: holding a screen item highlights the station it would link to; survey mode draws screen-to-station links in the station's color; the bar shows the station and its agent.
+- Make survey mode more obvious, so station areas and screen links are easy to see. Ideas: holding a screen item highlights the station it would link to; the bar shows the station and its agent.
 - Consider blocking file reads outside project folders, with one rule in onBeforeBrowse (screens run outside agents' sandboxes, so file:// could read what a sandbox denies).
 - Floor and ceiling screens (a war table in front of an agent): the same placement and support rules on horizontal faces.
 - Windows and Linux testing.

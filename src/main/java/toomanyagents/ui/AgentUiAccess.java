@@ -14,9 +14,11 @@ public interface AgentUiAccess {
     CompletableFuture<JsonObject> backendConfig();
     CompletableFuture<JsonObject> setDefaultProvider(String providerId);
     CompletableFuture<JsonObject> projectExecutionOptions(String projectId);
+    CompletableFuture<JsonObject> projectExecutionOptions(String projectId, boolean station);
     JsonObject projects();
     CompletableFuture<JsonObject> projectCreationOptions(String projectId);
     CompletableFuture<JsonObject> projectCommand(JsonObject request);
+    CompletableFuture<JsonObject> blockAction(JsonObject request);
     CompletableFuture<String> spawn(JsonObject settings);
     JsonArray list();
     JsonArray worldAgents();

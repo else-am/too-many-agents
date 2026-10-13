@@ -73,8 +73,8 @@ with its token; never share it.
 Create a body in Minecraft and choose a native BB project, provider and model.
 Each body belongs to its world's stable ID, one BB instance and one BB thread.
 Conversations, queued messages and provider settings live in BB. Minecraft saves
-agents, their BB ownership and thread links, body settings, inventories, project
-bounds and stations with the world. Only the selected BB is connected. Switching
+agents, their BB ownership and thread links, body settings, inventories, stations
+and project blocks with the world. Only the selected BB is connected. Switching
 BB leaves the other instance's agents disconnected; switching back reconnects them.
 
 New agents belong to **This world** unless you choose another project. Each world
@@ -85,15 +85,41 @@ files travel with the world. Agents with **No project** use BB's Personal projec
 A separate world copy keeps its bodies and workspace files; its agents start new
 conversations in the copy's own project.
 
-Project bounds and stations keep bodies within their assigned space. Press B
-for survey mode to see and draw boxes. Each activity (wants you, working, idle)
-can stand, wander, follow you, jump, spin, look, or swing. Behaviors yield to
-physical actions and resume afterward; following in all three activities keeps
-an agent with you even while it works in BB. Following leaves an assigned station
-but respects project bounds; other behaviors bring the body back to its station.
-Behaviors never change blocks. Agents with Minecraft access receive the plugin's Minecraft
-prompts and installed physical tools; other threads continue ordinary project
-work in BB.
+Access comes from the agent's project. **This world** agents have physical tools
+and no station or confinement. Agents in other BB projects do coding work and
+can optionally occupy a station; both kinds can use screens.
+
+A **station** is a physical block with a project, instructions, body choice and
+optional execution settings. Right-click to configure it or **Spawn agent here**.
+Blank execution fields inherit BB's project defaults; set a field to pin it.
+Station instructions precede the first task. Execution, instructions and body
+changes affect future spawns; area and behavior changes affect the occupant now.
+A station needs a project before spawning, and its project cannot change while
+occupied. World projects cannot be assigned to station or project blocks.
+
+Stationed agents stay in a square area around the block, except while following.
+Radius is 0–49 (width `2r+1`), height 1–99 upwards from the block; defaults are
+3×3 and height 3. Press **B** to view named station-area outlines. Survey is
+view-only. Break a free station to carry its settings to another location;
+occupied stations cannot be broken. Archiving or deleting the occupant frees it;
+unarchiving restores the agent without a station.
+
+A **project block** opens project settings and stamps its project onto a station
+item through its slot, preserving the item's other settings. It is only a marker:
+it defines no area and owns no screens. Breaking it drops a plain project-block
+item. A station's copy slot copies its settings onto another station item.
+
+World agents have one behavior: stand (default), wander near the starting point,
+or follow. It pauses from the first script or physical action until the turn ends.
+Project agents have separate working, wants-you and idle behaviors: stand, wander,
+follow, jump, spin or look at the player. A station supplies its occupant's
+behaviors; an agent without a station uses its own settings.
+
+Screens intersecting a station's area link to it automatically. Only its occupant
+can use them; free stations' screens are off-limits to all agents. Unlinked screens
+are shared, and players can use any screen. `screen_list` lists only usable screens,
+your station's first, then unlinked screens by proximity to you or the player.
+It defaults to 20 rows (maximum 50); `truncated` counts omitted rows.
 
 From an embodied thread, use `bb minecraft spawn --parent-self --prompt 'Task'`
 for a child, or omit `--parent-self` for an independent thread. Use
@@ -106,46 +132,27 @@ mod owns physical bodies and saved world records, and renders the plugin’s UI
 data. BB integration changes belong in `bb-plugin/`; the mod asks for actions
 such as creating an agent or choosing a worktree.
 
-Roles live in BB's plugin storage and are shared across game installs. In agent
-settings, **Load role** copies a preset; **Save a role** captures the body and current
-BB choices. Select **Edit** to change a preset's body, behaviors, provider, model,
-reasoning, worktree and multiline instructions. New-agent settings use the same
-role picker. Choose **None** to restore the choices from before loading a role;
-switching roles also clears choices left by the previous role. Existing agents
-can load body/model/reasoning; provider, workspace,
-access and initial instructions are spawn-time choices.
+Spawn at a station by its UUID or name; its project is implicit. A conflicting
+`--project` is rejected. Project agents spawn only in their own project; world
+agents can also spawn into other non-world projects. A station is optional for
+project agents and unavailable to world agents. Occupancy begins at spawn and
+lasts until archive or deletion.
 
 ```sh
-bb minecraft role create worker --provider codex --model gpt-6-astra --reasoning high --body minecraft:fox --instructions-file worker.md
-bb minecraft role update worker --worktree
-bb minecraft role show worker --json
-bb minecraft station create --name desk --from 10,64,10 --to 14,67,14
-bb minecraft spawn --parent-self --role worker --station <id> --prompt 'Fix the issue'
+bb minecraft stations --json
+bb minecraft spawn --parent-self --station desk --prompt 'Fix the issue'
 ```
 
-Roles have no project or station. Explicit spawn flags override the copied role.
-Role instructions precede the first task. `role list/show/delete` work offline;
-`create/update` require an attached game to validate body settings. Use
-`--instructions-stdin` for one line of stdin; BB currently rejects multiline
-plugin stdin and `--instructions-file -`. Use a file or the in-game editor for
-multiline instructions. File paths use the calling thread's BB host and the invoking
-directory; outside a thread, role files use BB's local host. `create` rejects an
-existing name; `update` patches only supplied fields. Boolean choices have
-`--no-worktree` and `--no-minecraft-access` counterparts.
+Explicit spawn flags override station execution choices, subject to the caller's
+permission cap. Without a station, children inherit their parent's live execution
+settings; independent spawns use BB project defaults. Worktrees are a spawn-time
+choice (`--new-environment worktree`). Existing threads keep their BB settings.
 
-Agent station commands (`create/update/assign/delete`) stay inside the caller's
-project and its box. Assign/unassign is limited to self or direct BB children;
-occupied stations cannot be taken or deleted. The dimension defaults to the
-caller's body. User station editing in Minecraft is unchanged.
-
-Modes combine physical abilities and command access: `survival` uses inventory
-and tools; `creative` grants Creative physical actions; `creative_commands`
+World-agent modes combine physical abilities and command access: `survival` uses
+inventory and tools; `creative` grants Creative physical actions; `creative_commands`
 also permits world commands using the human's existing permissions. The UI labels
 that last choice **Creative + commands**. Children cannot gain abilities their
 caller lacks. There is no separate command-access setting.
-
-Roles are created explicitly; none are seeded automatically. Later role edits
-never change existing agents. Saved data uses only the current format.
 
 Minecraft instructions ask agents to use embodied spawning; they do not disable
 native subagents or change unrelated BB threads' settings.

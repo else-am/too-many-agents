@@ -94,7 +94,7 @@ export function registerGameApi(
         const world = await projects.metadata(live());
         const id =
           !data.projectId || data.projectId === "minecraft" ? world.worldProjectId : data.projectId;
-        return id ? agents.draftDefaults(string(id, "projectId")) : {};
+        return id ? (data.station === true ? agents.projectDefaults : agents.draftDefaults)(string(id, "projectId")) : {};
       }
       case "project.creationOptions":
         return projects.creationOptions(live(), string(data.projectId, "projectId"));

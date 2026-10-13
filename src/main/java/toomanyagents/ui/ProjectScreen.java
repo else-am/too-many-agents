@@ -22,9 +22,13 @@ public final class ProjectScreen extends SettingsFormScreen {
     private boolean busy,choosing,confirmRemove;
     private final Map<EditBox,JsonObject> distances=new LinkedHashMap<>();
     private Button surveyButton;
+    private Consumer<String> created;
 
     public static ProjectScreen create(AgentUiAccess access,Screen parent){return new ProjectScreen(access,parent,"");}
-    public static ProjectScreen edit(AgentUiAccess access,Screen parent,String projectId){return new ProjectScreen(access,parent,projectId);}
+    public static ProjectScreen create(AgentUiAccess access,Screen parent,Consumer<String> created){var screen=create(access,parent);screen.created=created;return screen;}
+    public static ProjectScreen edit(AgentUiAccess access,Screen parent,String projectId){
+        for(var item:array(access.projects(),"projects"))if(text(item.getAsJsonObject(),"id").equals(projectId)&&text(item.getAsJsonObject(),"kind").equals("world"))throw new IllegalArgumentException("World projects have no settings.");
+        return new ProjectScreen(access,parent,projectId);}
     private ProjectScreen(AgentUiAccess access,Screen parent,String projectId){
         super(Component.literal(projectId.isBlank()?"New project":"Project settings"));
         this.access=access;this.parent=parent;this.projectId=projectId;data=access.projects();
@@ -164,6 +168,9 @@ public final class ProjectScreen extends SettingsFormScreen {
         run(req,r->{
             if(!creating){leave(parent);return;}
             String id=r.has("projectId")?text(r,"projectId"):text(r,"id");
+            // Creation is complete even if the caller's follow-up (such as binding a block) fails.
+            projectId=id;saved=fields();
+            if(created!=null){var callback=created;created=null;callback.accept(id);return;}
             if(!docked()){minecraft.setScreen(edit(access,parent,id));return;}
             projectId=id;saved=fields();
         });

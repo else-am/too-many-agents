@@ -384,6 +384,53 @@ final class GameAccess {
     CompletableFuture<Void> projectRemoved(String projectId, String expectedSession) {
         return schedule(expectedSession, current -> { StationIndex.get(current).projectRemoved(current, projectId); return null; });
     }
+    /** Player block screens: owning-thread edits and native inventory menus, bounded to this world session. */
+    CompletableFuture<JsonObject> blockUi(JsonObject request, String session) {
+        return schedule(session, System.currentTimeMillis()+5000, current -> {
+            var viewer=player(current);
+            var xyz=request.getAsJsonArray("pos");
+            var pos=new net.minecraft.core.BlockPos(xyz.get(0).getAsInt(),xyz.get(1).getAsInt(),xyz.get(2).getAsInt());
+            var level=viewer.serverLevel();
+            if (!level.dimension().location().toString().equals(JsonState.text(request,"dimension"))
+                || !level.isLoaded(pos) || viewer.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))>64)
+                throw error("Move within eight blocks of the block.");
+            var block=level.getBlockEntity(pos);
+            var station=block instanceof toomanyagents.stations.StationBlockEntity b ? b : null;
+            var project=block instanceof toomanyagents.stations.ProjectBlockEntity b ? b : null;
+            if (station==null && project==null) throw error("That block no longer exists.");
+            if (station!=null && !station.station().id().equals(JsonState.text(request,"id"))) throw error("That station was replaced.");
+            String operation=JsonState.text(request,"operation");
+            if (operation.equals("save")) {
+                // A just-created project can reach this action before the next server tick publishes its allowlist.
+                StationIndex.get(current).projects(stationProjects);
+                var fields=request.getAsJsonObject("fields");
+                if (station!=null) station.configure(fields);
+                else project.setProject(JsonState.text(fields,"projectId"));
+            } else if (operation.equals("items")) {
+                if (project!=null && project.projectId().isBlank()) throw error("Choose a project first.");
+                java.util.function.BooleanSupplier valid=()->session.equals(worldSession.get()) && viewer.isAlive()
+                    && viewer.level()==level && level.getBlockEntity(pos)==block
+                    && viewer.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))<=64;
+                viewer.openMenu(new net.minecraft.world.MenuProvider() {
+                    @Override public net.minecraft.network.chat.Component getDisplayName() {
+                        return net.minecraft.network.chat.Component.literal(station!=null?"Copy station settings":"Assign station project");
+                    }
+                    @Override public net.minecraft.world.inventory.AbstractContainerMenu createMenu(int id,
+                            net.minecraft.world.entity.player.Inventory inventory, net.minecraft.world.entity.player.Player player) {
+                        return new toomanyagents.stations.StationItemMenu(id,inventory,valid,stack -> station!=null
+                            ? toomanyagents.stations.StationItemMenu.copy(stack,station.station())
+                            : project.projectId().isBlank()?net.minecraft.world.item.ItemStack.EMPTY
+                            : toomanyagents.stations.StationItemMenu.project(stack,project.projectId()));
+                    }
+                    @Override public boolean shouldTriggerClientSideContainerClosingOnOpen() { return false; }
+                });
+            } else throw error("Unknown block UI operation.");
+            worldInfo=worldSnapshot(current);
+            if (station!=null) return station.station().json();
+            var result=new JsonObject();result.addProperty("projectId",project.projectId());return result;
+        });
+    }
+
     CompletableFuture<JsonObject> worldCommand(JsonObject request, String expectedSession) {
         return worldCommand(request,expectedSession,null,Long.MAX_VALUE);
     }

@@ -46,9 +46,16 @@ public final class Stations {
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<Station>> STATION_DATA = COMPONENTS.registerComponentType("station",
         builder -> builder.persistent(Station.CODEC).networkSynchronized(Station.STREAM_CODEC));
 
+    private static final DeferredRegister<net.minecraft.world.inventory.MenuType<?>> MENUS = DeferredRegister.create(Registries.MENU, "too_many_agents");
+    public static final DeferredHolder<net.minecraft.world.inventory.MenuType<?>, net.minecraft.world.inventory.MenuType<StationItemMenu>> ITEM_MENU =
+        MENUS.register("station_item", () -> new net.minecraft.world.inventory.MenuType<>(StationItemMenu::new, net.minecraft.world.flag.FeatureFlags.VANILLA_SET));
+
     private Stations() {}
 
     public static void register(IEventBus modBus) {
+        MENUS.register(modBus);
+        modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
+            event.register(ITEM_MENU.get(), toomanyagents.ui.StationItemScreen::new));
         BLOCKS.register(modBus);
         ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);

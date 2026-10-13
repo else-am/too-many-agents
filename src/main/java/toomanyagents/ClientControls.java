@@ -71,6 +71,7 @@ public final class ClientControls {
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::interactSpecific);
         NeoForge.EVENT_BUS.addListener(this::interact);
+        NeoForge.EVENT_BUS.addListener(this::interactBlock);
         NeoForge.EVENT_BUS.addListener(this::frame);
         toomanyagents.ui.ScreenScale.register();
         inventoryAgents = new toomanyagents.ui.InventoryAgents(() -> service.get(), id -> selectedAgent = id);
@@ -156,6 +157,29 @@ public final class ClientControls {
             client.setScreen(new net.minecraft.client.gui.screens.inventory.InventoryScreen(client.player));
     }
 
+    private void interactBlock(PlayerInteractEvent.RightClickBlock event) {
+        var block=event.getLevel().getBlockState(event.getPos()).getBlock();
+        if (!(block instanceof toomanyagents.stations.StationBlock || block instanceof toomanyagents.stations.ProjectBlock)) return;
+        if (event.getEntity().isShiftKeyDown()) return;
+        event.setCancellationResult(InteractionResult.SUCCESS);event.setCanceled(true);
+        var client=Minecraft.getInstance();
+        if(event.getLevel().isClientSide && event.getHand()==InteractionHand.MAIN_HAND && event.getEntity()==client.player
+            && client.hasSingleplayerServer() && service.get()!=null) openBlock(event.getPos());
+    }
+
+    private void openBlock(net.minecraft.core.BlockPos pos) {
+        var client=Minecraft.getInstance();var agents=service.get();
+        var block=client.level.getBlockEntity(pos);
+        String dimension=client.level.dimension().location().toString();
+        if(block instanceof toomanyagents.stations.StationBlockEntity station) {
+            var row=station.station().json();row.addProperty("dimension",dimension);
+            var xyz=new JsonArray();xyz.add(pos.getX());xyz.add(pos.getY());xyz.add(pos.getZ());row.add("pos",xyz);
+            client.setScreen(new toomanyagents.ui.StationScreen(agents,null,row));
+        } else if(block instanceof toomanyagents.stations.ProjectBlockEntity project)
+            client.setScreen(new toomanyagents.ui.ProjectBlockScreen(agents,null,pos,dimension,project.projectId()));
+        else throw new IllegalArgumentException("No station or project block at that position.");
+    }
+
     private void interactSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
         String agent = managed(event.getTarget());
         if (agent == null) return;
@@ -217,6 +241,10 @@ public final class ClientControls {
             target.add("position", vector(new Vec3(pos.getX(), pos.getY(), pos.getZ())));
             target.addProperty("block", BuiltInRegistries.BLOCK.getKey(client.level.getBlockState(pos).getBlock()).toString());
             target.addProperty("face", block.getDirection().getName());
+        } else if (hit instanceof EntityHitResult entity && entity.getEntity() instanceof toomanyagents.screens.ScreenEntity screen) {
+            target.addProperty("type", "screen");
+            target.addProperty("id", screen.record().id());
+            target.addProperty("name", screen.record().name());
         } else if (hit instanceof EntityHitResult entity) {
             target.addProperty("type", "entity");
             target.addProperty("entity", entity.getEntity().getStringUUID());
@@ -269,6 +297,26 @@ public final class ClientControls {
                     throw new IllegalStateException("Open a local singleplayer world first");
                 }
                 switch (action) {
+                    case "station", "project_block" -> {
+                        var server=client.getSingleplayerServer();
+                        if(!DevelopmentWorld.ENABLED || server==null || !server.getWorldPath(LevelResource.ROOT)
+                            .toAbsolutePath().normalize().getFileName().toString().equals(DevelopmentWorld.NAME))
+                            throw new IllegalStateException("Development controls require the exact development world");
+                        net.minecraft.core.BlockPos pos;
+                        if(request.has("pos")) {
+                            var xyz=request.getAsJsonArray("pos");pos=new net.minecraft.core.BlockPos(xyz.get(0).getAsInt(),xyz.get(1).getAsInt(),xyz.get(2).getAsInt());
+                        } else if(request.has("x")) pos=blockPos(request);
+                        else if(action.equals("station")) {
+                            var row=toomanyagents.ui.StationScreen.find(agents,request.has("id")?JsonState.text(request,"id"):JsonState.text(request,"name"));
+                            if(!JsonState.text(row,"dimension").equals(client.level.dimension().location().toString()))throw new IllegalArgumentException("Station is in another dimension.");
+                            var xyz=row.getAsJsonArray("pos");pos=new net.minecraft.core.BlockPos(xyz.get(0).getAsInt(),xyz.get(1).getAsInt(),xyz.get(2).getAsInt());
+                        } else throw new IllegalArgumentException("A project block is identified by pos:[x,y,z].");
+                        var block=client.level.getBlockEntity(pos);
+                        if(action.equals("station") && !(block instanceof toomanyagents.stations.StationBlockEntity)
+                            || action.equals("project_block") && !(block instanceof toomanyagents.stations.ProjectBlockEntity))
+                            throw new IllegalArgumentException("The requested block is not loaded at that position.");
+                        openBlock(pos);
+                    }
                     case "bb_setup" -> client.setScreen(TooManyAgentsSettingsScreen.open(client.screen));
                     case "usage" -> {
                         agents.usage().whenComplete((value, failure) -> {
@@ -369,8 +417,9 @@ public final class ClientControls {
                             client.getWindow().setWindowed(width, height);
                         }
                         else if (action.equals("dev_inventory_click")) {
-                            if (!(client.screen instanceof AgentInventoryScreen) || !(client.player.containerMenu instanceof AgentInventoryMenu menu))
-                                throw new IllegalStateException("Open an agent inventory first");
+                            if (!(client.screen instanceof AgentInventoryScreen || client.screen instanceof toomanyagents.ui.StationItemScreen))
+                                throw new IllegalStateException("Open an agent or station item inventory first");
+                            var menu=client.player.containerMenu;
                             int slot = request.get("slot").getAsInt();
                             if (slot != -999 && (slot < 0 || slot >= menu.slots.size())) throw new IllegalArgumentException("Invalid slot");
                             var click = net.minecraft.world.inventory.ClickType.valueOf(request.get("click").getAsString());
@@ -532,7 +581,7 @@ public final class ClientControls {
     }
 
     private static boolean ours(Screen screen) {
-        return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
+        return screen instanceof toomanyagents.ui.WorldLocationScreen || screen instanceof toomanyagents.ui.StationScreen || screen instanceof toomanyagents.ui.ProjectBlockScreen || screen instanceof toomanyagents.ui.StationItemScreen || screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQueueScreen
             || screen instanceof AgentInventoryScreen || screen instanceof TooManyAgentsSettingsScreen || screen instanceof ChatScreen || screen instanceof KeyBindsScreen;
@@ -554,6 +603,7 @@ public final class ClientControls {
         reply.add("survey", survey.diagnostics());
         if (screen instanceof ChatScreen) reply.add("mentions", mentions.diagnostics(screen));
         if (screen instanceof AgentChatScreen chat) reply.add("pointing", chat.pointingContext());
+        if (screen instanceof toomanyagents.ui.StationItemScreen items) reply.add("stationItems",items.diagnostics());
         if (screen instanceof AgentInventoryScreen inventory) reply.add("inventory", inventory.inventoryState());
         if (screen instanceof AgentApprovalScreen approval) reply.add("approval", approval.diagnostics());
         if (screen instanceof TooManyAgentsSettingsScreen || screen instanceof toomanyagents.ui.AgentWorkspaceScreen) reply.add("bbSetup", JsonState.object("state", BbSetup.get().view()).get("state"));

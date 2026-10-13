@@ -25,6 +25,8 @@ import toomanyagents.TooManyAgentsClientSettings;
 public final class InventoryAgentSidebar extends Screen {
     static final int DEFAULT_WIDTH = 260, CARD_MARGINS = 31;
     private static final int LIST_TOP = 39;
+    private boolean needsWorldDecision;
+    private final Runnable resolveWorld;
     private static final int ROW_HEIGHT = AgentCard.HEIGHT + 11;
     private static final List<String> BUG_ICON = List.of(
         "...###...",
@@ -63,7 +65,7 @@ public final class InventoryAgentSidebar extends Screen {
     private ProviderUsagePopup usagePopup;
 
     /** editProject receives a project id, or "" to create one. */
-    public InventoryAgentSidebar(AgentUiAccess access, Screen parent, Consumer<String> select, Consumer<String> newAgent, Consumer<String> editProject, Runnable openSettings) {
+    public InventoryAgentSidebar(AgentUiAccess access, Screen parent, Consumer<String> select, Consumer<String> newAgent, Consumer<String> editProject, Runnable openSettings, Runnable resolveWorld) {
         super(Component.literal("Agents"));
         this.access = access;
         this.parent = parent;
@@ -71,6 +73,7 @@ public final class InventoryAgentSidebar extends Screen {
         this.newAgent = newAgent;
         this.editProject = editProject;
         this.openSettings = openSettings;
+        this.resolveWorld = resolveWorld;
     }
 
     public void selected(String id) {
@@ -174,10 +177,15 @@ public final class InventoryAgentSidebar extends Screen {
             }
         });
         updateProviderButton();
+        needsWorldDecision=WorldLocationScreen.needed(access);
+        if(needsWorldDecision)addRenderableWidget(Button.builder(Component.literal("Resolve world location"),button->resolveWorld.run())
+            .bounds(62,7,width-69,20).build());
+        else {
         addRenderableWidget(Button.builder(Component.literal("+ Project"), button ->
             editProject.accept("")).bounds(62, 7, (width - 79) / 2, 20).build());
         addRenderableWidget(Button.builder(Component.literal("+ Thread"), button -> startAgent(""))
             .bounds(68 + (width - 79) / 2, 7, (width - 79) / 2, 20).build());
+        }
         int longest=0;
         for(var item:AgentModels.array(catalog,"providers"))longest=Math.max(longest,font.width(AgentModels.text(item.getAsJsonObject(),"displayName")));
         int choiceWidth = Math.min(width - 43, longest + font.width("✓ ") + ProviderIcon.SIZE + 24);
@@ -319,6 +327,7 @@ public final class InventoryAgentSidebar extends Screen {
 
     private void refresh() {
         if (sidebarCollapsed()) return;
+        if(needsWorldDecision!=WorldLocationScreen.needed(access))rebuild();
         for (var choice : providerChoices) choice.visible = providerMenu;
         long now = System.currentTimeMillis();
         if (now - projectsReadMs >= 1_000) {
@@ -646,7 +655,7 @@ public final class InventoryAgentSidebar extends Screen {
             int visibleTop = Math.max(LIST_TOP, top), visibleBottom = Math.min(listBottom(), top + 18);
             setY(visibleTop);
             setHeight(Math.max(0, visibleBottom - visibleTop));
-            visible = visibleBottom > visibleTop;
+            visible = visibleBottom > visibleTop && !(edit && text(projects.getOrDefault(projectId(),new JsonObject()),"kind").equals("world"));
             active = visible && projects.containsKey(projectId());
             var label = Component.literal((edit ? "Edit project " : "New agent in ") + row.entry.name);
             setMessage(label);
