@@ -25,6 +25,7 @@ import org.cef.handler.CefKeyboardHandlerAdapter;
 import org.cef.handler.CefDialogHandler;
 import org.cef.handler.CefDisplayHandlerAdapter;
 import org.cef.handler.CefLoadHandlerAdapter;
+import org.cef.handler.CefLifeSpanHandlerAdapter;
 import org.cef.handler.CefMessageRouterHandlerAdapter;
 import org.cef.handler.CefRequestHandler;
 import org.cef.handler.CefRequestHandlerAdapter;
@@ -74,6 +75,16 @@ final class Chromium {
           document.addEventListener('focusout', () => setTimeout(report, 0), true);
         })();
         """;
+
+    private static final String CAPTURE_SCRIPT = captureScript();
+
+    private static String captureScript() {
+        try (var stream = Chromium.class.getResourceAsStream("/assets/too_many_agents/browser/capture.js")) {
+            return new String(java.util.Objects.requireNonNull(stream).readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException error) {
+            throw new java.io.UncheckedIOException(error);
+        }
+    }
 
     static Phase phase() { return phase; }
     static int browsers() { return views.size(); }
@@ -126,12 +137,24 @@ final class Chromium {
     }
 
     private static void handle(CefClient client) {
+        client.addLifeSpanHandler(new CefLifeSpanHandlerAdapter() {
+            @Override public void onAfterCreated(CefBrowser browser) {
+                ((ScreenBrowser) browser).initialize(CAPTURE_SCRIPT).exceptionally(error -> {
+                    LOG.error("Could not initialize screen input", error);
+                    var view = views.get(browser);
+                    if (view != null) view.crashed((ScreenBrowser) browser);
+                    return null;
+                });
+            }
+        });
         client.addLoadHandler(new CefLoadHandlerAdapter() {
             @Override public void onLoadingStateChange(CefBrowser browser, boolean loading, boolean back, boolean forward) {
+                if (!((ScreenBrowser) browser).ready()) return;
                 var view = views.get(browser);
                 if (view != null) view.loading((ScreenBrowser) browser, loading, back, forward);
             }
             @Override public void onLoadStart(CefBrowser browser, CefFrame frame, CefRequest.TransitionType transition) {
+                if (!((ScreenBrowser) browser).pageStarted(frame)) return;
                 var view = views.get(browser);
                 if (view != null && frame.isMain()) view.loadStarted((ScreenBrowser) browser, frame.getURL());
             }
@@ -141,15 +164,18 @@ final class Chromium {
                 if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED) view.loadStarted((ScreenBrowser) browser, failedUrl);
             }
             @Override public void onLoadEnd(CefBrowser browser, CefFrame frame, int status) {
-                frame.executeJavaScript(PAGE_SCRIPT, "", 0);
+                if (!((ScreenBrowser) browser).ready()) return;
+                frame.executeJavaScript(PAGE_SCRIPT + CAPTURE_SCRIPT, "", 0);
             }
         });
         client.addDisplayHandler(new CefDisplayHandlerAdapter() {
             @Override public void onAddressChange(CefBrowser browser, CefFrame frame, String url) {
+                if (!((ScreenBrowser) browser).ready()) return;
                 var view = views.get(browser);
                 if (view != null && frame.isMain()) view.address((ScreenBrowser) browser, url);
             }
             @Override public void onTitleChange(CefBrowser browser, String title) {
+                if (!((ScreenBrowser) browser).ready()) return;
                 var view = views.get(browser);
                 if (view != null) view.title((ScreenBrowser) browser, title);
             }
@@ -186,6 +212,20 @@ final class Chromium {
         var router = CefMessageRouter.create();
         router.addHandler(new CefMessageRouterHandlerAdapter() {
             @Override public boolean onQuery(CefBrowser browser, CefFrame frame, long id, String request, boolean persistent, CefQueryCallback callback) {
+                if (request.startsWith("screen-capture:")) {
+                    var view = views.get(browser);
+                    String frameId = frame.getIdentifier();
+                    if (view != null) Minecraft.getInstance().execute(() -> {
+                        if (view.browser != browser) return;
+                        ScreenInput.pointerLock(view, frameId, request.equals("screen-capture:locked"));
+                        if (request.equals("screen-capture:ready")) {
+                            var loaded = browser.getFrameByIdentifier(frameId);
+                            if (loaded != null) ScreenInput.captureLoaded(view, loaded);
+                        }
+                    });
+                    callback.success("");
+                    return true;
+                }
                 if (!request.startsWith("screen-editing:")) return false;
                 var view = views.get(browser);
                 if (view != null) view.editing((ScreenBrowser) browser, request.endsWith("1"));

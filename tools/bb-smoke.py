@@ -72,7 +72,7 @@ def main():
     first, second = marker + '-observed', marker + '-queued'
     created = request('/v1/agents/' + args.agent_id) if args.agent_id else request('/v1/agents/spawn', {'name': 'BB live smoke', 'providerId': args.provider,
                                           'model': args.model, 'reasoningLevel': args.reasoning_level,
-                                          'minecraftAccess': True, 'mode': 'creative'})
+                                          'projectId': 'minecraft', 'mode': 'creative'})
     if created.get('threadId'):
         raise RuntimeError('Fixture already has a thread; inspect it instead of starting this check again.')
     agent_id = created['id']
@@ -185,56 +185,62 @@ def run_children(request, agent_id, project_id, model, reasoning_level, timeout)
     observation = request('/v1/state')['server']
     position = observation['player']['position']
     x, y, z = [math.floor(position[key]) for key in ('x', 'y', 'z')]
-    station = request('/v1/agents/projects', {'operation': 'station-create', 'projectId': project_id,
-                      'label': 'BB child smoke', 'dimension': observation['dimension'],
-                      'min': [x + 5, y, z + 5], 'max': [x + 11, y + 5, z + 11]})
+    projects = request('/v1/agents/projects')['projects']
+    target = next(row for row in projects if row.get('kind') == 'standard' and row.get('folder') == str(ROOT))
+    pos = [x + 5, y, z + 5]
+    session = request('/v1/state')['session']
+    # Only the guarded development world reaches this fixture. Keep mutations single-shot.
+    request('/v1/command', {'session': session, 'command': f'setblock {pos[0]} {pos[1] - 1} {pos[2]} stone'})
+    request('/v1/dev', {'action': 'station', 'operation': 'give', 'kind': 'station', 'slot': 8,
+                      'settings': {'name': 'BB child ' + uuid.uuid4().hex[:8], 'projectId': target['id'],
+                                   'radius': 3, 'height': 6}})
+    placed = request('/v1/dev', {'action': 'station', 'operation': 'place', 'pos': pos, 'slot': 8})
+    station = next(row for row in placed['index']['stations'] if row['pos'] == pos)
     observed = set()
-    try:
-        parent_thread = request(path)['threadId']
-        prompt = ('This is an embodied coordination check. Run bb minecraft stations --json. Then run exactly once '
-                  f'bb minecraft spawn --parent-self --name "BB child smoke" --body minecraft:pig --station {station["id"]} '
-                  f'--model {model} --reasoning-level {reasoning_level} --json '
-                  '--prompt "Reply BB_CHILD_OK. Do not call any tools or send messages.". '
-                  'Use ordinary bb thread wait/show for the returned threadId until idle with no pending interactions. '
-                  'Then run bb thread archive for that thread exactly once. Finally reply BB_COORDINATION_OK. '
-                  'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.')
-        request(path + '/message', {'text': prompt, 'delivery': 'auto'})
-        deadline = time.monotonic() + timeout + 60
-        while time.monotonic() < deadline:
-            children = {row['id'] for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread}
-            for entity in request('/v1/state').get('server', {}).get('entities', []):
-                if entity.get('agent', {}).get('id') in children:
-                    point = entity['position']
-                    if entity['type'] != 'minecraft:pig' or not all(low <= point[key] <= high + 1 for key, low, high in
-                                                                     zip(('x', 'y', 'z'), station['min'], station['max'])):
-                        raise RuntimeError('Child body is not a pig inside its station: ' + json.dumps(entity))
-                    observed.add(entity['agent']['id'])
-            current = request(path)
-            if current.get('interactions'):
-                raise RuntimeError('Child check needs human approval: ' + json.dumps(current['interactions']))
-            timeline = request(path + '/transcript', {})
-            if current.get('status') == 'idle' and any(row.get('role') == 'assistant' and 'BB_COORDINATION_OK' in row.get('text', '')
-                                                       for row in timeline.get('rows', [])):
-                break
-            time.sleep(1)
-        else:
-            raise RuntimeError('Child coordination did not finish; fixture retained.')
-        children = [row for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread]
-        if len(children) != 1:
-            raise RuntimeError('Expected exactly one child: ' + json.dumps(children))
-        child = children[0]
-        if child['id'] not in observed:
-            raise RuntimeError('Child body was never observed in its station.')
-        if child['executionOptions'].get('model') != model or child['executionOptions'].get('reasoningLevel') != reasoning_level:
-            raise RuntimeError('Child did not preserve execution options: ' + json.dumps(child['executionOptions']))
-        if child['bodyLoaded'] or child['bodyRemoved'] or not child['conversationArchived']:
-            raise RuntimeError('Child was not suspended and archived: ' + json.dumps(child))
-        stations = request('/v1/agents/projects')['world']['stations']
-        if next(item for item in stations if item['id'] == station['id']).get('agentId'):
-            raise RuntimeError('Child station was not freed.')
-        print('PASS: parent spawned, waited for and archived an embodied child in its station', flush=True)
-    finally:
-        request('/v1/agents/projects', {'operation': 'station-delete', 'stationId': station['id']})
+    parent_thread = request(path)['threadId']
+    prompt = ('This is an embodied coordination check. Run bb minecraft stations --json. Then run exactly once '
+              f'bb minecraft spawn --parent-self --name "BB child smoke" --body minecraft:pig --station {station["id"]} '
+              f'--model {model} --reasoning-level {reasoning_level} --json '
+              '--prompt "Reply BB_CHILD_OK. Do not call any tools or send messages.". '
+              'Use ordinary bb thread wait/show for the returned threadId until idle with no pending interactions. '
+              'Then run bb thread archive for that thread exactly once. Finally reply BB_COORDINATION_OK. '
+              'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.')
+    request(path + '/message', {'text': prompt, 'delivery': 'auto'})
+    deadline = time.monotonic() + timeout + 60
+    while time.monotonic() < deadline:
+        children = {row['id'] for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread}
+        for entity in request('/v1/state').get('server', {}).get('entities', []):
+            if entity.get('agent', {}).get('id') in children:
+                point = entity['position']
+                if entity['type'] != 'minecraft:pig' or not all(low <= point[key] <= high + 1 for key, low, high in
+                                                                 zip(('x', 'y', 'z'), station['min'], station['max'])):
+                    raise RuntimeError('Child body is not a pig inside its station: ' + json.dumps(entity))
+                observed.add(entity['agent']['id'])
+        current = request(path)
+        if current.get('interactions'):
+            raise RuntimeError('Child check needs human approval: ' + json.dumps(current['interactions']))
+        timeline = request(path + '/transcript', {})
+        if current.get('status') == 'idle' and any(row.get('role') == 'assistant' and 'BB_COORDINATION_OK' in row.get('text', '')
+                                                   for row in timeline.get('rows', [])):
+            break
+        time.sleep(1)
+    else:
+        raise RuntimeError('Child coordination did not finish; fixture retained.')
+    children = [row for row in request('/v1/agents') if row.get('parentThreadId') == parent_thread]
+    if len(children) != 1:
+        raise RuntimeError('Expected exactly one child: ' + json.dumps(children))
+    child = children[0]
+    if child['id'] not in observed:
+        raise RuntimeError('Child body was never observed in its station.')
+    if child['executionOptions'].get('model') != model or child['executionOptions'].get('reasoningLevel') != reasoning_level:
+        raise RuntimeError('Child did not preserve execution options: ' + json.dumps(child['executionOptions']))
+    if child['bodyLoaded'] or child['bodyRemoved'] or not child['conversationArchived']:
+        raise RuntimeError('Child was not suspended and archived: ' + json.dumps(child))
+    stations = request('/v1/agents/projects')['world']['stations']
+    if next(item for item in stations if item['id'] == station['id']).get('agentId'):
+        raise RuntimeError('Child station was not freed.')
+    print('PASS: parent spawned, waited for and archived an embodied child in its station', flush=True)
+    request('/v1/dev', {'action': 'station', 'operation': 'break', 'pos': pos})
 
 
 if __name__ == '__main__':

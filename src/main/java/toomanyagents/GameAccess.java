@@ -50,20 +50,24 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import toomanyagents.screens.ScreenTools;
+import toomanyagents.stations.StationIndex;
 
 /** All live world access runs on the integrated server thread. */
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, SETTINGS, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT,
+    enum Operation { OBSERVE, SETTINGS, BEHAVIOR, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT,
         SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
     private static final PovCapture.Settings POV = new PovCapture.Settings(960, 540, 70);
     record Body(String entityUuid, String world, String dimension) {}
-    /** An agent's project, activity and Minecraft access, published by AgentService. */
-    record AgentState(String projectId, String activity, boolean minecraftAccess) {}
+    /**
+     * An agent's project, activity and Minecraft access, published by AgentService. finishedAt is when BB was last
+     * read showing its turn finished, or 0 while that isn't known.
+     */
+    record AgentState(String projectId, String activity, boolean minecraftAccess, long finishedAt) {}
     private record PublishedWorld(String path, String session) {}
 
     private final Supplier<MinecraftServer> server;
@@ -73,7 +77,11 @@ final class GameAccess {
     private volatile PublishedWorld publishedWorld;
     private volatile JsonObject worldInfo = new JsonObject();
     private final Map<Body, AgentActions> actions = new HashMap<>();
+    /** Agent id -> when its latest physical work began, for this world session. */
+    private final Map<String, Long> behaviorHolds = new HashMap<>();
     private Map<String, AgentState> agentStates = Map.of();
+    /** Projects stations may name, with their colors, published by AgentService from BB's list. */
+    private volatile Map<String, String> stationProjects = Map.of();
     private final ConcurrentHashMap<Body, JsonObject> bodySnapshots = new ConcurrentHashMap<>();
     private String actionSession;
     private ScriptScoreboard scriptScoreboard;
@@ -279,7 +287,7 @@ final class GameAccess {
             BooleanSupplier live = () -> {
                 synchronized (queueLock) { return scope.closed == null && server.get() == current && Objects.equals(scope.session, worldSession.get()); }
             };
-            return ScreenTools.begin(current, WorldState.get(current).snapshot(), localPlayer.get(), caller, tool, arguments, live);
+            return ScreenTools.begin(current, localPlayer.get(), caller, tool, arguments, live);
         });
         // Bounded overall, even if a game thread stalls before a step starts. Once the result is in, the scope closes,
         // so no step still queued can run, and the call's waits and lease end.
@@ -335,6 +343,109 @@ final class GameAccess {
 
     /** World identity published by the server thread, safe for UI and HTTP readers. */
     JsonObject worldInfo() { return worldInfo.deepCopy(); }
+
+    /** Read after a completed world edit, without waiting for the next tick's published snapshot. */
+    CompletableFuture<JsonObject> worldMetadata(String expectedSession, long expiresAt) {
+        return schedule(expectedSession, expiresAt, true, current -> {
+            worldInfo = worldSnapshot(current);
+            return worldInfo.deepCopy();
+        });
+    }
+
+    /** Server thread: world.json's record, with the current stations and their linked screens for readers. */
+    private static JsonObject worldSnapshot(MinecraftServer current) {
+        var snapshot = WorldState.get(current).snapshot();
+        StationIndex.get(current);
+        var index = StationIndex.snapshot(current);
+        snapshot.add("stations", index == null ? new JsonArray() : index.getAsJsonArray("stations"));
+        var links = new JsonArray();
+        for (var link : ScreenTools.links(current)) {
+            var row = new JsonObject();
+            row.addProperty("screenId", link.screenId());
+            row.addProperty("screenName", link.screenName());
+            row.addProperty("stationId", link.stationId());
+            links.add(row);
+        }
+        snapshot.add("screenLinks", links);
+        return snapshot;
+    }
+
+    /** BB's projects, as AgentService last synced them. Stations and project blocks may name any but a world project. */
+    void stationProjects(JsonArray rows) {
+        var colors = new HashMap<String, String>();
+        for (var value : rows) {
+            var row = value.getAsJsonObject();
+            if (!JsonState.text(row, "kind").equals("world")) colors.put(JsonState.text(row, "id"), ProjectColor.of(row));
+        }
+        stationProjects = Map.copyOf(colors);
+    }
+
+    /** One BB's complete project listing, from a successful sync. Stations remember it to notice deletions. */
+    CompletableFuture<Void> projectCatalog(String instanceId, JsonArray rows, String expectedSession) {
+        var ids = new HashSet<String>();
+        for (var value : rows) {
+            var row = value.getAsJsonObject();
+            if (!JsonState.text(row, "kind").equals("world")) ids.add(JsonState.text(row, "id"));
+        }
+        return schedule(expectedSession, current -> { StationIndex.get(current).catalog(current, instanceId, ids); return null; });
+    }
+
+    /** Frees the agent's station, if any. Archiving, deleting and removing a body all end its occupancy. */
+    CompletableFuture<Void> releaseStation(String agentId, String expectedSession) {
+        return schedule(expectedSession, current -> { StationIndex.get(current).release(current, agentId); return null; });
+    }
+
+    /** A BB project was removed: its stations and project blocks become blank. */
+    CompletableFuture<Void> projectRemoved(String projectId, String expectedSession) {
+        return schedule(expectedSession, current -> { StationIndex.get(current).projectRemoved(current, projectId); return null; });
+    }
+    /** Player block screens: owning-thread edits and native inventory menus, bounded to this world session. */
+    CompletableFuture<JsonObject> blockUi(JsonObject request, String session) {
+        return schedule(session, System.currentTimeMillis()+5000, current -> {
+            var viewer=player(current);
+            var xyz=request.getAsJsonArray("pos");
+            var pos=new net.minecraft.core.BlockPos(xyz.get(0).getAsInt(),xyz.get(1).getAsInt(),xyz.get(2).getAsInt());
+            var level=viewer.serverLevel();
+            if (!level.dimension().location().toString().equals(JsonState.text(request,"dimension"))
+                || !level.isLoaded(pos) || viewer.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))>64)
+                throw error("Move within eight blocks of the block.");
+            var block=level.getBlockEntity(pos);
+            var station=block instanceof toomanyagents.stations.StationBlockEntity b ? b : null;
+            var project=block instanceof toomanyagents.stations.ProjectBlockEntity b ? b : null;
+            if (station==null && project==null) throw error("That block no longer exists.");
+            if (station!=null && !station.station().id().equals(JsonState.text(request,"id"))) throw error("That station was replaced.");
+            String operation=JsonState.text(request,"operation");
+            if (operation.equals("save")) {
+                // A just-created project can reach this action before the next server tick publishes its allowlist.
+                StationIndex.get(current).projects(stationProjects);
+                var fields=request.getAsJsonObject("fields");
+                if (station!=null) station.configure(fields);
+                else project.setProject(JsonState.text(fields,"projectId"));
+            } else if (operation.equals("items")) {
+                if (project!=null && project.projectId().isBlank()) throw error("Choose a project first.");
+                java.util.function.BooleanSupplier valid=()->session.equals(worldSession.get()) && viewer.isAlive()
+                    && viewer.level()==level && level.getBlockEntity(pos)==block
+                    && viewer.distanceToSqr(net.minecraft.world.phys.Vec3.atCenterOf(pos))<=64;
+                viewer.openMenu(new net.minecraft.world.MenuProvider() {
+                    @Override public net.minecraft.network.chat.Component getDisplayName() {
+                        return net.minecraft.network.chat.Component.literal(station!=null?"Copy station settings":"Assign station project");
+                    }
+                    @Override public net.minecraft.world.inventory.AbstractContainerMenu createMenu(int id,
+                            net.minecraft.world.entity.player.Inventory inventory, net.minecraft.world.entity.player.Player player) {
+                        return new toomanyagents.stations.StationItemMenu(id,inventory,valid,stack -> station!=null
+                            ? toomanyagents.stations.StationItemMenu.copy(stack,station.station())
+                            : project.projectId().isBlank()?net.minecraft.world.item.ItemStack.EMPTY
+                            : toomanyagents.stations.StationItemMenu.project(stack,project.projectId()));
+                    }
+                    @Override public boolean shouldTriggerClientSideContainerClosingOnOpen() { return false; }
+                });
+            } else throw error("Unknown block UI operation.");
+            worldInfo=worldSnapshot(current);
+            if (station!=null) return station.station().json();
+            var result=new JsonObject();result.addProperty("projectId",project.projectId());return result;
+        });
+    }
+
     CompletableFuture<JsonObject> worldCommand(JsonObject request, String expectedSession) {
         return worldCommand(request,expectedSession,null,Long.MAX_VALUE);
     }
@@ -344,11 +455,12 @@ final class GameAccess {
             synchronized(queueLock) { if(scope!=null && scope.closed!=null) throw error(scope.closed); }
             var state = WorldState.get(current);
             JsonObject result;
-            String operation = JsonState.text(request,"operation"), dimension = player(current).level().dimension().location().toString();
-            try { result = operation.equals("world-resolve") ? state.resolve(JsonState.text(request,"choice"))
-                : operation.equals("world-project") ? state.project(JsonState.text(request,"bbInstanceId"),JsonState.text(request,"projectId"))
-                : operation.startsWith("station-") ? state.stations(request,dimension)
-                : state.bounds(request,dimension);
+            String operation = JsonState.text(request,"operation");
+            try { result = switch (operation) {
+                case "world-resolve" -> state.resolve(JsonState.text(request,"choice"));
+                case "world-project" -> state.project(JsonState.text(request,"bbInstanceId"),JsonState.text(request,"projectId"));
+                default -> throw new IllegalArgumentException("Unknown world operation.");
+            };
             } catch (java.io.IOException failure) { throw new IllegalStateException("Could not save world data.",failure); }
             if (operation.equals("world-resolve") && JsonState.text(request,"choice").equals("copy")) {
                 for (var level : current.getAllLevels()) for (var entity : level.getAllEntities()) {
@@ -356,7 +468,7 @@ final class GameAccess {
                     if (saved.getString("too_many_agents_world").equals(state.copiedFrom())) saved.putString("too_many_agents_world",state.id());
                 }
             }
-            worldInfo = state.snapshot();
+            worldInfo = worldSnapshot(current);
             publishedWorld = new PublishedWorld(state.activeId(),worldSession.get());
             return result;
         });
@@ -456,12 +568,12 @@ final class GameAccess {
     private AgentActions actions(Body ref, Mob mob) {
         if (!Objects.equals(actionSession, worldSession.get())) {
             actions.values().forEach(a -> a.close("world_session_changed"));
-            actions.clear(); bodySnapshots.clear(); actionSession = worldSession.get();
+            actions.clear(); bodySnapshots.clear(); behaviorHolds.clear(); actionSession = worldSession.get();
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession,
-            () -> box(mob), () -> player(mob.getServer()),
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, behaviorHolds,
+            () -> player(mob.getServer()),
             request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
 
@@ -501,6 +613,7 @@ final class GameAccess {
             mob.setCustomName(Component.literal(name)); mob.setCustomNameVisible(true);
             var saved = mob.getPersistentData();
             saved.putString("too_many_agents_mode",mode);
+            if (values.has("behavior")) saved.putString("too_many_agents_behavior", values.get("behavior").getAsString());
             if (values.has("behaviors")) saved.putString("too_many_agents_behaviors",values.get("behaviors").toString());
             actions(ref,mob).hands.syncBody();
             cacheBody(ref,mob);
@@ -515,6 +628,7 @@ final class GameAccess {
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
         result.addProperty("mode",BodySettings.mode(saved.getString("too_many_agents_mode")).id);
         result.add("behaviors",behaviors(mob));
+        result.addProperty("behavior", worldBehavior(mob));
         var controller = actions(ref,mob);
         result.add("action",controller.status(""));
         bodySnapshots.put(ref,result);
@@ -572,6 +686,7 @@ final class GameAccess {
                         : DevelopmentChecks.sounds(controller.hands);
                 }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
+                case "station" -> toomanyagents.stations.StationDevelopment.run(human, request);
                 default -> throw error("unknown_development_action");
             };
         }).thenCompose(result->action.equals("pov") ? pov.capture(UUID.fromString(result.get("bodyUuid").getAsString()),session,POV)
@@ -602,18 +717,10 @@ final class GameAccess {
         });
     }
 
-    CompletableFuture<Body> spawn(String name, String entityType, String agentId) {
-        return spawn(name, entityType, agentId, "", worldSession.get());
-    }
-
-    CompletableFuture<Body> spawn(String name, String entityType, String agentId, String projectId, String expectedSession) {
-        return spawn(name,entityType,agentId,projectId,expectedSession,Long.MAX_VALUE);
-    }
-
-    CompletableFuture<Body> spawn(String name, String entityType, String agentId, String projectId, String expectedSession, long expiresAt) {
+    CompletableFuture<Body> spawn(String name, String entityType, String agentId, String expectedSession, long expiresAt) {
         return schedule(expectedSession, expiresAt, current -> {
             var player = player(current);
-            var mob = createBody(player, lookedAt(player), name, entityType, agentId, projectId);
+            var mob = createBody(player.serverLevel(), player, lookedAt(player), name, entityType, agentId);
             // Face the player who spawned it.
             float yaw = (float) (Math.toDegrees(Math.atan2(player.getZ() - mob.getZ(), player.getX() - mob.getX())) - 90);
             mob.moveTo(mob.getX(), mob.getY(), mob.getZ(), yaw, 0);
@@ -624,12 +731,7 @@ final class GameAccess {
         });
     }
 
-    CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, String projectId, Body parent,
-                                      String expectedSession, ToolScope callerScope) {
-        return spawnNear(name,entityType,agentId,projectId,parent,expectedSession,callerScope,Long.MAX_VALUE);
-    }
-
-    CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, String projectId, Body parent,
+    CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, Body parent,
                                       String expectedSession, ToolScope callerScope, long expiresAt) {
         return schedule(expectedSession, expiresAt, current -> {
             synchronized (queueLock) {
@@ -640,7 +742,7 @@ final class GameAccess {
                 }
             }
             var anchor = body(current, parent);
-            var mob = createBody(anchor, null, name, entityType, agentId, projectId);
+            var mob = createBody((ServerLevel) anchor.level(), anchor, null, name, entityType, agentId);
             // Closing the caller's turn revokes a spawn until this mutation begins.
             synchronized (queueLock) {
                 if (callerScope != null && callerScope.closed != null) throw error(callerScope.closed);
@@ -650,18 +752,45 @@ final class GameAccess {
         });
     }
 
+    /**
+     * Claims a free station in the agent's project and spawns the body inside its area, as one step: a body that
+     * can't be added leaves the station free. The station must be loaded. A blank entity type uses the station's body,
+     * then the given fallback.
+     */
+    CompletableFuture<Body> spawnAtStation(String name, String entityType, String fallbackType, String agentId, String projectId,
+                                           String stationId, String expectedSession, ToolScope callerScope, long expiresAt) {
+        return schedule(expectedSession, expiresAt, current -> {
+            synchronized (queueLock) {
+                if (callerScope != null && callerScope.closed != null) throw error(callerScope.closed);
+            }
+            var index = StationIndex.get(current);
+            var entry = index.claim(current, stationId, agentId, projectId);
+            try {
+                var level = current.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension())));
+                String type = !entityType.isBlank() ? entityType : !entry.station().body().isBlank() ? entry.station().body() : fallbackType;
+                // Search outward from standing on the station block, inside its area.
+                var mob = createBody(level, null, entry.pos().above(), name, type, agentId);
+                if (!level.addFreshEntity(mob)) throw error("spawn_rejected");
+                return new Body(mob.getStringUUID(), world(current), mob.level().dimension().location().toString());
+            } catch (RuntimeException failure) {
+                index.release(current, agentId);
+                throw failure;
+            }
+        });
+    }
+
     /** The space on top of the block under the player's crosshair, or null when not looking at a block. */
     private static BlockPos lookedAt(ServerPlayer player) {
         return player.pick(64, 1, false) instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK ? hit.getBlockPos().above() : null;
     }
 
-    private static Mob createBody(Entity anchor, BlockPos target, String name, String entityType, String agentId, String projectId) {
+    /** A new body near the anchor, or near target when given; the anchor may be null only with a target. */
+    private static Mob createBody(ServerLevel level, Entity anchor, BlockPos target, String name, String entityType, String agentId) {
         if (name == null || name.isBlank() || name.length() > 80) throw error("invalid_agent_name");
         if (agentId == null || agentId.isBlank()) throw error("invalid_agent_id");
         var id = ResourceLocation.tryParse(entityType);
         if (id == null || !BuiltInRegistries.ENTITY_TYPE.containsKey(id)) throw error("unknown_entity_type: " + entityType);
         var type = BuiltInRegistries.ENTITY_TYPE.get(id);
-        var level = (ServerLevel) anchor.level();
         if (!type.canSummon() || !type.canSerialize() || !type.isEnabled(level.enabledFeatures())) throw error("entity_type_not_spawnable: " + entityType);
         if (!(type.create(level) instanceof Mob mob)) throw error("entity_type_is_not_a_mob: " + entityType);
         mob.setCustomName(Component.literal(name.strip()));
@@ -671,9 +800,9 @@ final class GameAccess {
         mob.setNoAi(true);
         mob.getPersistentData().putString("too_many_agents_mode", "survival");
         mob.getPersistentData().putString("too_many_agents_agent", agentId);
-        mob.getPersistentData().putString("too_many_agents_world",WorldState.get(anchor.level().getServer()).id());
-        // A body starts inside its box: its station if assigned, otherwise its project's box.
-        placeNear(level, anchor, target, mob, WorldState.get(level.getServer()).box(agentId, projectId, level.dimension().location().toString()));
+        mob.getPersistentData().putString("too_many_agents_world",WorldState.get(level.getServer()).id());
+        // A stationed body starts inside its station's area.
+        placeNear(level, anchor, target, mob, box(level.getServer(), agentId, level.dimension().location().toString()));
         return mob;
     }
 
@@ -725,7 +854,7 @@ final class GameAccess {
         for (var call : rejected) call.result.completeExceptionally(error("body_dimension_changed"));
     }
 
-    CompletableFuture<Void> recoverBody(Body ref, String agentId, String projectId, JsonObject settings, String expectedSession) {
+    CompletableFuture<Void> recoverBody(Body ref, String agentId, JsonObject settings, String expectedSession) {
         var saved = settings.deepCopy();
         return schedule(expectedSession, current -> {
             if (!Objects.equals(ref.world(), world(current))) throw error("body_world_mismatch");
@@ -742,10 +871,11 @@ final class GameAccess {
             var player = player(current);
             if (!player.level().dimension().location().toString().equals(ref.dimension()))
                 throw error("Return to the agent's original dimension to recover its body.");
-            var mob = createBody(player, null, string(saved,"name",80), string(saved,"body",200), agentId, projectId);
+            var mob = createBody(player.serverLevel(), player, null, string(saved,"name",80), string(saved,"body",200), agentId);
             mob.setUUID(UUID.fromString(ref.entityUuid()));
             var data = mob.getPersistentData();
-            data.putString("too_many_agents_mode", BodySettings.mode(saved.get("mode").getAsString()).id);
+            data.putString("too_many_agents_mode", BodySettings.mode(saved.has("mode") ? saved.get("mode").getAsString() : "survival").id);
+            if (saved.has("behavior")) data.putString("too_many_agents_behavior", saved.get("behavior").getAsString());
             if (saved.has("behaviors")) data.putString("too_many_agents_behaviors", saved.get("behaviors").toString());
             if (!player.serverLevel().addFreshEntity(mob)) throw error("body_recovery_spawn_rejected");
             cacheBody(ref, mob);
@@ -806,6 +936,7 @@ final class GameAccess {
         var spawn = level.getSharedSpawnPos();
         worldState.add("spawnPoint", JsonState.object("x", spawn.getX(), "y", spawn.getY(), "z", spawn.getZ()));
         snapshot.add("worldState", worldState);
+        snapshot.add("stationBlocks", ScriptStations.snapshot(mob));
         snapshot.add("players", ScriptEntities.players(level));
         if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
             scriptScoreboard = new ScriptScoreboard(current.getScoreboard());
@@ -842,17 +973,26 @@ final class GameAccess {
                 var observation = observe(current,mob,arguments);
                 observation.add("hands",controller.hands.snapshot());
                 cacheBody(body,mob);
-                observation.add("settings",settings(body));
+                var bodySettings = settings(body);
+                BodySettings.forProject(bodySettings,agentState(mob).minecraftAccess());
+                observation.add("settings",bodySettings);
                 observation.add("action",controller.status(""));
                 yield observation;
             }
             case SETTINGS -> {
                 cacheBody(body,mob);
                 var result = settings(body);
-                var box = box(mob);
-                result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());
+                BodySettings.forProject(result,agentState(mob).minecraftAccess());
                 result.add("capabilities", capabilities(mob));
                 yield result;
+            }
+            case BEHAVIOR -> {
+                if (arguments.has("behavior")) {
+                    String behavior = BodySettings.behavior(string(arguments,"behavior",20));
+                    mob.getPersistentData().putString("too_many_agents_behavior",behavior);
+                    cacheBody(body,mob);
+                }
+                yield JsonState.object("behavior",worldBehavior(mob),"held",controller.behaviorHeld());
             }
             case ACTION -> controller.start(arguments);
             case ACTION_STATUS -> controller.status(arguments.has("id") ? string(arguments,"id",80) : "");
@@ -862,7 +1002,7 @@ final class GameAccess {
                 yield result;
             }
             case BLOCKS -> blocks((ServerLevel) mob.level(), arguments);
-            case COMMAND -> { controller.requireUnscripted(); yield command(current, mob, arguments); }
+            case COMMAND -> { controller.requireUnscripted(); controller.holdBehavior(); yield command(current, mob, arguments); }
             case SCRIPT -> script(current, body, mob, controller, arguments);
             case POV -> throw error("pov_requires_client_renderer");
             case SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE -> throw error("screen_tools_use_their_own_callback");
@@ -883,8 +1023,14 @@ final class GameAccess {
                 if (operation.equals("begin")) {
                     snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
                     snapshot.add("registryCodecs", ScriptRegistryData.snapshot((ServerLevel) mob.level()));
+                    snapshot.add("ownBlocks", ScriptRegistryData.ownBlocks((ServerLevel) mob.level()));
                 }
                 yield snapshot;
+            }
+            case "configureStation", "configureProjectBlock" -> {
+                var block = ScriptStations.configure(mob,operation,args);
+                // The guest waits for a stream frame captured after this server-thread mutation.
+                yield JsonState.object("block",block,"revision",controller.nextSnapshotRevision());
             }
             case "heartbeat" -> new JsonObject();
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
@@ -898,19 +1044,36 @@ final class GameAccess {
     /** Server thread only. */
     static JsonObject behaviors(Mob mob) {
         String saved = mob.getPersistentData().getString("too_many_agents_behaviors");
-        return saved.isBlank() ? new JsonObject() : com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
+        try {
+            var result = saved.isBlank() ? new JsonObject() : com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
+            AgentService.validateBehaviors(result);
+            return result;
+        } catch (RuntimeException obsolete) {
+            mob.getPersistentData().remove("too_many_agents_behaviors");
+            return new JsonObject();
+        }
+    }
+
+    private static String worldBehavior(Mob mob) {
+        String saved = mob.getPersistentData().getString("too_many_agents_behavior");
+        return Set.of("stand","wander","follow").contains(saved) ? saved : "stand";
     }
 
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
     AgentState agentState(Mob mob) {
         var state = agentStates.get(mob.getPersistentData().getString("too_many_agents_agent"));
-        return state == null ? new AgentState("", "idle", false) : state;
+        return state == null ? new AgentState("", "idle", false, 0) : state;
     }
 
-    /** Server thread: the box confining this body (its station, else its project box), or null. */
+    /** Server thread: the box confining this body, its station's area, or null. */
     BodyBox box(Mob mob) {
-        String agentId = mob.getPersistentData().getString("too_many_agents_agent");
-        return WorldState.get(mob.getServer()).box(agentId, agentState(mob).projectId(), mob.level().dimension().location().toString());
+        return box(mob.getServer(), mob.getPersistentData().getString("too_many_agents_agent"), mob.level().dimension().location().toString());
+    }
+
+    /** Server thread: an agent's station area when it is in this dimension, else null. Only stationed agents are confined. */
+    static BodyBox box(MinecraftServer current, String agentId, String dimension) {
+        var entry = StationIndex.get(current).occupiedBy(agentId);
+        return entry != null && entry.dimension().equals(dimension) ? BodyBox.of(entry) : null;
     }
 
     /** Called on the server's EntityJoinLevelEvent, before a restored body can run ordinary AI. */
@@ -931,10 +1094,13 @@ final class GameAccess {
               BiConsumer<String, Body> observed) {
         if (server.get() != current || worldSession.get() == null) return;
         agentStates = states.get();
-        worldInfo = WorldState.get(current).snapshot();
+        worldInfo = worldSnapshot(current);
         publishedWorld = new PublishedWorld(world(current), worldSession.get());
         drainActionStops();
         Set<String> retainedAgents = registry == null ? null : registry.get();
+        var stations = StationIndex.get(current);
+        stations.projects(stationProjects);
+        if (retainedAgents != null) stations.releaseOrphans(current, retainedAgents);
         if (!Objects.equals(cleanupSession,worldSession.get()) || failedBodyCleanup == null) {
             cleanupSession = worldSession.get();
             failedBodyCleanup = new HashSet<>();
@@ -986,6 +1152,8 @@ final class GameAccess {
                         var controller = actions(body,mob);
                         drainActionStops();
                         boolean wasBusy = controller.busy();
+                        // Only a finished turn read after the latest physical work ends the hold.
+                        if (agentState(mob).finishedAt() > controller.heldSince()) controller.releaseBehavior();
                         controller.tick(agentState(mob).minecraftAccess());
                         if (!wasBusy && !controller.scripted()) idle(current,mob,controller);
                         cacheBody(body,mob);
@@ -1025,12 +1193,15 @@ final class GameAccess {
     private void idle(MinecraftServer current, Mob mob, AgentActions controller) {
         if (controller.ambient.failed) { stopFollowingMotion(mob); return; }
         try {
-            var behavior = behaviors(mob).get(agentState(mob).activity());
+            // A stationed agent behaves as its station says; others as their own settings say.
+            var station = StationIndex.get(current).occupiedBy(mob.getPersistentData().getString("too_many_agents_agent"));
+            boolean worldAgent = agentState(mob).minecraftAccess();
+            if (worldAgent && controller.behaviorHeld()) { stopFollowingMotion(mob); return; }
+            JsonElement behavior = worldAgent ? JsonState.object("type",worldBehavior(mob))
+                : (station != null ? station.station().behaviors() : behaviors(mob)).get(agentState(mob).activity());
             boolean follows = behavior instanceof JsonObject b && "follow".equals(b.has("type") ? b.get("type").getAsString() : "");
-            // Following leaves the station, but remains inside the project's bounds.
-            var box = follows
-                ? WorldState.get(current).box("", agentState(mob).projectId(), mob.level().dimension().location().toString())
-                : box(mob);
+            // Following leaves the station.
+            var box = worldAgent || follows ? null : box(mob);
             if (controller.ambient.returnInside(box)) return;
             var id = localPlayer.get();
             controller.ambient.tick(box, behavior, id == null ? null : current.getPlayerList().getPlayer(id));
@@ -1315,7 +1486,7 @@ final class GameAccess {
         return schedule(expectedSession, expiresAt, false, work);
     }
 
-    /** whilePaused is for screens: their pages keep running while the game is paused, unlike agents' bodies. */
+    /** Screens and read-only metadata remain available while paused; physical actions do not. */
     private <T> CompletableFuture<T> schedule(String expectedSession, long expiresAt, boolean whilePaused, Function<MinecraftServer, T> work) {
         var current = server.get();
         if (current == null || expectedSession == null || !expectedSession.equals(worldSession.get())) {
@@ -1389,7 +1560,7 @@ final class GameAccess {
                         if (Math.max(Math.abs(dx), Math.abs(dz)) != radius) continue;
                         var pos = origin.offset(dx, dy, dz);
                         if (confined != null && !confined.holdsFeet(pos)) continue;
-                        mob.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, anchor.getYRot(), 0);
+                        mob.moveTo(pos.getX() + 0.5, pos.getY(), pos.getZ() + 0.5, anchor == null ? 0 : anchor.getYRot(), 0);
                         var box = mob.getBoundingBox();
                         if (box.minY < level.getMinBuildHeight() || box.maxY > level.getMaxBuildHeight()) continue;
                         if (!loaded(level, box) || !level.getWorldBorder().isWithinBounds(box)) continue;
@@ -1401,7 +1572,7 @@ final class GameAccess {
                 }
             }
         }
-        throw error(confined != null ? "no_clear_spawn_space_in_box" : anchor instanceof ServerPlayer ? "no_clear_spawn_space_near_player" : "no_clear_spawn_space_near_agent");
+        throw error(confined != null ? "no_clear_spawn_space_in_station_area" : anchor instanceof ServerPlayer ? "no_clear_spawn_space_near_player" : "no_clear_spawn_space_near_agent");
     }
 
     private static boolean loaded(ServerLevel level, AABB box) {
@@ -1428,8 +1599,6 @@ final class GameAccess {
         result.addProperty("tick", current.getTickCount());
         result.addProperty("timeOfDay", mob.level().getDayTime());
         result.add("body", Observations.entity(mob));
-        var box = box(mob);
-        result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());
         result.add("localPlayer", Observations.entity(player(current)));
         result.addProperty("localPlayerDimension", player(current).level().dimension().location().toString());
         result.addProperty("radius", radius);

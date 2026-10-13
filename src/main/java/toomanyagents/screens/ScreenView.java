@@ -32,14 +32,14 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** The entity this view draws; replaced when the same screen is tracked again. */
     ScreenEntity screen;
-    final Direction facing, right;
+    final Direction facing, right, up;
     final int blocksWide, blocksHigh;
     /** The navigation bar's height across the bottom of the screen, and the page's size above it, in blocks and pixels. */
     final double barHeight, pageWidth, pageHeight;
     final int pixelWidth, pixelHeight;
     /** The page's top-left corner in the world, on the panel's front. The bar runs along the page's bottom. */
     final Vec3 topLeft;
-    final Vec3 normal, rightVector;
+    final Vec3 normal, rightVector, upVector;
     private final Texture page = new Texture("page"), popup = new Texture("popup");
 
     /** The bar's controls, left to right. */
@@ -88,7 +88,9 @@ final class ScreenView implements ScreenBrowser.View {
     ScreenView(ScreenEntity screen) {
         this.screen = screen;
         facing = screen.facing();
-        right = ScreenEntity.right(facing);
+        up = screen.up();
+        right = ScreenEntity.right(facing, up);
+        upVector = Vec3.atLowerCornerOf(up.getNormal());
         blocksWide = screen.width();
         blocksHigh = screen.height();
         pageWidth = blocksWide - 2 * MARGIN;
@@ -113,7 +115,7 @@ final class ScreenView implements ScreenBrowser.View {
         menuX = pageWidth - menuWidth;
         menuTop = pageHeight - menuRow * Action.values().length;
         topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
-            .add(rightVector.scale(-0.5 + MARGIN)).add(0, blocksHigh - 0.5 - MARGIN, 0);
+            .add(rightVector.scale(-0.5 + MARGIN)).add(upVector.scale(blocksHigh - 0.5 - MARGIN));
     }
 
     /** The page's size in pixels for a screen this many blocks across and high. */
@@ -124,10 +126,10 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     boolean matches(ScreenEntity other) {
-        return other.width() == blocksWide && other.height() == blocksHigh && other.facing() == facing && other.getPos().equals(screen.getPos());
+        return other.width() == blocksWide && other.height() == blocksHigh && other.facing() == facing && other.up() == up && other.getPos().equals(screen.getPos());
     }
 
-    Vec3 center() { return topLeft.add(rightVector.scale(pageWidth / 2)).add(0, -pageHeight / 2, 0); }
+    Vec3 center() { return topLeft.add(rightVector.scale(pageWidth / 2)).add(upVector.scale(-pageHeight / 2)); }
 
     /** Where a ray meets the page plane, in blocks from the top-left corner, or null if it points away. */
     double[] hit(Vec3 origin, Vec3 direction) {
@@ -136,7 +138,7 @@ final class ScreenView implements ScreenBrowser.View {
         double distance = topLeft.subtract(origin).dot(normal) / facingDot;
         if (distance <= 0) return null;
         Vec3 offset = origin.add(direction.scale(distance)).subtract(topLeft);
-        return new double[] {offset.dot(rightVector), -offset.y, distance};
+        return new double[] {offset.dot(rightVector), -offset.dot(upVector), distance};
     }
 
     private double place(Part part, double x, double width) {
@@ -164,12 +166,12 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** A menu row's centre in the world, for development checks. */
     Vec3 menuCenter(Action action) {
-        return topLeft.add(rightVector.scale(menuX + menuWidth / 2)).add(0, -(menuTop + (action.ordinal() + 0.5) * menuRow), 0);
+        return topLeft.add(rightVector.scale(menuX + menuWidth / 2)).add(upVector.scale(-(menuTop + (action.ordinal() + 0.5) * menuRow)));
     }
 
     /** A bar control's centre in the world, for development checks. */
     Vec3 barCenter(Part part) {
-        return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(0, -(pageHeight + barHeight / 2), 0);
+        return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(upVector.scale(-(pageHeight + barHeight / 2)));
     }
 
     boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y < pageHeight; }
@@ -272,6 +274,17 @@ final class ScreenView implements ScreenBrowser.View {
         return waiter;
     }
 
+    /** Physical input uses Chromium's complete keyboard mapping, while retaining player navigation ownership. */
+    void playerInput(String method, com.google.gson.JsonObject params) {
+        playerInput();
+        if (devTools == null) devTools = browser.getDevToolsClient();
+        devTools.executeDevToolsMethod(method, params.toString()).exceptionally(error -> {
+            onRender(() -> ScreenInput.closing(this));
+            com.mojang.logging.LogUtils.getLogger().warn("Screen input failed", error);
+            return null;
+        });
+    }
+
     /** Runs one DevTools method on the page. */
     CompletableFuture<String> devTools(String method, String params) {
         agentInput();
@@ -310,6 +323,7 @@ final class ScreenView implements ScreenBrowser.View {
     ResourceLocation popupTexture() { return popup.location; }
 
     void close() {
+        ScreenInput.closing(this);
         if (devTools != null) devTools.close();
         devTools = null;
         if (browser != null) Chromium.close(browser);
@@ -379,7 +393,9 @@ final class ScreenView implements ScreenBrowser.View {
      */
     void loadStarted(ScreenBrowser source, String address) {
         onRender(() -> {
-            if (source != browser || opening == null || opening.isDone()) return;
+            if (source != browser) return;
+            ScreenInput.pageLoading(this);
+            if (opening == null || opening.isDone()) return;
             String loaded = trimSlash(address);
             if (loaded.equals(trimSlash(url)) || !loaded.equals(trimSlash(superseded))) openingStarted = true;
         });

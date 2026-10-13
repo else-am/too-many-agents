@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "ingredients": [{"item": "too_many_agents:station"}],
+  "result": {"id": "too_many_agents:station", "count": 1}
+}

@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -36,20 +37,20 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import toomanyagents.stations.StationIndex;
 
 /**
  * The agents' screen tools. A call is resolved, checked and leased on the server thread, from the world's screen
- * index, stations and project boxes; carried out on the client, where pages live; and settled on a thread of its
+ * and station indexes; carried out on the client, where pages live; and settled on a thread of its
  * own, so whoever waits on it never runs on either game thread. Nothing here retries.
  */
 public final class ScreenTools {
     /** The longest any call takes, below the bridge's own wait. */
     public static final long CALL_SECONDS = 40;
     private static final long CLIENT_START_NANOS = 2_000_000_000L, OPEN_SECONDS = 15, CDP_SECONDS = 30;
-    private static final int CDP_LIMIT = 64 * 1024, PNG_LIMIT = 5 * 1024 * 1024, LIST_LIMIT = 50;
-    /** A screen belongs to the nearest station within this many blocks. */
-    private static final double LINK_DISTANCE = 4;
+    private static final int CDP_LIMIT = 64 * 1024, PNG_LIMIT = 5 * 1024 * 1024, LIST_DEFAULT = 20, LIST_LIMIT = 50;
 
     /** Where calls settle. */
     private static final Executor SETTLE = Executors.newSingleThreadExecutor(task -> {
@@ -103,17 +104,14 @@ public final class ScreenTools {
     private ScreenTools() {}
 
     /**
-     * Server thread: resolves the call against the world. world is WorldState's snapshot; player is the local
-     * player; live says whether the call may still go ahead, checked again at each later step.
+     * Server thread: resolves the call against the screen and station indexes. player is the local player;
+     * live says whether the call may still go ahead, checked again at each later step.
      */
-    public static Call begin(MinecraftServer server, JsonObject world, UUID player, Caller caller, String tool, JsonObject args, BooleanSupplier live) {
+    public static Call begin(MinecraftServer server, UUID player, Caller caller, String tool, JsonObject args, BooleanSupplier live) {
         var index = ScreenIndex.get(server);
-        var layout = new Layout(server, world, player, caller, index);
+        var layout = new Layout(server, player, caller, index);
         Set<CompletableFuture<?>> waiters = ConcurrentHashMap.newKeySet();
-        if (tool.equals("screen_list")) {
-            boolean mine = args.has("mine") && args.get("mine").isJsonPrimitive() && args.get("mine").getAsBoolean();
-            return new Call(list(layout, mine, live), () -> {}, waiters);
-        }
+        if (tool.equals("screen_list")) return new Call(list(layout, limit(args), live), () -> {}, waiters);
         var row = layout.choose(args.get("screen"));
         var entry = row.entry;
         String id = entry.screen().id();
@@ -195,9 +193,9 @@ public final class ScreenTools {
     // The tools.
 
     /** Server thread: describes the screens now; the client only adds what it alone knows. */
-    private static Supplier<CompletableFuture<JsonObject>> list(Layout layout, boolean mine, BooleanSupplier live) {
-        var rows = layout.rows.stream().filter(row -> !mine || row.station != null && row.station == layout.station).toList();
-        var shown = rows.subList(0, Math.min(rows.size(), LIST_LIMIT)).stream().map(row -> new Listed(row.entry, layout.json(row))).toList();
+    private static Supplier<CompletableFuture<JsonObject>> list(Layout layout, int limit, BooleanSupplier live) {
+        var rows = layout.rows;
+        var shown = rows.subList(0, Math.min(rows.size(), limit)).stream().map(row -> new Listed(row.entry, layout.json(row))).toList();
         var you = layout.you();
         int truncated = rows.size() - shown.size();
         // Whether the user's client can show each page, and its title, are known only there.
@@ -314,67 +312,48 @@ public final class ScreenTools {
 
     private static final class Row {
         final ScreenIndex.Entry entry;
-        /** The caller's project when the screen is in its box; null when shared. */
-        final String project;
-        /** The station the screen belongs to, or null. */
-        final JsonObject station;
-        final boolean yours;
+        /** The station the screen is linked to, or null. */
+        final StationIndex.Entry station;
         final Double user, you;
 
-        Row(ScreenIndex.Entry entry, String project, JsonObject station, boolean yours, Double user, Double you) {
+        Row(ScreenIndex.Entry entry, StationIndex.Entry station, Double user, Double you) {
             this.entry = entry;
-            this.project = project;
             this.station = station;
-            this.yours = yours;
             this.user = user;
             this.you = you;
         }
+
+        /** The nearer of the user and the caller, or null when both are elsewhere. */
+        Double nearest() { return user == null ? you : you == null ? user : Math.min(user, you); }
     }
 
     private static final class Layout {
         final Caller caller;
         final ScreenIndex index;
         /** The caller's station, or null. */
-        final JsonObject station;
-        /** Screens the caller may use, yours first, then nearest the user. */
+        final StationIndex.Entry station;
+        /** Screens the caller may use: its station's first, then unlinked ones nearest the user or the caller. */
         final List<Row> rows = new ArrayList<>();
-        /** Ids of other projects' screens, which are never described. */
-        final HashSet<String> foreign = new HashSet<>();
+        /** Screens linked to another station. Never listed; naming one fails with no_access. */
+        final List<Row> foreign = new ArrayList<>();
 
-        Layout(MinecraftServer server, JsonObject world, UUID playerId, Caller caller, ScreenIndex index) {
+        Layout(MinecraftServer server, UUID playerId, Caller caller, ScreenIndex index) {
             this.caller = caller;
             this.index = index;
-            var bounds = rows(world, "bounds");
-            var stations = rows(world, "stations");
-            station = stations.stream().filter(row -> !caller.agentId().isBlank() && caller.agentId().equals(text(row, "agentId"))).findFirst().orElse(null);
+            var stations = StationIndex.get(server).entries();
+            station = caller.agentId().isBlank() ? null : stations.stream().filter(entry -> entry.station().agentId().equals(caller.agentId())).findFirst().orElse(null);
             var player = playerId == null ? null : server.getPlayerList().getPlayer(playerId);
             Entity body = null;
             if (caller.body() != null) for (var level : server.getAllLevels()) if ((body = level.getEntity(caller.body())) != null) break;
             for (var entry : index.entries()) {
-                var center = center(entry);
-                // Any other project's box around a screen makes it theirs, even where boxes overlap.
-                var boxes = bounds.stream().filter(box -> text(box, "dimension").equals(entry.dimension()) && distance(box, center) == 0).toList();
-                if (boxes.stream().anyMatch(box -> !text(box, "projectId").equals(caller.projectId()))) {
-                    foreign.add(entry.screen().id());
-                    continue;
-                }
-                // The nearest station within reach, ties going to the lower id.
-                JsonObject linked = null;
-                double nearest = Double.MAX_VALUE;
-                for (var candidate : stations) {
-                    if (!text(candidate, "dimension").equals(entry.dimension())) continue;
-                    double d = distance(candidate, center);
-                    if (d > LINK_DISTANCE) continue;
-                    if (d < nearest || d == nearest && text(candidate, "id").compareTo(text(linked, "id")) < 0) {
-                        nearest = d;
-                        linked = candidate;
-                    }
-                }
-                rows.add(new Row(entry, boxes.isEmpty() ? null : caller.projectId(), linked, linked != null && linked == station,
-                    distance(player, entry, center), distance(body, entry, center)));
+                var center = panel(entry).getCenter();
+                var row = new Row(entry, linked(entry, stations), distance(player, entry, center), distance(body, entry, center));
+                // A linked screen is its station's occupant's alone; a free station's screens are no one's.
+                if (row.station == null || row.station == station) rows.add(row);
+                else foreign.add(row);
             }
-            rows.sort(Comparator.<Row>comparingInt(row -> row.yours ? 0 : 1)
-                .thenComparingDouble(row -> row.user == null ? Double.MAX_VALUE : row.user)
+            rows.sort(Comparator.<Row>comparingInt(row -> row.station != null ? 0 : 1)
+                .thenComparingDouble(row -> row.nearest() == null ? Double.MAX_VALUE : row.nearest())
                 .thenComparing(row -> row.entry.screen().name(), String.CASE_INSENSITIVE_ORDER)
                 .thenComparing(row -> row.entry.screen().id()));
         }
@@ -384,21 +363,25 @@ public final class ScreenTools {
             if (argument == null || argument.isJsonNull()) {
                 if (station == null)
                     throw choose("You have no station, so pass `screen`: a UUID or unique name. screen_list shows the screens you can use.", List.of());
-                var mine = rows.stream().filter(row -> row.station == station).toList();
+                var mine = rows.stream().filter(row -> row.station != null).toList();
                 if (mine.size() == 1) return mine.getFirst();
                 throw choose(mine.isEmpty() ? "Your station has no screen. Pass `screen`; screen_list shows the screens you can use."
                     : "Your station has several screens. Pass `screen` to choose one.", mine);
             }
             if (!argument.isJsonPrimitive() || !argument.getAsJsonPrimitive().isString()) throw invalid("screen must be an id or a name.");
             String wanted = argument.getAsString().strip();
-            if (wanted.matches("(?i)[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")) {
-                String id = UUID.fromString(wanted).toString();
-                for (var row : rows) if (row.entry.screen().id().equals(id)) return row;
-                if (foreign.contains(id)) throw new ScreenError("no_access", "Screen " + wanted + " belongs to another project.");
-                throw new ScreenError("not_found", "There is no screen " + wanted + ".");
+            boolean uuid = wanted.matches("(?i)[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}");
+            String id = uuid ? UUID.fromString(wanted).toString() : null;
+            java.util.function.Predicate<Row> named = row -> uuid ? row.entry.screen().id().equals(id) : row.entry.screen().name().equalsIgnoreCase(wanted);
+            for (var row : rows) if (named.test(row)) return row;
+            for (var row : foreign) {
+                if (!named.test(row)) continue;
+                var owner = row.station.station();
+                throw new ScreenError("no_access", "Screen " + wanted + " is linked to station " + owner.name()
+                    + (owner.occupied() ? ", which belongs to another agent." : ", which has no agent yet, so no agent can use it."),
+                    object("station", station(row.station, true)));
             }
-            for (var row : rows) if (row.entry.screen().name().equalsIgnoreCase(wanted)) return row;
-            throw new ScreenError("not_found", "No screen you can use is called \"" + wanted + "\".");
+            throw new ScreenError("not_found", uuid ? "There is no screen " + wanted + "." : "No screen is called \"" + wanted + "\".");
         }
 
         private ScreenError choose(String message, List<Row> candidates) {
@@ -409,7 +392,7 @@ public final class ScreenTools {
 
         JsonObject you() {
             var you = new JsonObject();
-            you.add("station", station == null ? JsonNull.INSTANCE : object("id", text(station, "id"), "label", text(station, "label")));
+            you.add("station", station == null ? JsonNull.INSTANCE : station(station, false));
             you.addProperty("project", caller.projectId());
             return you;
         }
@@ -421,9 +404,9 @@ public final class ScreenTools {
             var viewport = new JsonArray();
             for (int pixels : ScreenView.viewport(row.entry.width(), row.entry.height())) viewport.add(pixels);
             json.add("viewport", viewport);
-            json.add("project", row.project == null ? JsonNull.INSTANCE : new JsonPrimitive(row.project));
-            json.add("station", row.station == null ? JsonNull.INSTANCE : station(row.station));
-            json.addProperty("yours", row.yours);
+            json.add("station", row.station == null ? JsonNull.INSTANCE : station(row.station, false));
+            json.addProperty("yours", row.station != null);
+            json.addProperty("openedByYou", !record.openedBy().isBlank() && record.openedBy().equals(caller.threadId()));
             json.addProperty("available", false);
             var lease = index.lease(record.id());
             if (lease == null) json.add("lease", JsonNull.INSTANCE);
@@ -440,30 +423,59 @@ public final class ScreenTools {
             return json;
         }
 
-        private JsonObject station(JsonObject row) {
-            var json = object("id", text(row, "id"), "label", text(row, "label"));
-            String thread = caller.threads().get(text(row, "agentId"));
-            json.add("thread", thread == null || thread.isBlank() ? JsonNull.INSTANCE : new JsonPrimitive(thread));
+        /** A station by id and name; with its occupant's thread when naming someone else's. */
+        private JsonObject station(StationIndex.Entry entry, boolean occupant) {
+            var json = object("id", entry.station().id(), "name", entry.station().name());
+            if (occupant) {
+                String thread = caller.threads().get(entry.station().agentId());
+                json.add("thread", thread == null || thread.isBlank() ? JsonNull.INSTANCE : new JsonPrimitive(thread));
+            }
             return json;
         }
     }
 
-    /** The middle of a screen's panel. */
-    private static Vec3 center(ScreenIndex.Entry entry) {
-        var facing = Direction.byName(entry.facing());
-        var right = ScreenEntity.right(facing == null ? Direction.NORTH : facing);
-        return Vec3.atCenterOf(entry.pos()).add(Vec3.atLowerCornerOf(right.getNormal()).scale((entry.width() - 1) / 2.0))
-            .add(0, (entry.height() - 1) / 2.0, 0).relative(facing == null ? Direction.NORTH : facing, -0.5 + ScreenEntity.DEPTH / 2);
+    /** A screen linked to a station. */
+    public record Link(String screenId, String screenName, String stationId) {}
+
+    /** Server thread: every linked screen, by the same rule the tools use. Unlinked screens are left out. */
+    public static List<Link> links(MinecraftServer server) {
+        var stations = StationIndex.get(server).entries();
+        var links = new ArrayList<Link>();
+        for (var entry : ScreenIndex.get(server).entries()) {
+            var station = linked(entry, stations);
+            if (station != null) links.add(new Link(entry.screen().id(), entry.screen().name(), station.station().id()));
+        }
+        return links;
     }
 
-    /** Distance from a point to a box of whole blocks given by min and max corners; 0 inside it. */
-    private static double distance(JsonObject box, Vec3 point) {
-        var min = box.getAsJsonArray("min");
-        var max = box.getAsJsonArray("max");
-        double dx = Math.max(0, Math.max(min.get(0).getAsInt() - point.x, point.x - (max.get(0).getAsInt() + 1)));
-        double dy = Math.max(0, Math.max(min.get(1).getAsInt() - point.y, point.y - (max.get(1).getAsInt() + 1)));
-        double dz = Math.max(0, Math.max(min.get(2).getAsInt() - point.z, point.z - (max.get(2).getAsInt() + 1)));
-        return Math.sqrt(dx * dx + dy * dy + dz * dz);
+    /** The station whose area holds any part of the panel, nearest its center, ties going to the lower id. */
+    private static StationIndex.Entry linked(ScreenIndex.Entry entry, Collection<StationIndex.Entry> stations) {
+        var panel = panel(entry);
+        var center = panel.getCenter();
+        StationIndex.Entry linked = null;
+        double nearest = Double.MAX_VALUE;
+        for (var candidate : stations) {
+            if (!candidate.dimension().equals(entry.dimension())) continue;
+            int r = candidate.station().radius();
+            var pos = candidate.pos();
+            var area = AABB.encapsulatingFullBlocks(pos.offset(-r, 0, -r), pos.offset(r, candidate.station().height() - 1, r));
+            if (!area.intersects(panel)) continue;
+            double d = Vec3.atCenterOf(pos).distanceTo(center);
+            if (d < nearest || d == nearest && candidate.station().id().compareTo(linked.station().id()) < 0) {
+                nearest = d;
+                linked = candidate;
+            }
+        }
+        return linked;
+    }
+
+    /** The screen's panel: the thin slab against its support, as ScreenEntity's bounding box. */
+    private static AABB panel(ScreenIndex.Entry entry) {
+        var facing = Direction.byName(entry.facing());
+        if (facing == null) facing = Direction.NORTH;
+        var up = Direction.byName(entry.up());
+        if (up == null || up.getAxis() == facing.getAxis()) up = facing.getAxis().isHorizontal() ? Direction.UP : Direction.NORTH;
+        return ScreenEntity.bounds(entry.pos(), facing, up, entry.width(), entry.height());
     }
 
     /** How far an entity is from a screen, or null when it's absent or in another dimension. */
@@ -563,6 +575,15 @@ public final class ScreenTools {
         return ScreenIndex.validName(name);
     }
 
+    private static int limit(JsonObject args) {
+        var value = args.get("limit");
+        if (value == null || value.isJsonNull()) return LIST_DEFAULT;
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber() || value.getAsDouble() != Math.rint(value.getAsDouble())
+            || value.getAsDouble() < 1 || value.getAsDouble() > LIST_LIMIT)
+            throw invalid("limit must be a whole number from 1 to " + LIST_LIMIT + ".");
+        return value.getAsInt();
+    }
+
     private static String string(JsonObject args, String key) {
         var value = args.get(key);
         return value != null && value.isJsonPrimitive() && value.getAsJsonPrimitive().isString() ? value.getAsString() : null;
@@ -593,18 +614,6 @@ public final class ScreenTools {
     private static ScreenError idle(String id) { return new ScreenError("unavailable", "Screen " + id + " is idle. Open a page on it first."); }
     private static ScreenError notLoaded(String id) {
         return new ScreenError("unavailable", "Screen " + id + " isn't loaded on the user's client: it's out of range, or in another dimension.");
-    }
-
-    private static List<JsonObject> rows(JsonObject world, String key) {
-        var rows = new ArrayList<JsonObject>();
-        var array = world.getAsJsonArray(key);
-        if (array != null) for (var row : array) rows.add(row.getAsJsonObject());
-        return rows;
-    }
-
-    private static String text(JsonObject row, String key) {
-        var value = row.get(key);
-        return value == null || value.isJsonNull() ? "" : value.getAsString();
     }
 
     private static JsonObject object(Object... pairs) {

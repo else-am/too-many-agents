@@ -35,7 +35,7 @@ await moving;
 
 ## Rules the types cannot express
 
-- **Movement** works in loaded, simulated chunks inside your permitted box, targets within 64 blocks, at most 60 s of game time. Arrival means within 0.9 blocks of the requested cell. It does not dig, build, teleport or load chunks; choose a standable destination. Dismount, wake and end flight/gliding first. Different species navigate differently. Starting during another native action can reject with `action_already_running_cancel_or_wait`.
+- **Movement** works in loaded, simulated chunks, targets within 64 blocks, at most 60 s of game time. Arrival means within 0.9 blocks of the requested cell. It does not dig, build, teleport or load chunks; choose a standable destination. Dismount, wake and end flight/gliding first. Different species navigate differently. Starting during another native action can reject with `action_already_running_cancel_or_wait`.
 - **Reach**: dig/place/activate/open need reach and do not approach. Workstations are used from their top face; a short body may need it unobstructed.
 - **Queued calls** (`attack`, `activateItem`, `deactivateItem`, `mount`, `dismount`, `updateSign`, `chat`, `whisper`) return immediately; `await bot.waitForTicks(1)` before inspecting. Misuse of these emits an `error` event instead of throwing.
 - **Block reads** cover observed cells only. `null` from `blockAt` means unknown, not air. `waitForChunksToLoad` waits for delivery and never forces loading.
@@ -43,6 +43,38 @@ await moving;
 - **Limits**: deadline 120 s by default, 300 s max. Code may run at most 1 s without awaiting, or it stops with `CpuLimit`; memory and output are bounded. Your script holds the body until it ends.
 - **Permissions** are native: survival follows normal rules, creative allows creative edits/flight, only Creative + commands allows commands. A denial such as `creative_mode_required` ends the script and can bypass try/catch.
 - **Failures** reject with `error.code` and details; completed work remains. Inventory failures can leave items on the cursor or partial crafts/trades, so inspect `currentWindow` and slots. A lost native reply is an unknown outcome: execution stops. Inspect the world before acting again, because blindly replaying could repeat a mutation that already happened. Errors report the failing line of your script.
+
+## Stations and behavior
+
+These APIs are for world agents in the singleplayer integrated server. World
+agents have physical access from their project and are never stationed or confined.
+Place station and project blocks with ordinary block placement; survival needs the
+item, while creative can use creative items.
+
+- `bot.stations()` and `bot.projectBlocks()` return synchronous arrays of loaded
+  blocks whose centers are within 32 blocks of your body in its dimension. Rows
+  include `pos` (a `Vec3`) and `dimension`. Stations include their settings, `id` and `agentId`
+  (empty when free); project blocks include `projectId` and `color`.
+- `await bot.configureStation(posOrIdOrName, patch)` updates a nearby station.
+  Optional patch fields: `name`, `projectId`, `providerId`, `model`,
+  `reasoningLevel`, `serviceTier`, `permissionMode`, `instructions`, `behaviors`,
+  `radius`, `height`, `body`. Radius is 0–49; height 1–99.
+- `await bot.configureProjectBlock(pos, { projectId })` updates a nearby project
+  block. Both configure calls require a loaded block within 32 blocks and return
+  its updated row. Neither accepts a world project. Blank blocks stay inert until
+  configured; an occupied station's project cannot change.
+
+Station `behaviors` map `working`, `wants_you`, `idle` to `{ type: ... }`, with
+stand, wander, follow, jump, spin or look (at the player). Area and behaviors
+apply to an occupant immediately; instructions, execution pins and body affect
+future spawns. Blank execution pins inherit BB project defaults. Station
+instructions precede the first task.
+
+Use the separate tool `minecraft_behavior { behavior: "stand" }` (also `wander`
+or `follow`) to set your own world-agent behavior; `{}` queries it. It returns
+`behavior` and `held`. The first script or physical action holds that behavior,
+through approvals and other waits, until the turn finishes or is stopped; it then
+resumes from where you are. Turns without physical work do not pause it.
 
 ## Core API
 

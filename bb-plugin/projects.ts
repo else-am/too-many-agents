@@ -34,7 +34,10 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
   }
 
   async function metadata(live: Session) {
-    return object(await worlds.callback(live, "world_metadata", {}));
+    const world = object(await worlds.callback(live, "world_metadata", {}));
+    if (typeof world.worldProjectId === "string" && world.worldProjectId)
+      worlds.worldProjects.set(live.worldId, world.worldProjectId);
+    return world;
   }
 
   async function ensureWorldProject(live: Session): Promise<string> {
@@ -62,6 +65,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
         await hideInSidebar(project.id);
       }
       await worlds.callback(live, "world.project", { projectId: project.id });
+      worlds.worldProjects.set(live.worldId, project.id);
       return project.id;
     })();
     creating.set(live.worldId, work);
@@ -155,6 +159,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
       ?? projects.find((project) => project.sources.some((source) => source.path === path));
     if (own) {
       if (world.worldProjectId !== own.id) await worlds.callback(live, "world.project", { projectId: own.id });
+      worlds.worldProjects.set(live.worldId, own.id);
       const source = own.sources.find((row) => row.isDefault);
       if (source && source.path !== path)
         await bb.sdk.projects.sources.update({

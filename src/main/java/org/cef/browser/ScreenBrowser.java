@@ -32,13 +32,16 @@ public class ScreenBrowser extends CefBrowser_N implements CefRenderHandler {
     // Synthetic AWT events need a source, and jcef's focus handling expects a UI component. Never shown or attached.
     private final Component component = new Component() {};
     private final View view;
+    private final String initialUrl;
+    private volatile boolean navigationRequested, ready;
     private Rectangle rect;
     private Rectangle popupBounds = new Rectangle();
     /** Re-entry is local to the thread making the native focus call. */
     private final ThreadLocal<Boolean> focusing = new ThreadLocal<>();
 
     public ScreenBrowser(CefClient client, String url, int width, int height, int fps, View view) {
-        super(client, url, null, null, null, settings(fps));
+        super(client, "about:blank", null, null, null, settings(fps));
+        this.initialUrl = url;
         this.view = view;
         this.rect = new Rectangle(0, 0, width, height);
     }
@@ -67,6 +70,27 @@ public class ScreenBrowser extends CefBrowser_N implements CefRenderHandler {
     @Override public void createImmediately() {
         if (getNativeRef("CefBrowser") == 0) createBrowser(getClient(), 0, getUrl(), true, false, null, getRequestContext());
     }
+
+    /** Install page compatibility before scripts can cache native functions, then begin the actual navigation. */
+    public CompletableFuture<String> initialize(String script) {
+        var params = new com.google.gson.JsonObject();
+        params.addProperty("source", script);
+        return getDevToolsClient().executeDevToolsMethod("Page.enable")
+            .thenCompose(ignored -> getDevToolsClient().executeDevToolsMethod("Page.addScriptToEvaluateOnNewDocument", params.toString()))
+            .thenApply(result -> {
+                navigationRequested = true;
+                loadURL(initialUrl);
+                return result;
+            });
+    }
+
+    /** Ignore the temporary blank document's callbacks. */
+    public boolean pageStarted(CefFrame frame) {
+        if (frame.isMain() && navigationRequested && (initialUrl.equals("about:blank") || !frame.getURL().equals("about:blank"))) ready = true;
+        return ready;
+    }
+
+    public boolean ready() { return ready; }
 
     public void resize(int width, int height) {
         rect = new Rectangle(0, 0, width, height);

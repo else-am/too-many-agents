@@ -18,6 +18,8 @@ export function minecraftWorlds(bb: BbPluginApi) {
   const seen = new Map<string, number>();
   // Thread metadata is writable by others, so it only names a candidate. Java checks each thread against its own record.
   const identities = new Map<string, Identity | null>();
+  // Each world's own BB project, as last reported by its game; its agents have Minecraft access.
+  const worldProjects = new Map<string, string>();
 
   function session(worldId: string): Session {
     const live = sessions.get(worldId);
@@ -169,12 +171,6 @@ export function minecraftWorlds(bb: BbPluginApi) {
     return { live, agent };
   }
 
-  async function validationSession(threadId?: string) {
-    if (threadId && await identify(threadId)) return (await caller(threadId)).live;
-    if (sessions.size !== 1) throw new ApiError("world_required", "Open one Minecraft world, or run from an embodied thread, to validate a role.");
-    return sessions.values().next().value!;
-  }
-
   function attach(live: Session) {
     const previous = sessions.get(live.worldId);
     sessions.set(live.worldId, live);
@@ -206,11 +202,12 @@ export function minecraftWorlds(bb: BbPluginApi) {
     sessions.clear();
     seen.clear();
     identities.clear();
+    worldProjects.clear();
   });
   return {
     session,
     activeGames,
-    validationSession,
+    worldProjects,
     attach,
     detach,
     identify,

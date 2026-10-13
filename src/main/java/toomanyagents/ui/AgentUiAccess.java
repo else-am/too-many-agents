@@ -14,17 +14,17 @@ public interface AgentUiAccess {
     CompletableFuture<JsonObject> backendConfig();
     CompletableFuture<JsonObject> setDefaultProvider(String providerId);
     CompletableFuture<JsonObject> projectExecutionOptions(String projectId);
+    CompletableFuture<JsonObject> projectExecutionOptions(String projectId, boolean station);
     JsonObject projects();
     CompletableFuture<JsonObject> projectCreationOptions(String projectId);
     CompletableFuture<JsonObject> projectCommand(JsonObject request);
+    CompletableFuture<JsonObject> blockAction(JsonObject request);
     CompletableFuture<String> spawn(JsonObject settings);
     JsonArray list();
     JsonArray worldAgents();
     CompletableFuture<JsonObject> inventory(String agentId);
     CompletableFuture<Void> openInventory(String agentId);
     void markRead(String agentId, long replyVersion);
-    CompletableFuture<JsonArray> roles();
-    CompletableFuture<Void> saveRole(JsonObject role, String agentId);
     CompletableFuture<Void> updateSettings(String agentId, JsonObject settings);
     /** {@code text}, and optionally {@code model}, {@code reasoningLevel}, {@code serviceTier}, {@code permissionMode}, {@code delivery}, {@code pointing}, {@code images}. */
     CompletableFuture<Void> send(String agentId, JsonObject message);

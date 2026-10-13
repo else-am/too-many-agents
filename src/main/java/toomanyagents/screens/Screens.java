@@ -130,7 +130,7 @@ public final class Screens {
     }
 
     /**
-     * Takes a screen down as an item, with its name and page or blank when reset. The server checks the player can
+     * Takes a screen down as an item, with its page (not its name) or blank when reset. The server checks the player can
      * still reach it, and a screen already taken can't be taken again.
      */
     static void pickUp(ScreenView view, boolean reset) {

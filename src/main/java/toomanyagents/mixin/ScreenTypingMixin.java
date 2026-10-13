@@ -12,7 +12,8 @@ import toomanyagents.screens.ScreenInput;
 abstract class ScreenTypingMixin {
     @Inject(method = "keyPress", at = @At("HEAD"), cancellable = true)
     private void typeOnScreen(long window, int key, int scanCode, int action, int modifiers, CallbackInfo info) {
-        if (ScreenInput.keyPress(key, scanCode, action, modifiers)) info.cancel();
+        if (ScreenInput.keyPress(key, scanCode, action, modifiers)
+                || toomanyagents.ui.SurveyMode.keyPress(key, action)) info.cancel();
     }
 
     @Inject(method = "charTyped", at = @At("HEAD"), cancellable = true)

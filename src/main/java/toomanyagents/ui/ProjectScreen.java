@@ -22,9 +22,13 @@ public final class ProjectScreen extends SettingsFormScreen {
     private boolean busy,choosing,confirmRemove;
     private final Map<EditBox,JsonObject> distances=new LinkedHashMap<>();
     private Button surveyButton;
+    private Consumer<String> created;
 
     public static ProjectScreen create(AgentUiAccess access,Screen parent){return new ProjectScreen(access,parent,"");}
-    public static ProjectScreen edit(AgentUiAccess access,Screen parent,String projectId){return new ProjectScreen(access,parent,projectId);}
+    public static ProjectScreen create(AgentUiAccess access,Screen parent,Consumer<String> created){var screen=create(access,parent);screen.created=created;return screen;}
+    public static ProjectScreen edit(AgentUiAccess access,Screen parent,String projectId){
+        for(var item:array(access.projects(),"projects"))if(text(item.getAsJsonObject(),"id").equals(projectId)&&text(item.getAsJsonObject(),"kind").equals("world"))throw new IllegalArgumentException("World projects have no settings.");
+        return new ProjectScreen(access,parent,projectId);}
     private ProjectScreen(AgentUiAccess access,Screen parent,String projectId){
         super(Component.literal(projectId.isBlank()?"New project":"Project settings"));
         this.access=access;this.parent=parent;this.projectId=projectId;data=access.projects();
@@ -121,23 +125,19 @@ public final class ProjectScreen extends SettingsFormScreen {
     }
     private void placeRows(JsonObject world){
         section("In-world");
-        JsonObject box=null;
-        for(var item:array(world,"bounds"))if(text(item.getAsJsonObject(),"projectId").equals(projectId))box=item.getAsJsonObject();
-        var boundary=value("Project boundary",box==null?"Not set":distance(box),"Agents in this project will stay inside this box");
-        if(box!=null)distances.put(boundary,box);
-        rowY+=4;row("Stations");
+        row("Stations");
         boolean any=false;
         for(var item:array(world,"stations")){
             var station=item.getAsJsonObject();if(!text(station,"projectId").equals(projectId))continue;
-            distances.put(value("  "+text(station,"label"),distance(station)),station);any=true;
+            distances.put(value("  "+text(station,"name"),distance(station)),station);any=true;
         }
         if(!any)note("No stations yet");
         rowY+=8;
-        surveyButton=place(Button.builder(Component.literal(surveyCaption()),b->SurveyMode.start(projectId))
+        surveyButton=place(Button.builder(Component.literal(surveyCaption()),b->SurveyMode.start())
             .bounds(left,0,contentWidth,20).build(),rowY);
         surveyButton.active=!busy&&minecraft.level!=null;rowY+=24;
     }
-    private static String surveyCaption(){return "Show/edit project boxes (press "+SurveyMode.keyLabel()+")";}
+    private static String surveyCaption(){return "Show station areas";}
     private String distance(JsonObject box){
         if(minecraft.player==null||minecraft.level==null)return "Not in world";
         String dimension=text(box,"dimension");
@@ -168,6 +168,9 @@ public final class ProjectScreen extends SettingsFormScreen {
         run(req,r->{
             if(!creating){leave(parent);return;}
             String id=r.has("projectId")?text(r,"projectId"):text(r,"id");
+            // Creation is complete even if the caller's follow-up (such as binding a block) fails.
+            projectId=id;saved=fields();
+            if(created!=null){var callback=created;created=null;callback.accept(id);return;}
             if(!docked()){minecraft.setScreen(edit(access,parent,id));return;}
             projectId=id;saved=fields();
         });

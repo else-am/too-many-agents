@@ -35,6 +35,19 @@ final class ScriptRegistryData {
         return result;
     }
 
+    /** Our two blocks have no state properties and both have a full cube collision shape. */
+    static JsonArray ownBlocks(ServerLevel level) {
+        var result = new JsonArray();
+        for (var block : java.util.List.of(toomanyagents.stations.Stations.STATION.get(), toomanyagents.stations.Stations.PROJECT.get())) {
+            if (block.getStateDefinition().getPossibleStates().size() != 1) throw new IllegalStateException("station_block_schema_changed");
+            result.add(JsonState.object("id",net.minecraft.core.registries.BuiltInRegistries.BLOCK.getId(block),
+                "name",net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block).toString(),
+                "stateId",net.minecraft.world.level.block.Block.getId(block.defaultBlockState()),
+                "hardness",block.defaultBlockState().getDestroySpeed(level,net.minecraft.core.BlockPos.ZERO)));
+        }
+        return result;
+    }
+
     private static <T> JsonObject encode(ServerLevel level, RegistryDataLoader.RegistryData<T> data,
                                          DynamicOps<Tag> ops, Budget budget) {
         var registry = level.registryAccess().registryOrThrow(data.key());

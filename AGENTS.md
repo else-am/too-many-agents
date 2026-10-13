@@ -1,5 +1,6 @@
 ## Development
 
+- Use single hyphens for Minecraft UI text separators and unordered list markers, never middle dots or bullet glyphs.
 - Start with the user's experience and one working end-to-end slice. Do not infer an enterprise architecture from Java conventions.
 - One Gradle module, one mod JAR, ordinary Java. A new interface, service layer, library, or module needs a concrete simplification to justify it.
 - Use `tools/build` (Java 21), `tools/too_many_agents.py`, and `tools/smoke.py`. Inspect Minecraft's locally generated sources when an API is uncertain. Do not infer runtime success from compilation.

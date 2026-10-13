@@ -81,7 +81,7 @@ public final class ScreenScale {
             || screen instanceof AgentChatScreen chat && chat.docked()
             || screen instanceof SettingsFormScreen form && form.docked()) return false;
         return screen != null && screen.getClass().getPackageName().equals(ScreenScale.class.getPackageName())
-            && !(screen instanceof TooManyAgentsSettingsScreen || screen instanceof ProviderSettingsScreen || screen instanceof AgentInventoryScreen);
+            && !(screen instanceof TooManyAgentsSettingsScreen || screen instanceof ProviderSettingsScreen || screen instanceof AgentInventoryScreen || screen instanceof StationItemScreen);
     }
 
     /** Draws a screen's coordinates at the chosen scale, including clipping and tooltip placement. */

@@ -5,7 +5,6 @@ import type { MinecraftProjects } from "./projects.js";
 import {
   ApiError,
   object,
-  string,
   type Agent,
   type Args,
   type ObjectValue,
@@ -15,15 +14,9 @@ import {
 } from "./protocol.js";
 
 // The UI sends body choices alongside BB choices; keep that translation out of Java.
-const bodyFields = new Set([
-  "name",
-  "body",
-  "mode",
-  "behaviors",
-  "stationId",
-  "minecraftAccess",
-  "notifyInChat",
-]);
+const bodyFields = new Set(["name", "body", "mode", "behavior", "behaviors"]);
+const executionFields = ["providerId", "model", "reasoningLevel", "serviceTier", "permissionMode"] as const;
+const permissionModes = ["accept-edits", "auto", "full"];
 function split(request: ObjectValue) {
   const settings: ObjectValue = {},
     draft: ObjectValue = {};
@@ -44,93 +37,70 @@ export function minecraftAgents(
 ) {
   const starting = new Set<string>();
 
-  // One record per role; serialize writes so creates and updates cannot race.
-  let roleWrites: Promise<unknown> = Promise.resolve();
-  const roleKey = (name: string) => `role:${name}`;
-  function roleName(value: unknown) {
-    const name = string(value, "role name");
-    if (name !== name.trim() || name.length > 80 || /[\u0000-\u001f]/.test(name))
-      throw new ApiError("invalid_role", "Role name must contain 1–80 printable characters.");
-    return name;
-  }
-  async function roleGet(name: string) {
-    const role = await bb.storage.kv.get<ObjectValue>(roleKey(roleName(name)));
-    if (!role) throw new ApiError("role_missing", `Unknown role: ${name}`);
-    return role;
-  }
-  async function roleList() {
-    const keys = await bb.storage.kv.list("role:");
-    const rows = await Promise.all(keys.sort().map(key => bb.storage.kv.get<ObjectValue>(key)));
-    return rows.filter((row): row is ObjectValue => row != null);
-  }
-  async function roleSave(live: Session, value: unknown, mode: "replace" | "create" | "update" = "replace") {
-    let role = object(value, "role");
-    const name = roleName(role.name);
-    const write = roleWrites.catch(() => undefined).then(async () => {
-      const previous = await bb.storage.kv.get<ObjectValue>(roleKey(name));
-      if (mode === "create" && previous) throw new ApiError("role_exists", `Role already exists: ${name}`);
-      if (mode === "update" && !previous) throw new ApiError("role_missing", `Unknown role: ${name}`);
-      if (mode === "update") role = {
-        ...previous!, ...role,
-        bb: { ...object(previous!.bb), ...object(role.bb ?? {}) },
-        body: { ...object(previous!.body), ...object(role.body ?? {}) },
-      };
-      if (mode === "create") role = { instructions: "", bb: {}, body: {}, ...role };
-      if (Object.keys(role).some(key => !["name", "instructions", "bb", "body"].includes(key)) ||
-          typeof role.instructions !== "string" || role.instructions.length > 64_000)
-        throw new ApiError("invalid_role", "Use name, instructions (up to 64000 characters), bb and body only.");
-      const choices = object(role.bb, "role.bb");
-      object(role.body, "role.body");
-      for (const [key, value] of Object.entries(choices)) {
-        if (!["providerId", "model", "reasoningLevel", "serviceTier", "permissionMode", "worktree"].includes(key) ||
-            (key === "worktree" ? typeof value !== "boolean" : typeof value !== "string" || !value.trim()))
-          throw new ApiError("invalid_role", `Invalid role.bb field: ${key}`);
-      }
-      if (choices.reasoningLevel && !["none", "low", "medium", "high", "xhigh", "max", "ultra", "ultracode"].includes(String(choices.reasoningLevel)))
-        throw new ApiError("invalid_role", "Invalid reasoningLevel");
-      if (choices.permissionMode && !["accept-edits", "auto", "full"].includes(String(choices.permissionMode)))
-        throw new ApiError("invalid_role", "Invalid permissionMode");
-      await worlds.callback(live, "body.validate", { settings: role.body });
-      await bb.storage.kv.set(roleKey(name), role);
-    });
-    roleWrites = write;
-    await write;
-    return roleGet(name);
-  }
-  async function roleDelete(name: string) {
-    const write = roleWrites.catch(() => undefined).then(() => bb.storage.kv.delete(roleKey(roleName(name))));
-    roleWrites = write;
-    await write;
-  }
-  async function roleCapture(live: Session, agent: Agent | undefined, request: ObjectValue) {
-    const role = { ...object(request.role) };
-    if (agent?.threadId) {
-      const thread = await bb.sdk.threads.get({ threadId: agent.threadId });
-      const execution = await bb.sdk.threads.defaultExecutionOptions({ threadId: agent.threadId });
-      const environment = thread.environmentId
-        ? await bb.sdk.environments.get({ environmentId: thread.environmentId }) : undefined;
-      role.bb = {
-        providerId: thread.providerId,
-        model: execution?.model,
-        reasoningLevel: execution?.reasoningLevel,
-        permissionMode: execution?.permissionMode,
-        serviceTier: execution?.serviceTier,
-        worktree: environment?.isWorktree === true,
-      } as ObjectValue;
-      // Omit absent optional execution fields.
-      role.bb = Object.fromEntries(Object.entries(role.bb as ObjectValue).filter(([, value]) => value != null && value !== ""));
-    }
-    if (role.instructions === undefined) {
-      const existing = await bb.storage.kv.get<ObjectValue>(roleKey(roleName(role.name)));
-      role.instructions = existing?.instructions ?? "";
-    }
-    return roleSave(live, role);
-  }
-
   async function get(live: Session, agentId: string) {
     const agent = (await worlds.agents(live)).find((row) => row.agentId === agentId);
     if (!agent) throw new ApiError("agent_missing", "This Minecraft body is unavailable");
     return agent;
+  }
+
+  /** BB's own defaults for a project: its saved choices, else the default provider's default model. */
+  async function projectDefaults(projectId: string): Promise<ObjectValue> {
+    const saved = await bb.sdk.projects.defaultExecutionOptions({ projectId });
+    const configured = saved?.providerId || (await bb.sdk.system.config()).generalSettings.defaultProviderId;
+    const catalog = await bb.sdk.system.executionOptions(configured ? { providerId: configured } : {});
+    const providerId = configured || catalog.providers.find((row) => row.available)?.id;
+    if (!providerId) throw new ApiError("provider_unavailable", "No BB provider is available.");
+    const model = [...catalog.models, ...catalog.selectedOnlyModels].find((row) => row.model === saved?.model)
+      ?? catalog.models.find((row) => row.isDefault);
+    return {
+      providerId,
+      ...(saved?.model || model ? { model: saved?.model || model!.model } : {}),
+      ...(saved?.reasoningLevel || model ? { reasoningLevel: saved?.reasoningLevel || model!.defaultReasoningEffort } : {}),
+      serviceTier: saved?.serviceTier || "default",
+      permissionMode: saved?.permissionMode || "auto",
+    };
+  }
+
+  /** The UI's starting choices for a project: BB's defaults, then the choices of its last ordinary UI agent. */
+  async function draftDefaults(projectId: string) {
+    const remembered = await bb.storage.kv.get<ObjectValue>(`last-execution:${projectId}`);
+    return { ...(await projectDefaults(projectId)), ...remembered };
+  }
+
+  /** Catch invalid pinned or explicit models before a station is claimed. BB remains authoritative at start. */
+  async function validateExecution(choices: Partial<SpawnOptions>) {
+    if (!choices.providerId) return;
+    const catalog = await bb.sdk.system.executionOptions({
+      providerId: choices.providerId,
+      ...(choices.environment?.type === "reuse" ? { environmentId: choices.environment.environmentId } : {}),
+    });
+    const provider = catalog.providers.find((row) => row.id === choices.providerId);
+    if (!provider?.available || catalog.modelLoadError)
+      throw new ApiError("provider_unavailable", catalog.modelLoadError?.detail ?? "The selected provider is unavailable.");
+    const models = [...catalog.models, ...catalog.selectedOnlyModels];
+    const model = choices.model ? models.find((row) => row.model === choices.model) : models.find((row) => row.isDefault);
+    if (!model) throw new ApiError("invalid_model", `Unknown model ${choices.model ?? "(default)"} for ${choices.providerId}.`);
+    choices.model = model.model;
+    choices.reasoningLevel ??= model.defaultReasoningEffort;
+    choices.serviceTier ||= "default";
+    choices.permissionMode ??= "auto";
+    if (model.supportedReasoningEfforts.length && !model.supportedReasoningEfforts.some((row) => row.reasoningEffort === choices.reasoningLevel))
+      throw new ApiError("invalid_reasoning_level", `The model does not support ${choices.reasoningLevel} reasoning.`);
+    const tiers = model.supportedServiceTiers ?? provider.serviceTiers ?? [];
+    if (choices.serviceTier && choices.serviceTier !== "default" && !tiers.some((row) => row.id === choices.serviceTier))
+      throw new ApiError("invalid_service_tier", "The model does not support this service tier.");
+    if (choices.permissionMode && !provider.capabilities.permissionModes.includes(choices.permissionMode))
+      throw new ApiError("invalid_permission_mode", "The provider does not support this permission mode.");
+  }
+
+  async function station(live: Session, idOrName: string) {
+    const world = await projects.metadata(live);
+    const rows = (Array.isArray(world.stations) ? world.stations : []).map((row) => object(row));
+    const found = rows.find((row) => row.id === idOrName) ?? rows.find((row) => typeof row.name === "string" && row.name.toLowerCase() === idOrName.trim().toLowerCase());
+    if (!found) throw new ApiError("station_missing", `No station is named ${idOrName}.`);
+    if (!found.projectId)
+      throw new ApiError("station_without_project", `Station ${found.name} has no project yet.`);
+    return found;
   }
 
   async function start(live: Session, agent: Agent, message: ObjectValue) {
@@ -146,40 +116,83 @@ export function minecraftAgents(
         ...agent.draft,
         ...request,
       } as Partial<SpawnOptions>);
-      const thread = await threads.start(
-        live,
-        agent.agentId,
-        agent.minecraftAccess,
-        selection as SpawnOptions,
-      );
+      await validateExecution(selection);
+      const thread = await threads.start(live, agent.agentId, selection as SpawnOptions);
       await bb.storage.kv.delete(`instructions:${agent.agentId}`);
+      // Remember what BB accepted, so the next ordinary agent in this project starts with it.
+      if (await bb.storage.kv.get<boolean>(`remember:${agent.agentId}`)) {
+        const execution = await bb.sdk.threads.defaultExecutionOptions({ threadId: thread.id });
+        if (execution)
+          await bb.storage.kv.set(`last-execution:${selection.projectId}`, {
+            providerId: thread.providerId,
+            model: execution.model,
+            reasoningLevel: execution.reasoningLevel,
+            serviceTier: execution.serviceTier,
+            permissionMode: execution.permissionMode,
+          });
+        await bb.storage.kv.delete(`remember:${agent.agentId}`);
+      }
       return thread;
     } finally {
       starting.delete(agent.agentId);
     }
   }
 
+  /**
+   * A stationed body takes the station's project, body, behaviors, instructions and pinned BB choices; BB's project
+   * defaults fill the rest. Other children inherit their parent's execution; independent spawns use project defaults.
+   * Explicit choices win, and an agent caller can never grant a stronger permission mode than its own.
+   */
   async function create(
     live: Session,
     request: ObjectValue,
     caller?: { threadId: string; signal: AbortSignal },
   ) {
-    const role = request.role ? await roleGet(string(request.role, "role")) : undefined;
-    const explicit = Object.fromEntries(Object.entries(request).filter(([, value]) => value !== undefined));
-    request = { ...(role ? object(role.body) : {}), ...(role ? object(role.bb) : {}), ...explicit };
-    const { worktree, role: _role, roleInstructions, ...choicesRequest } = request;
+    for (const key of ["role", "minecraftAccess", "notifyInChat"])
+      if (request[key] != null)
+        throw new ApiError("invalid_request", `${key} is no longer a spawn choice. Minecraft access follows the project.`);
+    const { worktree, stationId, ...choicesRequest } = request;
+    const atStation = typeof stationId === "string" && stationId ? await station(live, stationId) : undefined;
+    if (atStation) {
+      if (choicesRequest.projectId && choicesRequest.projectId !== atStation.projectId)
+        throw new ApiError("station_project", `Station ${atStation.name} belongs to another project.`);
+      choicesRequest.projectId = atStation.projectId;
+    }
     const { settings, draft } = split(choicesRequest);
     const selected = await projects.selection(
       live,
       draft as Partial<SpawnOptions>,
       typeof worktree === "boolean" ? worktree : undefined,
     );
-    const { input, prompt, ...choices } = selected as SpawnOptions;
+    const { input, prompt, ...choices } = selected as SpawnOptions & ObjectValue;
+    const explicit = choices.permissionMode;
+    const parent = !atStation && choices.parentThreadId
+      ? await bb.sdk.threads.get({ threadId: choices.parentThreadId }) : undefined;
+    const defaults: ObjectValue = parent
+      ? { ...(await bb.sdk.threads.defaultExecutionOptions({ threadId: parent.id })), providerId: parent.providerId }
+      : await projectDefaults(selected.projectId);
+    for (const key of executionFields)
+      if (!choices[key] && atStation?.[key]) choices[key] = atStation[key] as never;
+    // A different provider must choose its own model/effort/tier rather than inherit another provider's values.
+    const sameProvider = !choices.providerId || choices.providerId === defaults.providerId;
+    for (const key of executionFields)
+      if (!choices[key] && defaults[key] && (sameProvider || key === "permissionMode" || key === "providerId"))
+        choices[key] = defaults[key] as never;
+    if (atStation && settings.behaviors === undefined) settings.behaviors = atStation.behaviors;
+    if (caller) {
+      const own = (await bb.sdk.threads.defaultExecutionOptions({ threadId: caller.threadId }))?.permissionMode;
+      if (!own) throw new ApiError("caller_permissions_unavailable", "Cannot read the caller's current permission mode.");
+      if (explicit && permissionModes.indexOf(explicit) > permissionModes.indexOf(own))
+        throw new ApiError("permission_exceeds_caller", "A spawned agent cannot exceed the caller's BB permission mode.");
+      if (!choices.permissionMode || permissionModes.indexOf(choices.permissionMode) > permissionModes.indexOf(own))
+        choices.permissionMode = own;
+    }
+    await validateExecution(choices as Partial<SpawnOptions>);
     const args = {
       settings,
       projectId: selected.projectId,
-      minecraftAccess: settings.minecraftAccess !== false,
-      draft: choices,
+      ...(atStation ? { stationId: atStation.id as string } : {}),
+      draft: choices as ObjectValue,
     };
     const agent = (
       caller
@@ -189,9 +202,10 @@ export function minecraftAgents(
           })
         : await worlds.callback(live, "body.create", args)
     ) as Agent;
-    const instructions = roleInstructions ?? role?.instructions;
-    if (typeof instructions === "string" && instructions)
-      await bb.storage.kv.set(`instructions:${agent.agentId}`, instructions);
+    if (typeof atStation?.instructions === "string" && atStation.instructions)
+      await bb.storage.kv.set(`instructions:${agent.agentId}`, atStation.instructions);
+    // Only the player's ordinary agents shape the next draft's choices.
+    if (!caller && !atStation && !choices.parentThreadId) await bb.storage.kv.set(`remember:${agent.agentId}`, true);
     caller?.signal.throwIfAborted();
     const task = typeof request.initialTask === "string" ? request.initialTask : prompt;
     const first = input ?? (task ? [inputText(task)] : []);
@@ -235,6 +249,8 @@ export function minecraftAgents(
   }
 
   async function settings(live: Session, agent: Agent, request: ObjectValue) {
+    for (const key of ["role", "minecraftAccess", "notifyInChat", "stationId"])
+      if (request[key] != null) throw new ApiError("invalid_request", `${key} is not an agent setting.`);
     const { settings, draft: patch } = split(request);
     if (agent.threadId && (patch.permissionMode || patch.serviceTier))
       throw new ApiError(
@@ -276,6 +292,6 @@ export function minecraftAgents(
     );
     return { projects: rows };
   }
-  return { get, create, send, settings, archive, sync, roleGet, roleList, roleSave, roleDelete, roleCapture };
+  return { get, create, send, settings, archive, sync, draftDefaults, projectDefaults, station };
 }
 export type MinecraftAgents = ReturnType<typeof minecraftAgents>;

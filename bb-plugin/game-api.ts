@@ -60,10 +60,6 @@ export function registerGameApi(
             Sdk["providers"]["models"]
           >,
         );
-      case "role.list":
-        return agents.roleList();
-      case "role.save":
-        return agents.roleCapture(live(), agent, data);
       case "world.sync":
         return agents.sync(live());
       case "agent.create":
@@ -98,9 +94,7 @@ export function registerGameApi(
         const world = await projects.metadata(live());
         const id =
           !data.projectId || data.projectId === "minecraft" ? world.worldProjectId : data.projectId;
-        return id
-          ? bb.sdk.projects.defaultExecutionOptions({ projectId: string(id, "projectId") })
-          : {};
+        return id ? (data.station === true ? agents.projectDefaults : agents.draftDefaults)(string(id, "projectId")) : {};
       }
       case "project.creationOptions":
         return projects.creationOptions(live(), string(data.projectId, "projectId"));
@@ -135,7 +129,10 @@ export function registerGameApi(
           callbackUrl: loopbackUrl(data.callbackUrl),
           callbackToken: string(data.callbackToken, "callbackToken"),
         });
-        if (joined) await threads.reconnect(worldId);
+        if (joined) {
+          await projects.metadata(worlds.session(worldId));
+          await threads.reconnect(worldId);
+        }
         return { protocol: PROTOCOL };
       }
       case "session.detach": {

@@ -17,9 +17,21 @@
   {
     "name": "minecraft_settings",
     "minecraft": true,
-    "description": "Read your body's mod settings: name, species, game mode (survival, creative, creative_commands), activity behaviors, the box you must stay inside, and capabilities.",
+    "description": "Read your world body settings: name, species, game mode (survival, creative, creative_commands), ambient behavior, and capabilities.",
     "inputSchema": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
     "operation": "SETTINGS"
+  },
+  {
+    "name": "minecraft_behavior",
+    "minecraft": true,
+    "description": "Read or set your ambient behavior: stand, wander near where wandering began, or follow the player. It pauses from your first script or physical action until the current turn finishes. Omit behavior to read it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "behavior": { "type": "string", "enum": ["stand", "wander", "follow"] } },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "BEHAVIOR"
   },
   {
     "name": "minecraft_observe",
@@ -252,13 +264,15 @@
   },
   {
     "name": "screen_list",
-    "description": "List the screens you can use: your project's screens and shared ones, yours first, then nearest the user, capped at 50 (`truncated` counts the rest). `mine: true` lists only your station's screens. `distance` is how far each screen is from the user and from you in the layout. It's useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. Each row has a stable UUID `id` and a unique readable `name`. Names can change; keep the UUID for future calls. Pickup ends that identity. A `lease` identifies the thread currently controlling the screen.",
+    "description": "List the screens you can use, `limit` at a time (`truncated` counts the rest; raise `limit` if you don't find what you need). Your station's screens come first, marked `yours`. Screens linked to any other station, occupied or free, aren't listed and can't be used; a free station's screens wait for an agent spawned there. Shared screens follow, nearest you or the user first, with screens in other dimensions last. `distance` is how far each screen is from the user and from you, useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. `openedByYou` marks pages you opened, including in earlier turns. Each row has a stable UUID `id` and a unique readable `name`. Names can change; keep the UUID for future calls. Pickup ends that identity. A `lease` identifies the thread currently controlling the screen.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "mine": {
-          "type": "boolean",
-          "description": "Only your station's screens."
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Most rows to return. Default 20, at most 50."
         }
       },
       "required": [],
@@ -274,7 +288,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen. A screen linked to any other station, occupied or free, fails with `no_access`."
         },
         "kind": {
           "type": "string",
@@ -308,7 +322,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen. A screen linked to any other station, occupied or free, fails with `no_access`."
         },
         "method": {
           "type": "string",
@@ -333,7 +347,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen. A screen linked to any other station, occupied or free, fails with `no_access`."
         }
       },
       "required": [],
@@ -349,7 +363,7 @@
       "properties": {
         "screen": {
           "type": "string",
-          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen."
+          "description": "Screen UUID or unique name (case-insensitive). Prefer the UUID for lasting references; it survives renaming, but not pickup and replacement. Omit to use your station's only screen. A screen linked to any other station, occupied or free, fails with `no_access`."
         }
       },
       "required": [],

@@ -3,7 +3,6 @@ import type { BbPluginApi } from "@get-bb/plugin-sdk";
 import { imageUploads } from "./images.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import { agentSpeech } from "./speech.js";
-import { chatNotifications } from "./notifications.js";
 import { describe, type ObjectValue, type Session, type SpawnOptions, type Thread } from "./protocol.js";
 
 function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" | "working" | "idle" {
@@ -17,7 +16,6 @@ function activity(thread: Thread, hasPendingInteraction: boolean): "wants_you" |
 export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const withImages = imageUploads(bb);
   const speech = agentSpeech(bb);
-  chatNotifications(bb, worlds, speech);
   const pending = new Map<string, Promise<void>>();
   let disposed = false;
   const environments = new Map<string, { until: number; value: ReturnType<typeof readEnvironment> }>();
@@ -91,13 +89,15 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
         let update;
         let thread: Thread | undefined;
         try {
+          // Minecraft trusts a finished turn only if it was read after the body's latest physical work.
+          const observedAt = Date.now();
           thread = await bb.sdk.threads.get({ threadId });
-          const view = await read(thread);
+          const view = { ...(await read(thread)), observedAt };
           update = {
             view: thread.deletedAt != null ? { ...view, status: "disconnected", error: "This conversation is unavailable in BB." } : view,
             state:
               view.thread.deletedAt != null
-                ? "disconnected"
+                ? "deleted"
                 : view.conversationArchived
                   ? "suspended"
                   : "present",
@@ -122,7 +122,6 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
   async function start(
     live: Session,
     agentId: string,
-    minecraftAccess: boolean,
     spawn: SpawnOptions,
   ) {
     const nonce = randomUUID();
@@ -131,7 +130,12 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
       await worlds.callback(live, "body.begin", { agentId, nonce });
       return bb.sdk.threads.spawn({
         ...(prepared as unknown as SpawnOptions),
-        pluginMetadata: { worldId: live.worldId, agentId, minecraftAccess, nonce },
+        executionInputSources: Object.fromEntries(
+          ["providerId", "model", "reasoningLevel", "serviceTier", "permissionMode"]
+            .filter((key) => prepared[key] != null && prepared[key] !== "")
+            .map((key) => [key, "explicit" as const]),
+        ),
+        pluginMetadata: { worldId: live.worldId, agentId, nonce },
       });
     });
     worlds.identities.set(created.id, { worldId: live.worldId, agentId });

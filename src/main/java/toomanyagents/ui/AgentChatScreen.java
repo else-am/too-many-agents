@@ -23,11 +23,10 @@ public final class AgentChatScreen extends Screen {
     private final AgentUiAccess access;
     private String agentId;
     private JsonObject creationSettings;
-    private final JsonObject roleSelection = new JsonObject();
     private String creationProjectName="Choose project";
     private boolean creationGit;
     private String environmentProject;
-    private Checkbox worktreeBox, minecraftBox;
+    private Checkbox worktreeBox;
     private Button projectButton;
     private Consumer<String> created;
     private final List<String> bodies = new ArrayList<>();
@@ -38,6 +37,8 @@ public final class AgentChatScreen extends Screen {
     // A random starter name clears when the field is first clicked, until something is typed.
     private String suggestedName = "";
     private boolean nameSuggested;
+    /** A station draft reports pins its model can't honor once, on its first catalog. */
+    private boolean stationPinsChecked;
     private Button providerButton, bodyButton;
     private List<PickerChoice> bodyChoices;
     private Screen dockParent;
@@ -315,7 +316,7 @@ public final class AgentChatScreen extends Screen {
         this.access = access;
         this.agentId = agentId;
         state = access.snapshot(agentId);
-        this.pointing = pointing != null && state.has("minecraftAccess") && state.get("minecraftAccess").getAsBoolean()
+        this.pointing = pointing != null
             ? pointing.deepCopy() : null;
         models.model = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "model");
         models.effort = AgentModels.text(draft() ? state : AgentSettingsScreen.settings(state), "reasoningLevel");
@@ -351,16 +352,13 @@ public final class AgentChatScreen extends Screen {
 
     private void readCreationProject(){
         creationProjectName="Choose project";
-        if (!creationSettings.has("minecraftAccess")) creationSettings.addProperty("minecraftAccess", true);
         String projectId=AgentModels.text(creationSettings,"projectId");
-        if (AgentModels.worldProject(access.projects(), projectId)) {
-            creationSettings.addProperty("minecraftAccess", true);
-            creationSettings.addProperty("worktree", false);
-        }
+        if (AgentModels.worldProject(access.projects(), projectId)) creationSettings.addProperty("worktree", false);
         for(var item:AgentModels.array(access.projects(),"projects")){
             var project=item.getAsJsonObject();
             if(AgentModels.text(project,"id").equals(projectId))creationProjectName=AgentModels.text(project,"name");
         }
+        if(AgentModels.worldProject(access.projects(),projectId))creationProjectName="This world";
         if(projectId.equals(environmentProject))return;
         environmentProject=projectId;creationGit=false;
         if(projectId.isBlank())return;
@@ -530,7 +528,6 @@ public final class AgentChatScreen extends Screen {
                 }
                 return access.updateSettings(agentId,changes);
             },draft()?null:agentId);
-            screen.rememberRole(roleSelection);
             if(!docked()){minecraft.setScreen(screen);return;}
             settingsPanel=screen;
             screen.dock(()->{if(settingsPanel==screen){settingsPanel=null;cover(false);refreshButtons();}});
@@ -555,14 +552,6 @@ public final class AgentChatScreen extends Screen {
             });
             bodyButton = addRenderableWidget(Button.builder(Component.empty(), button -> requestModels(() -> togglePicker(bodyButton)))
                 .bounds(left, compact ? 55 : 29, 120, 20).build());
-            minecraftBox = Checkbox.builder(Component.literal("Can act in Minecraft"), font)
-                .selected(creationSettings.get("minecraftAccess").getAsBoolean())
-                .onValueChange((box, value) -> {
-                    creationSettings.addProperty("minecraftAccess", value);
-                    refreshButtons();
-                }).build();
-            addRenderableWidget(minecraftBox);
-            minecraftBox.visible = !worldDraft();
             projectButton = addRenderableWidget(Button.builder(Component.empty(), button -> togglePicker(projectButton))
                 .bounds(left, 0, Math.min(180, contentWidth), 20).build());
             projectButton.visible = !worldDraft();
@@ -572,7 +561,7 @@ public final class AgentChatScreen extends Screen {
             worktreeBox.setTooltip(Tooltip.create(Component.literal("Work in a separate Git worktree instead of the project folder")));
             worktreeBox.visible = creationGit;
             addRenderableWidget(worktreeBox);
-        } else { nameField = null; bodyButton = null; minecraftBox = null; worktreeBox = null; projectButton = null; }
+        } else { nameField = null; bodyButton = null; worktreeBox = null; projectButton = null; }
         addRenderableWidget(Button.builder(Component.literal("×"), button -> onClose())
             .bounds(left + contentWidth - 20, 7, 20, 20).build());
         var previousComposer = composer;
@@ -683,7 +672,7 @@ public final class AgentChatScreen extends Screen {
         String provider = AgentModels.text(state, "providerId");
         int version = ++catalogVersion;
         var catalog = access.catalog(provider, AgentModels.text(AgentModels.object(state,"thread"),"environmentId"));
-        var defaults = draft() ? access.projectExecutionOptions(AgentModels.text(creationSettings,"projectId")) : CompletableFuture.completedFuture(new JsonObject());
+        var defaults = draft() ? access.projectExecutionOptions(AgentModels.text(creationSettings,"projectId"),!AgentModels.text(creationSettings,"stationId").isBlank()) : CompletableFuture.completedFuture(new JsonObject());
         catalog.thenCombine(defaults, (result, options) -> {
             var copy = result.deepCopy(); copy.add("draftDefaults",options); return copy;
         }).whenComplete((result, failure) -> executeUi(() -> {
@@ -693,18 +682,22 @@ public final class AgentChatScreen extends Screen {
             else {
                 this.catalog = result;
                 if (draft()) {
+                    String preferred = AgentModels.text(AgentModels.object(result,"draftDefaults"),"providerId");
                     String selected = "";
                     boolean available = false;
                     for (var item : AgentModels.array(result, "providers")) {
                         var info = item.getAsJsonObject();
                         if (!info.has("available") || !info.get("available").getAsBoolean()) continue;
                         String id = AgentModels.text(info, "id");
-                        if (selected.isBlank()) selected = id;
+                        if (selected.isBlank() || id.equals(preferred)) selected = id;
                         if (id.equals(provider)) available = true;
                     }
                     if (!available && !selected.isBlank()) {
                         creationSettings.addProperty("providerId", selected);
+                        // Keep a station's pins until its provider's catalog can check them.
+                        String model = models.model, effort = models.effort, tier = models.serviceTier;
                         models.load(new JsonObject());
+                        if (!AgentModels.text(creationSettings, "stationId").isBlank()) { models.model = model; models.effort = effort; models.serviceTier = tier; }
                         requestModels(change);
                         return;
                     }
@@ -731,10 +724,34 @@ public final class AgentChatScreen extends Screen {
                     if (!bodies.contains(body)) creationSettings.addProperty("body", bodies.isEmpty() ? "" : bodies.getFirst());
                 }
                 feedback = models.available() ? "" : "No models available";
+                if (draft() && models.available() && !stationPinsChecked && !AgentModels.text(creationSettings, "stationId").isBlank()) {
+                    stationPinsChecked = true;
+                    feedback = stationPinNotice();
+                }
                 if (models.available()) change.run();
             }
             refreshButtons();
         }));
+    }
+
+    /** Names any station pin the catalog replaced, so the draft never changes one silently. */
+    private String stationPinNotice() {
+        var changed = new ArrayList<String>();
+        String[][] pins = {{"model", models.model, "model"}, {"reasoningLevel", models.effort, "reasoning"}, {"serviceTier", models.serviceTier, "speed"}};
+        for (var pin : pins) {
+            String pinned = AgentModels.text(creationSettings, pin[0]);
+            if (!pinned.isBlank() && !pinned.equals(pin[1])) changed.add("station " + pin[2] + " " + pinned + " → " + pin[1]);
+        }
+        return changed.isEmpty() ? "" : "Not available for this model: " + String.join(", ", changed) + ". Edit the station to fix it.";
+    }
+
+    private void selectProject(String id) {
+        if(id.equals(AgentModels.text(creationSettings,"projectId")))return;
+        creationSettings.addProperty("projectId",id);creationSettings.addProperty("worktree",false);
+        readCreationProject();catalogVersion++;loadingModels=false;
+        models.model="";models.effort="";models.serviceTier="default";
+        for(String field:new String[]{"providerId","model","reasoningLevel","serviceTier","permissionMode"})creationSettings.remove(field);
+        models.load(new JsonObject());rebuildWidgets();
     }
 
     private void closePicker() {
@@ -777,20 +794,14 @@ public final class AgentChatScreen extends Screen {
             }
         } else if (anchor == projectButton) {
             String selected = AgentModels.text(creationSettings, "projectId");
+            String worldProject=AgentModels.text(AgentModels.object(access.projects(),"world"),"worldProjectId");
+            if(!worldProject.isBlank())pickerChoices.add(new PickerChoice("This world", "", () -> selectProject(worldProject)));
             for (var item : AgentModels.array(access.projects(), "projects")) {
                 var project = item.getAsJsonObject();
                 if (AgentModels.text(project, "kind").equals("world")) continue;
                 String id = AgentModels.text(project, "id");
                 pickerChoices.add(new PickerChoice((id.equals(selected) ? "✓ " : "") + AgentModels.text(project, "name"), "", () -> {
-                    if (id.equals(AgentModels.text(creationSettings, "projectId"))) return;
-                    creationSettings.addProperty("projectId", id);
-                    creationSettings.addProperty("worktree", false);
-                    readCreationProject();
-                    // Ignore defaults still arriving for the previous project.
-                    catalogVersion++;
-                    loadingModels = false;
-                    models.load(new JsonObject());
-                    rebuildWidgets();
+                    selectProject(id);
                 }));
             }
         } else if (anchor == bodyButton) {
@@ -1113,12 +1124,10 @@ public final class AgentChatScreen extends Screen {
             bodyButton.setWidth(Math.min(contentWidth, buttonWidth(bodyLabels, " ▾")));
             bodyButton.setMessage(Component.literal(font.plainSubstrByWidth(bodyLabel(AgentModels.text(creationSettings, "body")), bodyButton.getWidth() - font.width(" ▾") - 12) + " ▾"));
             bodyButton.active = !sending && !loadingModels;
-            projectButton.active = !sending && !worldDraft();
-            projectButton.visible = !settingsCovering && !worldDraft();
+            projectButton.active = !sending && AgentModels.text(creationSettings,"stationId").isBlank();
+            projectButton.visible = !settingsCovering;
             projectButton.setMessage(Component.literal(font.plainSubstrByWidth(creationProjectName, projectButton.getWidth() - 24) + " ▾"));
             projectButton.setTooltip(Tooltip.create(Component.literal(creationProjectName)));
-            minecraftBox.active = !sending && !worldDraft();
-            minecraftBox.visible = !settingsCovering && !worldDraft();
             boolean worktreeShown = worktreeBox.visible;
             worktreeBox.visible = !settingsCovering && creationGit;
             // Worktree support arrives after layout; place the options beside each other once it does.
@@ -1801,9 +1810,9 @@ public final class AgentChatScreen extends Screen {
     }
 
     private int creationOptionsHeight() {
-        if (!draft() || minecraftBox == null) return 0;
+        if (!draft() || projectButton == null) return 0;
         int x = 0, rows = 0;
-        for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+        for (var widget : List.of(projectButton, worktreeBox)) {
             if (!widget.visible) continue;
             if (rows == 0 || x + widget.getWidth() > contentWidth) { rows++; x = 0; }
             x += widget.getWidth() + 12;
@@ -1831,7 +1840,7 @@ public final class AgentChatScreen extends Screen {
         if (draft()) {
             int optionsY = composer.getY() - optionsHeight;
             int x = left;
-            for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+            for (var widget : List.of(projectButton, worktreeBox)) {
                 if (!widget.visible) continue;
                 if (x > left && x + widget.getWidth() > left + contentWidth) { x = left; optionsY += 24; }
                 widget.setPosition(x, optionsY);
@@ -2032,7 +2041,7 @@ public final class AgentChatScreen extends Screen {
             var image=chatImages.get(media.kind(),media.source());
             if(image.texture!=null)ChatImages.draw(graphics,image,x,y,media.width(),height);
             else {
-                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":"Click to retry · "+image.error;
+                String status=image.loading?"Loading "+(media.kind().equals("mermaid")?"diagram":"image")+"…":"Click to retry - "+image.error;
                 var wrapped=font.split(Component.literal(status),Math.max(24,media.width()));
                 for(int i=0;i<Math.min(wrapped.size(),height/LINE_HEIGHT);i++)
                     graphics.drawString(font,wrapped.get(i),x,y+i*LINE_HEIGHT,0xBDB5A6);
@@ -2367,7 +2376,7 @@ public final class AgentChatScreen extends Screen {
     public JsonObject pointingContext() { return pointing == null ? null : pointing.deepCopy(); }
 
     public void capturePointing(JsonObject context) {
-        pointing = context != null && state.has("minecraftAccess") && state.get("minecraftAccess").getAsBoolean()
+        pointing = context != null
             ? context.deepCopy() : null;
     }
 

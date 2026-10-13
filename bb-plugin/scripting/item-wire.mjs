@@ -1,3 +1,4 @@
+import { ownItems } from './own-registry.mjs';
 import items from 'minecraft-data/minecraft-data/data/pc/1.21.1/items.json' with { type: 'json' };
 import protocol from 'minecraft-data/minecraft-data/data/pc/1.21.1/protocol.json' with { type: 'json' };
 import protodef from 'protodef';
@@ -5,7 +6,8 @@ import nbt from 'prismarine-nbt';
 import minecraftTypes from 'minecraft-protocol/src/datatypes/compiler-minecraft.js';
 
 // Only the pinned game's wire schema and item IDs belong in the host bundle.
-const guestItemIds = new Map(items.map(item => [`minecraft:${item.name}`, item.id]));
+const guestItemIds = new Map([...items.map(item => [`minecraft:${item.name}`, item.id]),
+  ...ownItems(items).map(item => [item.name, item.id])]);
 const codecs = new Map();
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_ENTRIES = 65536;
@@ -62,12 +64,19 @@ function createItemCodec (registries) {
   const knownComponents = new Set(Object.values(types.SlotComponentType[1].mappings));
   const componentNames = new Map(components.filter(([, name]) => name.startsWith('minecraft:') && knownComponents.has(name.slice(10)))
     .map(([id, name]) => [id, name.slice(10)]));
+  // These are the exact codecs registered by Stations and Screens. Other mod codecs remain unsupported.
+  const ownComponents = new Set(['too_many_agents:station', 'too_many_agents:screen']);
+  for (const [id, name] of components) if (ownComponents.has(name)) componentNames.set(id, name);
   types.SlotComponentType[1].mappings = Object.fromEntries(componentNames);
   types.itemWireItemId = 'varint';
   types.Slot[1][1].type[1].default[1].find(field => field.name === 'itemId').type = 'itemWireItemId';
   types.ArmorTrimMaterial[1].find(field => field.name === 'ingredientId').type = 'itemWireItemId';
   types.ArmorTrimPattern[1].find(field => field.name === 'templateItemId').type = 'itemWireItemId';
   const componentFields = types.SlotComponent[1][1].type[1].fields;
+  // Station.STREAM_CODEC is ByteBufCodecs.fromCodec(Station.CODEC): unnamed network NBT.
+  componentFields['too_many_agents:station'] = 'anonymousNbt';
+  // Screen.STREAM_CODEC writes these four STRING_UTF8 fields, in this order.
+  componentFields['too_many_agents:screen'] = ['container', ['id', 'name', 'url', 'openedBy'].map(name => ({ name, type: 'string' }))];
   componentFields.pot_decorations[1][0].type[1].type = 'itemWireItemId';
 
   const compiler = new protodef.Compiler.ProtoDefCompiler();
