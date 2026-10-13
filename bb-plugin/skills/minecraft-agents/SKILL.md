@@ -83,7 +83,7 @@ except while following. **B** toggles view-only station-area outlines.
 
 World agents use `--behavior stand|wander|follow`, default stand. Wander stays near
 where it began. `minecraft_behavior` changes it; the first script or physical
-action pauses it until the turn ends. Project agents use per-status `behaviors`
+action pauses it until the turn ends, and it resumes from where the body is. Project agents use per-status `behaviors`
 (`working`, `wants_you`, `idle`), each with a `type` of stand, wander, follow, jump,
 spin or look (at the player). A station supplies these for its occupant; otherwise
 use the agent's settings or `--behaviors` at spawn.

@@ -72,8 +72,9 @@ instructions precede the first task.
 
 Use the separate tool `minecraft_behavior { behavior: "stand" }` (also `wander`
 or `follow`) to set your own world-agent behavior; `{}` queries it. It returns
-`behavior` and `held`. The first script or physical action holds that behavior
-until the turn leaves working; turns without physical work do not pause it.
+`behavior` and `held`. The first script or physical action holds that behavior,
+through approvals and other waits, until the turn finishes or is stopped; it then
+resumes from where you are. Turns without physical work do not pause it.
 
 ## Core API
 

@@ -66,6 +66,9 @@ final class AmbientBehavior {
         GameAccess.travelFollowingBody(mob, box);
     }
 
+    /** Starts over on the next tick, wandering around wherever the body is now. */
+    void restart() { running = ""; }
+
     /** Walk a displaced body back inside its box, or teleport it if it cannot walk. True while outside. */
     boolean returnInside(BodyBox box) {
         if (box == null || box.holds(mob.position())) {

@@ -276,9 +276,19 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed && !agent.archived) {
             String activity=text(snapshot(agent.id),"activity");
-            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity,minecraftAccess(agent)));
+            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity,minecraftAccess(agent),finishedAt(agent)));
         }
         return result;
+    }
+    /**
+     * When BB was last read showing this agent's turn finished: idle or failed, with nothing awaiting the user.
+     * 0 while running, waiting, unknown or disconnected, which never count as finished.
+     */
+    private long finishedAt(Agent agent) {
+        var view=agent.remote;
+        if(!connected || !ownsConnection(agent) || !text(view,"error").isBlank() || flag(view,"hasPendingInteraction")
+            || !Set.of("idle","error").contains(text(view,"status")) || !view.has("observedAt")) return 0;
+        return view.get("observedAt").getAsLong();
     }
     @Override public synchronized JsonArray list() { var rows=new JsonArray(); if(currentSession(loadedSession)) for(var agent:agents.values()) if(!agent.deleted) rows.add(snapshot(agent.id)); return rows; }
     @Override public synchronized JsonArray worldAgents() { var rows=new JsonArray(); if(currentSession(loadedSession)) for(var agent:agents.values()) if(!agent.removed && !agent.archived && game.belongsToCurrentWorld(agent.body)) rows.add(snapshot(agent.id)); return rows; }

@@ -85,8 +85,9 @@ Station blocks replace drawn station boxes, project boxes, roles and the per-age
 **World agents** have one `behavior` that doesn't depend on status: `stand`, `wander` or `follow`.
 - The default is `stand`. Wander stays near where the behavior started, since there's no area.
 - It's set by the user in agent settings, or by the agent through a new `minecraft_behavior` tool.
-- It pauses from the agent's first `minecraft_run` script or physical action in a turn until that turn ends. Turns that never touch the world don't pause it.
-- The hook: `claimScript`, and starting an action, set a held flag on the controller, and the behavior tick is skipped while the flag is set. The flag clears when the body's synced `activity` leaves `working`.
+- It pauses from the agent's first `minecraft_run` script or physical action in a turn until that turn ends, including through approvals and other waits, or until it's stopped. Turns that never touch the world don't pause it.
+- The hook: `claimScript`, and starting an action, record a hold for the agent in the current world session, with the time of that physical work. It survives chunk unload/reload and skips ambient behavior. The hold clears only when BB was read, after that time, showing the thread idle or failed with no pending interaction. Running, starting, stopping, awaiting approval, unknown and disconnected states never clear it.
+- On release, wander restarts around where the body is, so it wanders where the turn left it.
 
 ### Screens
 

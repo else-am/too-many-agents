@@ -37,7 +37,8 @@ final class AgentActions {
     private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
     private final ArrayDeque<JsonObject> blockEvents = new ArrayDeque<>();
     private boolean creativeFlying;
-    private boolean behaviorHeld;
+    /** Held agents, shared by this session's controllers so a reloaded body stays held. Server thread only. */
+    private final Map<String, Long> holds;
 
     private boolean ownsElytraFlight;
     private final Set<String> heldControls = new HashSet<>();
@@ -68,10 +69,11 @@ final class AgentActions {
     private long actionSequence, completedActionSequence;
     ScriptColumns columns;
 
-    AgentActions(Mob mob, String session, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
+    AgentActions(Mob mob, String session, Map<String, Long> holds, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
                  java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete) {
         this.mob = mob;
         this.session = session;
+        this.holds = holds;
         this.player = player;
         this.chatAction = chatAction;
         this.tabComplete = tabComplete;
@@ -84,10 +86,15 @@ final class AgentActions {
         ambient = new AmbientBehavior(mob);
     }
 
-    // A world turn owns ambient motion from its first physical work through completion.
-    void holdBehavior() { behaviorHeld = true; }
-    void releaseBehavior() { behaviorHeld = false; }
-    boolean behaviorHeld() { return behaviorHeld; }
+    // A world turn owns ambient motion from its first physical work until BB shows the turn finished.
+    // The time is compared with BB's read times, so BB must share this machine's clock, as the local bridge does.
+    void holdBehavior() { holds.put(agentId(), System.currentTimeMillis()); }
+    /** When the latest physical work began; a finished turn must be read after it. */
+    long heldSince() { return holds.getOrDefault(agentId(), 0L); }
+    /** Ambient behavior resumes from where the turn left the body. */
+    void releaseBehavior() { if (holds.remove(agentId()) != null) ambient.restart(); }
+    boolean behaviorHeld() { return holds.containsKey(agentId()); }
+    private String agentId() { return mob.getPersistentData().getString("too_many_agents_agent"); }
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
     boolean scripted() { return scriptId != null; }

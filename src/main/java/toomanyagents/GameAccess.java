@@ -63,8 +63,11 @@ final class GameAccess {
     private static final int ENTITY_LIMIT = 64;
     private static final PovCapture.Settings POV = new PovCapture.Settings(960, 540, 70);
     record Body(String entityUuid, String world, String dimension) {}
-    /** An agent's project, activity and Minecraft access, published by AgentService. */
-    record AgentState(String projectId, String activity, boolean minecraftAccess) {}
+    /**
+     * An agent's project, activity and Minecraft access, published by AgentService. finishedAt is when BB was last
+     * read showing its turn finished, or 0 while that isn't known.
+     */
+    record AgentState(String projectId, String activity, boolean minecraftAccess, long finishedAt) {}
     private record PublishedWorld(String path, String session) {}
 
     private final Supplier<MinecraftServer> server;
@@ -74,6 +77,8 @@ final class GameAccess {
     private volatile PublishedWorld publishedWorld;
     private volatile JsonObject worldInfo = new JsonObject();
     private final Map<Body, AgentActions> actions = new HashMap<>();
+    /** Agent id -> when its latest physical work began, for this world session. */
+    private final Map<String, Long> behaviorHolds = new HashMap<>();
     private Map<String, AgentState> agentStates = Map.of();
     /** Projects stations may name, with their colors, published by AgentService from BB's list. */
     private volatile Map<String, String> stationProjects = Map.of();
@@ -563,11 +568,11 @@ final class GameAccess {
     private AgentActions actions(Body ref, Mob mob) {
         if (!Objects.equals(actionSession, worldSession.get())) {
             actions.values().forEach(a -> a.close("world_session_changed"));
-            actions.clear(); bodySnapshots.clear(); actionSession = worldSession.get();
+            actions.clear(); bodySnapshots.clear(); behaviorHolds.clear(); actionSession = worldSession.get();
         }
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
-        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession,
+        return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession, behaviorHolds,
             () -> player(mob.getServer()),
             request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
@@ -1057,7 +1062,7 @@ final class GameAccess {
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
     AgentState agentState(Mob mob) {
         var state = agentStates.get(mob.getPersistentData().getString("too_many_agents_agent"));
-        return state == null ? new AgentState("", "idle", false) : state;
+        return state == null ? new AgentState("", "idle", false, 0) : state;
     }
 
     /** Server thread: the box confining this body, its station's area, or null. */
@@ -1147,7 +1152,8 @@ final class GameAccess {
                         var controller = actions(body,mob);
                         drainActionStops();
                         boolean wasBusy = controller.busy();
-                        if (!agentState(mob).activity().equals("working")) controller.releaseBehavior();
+                        // Only a finished turn read after the latest physical work ends the hold.
+                        if (agentState(mob).finishedAt() > controller.heldSince()) controller.releaseBehavior();
                         controller.tick(agentState(mob).minecraftAccess());
                         if (!wasBusy && !controller.scripted()) idle(current,mob,controller);
                         cacheBody(body,mob);

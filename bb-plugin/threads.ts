@@ -89,8 +89,10 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
         let update;
         let thread: Thread | undefined;
         try {
+          // Minecraft trusts a finished turn only if it was read after the body's latest physical work.
+          const observedAt = Date.now();
           thread = await bb.sdk.threads.get({ threadId });
-          const view = await read(thread);
+          const view = { ...(await read(thread)), observedAt };
           update = {
             view: thread.deletedAt != null ? { ...view, status: "disconnected", error: "This conversation is unavailable in BB." } : view,
             state:
