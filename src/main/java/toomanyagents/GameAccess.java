@@ -572,6 +572,7 @@ final class GameAccess {
                         : DevelopmentChecks.sounds(controller.hands);
                 }
                 case "save" -> { current.saveEverything(false,true,true); yield new JsonObject(); }
+                case "station" -> toomanyagents.stations.StationDevelopment.run(human, request);
                 default -> throw error("unknown_development_action");
             };
         }).thenCompose(result->action.equals("pov") ? pov.capture(UUID.fromString(result.get("bodyUuid").getAsString()),session,POV)

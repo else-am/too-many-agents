@@ -1,10 +1,22 @@
 # Stations
 
+## Implementation checkpoints
+
+- [x] ~~Physical station/project blocks, carried settings, and persistent index.~~
+- [ ] Station occupancy, project-derived access, spawning, and execution defaults.
+- [ ] Station scripting, world/project behaviors, and confinement.
+- [ ] Screen linking, access, listing, and pointing context.
+- [ ] Station/project block screens, item slots, settings, and survey UI.
+- [ ] Remove obsolete roles, boxes, commands, settings, and documentation.
+- [ ] Live acceptance, packaged JAR checks, and persistence after reopening.
+
 A station is a block you place in the world. A project agent works at a station: it stays inside the station's area, uses the station's screens, and starts with the station's instructions and settings. You can pick a station up with its settings intact and place it somewhere else, the way you can with a shulker box.
 
 Station blocks replace drawn station boxes, project boxes, roles and the per-agent Minecraft access setting. Survey mode stays only to show station areas. A project becomes a BB workspace binding with no shape in the world.
 
 ## Decided
+
+- Prefer discarding obsolete mod data over adding migration or compatibility code. Preserve worlds and unrelated BB data.
 
 ### Two kinds of agents
 

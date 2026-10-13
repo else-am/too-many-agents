@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:block",
+  "pools": [{
+    "rolls": 1,
+    "entries": [{
+      "type": "minecraft:item",
+      "name": "too_many_agents:station",
+      "functions": [{"function": "minecraft:copy_components", "source": "block_entity", "include": ["too_many_agents:station"]}]
+    }],
+    "conditions": [{"condition": "minecraft:survives_explosion"}]
+  }]
+}
