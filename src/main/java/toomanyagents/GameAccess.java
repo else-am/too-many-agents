@@ -56,7 +56,7 @@ import toomanyagents.stations.StationIndex;
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, SETTINGS, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT,
+    enum Operation { OBSERVE, SETTINGS, BEHAVIOR, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT,
         SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
@@ -511,7 +511,7 @@ final class GameAccess {
         var existing = actions.get(ref);
         if (existing != null && existing.mob != mob) { existing.close("body_reloaded"); actions.remove(ref); }
         return actions.computeIfAbsent(ref, ignored -> new AgentActions(mob, actionSession,
-            () -> box(mob), () -> player(mob.getServer()),
+            () -> player(mob.getServer()),
             request -> scriptChat(mob, request), request -> tabComplete(mob, request)));
     }
 
@@ -566,7 +566,7 @@ final class GameAccess {
         result.addProperty("body",BuiltInRegistries.ENTITY_TYPE.getKey(mob.getType()).toString());
         result.addProperty("mode",BodySettings.mode(saved.getString("too_many_agents_mode")).id);
         result.add("behaviors",behaviors(mob));
-        result.addProperty("behavior", saved.contains("too_many_agents_behavior") ? saved.getString("too_many_agents_behavior") : "stand");
+        result.addProperty("behavior", worldBehavior(mob));
         var controller = actions(ref,mob);
         result.add("action",controller.status(""));
         bodySnapshots.put(ref,result);
@@ -874,6 +874,7 @@ final class GameAccess {
         var spawn = level.getSharedSpawnPos();
         worldState.add("spawnPoint", JsonState.object("x", spawn.getX(), "y", spawn.getY(), "z", spawn.getZ()));
         snapshot.add("worldState", worldState);
+        snapshot.add("stationBlocks", ScriptStations.snapshot(mob));
         snapshot.add("players", ScriptEntities.players(level));
         if (scriptScoreboard == null || scriptScoreboard.source != current.getScoreboard())
             scriptScoreboard = new ScriptScoreboard(current.getScoreboard());
@@ -910,17 +911,26 @@ final class GameAccess {
                 var observation = observe(current,mob,arguments);
                 observation.add("hands",controller.hands.snapshot());
                 cacheBody(body,mob);
-                observation.add("settings",settings(body));
+                var bodySettings = settings(body);
+                BodySettings.forProject(bodySettings,agentState(mob).minecraftAccess());
+                observation.add("settings",bodySettings);
                 observation.add("action",controller.status(""));
                 yield observation;
             }
             case SETTINGS -> {
                 cacheBody(body,mob);
                 var result = settings(body);
-                var box = box(mob);
-                result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());
+                BodySettings.forProject(result,agentState(mob).minecraftAccess());
                 result.add("capabilities", capabilities(mob));
                 yield result;
+            }
+            case BEHAVIOR -> {
+                if (arguments.has("behavior")) {
+                    String behavior = BodySettings.behavior(string(arguments,"behavior",20));
+                    mob.getPersistentData().putString("too_many_agents_behavior",behavior);
+                    cacheBody(body,mob);
+                }
+                yield JsonState.object("behavior",worldBehavior(mob),"held",controller.behaviorHeld());
             }
             case ACTION -> controller.start(arguments);
             case ACTION_STATUS -> controller.status(arguments.has("id") ? string(arguments,"id",80) : "");
@@ -930,7 +940,7 @@ final class GameAccess {
                 yield result;
             }
             case BLOCKS -> blocks((ServerLevel) mob.level(), arguments);
-            case COMMAND -> { controller.requireUnscripted(); yield command(current, mob, arguments); }
+            case COMMAND -> { controller.requireUnscripted(); controller.holdBehavior(); yield command(current, mob, arguments); }
             case SCRIPT -> script(current, body, mob, controller, arguments);
             case POV -> throw error("pov_requires_client_renderer");
             case SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE -> throw error("screen_tools_use_their_own_callback");
@@ -951,8 +961,14 @@ final class GameAccess {
                 if (operation.equals("begin")) {
                     snapshot.add("itemRegistries", ScriptItems.registries((ServerLevel) mob.level()));
                     snapshot.add("registryCodecs", ScriptRegistryData.snapshot((ServerLevel) mob.level()));
+                    snapshot.add("ownBlocks", ScriptRegistryData.ownBlocks((ServerLevel) mob.level()));
                 }
                 yield snapshot;
+            }
+            case "configureStation", "configureProjectBlock" -> {
+                var block = ScriptStations.configure(mob,operation,args);
+                // The guest waits for a stream frame captured after this server-thread mutation.
+                yield JsonState.object("block",block,"revision",controller.nextSnapshotRevision());
             }
             case "heartbeat" -> new JsonObject();
             case "action" -> controller.startScriptAction(args.getAsJsonObject("action"));
@@ -966,7 +982,19 @@ final class GameAccess {
     /** Server thread only. */
     static JsonObject behaviors(Mob mob) {
         String saved = mob.getPersistentData().getString("too_many_agents_behaviors");
-        return saved.isBlank() ? new JsonObject() : com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
+        try {
+            var result = saved.isBlank() ? new JsonObject() : com.google.gson.JsonParser.parseString(saved).getAsJsonObject();
+            AgentService.validateBehaviors(result);
+            return result;
+        } catch (RuntimeException obsolete) {
+            mob.getPersistentData().remove("too_many_agents_behaviors");
+            return new JsonObject();
+        }
+    }
+
+    private static String worldBehavior(Mob mob) {
+        String saved = mob.getPersistentData().getString("too_many_agents_behavior");
+        return Set.of("stand","wander","follow").contains(saved) ? saved : "stand";
     }
 
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
@@ -1062,6 +1090,7 @@ final class GameAccess {
                         var controller = actions(body,mob);
                         drainActionStops();
                         boolean wasBusy = controller.busy();
+                        if (!agentState(mob).activity().equals("working")) controller.releaseBehavior();
                         controller.tick(agentState(mob).minecraftAccess());
                         if (!wasBusy && !controller.scripted()) idle(current,mob,controller);
                         cacheBody(body,mob);
@@ -1103,10 +1132,13 @@ final class GameAccess {
         try {
             // A stationed agent behaves as its station says; others as their own settings say.
             var station = StationIndex.get(current).occupiedBy(mob.getPersistentData().getString("too_many_agents_agent"));
-            var behavior = (station != null ? station.station().behaviors() : behaviors(mob)).get(agentState(mob).activity());
+            boolean worldAgent = agentState(mob).minecraftAccess();
+            if (worldAgent && controller.behaviorHeld()) { stopFollowingMotion(mob); return; }
+            JsonElement behavior = worldAgent ? JsonState.object("type",worldBehavior(mob))
+                : (station != null ? station.station().behaviors() : behaviors(mob)).get(agentState(mob).activity());
             boolean follows = behavior instanceof JsonObject b && "follow".equals(b.has("type") ? b.get("type").getAsString() : "");
             // Following leaves the station.
-            var box = follows ? null : box(mob);
+            var box = worldAgent || follows ? null : box(mob);
             if (controller.ambient.returnInside(box)) return;
             var id = localPlayer.get();
             controller.ambient.tick(box, behavior, id == null ? null : current.getPlayerList().getPlayer(id));
@@ -1504,8 +1536,6 @@ final class GameAccess {
         result.addProperty("tick", current.getTickCount());
         result.addProperty("timeOfDay", mob.level().getDayTime());
         result.add("body", Observations.entity(mob));
-        var box = box(mob);
-        result.add("box", box == null ? com.google.gson.JsonNull.INSTANCE : box.json());
         result.add("localPlayer", Observations.entity(player(current)));
         result.addProperty("localPlayerDimension", player(current).level().dimension().location().toString());
         result.addProperty("radius", radius);

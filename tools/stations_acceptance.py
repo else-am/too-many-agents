@@ -182,6 +182,52 @@ def persistence(game):
     passed('reopened station identity, settings, position and occupancy match the saved index')
 
 
+def unloaded(game):
+    saved = json.loads(MANIFEST.read_text())
+    pos, project_pos = saved['pos'], [224, -60, 229]
+    station = row(game.station('read', pos=pos), pos)
+    assert not station['agentId'], 'The retained fixture must be free'
+    folder = GAME / 'stations-unloaded-project'
+    folder.mkdir(exist_ok=True)
+    assert not any(p.get('folder') == str(folder) for p in game.request('/v1/agents/projects')['projects'])
+    project = game.request('/v1/agents/projects', {'operation': 'create', 'name': 'Unloaded station fixture', 'folder': str(folder)})
+    project_id = project['id']
+    deadline = time.monotonic() + 10
+    while not any(p['id'] == project_id for p in game.request('/v1/agents/projects')['projects']):
+        assert time.monotonic() < deadline
+        time.sleep(.1)
+    game.command('gamemode creative @s')
+    game.station('configure', pos=pos, settings={'projectId': project_id})
+    game.station('give', kind='project', slot=0)
+    game.station('place', pos=project_pos, slot=0)
+    game.station('configure_project', pos=project_pos, projectId=project_id)
+    # Observe chunk unloading without a read that would itself load the station's chunk.
+    game.command('tp @s 5000 -60 5000')
+    game.command('setblock 5001 -60 5000 air')
+    deadline = time.monotonic() + 35
+    while True:
+        game.command(f'execute unless loaded {pos[0]} {pos[1]} {pos[2]} run setblock 5001 -60 5000 gold_block')
+        if game.station('read', pos=[5001, -60, 5000])['block'] == 'minecraft:gold_block':
+            break
+        assert time.monotonic() < deadline, 'Fixture chunk did not unload'
+        time.sleep(.5)
+    assert any(s['id'] == station['id'] for s in game.station('read')['index']['stations'])
+    error = game.request('/v1/agents/spawn', {'stationId': station['id']}, error=True)
+    assert 'unloaded' in json.dumps(error).lower(), error
+    passed('unloaded stations remain listed but cannot accept a spawn')
+    game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id})
+    assert not next(s for s in game.station('read')['index']['stations'] if s['id'] == station['id'])['projectId']
+    game.command('setblock 5001 -60 5000 air')
+    game.command('tp @s 224 -60 220')
+    current = row(game.station('read', pos=pos), pos)
+    assert not current['projectId'] and not current['agentId']
+    assert project_id not in json.dumps(game.station('read', pos=project_pos)['blockEntity'])
+    game.station('break', pos=project_pos)
+    saved['station'] = current
+    MANIFEST.write_text(json.dumps(saved, indent=2) + '\n')
+    passed('project removal clears unloaded station and project block bindings when they reload')
+
+
 def spawning(game):
     saved = json.loads(MANIFEST.read_text())
     pos = saved['pos']
@@ -273,10 +319,10 @@ def spawning(game):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=['foundation', 'persistence', 'spawning'])
+    parser.add_argument('phase', choices=['foundation', 'persistence', 'spawning', 'unloaded'])
     args = parser.parse_args()
     game = Game()
-    {'foundation': foundation, 'persistence': persistence, 'spawning': spawning}[args.phase](game)
+    {'foundation': foundation, 'persistence': persistence, 'spawning': spawning, 'unloaded': unloaded}[args.phase](game)
 
 
 if __name__ == '__main__':

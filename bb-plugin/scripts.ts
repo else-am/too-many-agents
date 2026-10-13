@@ -211,6 +211,8 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
       const onRequest = async (operation: string, value: unknown, requestSignal: AbortSignal) => {
         if (terminalReadRejection) return waitForStreamAbort(requestSignal);
         const request = object(value);
+        if (operation === 'configureStation' || operation === 'configureProjectBlock')
+          return call(operation, request, requestSignal);
         if (operation === 'startAction') return startAction(request, requestSignal);
         if (operation === 'awaitAction') return awaitAction(request.id, requestSignal);
         if (operation === 'action') return awaitAction((await startAction(request, requestSignal)).id, requestSignal);

@@ -1,3 +1,4 @@
+import { withOwnBlocks } from './own-registry.mjs';
 import { emitWindow, createWindowFactory } from './windows.mjs';
 import { createParticleClass } from './particle.mjs';
 import { createChunkClass } from './chunks.mjs';
@@ -58,7 +59,7 @@ function mergeEntityMetadata(entity, frames) {
 
 export function createBot(initial) {
   if (!initial.registryCodecs) throw new Error('Native registry codecs are missing');
-  const registry = createRegistry(data, initial.registryCodecs);
+  const registry = createRegistry(withOwnBlocks(data, initial.ownBlocks), initial.registryCodecs);
   const biomeNames = initial.itemRegistries.references['minecraft:worldgen/biome'];
   if (!Array.isArray(biomeNames) || biomeNames.length !== registry.biomesArray.length
     || biomeNames.some((name, id) => registry.biomesArray[id].name !== name.replace(/^minecraft:/, '')))
@@ -192,6 +193,31 @@ export function createBot(initial) {
       throw failure;
     }
   }
+  function stationRow(row) {
+    const copy = JSON.parse(JSON.stringify(row));
+    copy.pos = new Vec3(...copy.pos);
+    return copy;
+  }
+  bot.stations = () => snapshot.stationBlocks.stations.map(stationRow);
+  bot.projectBlocks = () => snapshot.stationBlocks.projectBlocks.map(stationRow);
+  async function configureBlock(operation, target, settings) {
+    if (typeof target !== 'string') {
+      if (!target || !['x','y','z'].every(axis => Number.isSafeInteger(target[axis]))) throw new TypeError('Expected an integral block position');
+      target = { x: target.x, y: target.y, z: target.z };
+    } else if (operation !== 'configureStation') throw new TypeError('Expected a project block position');
+    if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new TypeError('Expected settings object');
+    const result = await request(operation, { target, settings });
+    if (!Number.isSafeInteger(result.revision) || result.revision <= 0 || !result.block)
+      throw new Error('Invalid native configuration acknowledgement; outcome is unknown');
+    // Control replies can overtake queued stream frames. Publish only observed state,
+    // and do not finish configuring until the stream has passed the mutation.
+    if (snapshot.revision < result.revision)
+      await new Promise(resolve => { stateWaits.add({ revision: result.revision, resolve }); });
+    return stationRow(result.block);
+  }
+  bot.configureStation = (target, settings) => configureBlock('configureStation', target, settings);
+  bot.configureProjectBlock = (pos, settings) => configureBlock('configureProjectBlock', pos, settings);
+
   async function action(args) {
     const result = await request('action', args);
     await waitForActionState(result);
@@ -433,7 +459,8 @@ export function createBot(initial) {
       dispatchMessage(message.toString());
     }
     for (const wait of stateWaits) {
-      if (next.completedActionSequence >= wait.sequence) { stateWaits.delete(wait); wait.resolve(); }
+      const ready = wait.revision != null ? next.revision >= wait.revision : next.completedActionSequence >= wait.sequence;
+      if (ready) { stateWaits.delete(wait); wait.resolve(); }
     }
   }
   function hydrateWindow(window, entries, carried, generation) {

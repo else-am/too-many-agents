@@ -5,7 +5,6 @@ import com.google.gson.JsonObject;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.world.level.pathfinder.WalkNodeEvaluator;
@@ -15,7 +14,7 @@ import net.minecraft.world.phys.Vec3;
 final class AmbientBehavior {
     private final Mob mob;
     private String running = "";
-    private int lastTick = -2, wait, walking, swing, returning;
+    private int lastTick = -2, wait, walking, returning;
     private Vec3 home;
     boolean failed;
 
@@ -28,11 +27,11 @@ final class AmbientBehavior {
         int now = mob.getServer().getTickCount();
         if (now != lastTick + 1 || !settings.toString().equals(running)) {
             GameAccess.stopFollowingMotion(mob);
+            if (!settings.toString().equals(running)) home = mob.position();
             running = settings.toString();
             wait = 20 + mob.getRandom().nextInt(40);
             if (type.equals("jump")) wait = Math.round(wait / 1.5f);
-            walking = swing = 0;
-            home = mob.position();
+            walking = 0;
         }
         lastTick = now;
         if (type.equals("follow")) {
@@ -43,7 +42,7 @@ final class AmbientBehavior {
         if (type.equals("wander") && (box == null || box.min().getX() != box.max().getX() || box.min().getZ() != box.max().getZ())) wander(box);
         else {
             GameAccess.stopFollowingMotion(mob);
-            var target = type.equals("look") || type.equals("swing") ? target(settings, player) : null;
+            var target = type.equals("look") && player != null && player.level() == mob.level() ? player.getEyePosition() : null;
             if (target != null) mob.getLookControl().setLookAt(target.x, target.y, target.z, 10, 40);
             mob.getLookControl().tick();
             if (type.equals("jump") && mob.onGround() && --wait <= 0) {
@@ -62,11 +61,7 @@ final class AmbientBehavior {
                 mob.setYHeadRot(yaw);
                 mob.setYBodyRot(yaw);
             }
-            // Animation only: the block is never hit, damaged or used.
-            if (type.equals("swing") && target != null && --swing <= 0) {
-                mob.swing(InteractionHand.MAIN_HAND);
-                swing = 10 + mob.getRandom().nextInt(10);
-            }
+
         }
         GameAccess.travelFollowingBody(mob, box);
     }
@@ -156,11 +151,4 @@ final class AmbientBehavior {
         return null;
     }
 
-    private Vec3 target(JsonObject settings, ServerPlayer player) {
-        var target = settings.get("target");
-        if (target == null) return null;
-        if (target.isJsonPrimitive()) return player != null && player.level() == mob.level() ? player.getEyePosition() : null;
-        var xyz = target.getAsJsonObject();
-        return Vec3.atCenterOf(new BlockPos(xyz.get("x").getAsInt(), xyz.get("y").getAsInt(), xyz.get("z").getAsInt()));
-    }
 }

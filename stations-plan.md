@@ -4,7 +4,7 @@
 
 - [x] ~~Physical station/project blocks, carried settings, and persistent index.~~
 - [x] ~~Station occupancy, project-derived access, spawning, and execution defaults.~~
-- [ ] Station scripting, world/project behaviors, and confinement.
+- [x] ~~Station scripting, world/project behaviors, and confinement.~~
 - [x] ~~Screen linking, access, and listing.~~
 - [ ] Pointing context.
 - [ ] Station/project block screens, item slots, settings, and survey UI.

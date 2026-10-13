@@ -26,6 +26,8 @@ public record Station(String id, String name, String projectId, String providerI
 
     public Station {
         behaviors = behaviors == null ? new JsonObject() : behaviors.deepCopy();
+        try { validBehaviors(behaviors); }
+        catch (IllegalArgumentException obsolete) { behaviors = new JsonObject(); }
         radius = Math.clamp(radius, 0, MAX_RADIUS);
         height = Math.clamp(height, 1, MAX_HEIGHT);
     }
@@ -117,7 +119,7 @@ public record Station(String id, String name, String projectId, String providerI
                 throw new IllegalArgumentException("Unknown behavior status: " + entry.getKey() + ".");
             boolean valid = entry.getValue().isJsonObject() && switch (stringOr(entry.getValue().getAsJsonObject().get("type"))) {
                 case "stand", "wander", "follow", "jump", "spin" -> !entry.getValue().getAsJsonObject().has("target");
-                case "look" -> "player".equals(stringOr(entry.getValue().getAsJsonObject().get("target")));
+                case "look" -> !entry.getValue().getAsJsonObject().has("target") || "player".equals(stringOr(entry.getValue().getAsJsonObject().get("target")));
                 default -> false;
             };
             if (!valid) throw new IllegalArgumentException("Invalid " + entry.getKey()

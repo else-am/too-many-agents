@@ -94,7 +94,8 @@ public final class AgentSettingsScreen extends SettingsFormScreen {
         section("In the world");
         String station=stationName();
         if(!station.isBlank())value("Station","At "+station);
-        if(world) value("Behavior", "Stand"); // World behavior controls and runtime follow in the next slice.
+        if(world) choice("Behavior",value("behavior").isBlank()?"stand":value("behavior"),
+            options("stand","Stand","wander","Wander","follow","Follow me"),v->change("behavior",v),enabled);
         else if(!station.isBlank()) for(String[] state:STATES) value(state[1],"Set by "+station);
         else behaviorRows(enabled);
         if(world)choice("Game mode",value("mode").isBlank()?"survival":value("mode"),java.util.Arrays.stream(BodySettings.Mode.values()).map(m -> new Choice(m.id,m.label)).toList(),v->change("mode",v),enabled);

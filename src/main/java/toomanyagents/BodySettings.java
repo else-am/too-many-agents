@@ -19,6 +19,11 @@ public final class BodySettings {
         else { settings.remove("mode"); settings.remove("behavior"); }
     }
 
+    public static String behavior(String value) {
+        if (!java.util.Set.of("stand","wander","follow").contains(value)) throw new IllegalArgumentException("Invalid world behavior: " + value);
+        return value;
+    }
+
     public enum Mode {
         SURVIVAL("survival", "Survival", false, false),
         CREATIVE("creative", "Creative", true, false),

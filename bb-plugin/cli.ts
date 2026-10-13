@@ -97,7 +97,8 @@ export function registerMinecraftCli(
             "environment-inputs": text("JSON inputs for the environment provider."),
             name: text("Minecraft display name; generated when omitted."),
             mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Game mode for a world agent; it cannot exceed your own." },
-            behaviors: text("JSON behavior settings."),
+            behavior: { type: "enum", values: ["stand", "wander", "follow"], description: "Ambient behavior for a world agent." },
+            behaviors: text("JSON per-status behavior settings for a loose project agent."),
             body: text("Minecraft entity type, e.g. minecraft:fox; defaults to the station's body."),
             station: text("Free station ID or name from bb minecraft stations; the agent joins its project."),
             json: {
@@ -227,6 +228,7 @@ export function registerMinecraftCli(
               {
                 ...spawn,
                 ...(o.mode ? { mode: o.mode } : {}),
+                ...(o.behavior ? { behavior: o.behavior } : {}),
                 ...(o.behaviors ? { behaviors: object(JSON.parse(o.behaviors)) } : {}),
                 name: o.name,
                 ...(o.body ? { body: o.body } : {}),

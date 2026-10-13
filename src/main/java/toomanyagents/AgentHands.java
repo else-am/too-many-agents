@@ -89,7 +89,6 @@ import java.util.HashSet;
 import java.util.OptionalInt;
 import java.util.UUID;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /** Native player interactions for one visible body. Never added to the world or player list. */
 public final class AgentHands extends FakePlayer {
@@ -100,7 +99,6 @@ public final class AgentHands extends FakePlayer {
     Consumer<net.minecraft.network.protocol.Packet<?>> blockEventSink;
     private JsonObject tablist = JsonState.object("header", "", "footer", "");
     private final Mob body;
-    private final Supplier<BodyBox> bodyBox;
     private final EnumMap<EquipmentSlot, ItemStack> previousEquipment = new EnumMap<>(EquipmentSlot.class);
     private BlockPos miningPos;
     private BlockState miningState;
@@ -136,13 +134,10 @@ public final class AgentHands extends FakePlayer {
             && containerMenu != inventoryMenu && bounds.intersects(getBoundingBox());
     }
 
-    AgentHands(Mob body) { this(body, () -> null); }
-
-    AgentHands(Mob body, Supplier<BodyBox> bodyBox) {
+    AgentHands(Mob body) {
         super((ServerLevel) body.level(), new GameProfile(UUID.nameUUIDFromBytes(
             ("too_many_agents-hands:" + body.getUUID()).getBytes(StandardCharsets.UTF_8)), "[TooManyAgents]"));
         this.body = body;
-        this.bodyBox = bodyBox;
         requireThread();
         syncBody();
         restore();
@@ -586,10 +581,8 @@ public final class AgentHands extends FakePlayer {
     }
 
     private void requireSleepBounds(Vec3 position) {
-        var bounds = bodyBox.get();
         if (!serverLevel().hasChunkAt(BlockPos.containing(position))
-            || !serverLevel().getWorldBorder().isWithinBounds(BlockPos.containing(position))
-            || bounds != null && (!bounds.dimension().equals(level().dimension().location().toString()) || !bounds.holds(position)))
+            || !serverLevel().getWorldBorder().isWithinBounds(BlockPos.containing(position)))
             throw error("sleep_position_outside_body_boundary");
     }
 
@@ -913,12 +906,10 @@ public final class AgentHands extends FakePlayer {
         if (!stack.isEmpty()) {
             if (!stack.isItemEnabled(level().enabledFeatures())) throw error("item_is_disabled");
             if (stack.getCount() < 1 || stack.getCount() > stack.getMaxStackSize()) throw error("invalid_item_count");
-            // Match native creative block-entity copying, without reading beyond the body's box.
+            // Match native creative block-entity copying in loaded chunks.
             var data = stack.getOrDefault(DataComponents.BLOCK_ENTITY_DATA, net.minecraft.world.item.component.CustomData.EMPTY);
             if (data.contains("x") && data.contains("y") && data.contains("z")) {
                 var pos = net.minecraft.world.level.block.entity.BlockEntity.getPosFromTag(data.getUnsafe());
-                var bounds = bodyBox.get();
-                if (bounds != null && !bounds.contains(pos)) throw error("creative_block_data_outside_box");
                 if (level().isLoaded(pos)) {
                     var entity = level().getBlockEntity(pos);
                     if (entity != null) entity.saveToItem(stack, registryAccess());

@@ -1,3 +1,4 @@
+import { ownItems } from './own-registry.mjs';
 // Build-time selection: canonical tables from the one pinned PC version.
 // Indexes are rebuilt in the guest so block-state ranges don't repeat 18MB of JSON.
 export function selectRegistryData(minecraftData) {
@@ -9,5 +10,6 @@ export function selectRegistryData(minecraftData) {
     'effectsArray', 'attributesArray', 'particlesArray', 'language',
     'blockLootArray', 'entityLootArray',
   ];
-  return Object.fromEntries(fields.map(field => [field, registry[field]]));
+  return { ...Object.fromEntries(fields.map(field => [field, registry[field]])),
+    itemsArray: [...registry.itemsArray, ...ownItems(registry.itemsArray)] };
 }

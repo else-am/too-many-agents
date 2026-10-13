@@ -17,9 +17,21 @@
   {
     "name": "minecraft_settings",
     "minecraft": true,
-    "description": "Read your body's mod settings: name, species, game mode (survival, creative, creative_commands), activity behaviors, the box you must stay inside, and capabilities.",
+    "description": "Read your world body settings: name, species, game mode (survival, creative, creative_commands), ambient behavior, and capabilities.",
     "inputSchema": { "type": "object", "properties": {}, "required": [], "additionalProperties": false },
     "operation": "SETTINGS"
+  },
+  {
+    "name": "minecraft_behavior",
+    "minecraft": true,
+    "description": "Read or set your ambient behavior: stand, wander near where wandering began, or follow the player. It pauses from your first script or physical action until the current turn finishes. Omit behavior to read it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": { "behavior": { "type": "string", "enum": ["stand", "wander", "follow"] } },
+      "required": [],
+      "additionalProperties": false
+    },
+    "operation": "BEHAVIOR"
   },
   {
     "name": "minecraft_observe",

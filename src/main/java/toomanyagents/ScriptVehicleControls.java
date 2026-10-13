@@ -19,7 +19,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.IdentityHashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 
 /** Server-thread input bridge. Native vehicle ticks, passengers and momentum stay native. */
 public final class ScriptVehicleControls {
@@ -29,16 +28,15 @@ public final class ScriptVehicleControls {
     private final AgentHands hands;
     private final Entity vehicle;
     private final ServerLevel world;
-    private final Supplier<BodyBox> box;
     private final String lease;
     private float left, forward;
     private boolean jump, previousJump, sprint;
     private int chargeTicks;
     private float charge;
 
-    ScriptVehicleControls(AgentActions owner, Entity vehicle, Supplier<BodyBox> box, String lease) {
+    ScriptVehicleControls(AgentActions owner, Entity vehicle, String lease) {
         this.owner = owner; this.body = owner.mob; this.hands = owner.hands;
-        this.vehicle = vehicle; this.box = box; this.lease = lease;
+        this.vehicle = vehicle; this.lease = lease;
         this.world = (ServerLevel) body.level();
         if (!owner.vehicleLeaseActive(lease)) throw error("script_no_longer_controls_body");
         requireEligible(body, hands, vehicle);
@@ -229,14 +227,11 @@ public final class ScriptVehicleControls {
 
     private void checkBounds(Vec3 delta, AABB sweep) {
         ServerLevel level = (ServerLevel) vehicle.level();
-        BodyBox limit = box.get();
         if (!Double.isFinite(delta.x) || !Double.isFinite(delta.y) || !Double.isFinite(delta.z)
             || sweep.getSize() > 32 || sweep.minY < level.getMinBuildHeight() || sweep.maxY > level.getMaxBuildHeight()
             || !level.hasChunksAt(BlockPos.containing(sweep.minX, sweep.minY, sweep.minZ),
                 BlockPos.containing(sweep.maxX, sweep.maxY, sweep.maxZ))
-            || !level.getWorldBorder().isWithinBounds(sweep)
-            || limit != null && (!limit.dimension().equals(level.dimension().location().toString())
-                || !limit.holds(body.position()) || !limit.holds(body.position().add(delta))))
+            || !level.getWorldBorder().isWithinBounds(sweep))
             throw error("vehicle_execution_boundary");
     }
 

@@ -37,6 +37,8 @@ final class AgentActions {
     private final ArrayDeque<JsonObject> particles = new ArrayDeque<>();
     private final ArrayDeque<JsonObject> blockEvents = new ArrayDeque<>();
     private boolean creativeFlying;
+    private boolean behaviorHeld;
+
     private boolean ownsElytraFlight;
     private final Set<String> heldControls = new HashSet<>();
     private net.minecraft.world.entity.vehicle.Boat controlledBoat;
@@ -46,7 +48,6 @@ final class AgentActions {
     final AgentHands hands;
     final AmbientBehavior ambient;
     private final String session;
-    private final Supplier<BodyBox> box;
     private final Supplier<ServerPlayer> player;
     private final LinkedHashMap<String, JsonObject> history = new LinkedHashMap<>();
     private JsonObject action;
@@ -67,15 +68,14 @@ final class AgentActions {
     private long actionSequence, completedActionSequence;
     ScriptColumns columns;
 
-    AgentActions(Mob mob, String session, Supplier<BodyBox> box, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
+    AgentActions(Mob mob, String session, Supplier<ServerPlayer> player, java.util.function.Function<JsonObject, JsonObject> chatAction,
                  java.util.function.Function<JsonObject, CompletableFuture<com.mojang.brigadier.suggestion.Suggestions>> tabComplete) {
         this.mob = mob;
         this.session = session;
-        this.box = box;
         this.player = player;
         this.chatAction = chatAction;
         this.tabComplete = tabComplete;
-        hands = new AgentHands(mob, box);
+        hands = new AgentHands(mob);
         hands.messageSink = (message, overlay) -> recordMessage(GameAccess.chatRecord((ServerLevel) mob.level(), message,
             overlay ? "game_info" : "system", null));
         hands.presentationSink = this::recordMessage;
@@ -83,6 +83,11 @@ final class AgentActions {
         hands.blockEventSink = this::recordBlockPacket;
         ambient = new AmbientBehavior(mob);
     }
+
+    // A world turn owns ambient motion from its first physical work through completion.
+    void holdBehavior() { behaviorHeld = true; }
+    void releaseBehavior() { behaviorHeld = false; }
+    boolean behaviorHeld() { return behaviorHeld; }
 
     boolean busy() { return action != null && "running".equals(action.get("status").getAsString()); }
     boolean scripted() { return scriptId != null; }
@@ -99,6 +104,7 @@ final class AgentActions {
         sounds.clear();
         particles.clear();
         blockEvents.clear();
+        holdBehavior();
         scriptId = id;
         columns = new ScriptColumns();
         lastScriptId = id;
@@ -370,6 +376,7 @@ final class AgentActions {
             && !(text(request, "control").equals("sneak") && !(mob.getVehicle() instanceof net.minecraft.world.entity.vehicle.Boat))) {
             requireVehicleController();
         }
+        holdBehavior();
         kind = type;
         completion = new CompletableFuture<>();
         action = object("id", UUID.randomUUID().toString(), "type", kind, "status", "running", "phase", "starting", "terminal", false, "session", session);
@@ -457,21 +464,12 @@ final class AgentActions {
             switch (kind) {
                 case "walk" -> {
                     var wanted = target();
-                    var confined = box.get();
-                    var target = GameAccess.inside(mob, confined, wanted);
                     double distance = args.has("entity") ? 2.0 : 0.9;
                     // The direct tool's tolerance can stop in a neighboring tile.
                     // A script's goal must reach the requested tile as well.
                     boolean tileReached = approachTargets || BlockPos.containing(wanted).equals(mob.blockPosition());
                     if (tileReached && mob.position().distanceTo(wanted) <= distance) finish("completed", "arrived", null);
-                    else if (target != wanted && mob.position().distanceTo(target) <= 0.9) {
-                        // The body stops at its box's edge; say so rather than claiming arrival.
-                        var result = new JsonObject();
-                        result.add("requested", Observations.position(wanted));
-                        result.add("box", confined.json());
-                        finish("completed", "confined_to_box", result);
-                    }
-                    else navigate(target, false);
+                    else navigate(wanted, false);
                 }
                 case "look" -> {
                     if (!args.has("yaw") || !args.has("pitch")) { face(target()); finish("completed", "looking", null); }
@@ -568,7 +566,7 @@ final class AgentActions {
                     requireCreativeFlight();
                     creativeFlying = true;
                     var destination = position(args);
-                    flightBounds(destination, mob.getBoundingBox().move(destination.subtract(mob.position())));
+                    flightBounds(mob.getBoundingBox().move(destination.subtract(mob.position())));
                     var delta = destination.subtract(mob.position());
                     if (delta.lengthSqr() > 0.25) delta = delta.normalize().scale(0.5);
                     travelled = true;
@@ -731,7 +729,7 @@ final class AgentActions {
                     if (mob.isSleeping()) clearControls();
                     else if (!heldControls.isEmpty()) applyControls();
                     tickVehicleControls();
-                    GameAccess.travelFollowingBody(mob, box.get());
+                    GameAccess.travelFollowingBody(mob, null);
                 }
             }
             if (stateStream != null) {
@@ -751,20 +749,18 @@ final class AgentActions {
         if (mob.isSleeping() || mob.isPassenger()) throw error("wake_and_dismount_before_flying");
     }
 
-    private void flightBounds(Vec3 feet, net.minecraft.world.phys.AABB swept) {
+    private void flightBounds(net.minecraft.world.phys.AABB swept) {
         var level = (ServerLevel) mob.level();
-        var limit = box.get();
         if (swept.minY < level.getMinBuildHeight() || swept.maxY > level.getMaxBuildHeight()
             || !level.getWorldBorder().isWithinBounds(swept)
             || !level.hasChunksAt(BlockPos.containing(swept.minX, swept.minY, swept.minZ),
-                BlockPos.containing(swept.maxX, swept.maxY, swept.maxZ))
-            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(feet)))
+                BlockPos.containing(swept.maxX, swept.maxY, swept.maxZ)))
             throw error("creative_flight_execution_boundary");
     }
 
     private void flyStep(Vec3 delta) {
         requireCreativeFlight();
-        flightBounds(mob.position().add(delta), mob.getBoundingBox().expandTowards(delta));
+        flightBounds(mob.getBoundingBox().expandTowards(delta));
         // Ordinary Entity.move owns collision and block callbacks. No persistent
         // NoGravity flag is changed; only this lease omits ground travel/gravity.
         mob.setJumping(false);
@@ -811,7 +807,7 @@ final class AgentActions {
             clearControls();
             throw error("vehicle_control_ownership_changed");
         }
-        if (mountedControls == null) mountedControls = new ScriptVehicleControls(this, mob.getVehicle(), box, scriptId);
+        if (mountedControls == null) mountedControls = new ScriptVehicleControls(this, mob.getVehicle(), scriptId);
         mountedControls.input(left, forward, heldControls.contains("jump"), heldControls.contains("sprint"));
     }
 
@@ -839,12 +835,9 @@ final class AgentActions {
         boat.controlBoat();
         var projected = boat.getBoundingBox().expandTowards(boat.getDeltaMovement()).inflate(0.1);
         var level = (ServerLevel) mob.level();
-        var limit = box.get();
-        var nextFeet = mob.position().add(boat.getDeltaMovement());
         if (!level.hasChunksAt(BlockPos.containing(projected.minX, projected.minY, projected.minZ),
                 BlockPos.containing(projected.maxX, projected.maxY, projected.maxZ))
-            || !level.getWorldBorder().isWithinBounds(projected)
-            || limit != null && (!limit.dimension().equals(level.dimension().location().toString()) || !limit.holds(nextFeet))) {
+            || !level.getWorldBorder().isWithinBounds(projected)) {
             // Stop at the execution boundary without moving or snapping position.
             boat.setDeltaMovement(0, boat.getDeltaMovement().y, 0);
             clearVehicleControls();
@@ -988,21 +981,18 @@ final class AgentActions {
 
     private void navigate(Vec3 target, boolean workingPosition) {
         var level = (ServerLevel) mob.level();
-        var confined = box.get();
         if (mob.position().distanceToSqr(target) > 64 * 64) throw error("target_outside_navigation_radius_64");
-        var goal = workingPosition ? target : GameAccess.inside(mob, confined, target);
-        if (goal != target && mob.position().distanceToSqr(goal) < 0.81) throw error("target_out_of_reach_from_box");
-        var pos = BlockPos.containing(goal);
+        var pos = BlockPos.containing(target);
         if (mob.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation && !mob.onGround()) {
             travelled = true;
-            GameAccess.travelFollowingBody(mob, confined);
+            GameAccess.travelFollowingBody(mob, null);
             action.addProperty("phase","landing");
             return;
         }
         if (!level.hasChunkAt(pos) || !level.getWorldBorder().isWithinBounds(pos)) throw error("target_unloaded_or_outside_world");
         if (!level.isPositionEntityTicking(pos)) throw error("target_outside_simulated_chunks");
         if (ticks == 1 || ticks % 10 == 0 || mob.getNavigation().isDone()) {
-            boolean found = false, outsideOnly = false;
+            boolean found = false;
             if (workingPosition) {
                 // Search physical standing positions; never dig or teleport to manufacture a path.
                 var candidates = new ArrayList<BlockPos>();
@@ -1022,20 +1012,17 @@ final class AgentActions {
                     if (eye.distanceToSqr(target) > (reach - 0.1) * (reach - 0.1)) continue;
                     Direction requiredFace = args.has("position") && (kind.equals("place") || kind.equals("interact")) ? blockFace() : null;
                     if (!visibleWorkTarget(eye, target, pos, requiredFace)) continue;
-                    // Interactions may reach out of the box, but the body works from inside it.
-                    if (confined != null && !confined.holdsFeet(candidate)) { outsideOnly = true; continue; }
-                    outsideOnly = false;
                     var path = mob.getNavigation().createPath(candidate, 0, 64);
-                    if (path != null && path.canReach() && GameAccess.staysInside(path, confined)) { found = mob.getNavigation().moveTo(path, 1.0); if (found) break; }
+                    if (path != null && path.canReach()) { found = mob.getNavigation().moveTo(path, 1.0); if (found) break; }
                 }
             } else {
                 // The convenience moveTo overload accepts a neighboring tile (accuracy 1).
                 // Coordinate goals need the actual target tile before our arrival check.
                 // Use the physical tool's range rather than this mob species' follow range.
                 var path = mob.getNavigation().createPath(pos, 0, 64);
-                found = path != null && path.canReach() && GameAccess.staysInside(path, confined) && mob.getNavigation().moveTo(path, 1.0);
+                found = path != null && path.canReach() && mob.getNavigation().moveTo(path, 1.0);
             }
-            if (!found) throw error(outsideOnly ? "target_out_of_reach_from_box" : confined != null ? "unreachable_inside_box" : "unreachable");
+            if (!found) throw error("unreachable");
         }
         var path = mob.getNavigation().getPath();
         if (path != null && !path.isDone() && !level.hasChunkAt(path.getNextNodePos())) throw error("path_enters_unloaded_chunk");
@@ -1043,7 +1030,7 @@ final class AgentActions {
         mob.getLookControl().setLookAt(target.x,target.y,target.z,30,30);
         GameAccess.steer(mob);
         travelled = true;
-        GameAccess.travelFollowingBody(mob, confined);
+        GameAccess.travelFollowingBody(mob, null);
         action.addProperty("phase", "approaching");
         action.add("position", Observations.position(mob.position()));
         if (mob.position().distanceToSqr(lastPosition) < 0.0001) stillTicks++; else stillTicks = 0;

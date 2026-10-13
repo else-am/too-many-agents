@@ -164,6 +164,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         agent.body=JSON.fromJson(row.get("body"),GameAccess.Body.class);
         if(agent.body!=null) agent.body=new GameAccess.Body(agent.body.entityUuid(),worldId,agent.body.dimension());
         agent.settings=BodySettings.copy(obj(row,"settings"));
+        if(agent.settings.has("behaviors")) try { validateBehaviors(agent.settings.get("behaviors")); }
+            catch(IllegalArgumentException obsolete) { agent.settings.remove("behaviors"); }
+        if(agent.settings.has("behavior")) try { BodySettings.behavior(text(agent.settings,"behavior")); }
+            catch(IllegalArgumentException obsolete) { agent.settings.remove("behavior"); }
         agent.projectId=text(row,"projectId"); agent.threadId=text(row,"threadId"); agent.suspendedBody=text(row,"suspendedBody"); agent.deleted=flag(row,"deleted");
         agent.bbInstanceId=text(row,"bbInstanceId");
         agent.localArchive=row.has("localArchive") && !row.get("localArchive").isJsonNull() ? row.get("localArchive").getAsBoolean() : null;
@@ -514,8 +518,19 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 scopes.put(requestId,scope); scopeAgents.put(requestId,agent.id); screenScopes.add(requestId);
                 return game.screen(scope,screenCaller(agent),tool,arguments,Long.MAX_VALUE).whenComplete((done,failure) -> screenFinished(requestId,scope));
             }
-            return AgentSurface.call(minecraftAccess(agent),game,agent.body,loadedSession,null,tool,arguments);
+            String session=loadedSession;
+            return AgentSurface.call(minecraftAccess(agent),game,agent.body,session,null,tool,arguments)
+                .thenCompose(result -> rememberBehavior(agent,session,tool,result));
         });
+    }
+
+    private CompletableFuture<JsonObject> rememberBehavior(Agent agent,String session,String tool,JsonObject result) {
+        if(!tool.equals("minecraft_behavior")) return CompletableFuture.completedFuture(result);
+        synchronized(this) {
+            requireCurrent(agent,session);
+            agent.settings.addProperty("behavior",BodySettings.behavior(text(result,"behavior")));
+        }
+        return save().thenApply(done -> result);
     }
 
     private synchronized void screenFinished(String requestId,GameAccess.ToolScope scope) {
@@ -664,7 +679,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             scopes.put(requestId,scope); scopeAgents.put(requestId,actor);
             if(op.equals("script")) scopeScripts.put(requestId,text(obj(request,"arguments"),"scriptId"));
             CompletableFuture<JsonObject> work=switch(op) {
-                case "tool" -> game.callInTurn(scope,agent.body,AgentSurface.operation(minecraftAccess(agent),text(request,"tool")),obj(request,"arguments"),expiresAt).thenApply(AgentService::toolResult);
+                case "tool" -> game.callInTurn(scope,agent.body,AgentSurface.operation(minecraftAccess(agent),text(request,"tool")),obj(request,"arguments"),expiresAt)
+                    .thenCompose(result -> rememberBehavior(agent,session,text(request,"tool"),result)).thenApply(AgentService::toolResult);
                 case "script" -> game.callInTurn(scope,agent.body,AgentSurface.operation(minecraftAccess(agent),"minecraft_run"),obj(request,"arguments"),expiresAt,stream);
                 case "body.create" -> createBody(request,agent,session,scope,expiresAt).thenApply(created -> { synchronized(this) { return bodyRecord(created); } });
                 default -> failed("unknown_callback_operation");
@@ -739,7 +755,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             var target = behavior.get("target");
             boolean valid = switch (text(behavior,"type")) {
                 case "stand", "wander", "follow", "jump", "spin" -> target == null;
-                case "look" -> target != null && target.isJsonPrimitive() && target.getAsString().equals("player");
+                case "look" -> target == null || target.isJsonPrimitive() && target.getAsString().equals("player");
                 default -> false;
             };
             if (!valid) throw new IllegalArgumentException("Invalid " + entry.getKey() + " behavior: use stand, wander, follow, jump, spin, or look at the player.");

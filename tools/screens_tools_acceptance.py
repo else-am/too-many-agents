@@ -50,6 +50,9 @@ def main():
                         help='Check the 30s timeout; requires the calling BB thread to stay active throughout')
     args = parser.parse_args()
     agent, other, screen = args.agent, args.other, args.screen
+    native.command('gamemode creative @s')
+    native.command('tp @s 168 -60 165')
+    native.aim(169, -56.385, 167.9355)
 
     listed = success(agent, 'screen_list')
     row = next(row for row in listed['screens'] if row['id'] == screen)
@@ -61,6 +64,8 @@ def main():
     limited = success(agent, 'screen_list', limit=1)
     assert len(limited['screens']) == 1 and limited['screens'][0]['id'] == listed['screens'][0]['id']
     assert limited['truncated'] == len(listed['screens']) + listed['truncated'] - 1
+    for invalid in (0, -1, 51, 1.5, True, '2'):
+        error('invalid_request', agent, 'screen_list', limit=invalid)
     seen_unlinked = False
     last_distance = -1
     for screen_row in listed['screens']:
