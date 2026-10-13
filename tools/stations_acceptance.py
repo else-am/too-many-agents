@@ -68,6 +68,8 @@ def passed(message):
 
 def foundation(game):
     pos, duplicate, project = [224, -60, 224], [228, -60, 224], [224, -60, 229]
+    projects = game.request('/v1/agents/projects')['projects']
+    project_id = next(p['id'] for p in projects if p.get('kind') == 'standard' and p.get('folder') == str(ROOT))
     if game.request('/v1/state')['screen'] != 'game':
         game.ui('close')
     game.command('gamemode creative @s')
@@ -154,13 +156,13 @@ def foundation(game):
 
     game.station('give', kind='project', slot=0)
     assert game.station('place', pos=project, slot=0)['block'] == 'too_many_agents:project_block'
-    game.station('configure_project', pos=project, projectId='proj_2mstpt8yi2', color='#77BFC7')
+    game.station('configure_project', pos=project, projectId=project_id, color='#77BFC7')
     project_read = game.station('read', pos=project)
-    assert 'proj_2mstpt8yi2' in json.dumps(project_read['blockEntity'])
+    assert project_id in json.dumps(project_read['blockEntity'])
     game.command('gamemode survival @s')
     dropped = game.station('break', pos=project)
     plain = [item for item in dropped['dropped'] if item['item'] == 'too_many_agents:project_block']
-    assert plain and all('proj_2mstpt8yi2' not in json.dumps(item) for item in plain)
+    assert plain and all(project_id not in json.dumps(item) for item in plain)
     passed('project block saves its binding and drops a stateless item')
 
     game.command('setblock 228 -60 224 air')
@@ -180,12 +182,101 @@ def persistence(game):
     passed('reopened station identity, settings, position and occupancy match the saved index')
 
 
+def spawning(game):
+    saved = json.loads(MANIFEST.read_text())
+    pos = saved['pos']
+    folder = GAME / 'stations-acceptance-project'
+    folder.mkdir(exist_ok=True)
+    projects = game.request('/v1/agents/projects')
+    assert not any(p.get('folder') == str(folder) for p in projects['projects']), \
+        'An earlier fixture project remains; inspect it before rerunning mutations.'
+    project = game.request('/v1/agents/projects', {'operation': 'create',
+        'name': 'Stations acceptance', 'folder': str(folder), 'color': '#77BFC7'})
+    project_id = project['id']
+    saved['projectId'] = project_id
+    MANIFEST.write_text(json.dumps(saved, indent=2) + '\n')
+    deadline = time.monotonic() + 10
+    while not any(p['id'] == project_id for p in game.request('/v1/agents/projects')['projects']):
+        assert time.monotonic() < deadline, 'New project did not sync to Minecraft'
+        time.sleep(.2)
+    game.station('configure', pos=pos, settings={'projectId': project_id, 'providerId': 'codex',
+        'model': 'gpt-6.1-sol', 'reasoningLevel': 'medium', 'permissionMode': 'accept-edits',
+        'instructions': 'For the first reply, say exactly station-instructions-arrived. Do not use tools.'})
+    station = row(game.station('read', pos=pos), pos)
+    project_pos = [224, -60, 229]
+    game.station('give', kind='project', slot=0)
+    game.station('place', pos=project_pos, slot=0)
+    game.station('configure_project', pos=project_pos, projectId=project_id)
+    created = game.request('/v1/agents/spawn', {'stationId': station['name'].upper(), 'name': 'Station acceptance occupant'})
+    agent_id = created['id']
+    saved['agentId'] = agent_id
+    MANIFEST.write_text(json.dumps(saved, indent=2) + '\n')
+    path = '/v1/agents/' + agent_id
+    agent = game.request(path)
+    assert agent['projectId'] == project_id and agent['minecraftAccess'] is False, agent
+    assert not {'stationId', 'minecraftAccess', 'notifyInChat', 'mode', 'behavior'}.intersection(agent['settings']), agent['settings']
+    assert agent['settings']['body'] == 'minecraft:fox', agent['settings']
+    assert row(game.station('read', pos=pos), pos)['agentId'] == agent_id
+    assert agent['executionOptions']['model'] == 'gpt-6.1-sol'
+    assert agent['executionOptions']['permissionMode'] == 'accept-edits'
+    passed('station name resolves its project, claims occupancy, and supplies execution settings')
+
+    game.request('/v1/agents/spawn', {'stationId': station['id'], 'name': 'Must not spawn'}, error=True)
+    game.request('/v1/agents/spawn', {'stationId': station['id'],
+        'projectId': projects['world']['worldProjectId']}, error=True)
+    game.request('/v1/dev', {'action': 'station', 'operation': 'configure', 'pos': pos,
+        'settings': {'projectId': ''}}, error=True)
+    game.request(path + '/tool', {'tool': 'minecraft_settings', 'arguments': {}}, error=True)
+    passed('occupied station, project mismatch, project changes and project-agent physical access are rejected')
+
+    game.station('configure', pos=pos, settings={'model': 'gpt-6-astra', 'radius': 2})
+    assert game.request(path)['executionOptions']['model'] == 'gpt-6.1-sol'
+    game.request(path + '/message', {'text': 'Follow the station instructions.', 'delivery': 'send'})
+    deadline = time.monotonic() + 120
+    while True:
+        agent = game.request(path)
+        transcript = game.request(path + '/transcript', {'includeNestedRows': 'true', 'summaryOnly': 'false'})
+        replies = [r.get('text', '') for r in transcript.get('rows', []) if r.get('role') == 'assistant']
+        if any('station-instructions-arrived' in text for text in replies) and agent['status'] == 'idle':
+            break
+        assert not agent.get('error'), agent.get('error')
+        assert time.monotonic() < deadline, (agent['status'], replies)
+        time.sleep(.5)
+    assert agent['executionOptions']['model'] == 'gpt-6.1-sol'
+    passed('real BB turn receives station instructions; later station edits leave its execution unchanged')
+
+    game.request(path + '/archive', {})
+    assert not row(game.station('read', pos=pos), pos)['agentId']
+    game.request(path + '/conversation-restore', {})
+    assert not row(game.station('read', pos=pos), pos)['agentId']
+    restored = game.request(path)
+    assert not restored['bodyRemoved'] and not restored['conversationArchived'], restored
+    game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id}, error=True)
+    passed('archive releases the station; restore is loose; remaining body prevents project removal')
+    game.request(path + '/archive', {})
+    game.request('/v1/agents/projects', {'operation': 'remove', 'projectId': project_id})
+    deadline = time.monotonic() + 10
+    while row(game.station('read', pos=pos), pos)['projectId']:
+        assert time.monotonic() < deadline, 'Removed project remained bound to its station'
+        time.sleep(.2)
+    game.request('/v1/dev', {'action': 'station', 'operation': 'configure', 'pos': pos,
+        'settings': {'projectId': projects['world']['worldProjectId']}}, error=True)
+    game.request('/v1/agents/spawn', {'stationId': station['id']}, error=True)
+    assert project_id not in json.dumps(game.station('read', pos=project_pos)['blockEntity'])
+    game.request('/v1/dev', {'action': 'station', 'operation': 'configure_project', 'pos': project_pos,
+        'projectId': projects['world']['worldProjectId']}, error=True)
+    game.station('break', pos=project_pos)
+    saved['station'] = row(game.station('read', pos=pos), pos)
+    MANIFEST.write_text(json.dumps(saved, indent=2) + '\n')
+    passed('project removal leaves the station blank/inert; world-project binding is rejected')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('phase', choices=['foundation', 'persistence'])
+    parser.add_argument('phase', choices=['foundation', 'persistence', 'spawning'])
     args = parser.parse_args()
     game = Game()
-    (foundation if args.phase == 'foundation' else persistence)(game)
+    {'foundation': foundation, 'persistence': persistence, 'spawning': spawning}[args.phase](game)
 
 
 if __name__ == '__main__':

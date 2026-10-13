@@ -9,7 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import net.neoforged.fml.loading.FMLPaths;
 
-/** Display preferences belong to this installation, separately from worlds and BB roles. */
+/** Display preferences belong to this installation, separately from worlds and BB conversations. */
 public final class TooManyAgentsClientSettings {
     private static TooManyAgentsClientSettings instance;
     private final Path path = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-client.json");

@@ -23,11 +23,10 @@ public final class AgentChatScreen extends Screen {
     private final AgentUiAccess access;
     private String agentId;
     private JsonObject creationSettings;
-    private final JsonObject roleSelection = new JsonObject();
     private String creationProjectName="Choose project";
     private boolean creationGit;
     private String environmentProject;
-    private Checkbox worktreeBox, minecraftBox;
+    private Checkbox worktreeBox;
     private Button projectButton;
     private Consumer<String> created;
     private final List<String> bodies = new ArrayList<>();
@@ -351,12 +350,8 @@ public final class AgentChatScreen extends Screen {
 
     private void readCreationProject(){
         creationProjectName="Choose project";
-        if (!creationSettings.has("minecraftAccess")) creationSettings.addProperty("minecraftAccess", true);
         String projectId=AgentModels.text(creationSettings,"projectId");
-        if (AgentModels.worldProject(access.projects(), projectId)) {
-            creationSettings.addProperty("minecraftAccess", true);
-            creationSettings.addProperty("worktree", false);
-        }
+        if (AgentModels.worldProject(access.projects(), projectId)) creationSettings.addProperty("worktree", false);
         for(var item:AgentModels.array(access.projects(),"projects")){
             var project=item.getAsJsonObject();
             if(AgentModels.text(project,"id").equals(projectId))creationProjectName=AgentModels.text(project,"name");
@@ -530,7 +525,6 @@ public final class AgentChatScreen extends Screen {
                 }
                 return access.updateSettings(agentId,changes);
             },draft()?null:agentId);
-            screen.rememberRole(roleSelection);
             if(!docked()){minecraft.setScreen(screen);return;}
             settingsPanel=screen;
             screen.dock(()->{if(settingsPanel==screen){settingsPanel=null;cover(false);refreshButtons();}});
@@ -555,14 +549,6 @@ public final class AgentChatScreen extends Screen {
             });
             bodyButton = addRenderableWidget(Button.builder(Component.empty(), button -> requestModels(() -> togglePicker(bodyButton)))
                 .bounds(left, compact ? 55 : 29, 120, 20).build());
-            minecraftBox = Checkbox.builder(Component.literal("Can act in Minecraft"), font)
-                .selected(creationSettings.get("minecraftAccess").getAsBoolean())
-                .onValueChange((box, value) -> {
-                    creationSettings.addProperty("minecraftAccess", value);
-                    refreshButtons();
-                }).build();
-            addRenderableWidget(minecraftBox);
-            minecraftBox.visible = !worldDraft();
             projectButton = addRenderableWidget(Button.builder(Component.empty(), button -> togglePicker(projectButton))
                 .bounds(left, 0, Math.min(180, contentWidth), 20).build());
             projectButton.visible = !worldDraft();
@@ -572,7 +558,7 @@ public final class AgentChatScreen extends Screen {
             worktreeBox.setTooltip(Tooltip.create(Component.literal("Work in a separate Git worktree instead of the project folder")));
             worktreeBox.visible = creationGit;
             addRenderableWidget(worktreeBox);
-        } else { nameField = null; bodyButton = null; minecraftBox = null; worktreeBox = null; projectButton = null; }
+        } else { nameField = null; bodyButton = null; worktreeBox = null; projectButton = null; }
         addRenderableWidget(Button.builder(Component.literal("×"), button -> onClose())
             .bounds(left + contentWidth - 20, 7, 20, 20).build());
         var previousComposer = composer;
@@ -1117,8 +1103,6 @@ public final class AgentChatScreen extends Screen {
             projectButton.visible = !settingsCovering && !worldDraft();
             projectButton.setMessage(Component.literal(font.plainSubstrByWidth(creationProjectName, projectButton.getWidth() - 24) + " ▾"));
             projectButton.setTooltip(Tooltip.create(Component.literal(creationProjectName)));
-            minecraftBox.active = !sending && !worldDraft();
-            minecraftBox.visible = !settingsCovering && !worldDraft();
             boolean worktreeShown = worktreeBox.visible;
             worktreeBox.visible = !settingsCovering && creationGit;
             // Worktree support arrives after layout; place the options beside each other once it does.
@@ -1801,9 +1785,9 @@ public final class AgentChatScreen extends Screen {
     }
 
     private int creationOptionsHeight() {
-        if (!draft() || minecraftBox == null) return 0;
+        if (!draft() || projectButton == null) return 0;
         int x = 0, rows = 0;
-        for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+        for (var widget : List.of(projectButton, worktreeBox)) {
             if (!widget.visible) continue;
             if (rows == 0 || x + widget.getWidth() > contentWidth) { rows++; x = 0; }
             x += widget.getWidth() + 12;
@@ -1831,7 +1815,7 @@ public final class AgentChatScreen extends Screen {
         if (draft()) {
             int optionsY = composer.getY() - optionsHeight;
             int x = left;
-            for (var widget : List.of(projectButton, worktreeBox, minecraftBox)) {
+            for (var widget : List.of(projectButton, worktreeBox)) {
                 if (!widget.visible) continue;
                 if (x > left && x + widget.getWidth() > left + contentWidth) { x = left; optionsY += 24; }
                 widget.setPosition(x, optionsY);

@@ -3,9 +3,10 @@
 ## Implementation checkpoints
 
 - [x] ~~Physical station/project blocks, carried settings, and persistent index.~~
-- [ ] Station occupancy, project-derived access, spawning, and execution defaults.
+- [x] ~~Station occupancy, project-derived access, spawning, and execution defaults.~~
 - [ ] Station scripting, world/project behaviors, and confinement.
-- [ ] Screen linking, access, listing, and pointing context.
+- [x] ~~Screen linking, access, and listing.~~
+- [ ] Pointing context.
 - [ ] Station/project block screens, item slots, settings, and survey UI.
 - [ ] Remove obsolete roles, boxes, commands, settings, and documentation.
 - [ ] Live acceptance, packaged JAR checks, and persistence after reopening.

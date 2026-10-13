@@ -23,8 +23,6 @@ public interface AgentUiAccess {
     CompletableFuture<JsonObject> inventory(String agentId);
     CompletableFuture<Void> openInventory(String agentId);
     void markRead(String agentId, long replyVersion);
-    CompletableFuture<JsonArray> roles();
-    CompletableFuture<Void> saveRole(JsonObject role, String agentId);
     CompletableFuture<Void> updateSettings(String agentId, JsonObject settings);
     /** {@code text}, and optionally {@code model}, {@code reasoningLevel}, {@code serviceTier}, {@code permissionMode}, {@code delivery}, {@code pointing}, {@code images}. */
     CompletableFuture<Void> send(String agentId, JsonObject message);

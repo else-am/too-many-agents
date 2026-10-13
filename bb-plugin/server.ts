@@ -71,14 +71,14 @@ export default async function minecraft(bb: BbPluginApi) {
     });
   }
 
-  bb.agents.configure(({ pluginMetadata }) => {
+  bb.agents.configure(({ pluginMetadata, project }) => {
     if (typeof pluginMetadata.worldId !== "string" || typeof pluginMetadata.agentId !== "string")
       return { tools: [], skills: [] };
+    // Only agents in their world's own project act in Minecraft. Java checks every call again.
+    const access = project.id === worlds.worldProjects.get(pluginMetadata.worldId);
     return {
-      tools: agentTools
-        .filter((tool) => !tool.minecraft || pluginMetadata.minecraftAccess === true)
-        .map((tool) => tool.name),
-      skills: ["minecraft-agents", ...(pluginMetadata.minecraftAccess === true ? ["minecraft-scripting"] : [])],
+      tools: agentTools.filter((tool) => !tool.minecraft || access).map((tool) => tool.name),
+      skills: ["minecraft-agents", ...(access ? ["minecraft-scripting"] : [])],
       instructions,
     };
   });

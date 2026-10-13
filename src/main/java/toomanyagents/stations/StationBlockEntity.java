@@ -26,11 +26,12 @@ public final class StationBlockEntity extends BlockEntity {
     public Station station() { return station; }
 
     /**
-     * Server: applies a configuration request. Names must be unique; area and behaviors apply at once, and the
-     * project can't change while occupied.
+     * Server: applies a configuration request. Names must be unique, and a project must be one of BB's, never a
+     * world project. Area and behaviors apply at once; the project can't change while occupied.
      */
     public Station configure(JsonObject request) {
         var updated = station.configure(request);
+        if (!updated.projectId().equals(station.projectId())) index().requireProject(updated.projectId());
         if (request.has("name")) updated = updated.withName(index().requireName(updated.name(), station.id()));
         if (!updated.equals(station)) {
             adopt(updated);

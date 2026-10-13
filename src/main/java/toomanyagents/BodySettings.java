@@ -8,9 +8,15 @@ public final class BodySettings {
     public static JsonObject copy(JsonObject settings) {
         var result = new JsonObject();
         if (settings == null) return result;
-        for (String key : List.of("name", "body", "mode", "behaviors", "stationId", "minecraftAccess", "notifyInChat"))
+        for (String key : List.of("name", "body", "mode", "behavior", "behaviors"))
             if (settings.has(key)) result.add(key, settings.get(key).deepCopy());
         return result;
+    }
+
+    /** Keep the two kinds of agent settings separate; access itself is never saved here. */
+    public static void forProject(JsonObject settings, boolean world) {
+        if (world) settings.remove("behaviors");
+        else { settings.remove("mode"); settings.remove("behavior"); }
     }
 
     public enum Mode {
@@ -29,13 +35,6 @@ public final class BodySettings {
     public static Mode mode(String id) {
         for (var mode : Mode.values()) if (mode.id.equals(id)) return mode;
         throw new IllegalArgumentException("invalid_agent_mode: " + id);
-    }
-
-    /** Roles reuse body settings without replacing identity or a world's station assignment. */
-    public static JsonObject profile(JsonObject settings) {
-        var result = copy(settings);
-        for (String key : List.of("name", "stationId")) result.remove(key);
-        return result;
     }
 
     private BodySettings() {}

@@ -19,6 +19,7 @@ export interface Agent {
   threadId: string;
   projectId: string;
   minecraftAccess: boolean;
+  stationId: string;
   settings: ObjectValue;
   draft: ObjectValue;
   body: ObjectValue;

@@ -42,8 +42,7 @@ def main():
     spawn.add_argument('--reasoning-level', '--effort', dest='reasoning_level', help='Native BB reasoning level')
     spawn.add_argument('--json', default='{}', help='Additional native BB spawn fields as a JSON object')
     spawn.add_argument('--service-tier', help='Native BB speed tier; omit to use BB defaults')
-    spawn.add_argument('--mode', choices=['survival', 'creative', 'creative_commands'], default='survival')
-    spawn.add_argument('--no-minecraft', action='store_true', help='Keep the body and BB coordination, without physical Minecraft tools')
+    spawn.add_argument('--mode', choices=['survival', 'creative', 'creative_commands'])
     transcript = commands.add_parser('transcript', help='Read the native BB conversation timeline')
     transcript.add_argument('id')
     transcript.add_argument('--json', default='{}', help='Native BB timeline query fields')
@@ -135,7 +134,6 @@ def main():
             if args.provider: data['providerId'] = args.provider
             if args.permission_mode:
                 data['permissionMode'] = args.permission_mode
-            data['minecraftAccess'] = not args.no_minecraft
             if args.service_tier: data['serviceTier'] = args.service_tier
             values = json.loads(args.json)
             if not isinstance(values, dict):

@@ -51,7 +51,7 @@ public final class StationDevelopment {
             case "configure" -> station(player, pos).configure(request.getAsJsonObject("settings"));
             case "configure_project" -> {
                 if (!(level.getBlockEntity(require(pos)) instanceof ProjectBlockEntity block)) throw new IllegalArgumentException("No project block there");
-                block.setProject(text(request, "projectId"), text(request, "color"));
+                block.setProject(text(request, "projectId"));
             }
             case "occupy" -> StationIndex.get(level.getServer()).setOccupant(level.getServer(), station(player, pos).station().id(), text(request, "agentId"));
             case "read" -> {}

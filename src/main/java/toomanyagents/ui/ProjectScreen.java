@@ -121,23 +121,19 @@ public final class ProjectScreen extends SettingsFormScreen {
     }
     private void placeRows(JsonObject world){
         section("In-world");
-        JsonObject box=null;
-        for(var item:array(world,"bounds"))if(text(item.getAsJsonObject(),"projectId").equals(projectId))box=item.getAsJsonObject();
-        var boundary=value("Project boundary",box==null?"Not set":distance(box),"Agents in this project will stay inside this box");
-        if(box!=null)distances.put(boundary,box);
-        rowY+=4;row("Stations");
+        row("Stations");
         boolean any=false;
         for(var item:array(world,"stations")){
             var station=item.getAsJsonObject();if(!text(station,"projectId").equals(projectId))continue;
-            distances.put(value("  "+text(station,"label"),distance(station)),station);any=true;
+            distances.put(value("  "+text(station,"name"),distance(station)),station);any=true;
         }
         if(!any)note("No stations yet");
         rowY+=8;
-        surveyButton=place(Button.builder(Component.literal(surveyCaption()),b->SurveyMode.start(projectId))
+        surveyButton=place(Button.builder(Component.literal(surveyCaption()),b->SurveyMode.start())
             .bounds(left,0,contentWidth,20).build(),rowY);
         surveyButton.active=!busy&&minecraft.level!=null;rowY+=24;
     }
-    private static String surveyCaption(){return "Show/edit project boxes (press "+SurveyMode.keyLabel()+")";}
+    private static String surveyCaption(){return "Show station areas ("+SurveyMode.keyLabel()+")";}
     private String distance(JsonObject box){
         if(minecraft.player==null||minecraft.level==null)return "Not in world";
         String dimension=text(box,"dimension");

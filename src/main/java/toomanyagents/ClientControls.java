@@ -302,14 +302,8 @@ public final class ClientControls {
                     }
                     case "survey" -> {
                         boolean on = request.has("on") ? request.get("on").getAsBoolean() : !survey.on();
-                        if (on && request.has("projectId")) toomanyagents.ui.SurveyMode.start(request.get("projectId").getAsString());
-                        else survey.setOn(on);
+                        survey.setOn(on);
                     }
-                    case "survey_corner" -> {
-                        if (client.screen != null) throw new IllegalStateException("Close the open screen first");
-                        survey.corner(blockPos(request));
-                    }
-                    case "survey_edit" -> { if (!survey.editAt(blockPos(request))) throw new IllegalArgumentException("No box holds that block"); }
                     case "dev_drag", "dev_chat", "dev_pause", "dev_resume", "dev_leave", "dev_gui_scale", "dev_window_size", "dev_focus", "dev_key", "dev_input_state", "dev_inventory_click", "dev_look", "dev_press", "dev_drop", "dev_command", "dev_aim", "dev_mouse", "dev_scroll", "dev_char", "dev_quit" -> {
                         var server = client.getSingleplayerServer();
                         if (!DevelopmentWorld.ENABLED || server == null || !server.getWorldPath(LevelResource.ROOT)
@@ -539,7 +533,6 @@ public final class ClientControls {
 
     private static boolean ours(Screen screen) {
         return screen instanceof toomanyagents.ui.ProviderSettingsScreen || screen instanceof toomanyagents.ui.ProjectScreen || screen instanceof AgentChatScreen
-            || screen instanceof toomanyagents.ui.SurveyScreen
             || screen instanceof AgentSettingsScreen || screen instanceof toomanyagents.ui.ArchiveScreen
             || screen instanceof AgentApprovalScreen || screen instanceof AgentQueueScreen
             || screen instanceof AgentInventoryScreen || screen instanceof TooManyAgentsSettingsScreen || screen instanceof ChatScreen || screen instanceof KeyBindsScreen;

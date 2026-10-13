@@ -10,13 +10,18 @@ record BodyBox(String dimension, BlockPos min, BlockPos max) {
     static BodyBox of(JsonObject row) {
         return new BodyBox(JsonState.text(row,"dimension"), pos(row.getAsJsonArray("min")), pos(row.getAsJsonArray("max")));
     }
+    /** A station's area: the block's column ± radius in x/z, from the block's level up height blocks. */
+    static BodyBox of(toomanyagents.stations.StationIndex.Entry entry) {
+        int r = entry.station().radius();
+        var pos = entry.pos();
+        return new BodyBox(entry.dimension(), pos.offset(-r, 0, -r), pos.offset(r, entry.station().height() - 1, r));
+    }
     private static BlockPos pos(JsonArray xyz) { return new BlockPos(xyz.get(0).getAsInt(), xyz.get(1).getAsInt(), xyz.get(2).getAsInt()); }
 
     boolean contains(BlockPos pos) {
         return pos.getX() >= min.getX() && pos.getX() <= max.getX() && pos.getY() >= min.getY() && pos.getY() <= max.getY()
             && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
     }
-    boolean encloses(BodyBox other) { return dimension.equals(other.dimension) && contains(other.min) && contains(other.max); }
 
     /**
      * Whether a body whose feet are in this block is inside. Standing on the box's top layer counts,

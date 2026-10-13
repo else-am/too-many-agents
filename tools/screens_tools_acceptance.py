@@ -45,7 +45,7 @@ def main():
     parser.add_argument('--agent', required=True)
     parser.add_argument('--other', required=True, help='Another test agent with access to the same screen')
     parser.add_argument('--screen', required=True, help='A north-facing panel in the native acceptance fixture')
-    parser.add_argument('--foreign-screen', help='Optional screen inside another project box')
+    parser.add_argument('--foreign-screen', help='Optional screen linked to another station, occupied or free')
     parser.add_argument('--check-timeout', action='store_true',
                         help='Check the 30s timeout; requires the calling BB thread to stay active throughout')
     args = parser.parse_args()
@@ -54,9 +54,24 @@ def main():
     listed = success(agent, 'screen_list')
     row = next(row for row in listed['screens'] if row['id'] == screen)
     assert row['available'] and len(row['viewport']) == 2, row
-    assert 'project' in row and 'station' in row and 'lease' in row and 'distance' in row
-    mine = success(agent, 'screen_list', mine=True)
-    assert all(row['yours'] for row in mine['screens']), mine
+    assert 'project' not in row and 'station' in row and 'lease' in row and 'distance' in row
+    assert isinstance(row['openedByYou'], bool)
+    assert set(listed['you']) == {'station', 'project'}
+    assert len(listed['screens']) <= 20 and type(listed['truncated']) is int and listed['truncated'] >= 0
+    limited = success(agent, 'screen_list', limit=1)
+    assert len(limited['screens']) == 1 and limited['screens'][0]['id'] == listed['screens'][0]['id']
+    assert limited['truncated'] == len(listed['screens']) + listed['truncated'] - 1
+    seen_unlinked = False
+    last_distance = -1
+    for screen_row in listed['screens']:
+        if not screen_row['yours']:
+            seen_unlinked = True
+            assert screen_row['station'] is None, screen_row
+            distances = [d for d in screen_row['distance'].values() if d is not None]
+            distance = min(distances) if distances else float('inf')
+            assert distance >= last_distance, listed
+            last_distance = distance
+        assert not seen_unlinked or not screen_row['yours'], listed
     if listed['you']['station'] is None:
         missing = error('choose_screen', agent, 'screen_open', kind='url', target='about:blank')
         assert not missing.get('candidates'), missing
@@ -74,6 +89,10 @@ def main():
     opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture), name='Tool acceptance')
     assert opened['screen'] == screen and opened['title'] == 'Screen tool acceptance', opened
     assert opened['url'] == fixture.as_uri(), opened
+    after_open = next(r for r in success(agent, 'screen_list')['screens'] if r['id'] == screen)
+    assert after_open['openedByYou'], after_open
+    after_other = next(r for r in success(other, 'screen_list')['screens'] if r['id'] == screen)
+    assert not after_other['openedByYou'], after_other
     conflicting = next((r['name'] for r in listed['screens'] if r['id'] != screen), None)
     for invalid_name in ('', '   ', conflicting):
         if invalid_name is None:

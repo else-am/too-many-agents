@@ -3,9 +3,13 @@ package toomanyagents.stations;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.WeakHashMap;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -13,6 +17,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.nbt.NbtUtils;
+import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -38,14 +43,28 @@ public final class StationIndex extends SavedData {
         public JsonObject json() {
             var row = station.json();
             row.addProperty("dimension", dimension);
+            row.add("pos", xyz(pos));
+            // The area as a block-inclusive box, for outlines and screen linking.
+            int r = station.radius();
+            row.add("min", xyz(pos.offset(-r, 0, -r)));
+            row.add("max", xyz(pos.offset(r, station.height() - 1, r)));
+            return row;
+        }
+
+        private static JsonArray xyz(BlockPos pos) {
             var xyz = new JsonArray();
             xyz.add(pos.getX()); xyz.add(pos.getY()); xyz.add(pos.getZ());
-            row.add("pos", xyz);
-            return row;
+            return xyz;
         }
     }
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
+    /** Removed BB projects. Blocks that still name one, loaded later, become blank. Project ids are never reused. */
+    private final Set<String> removedProjects = new HashSet<>();
+    /** Projects a station or project block may name now, with their colors: BB's projects except world projects. */
+    private Map<String, String> projects = Map.of();
+    private final Set<ProjectBlockEntity> loadedProjectBlocks = Collections.newSetFromMap(new WeakHashMap<>());
+    private boolean orphansReleased;
 
     private record Published(MinecraftServer server, JsonObject snapshot) {}
     private static volatile Published published;
@@ -78,6 +97,7 @@ public final class StationIndex extends SavedData {
      */
     void added(StationBlockEntity block) {
         var station = block.station();
+        if (removedProjects.contains(station.projectId())) station = station.withProject("");
         String dimension = block.dimension();
         var existing = station.id().isEmpty() ? null : entries.get(station.id());
         Station normalized;
@@ -136,11 +156,110 @@ public final class StationIndex extends SavedData {
         }
         var updated = new Entry(entry.station.withIdentity(id, agentId), entry.dimension, entry.pos);
         entries.put(id, updated);
-        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension)));
+        var level = level(server, entry);
         if (level != null && level.isLoaded(entry.pos) && level.getBlockEntity(entry.pos) instanceof StationBlockEntity block
             && block.station().id().equals(id)) block.adopt(updated.station);
         changed(server);
         return updated;
+    }
+
+    /** The station an agent occupies, or null. */
+    public Entry occupiedBy(String agentId) {
+        if (agentId.isEmpty()) return null;
+        return entries.values().stream().filter(entry -> entry.station.agentId().equals(agentId)).findFirst().orElse(null);
+    }
+
+    /**
+     * Gives a free station in the agent's project to the agent, whose body will spawn there. The station's chunk
+     * must be loaded, so its block and area are real.
+     */
+    public Entry claim(MinecraftServer server, String idOrName, String agentId, String projectId) {
+        var entry = find(idOrName);
+        if (entry == null) throw new IllegalArgumentException("Unknown station: " + idOrName + ".");
+        if (entry.station.projectId().isEmpty()) throw new IllegalArgumentException("Station " + entry.station.name() + " has no project yet.");
+        if (!entry.station.projectId().equals(projectId))
+            throw new IllegalArgumentException("Station " + entry.station.name() + " belongs to another project.");
+        var level = level(server, entry);
+        if (level == null || !level.isLoaded(entry.pos) || !(level.getBlockEntity(entry.pos) instanceof StationBlockEntity block)
+            || !block.station().id().equals(entry.station.id()))
+            throw new IllegalArgumentException("Station " + entry.station.name() + " is in an unloaded area. Go near it first.");
+        return setOccupant(server, entry.station.id(), agentId);
+    }
+
+    /** Frees the agent's station, if it has one. */
+    public void release(MinecraftServer server, String agentId) {
+        var entry = occupiedBy(agentId);
+        if (entry != null) setOccupant(server, entry.station.id(), "");
+    }
+
+    /**
+     * Once per world session, after the world's agent records load: frees stations whose occupant has no body, e.g.
+     * a spawn interrupted before its body was saved. Later occupants are only ever set with a body.
+     */
+    public void releaseOrphans(MinecraftServer server, Set<String> bodies) {
+        if (orphansReleased) return;
+        orphansReleased = true;
+        for (var entry : java.util.List.copyOf(entries.values()))
+            if (entry.station.occupied() && !bodies.contains(entry.station.agentId())) setOccupant(server, entry.station.id(), "");
+    }
+
+    /** The projects stations and project blocks may name, from BB's project list. Empty while BB is disconnected. */
+    public void projects(Map<String, String> colors) {
+        var allowed = new java.util.HashMap<>(colors);
+        allowed.keySet().removeAll(removedProjects);
+        if (allowed.equals(projects)) return;
+        projects = Map.copyOf(allowed);
+        for (var block : java.util.List.copyOf(loadedProjectBlocks)) if (!block.isRemoved()) recolor(block);
+    }
+
+    /** A project block takes its project's current BB color, once BB has listed it. */
+    private void recolor(ProjectBlockEntity block) {
+        if (projects.containsKey(block.projectId())) block.recolor(color(block.projectId()));
+    }
+
+    /** Blank, or a project a station or project block may name. Never a world project. */
+    String requireProject(String projectId) {
+        if (projectId.isEmpty() || projects.containsKey(projectId)) return projectId;
+        throw new IllegalArgumentException(projects.isEmpty() ? "BB is not connected, so the project can't be checked."
+            : "Choose one of BB's projects. A world's own project can't be used here.");
+    }
+
+    String color(String projectId) { return projects.getOrDefault(projectId, ""); }
+
+    /**
+     * A BB project was removed. Its stations stay, with no project; its project blocks become blank, now or when
+     * they next load.
+     */
+    public void projectRemoved(MinecraftServer server, String projectId) {
+        if (projectId.isEmpty() || !removedProjects.add(projectId)) return;
+        var allowed = new java.util.HashMap<>(projects);
+        allowed.remove(projectId);
+        projects = Map.copyOf(allowed);
+        for (var entry : java.util.List.copyOf(entries.values())) {
+            if (!entry.station.projectId().equals(projectId)) continue;
+            var updated = new Entry(entry.station.withProject(""), entry.dimension, entry.pos);
+            entries.put(entry.station.id(), updated);
+            var level = level(server, entry);
+            if (level != null && level.isLoaded(entry.pos) && level.getBlockEntity(entry.pos) instanceof StationBlockEntity block
+                && block.station().id().equals(entry.station.id())) block.adopt(updated.station);
+        }
+        for (var block : java.util.List.copyOf(loadedProjectBlocks))
+            if (!block.isRemoved() && block.projectId().equals(projectId)) block.clear();
+        changed(server);
+    }
+
+    /** A project block joined the level. One naming a removed project becomes blank. */
+    void projectBlockLoaded(ProjectBlockEntity block) {
+        loadedProjectBlocks.add(block);
+        if (removedProjects.contains(block.projectId())) block.clear();
+        else recolor(block);
+    }
+
+    void projectBlockUnloaded(ProjectBlockEntity block) { loadedProjectBlocks.remove(block); }
+
+    private static ServerLevel level(MinecraftServer server, Entry entry) {
+        var dimension = ResourceLocation.tryParse(entry.dimension);
+        return dimension == null ? null : server.getLevel(ResourceKey.create(Registries.DIMENSION, dimension));
     }
 
     /** A valid name no other station uses, ignoring capitalization. */
@@ -194,6 +313,9 @@ public final class StationIndex extends SavedData {
             list.add(row);
         }
         tag.put("stations", list);
+        var removed = new ListTag();
+        removedProjects.forEach(id -> removed.add(StringTag.valueOf(id)));
+        tag.put("removedProjects", removed);
         return tag;
     }
 
@@ -206,6 +328,7 @@ public final class StationIndex extends SavedData {
             if (station == null || pos == null || station.id().isEmpty()) continue;
             index.entries.put(station.id(), new Entry(station, row.getString("dimension"), pos));
         }
+        for (var id : tag.getList("removedProjects", Tag.TAG_STRING)) index.removedProjects.add(id.getAsString());
         return index;
     }
 }

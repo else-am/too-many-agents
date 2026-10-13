@@ -318,8 +318,8 @@ public final class InventoryAgents {
                 sidebar.reportProviderError("Could not load BB defaults for a new chat: " + AgentModels.error(failure));
                 return;
             }
-            String provider = InventoryAgentSidebar.defaultProvider(config);
-            if (provider.isBlank()) provider = AgentModels.text(AgentModels.object(config, "draftDefaults"), "providerId");
+            String provider = AgentModels.text(AgentModels.object(config, "draftDefaults"), "providerId");
+            if (provider.isBlank()) provider = InventoryAgentSidebar.defaultProvider(config);
             openDraft(draftProject, provider, requestAccess);
         }));
     }

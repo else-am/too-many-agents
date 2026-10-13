@@ -7,6 +7,7 @@ import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -23,16 +24,35 @@ public final class ProjectBlockEntity extends BlockEntity {
     public String projectId() { return projectId; }
     public String color() { return color; }
 
-    /** Server: sets the project, or clears it with a blank id. A world project is rejected by the caller. */
-    public void setProject(String projectId, String color) {
-        projectId = projectId.strip();
-        if (projectId.length() > 200 || projectId.codePoints().anyMatch(Character::isISOControl))
-            throw new IllegalArgumentException("A project id must be at most 200 characters, with no control characters.");
-        if (!color.isEmpty() && !ProjectColor.valid(color)) throw new IllegalArgumentException("A project color must look like #RRGGBB.");
+    /** Server: sets one of BB's projects, never a world project, or clears it with a blank id. The tint is its color. */
+    public void setProject(String projectId) {
+        var index = StationIndex.get(level.getServer());
+        projectId = index.requireProject(projectId.strip());
+        set(projectId, index.color(projectId));
+    }
+
+    void clear() { set("", ""); }
+
+    /** BB changed this project's color. */
+    void recolor(String color) {
+        if (!ProjectColor.valid(color) ? !this.color.isEmpty() : !color.equals(this.color)) set(projectId, color);
+    }
+
+    private void set(String projectId, String color) {
         this.projectId = projectId;
-        this.color = projectId.isEmpty() ? "" : color;
+        this.color = ProjectColor.valid(color) ? color : "";
         setChanged();
         if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+    }
+
+    @Override public void onLoad() {
+        super.onLoad();
+        if (level instanceof ServerLevel server) StationIndex.get(server.getServer()).projectBlockLoaded(this);
+    }
+
+    @Override public void setRemoved() {
+        super.setRemoved();
+        if (level instanceof ServerLevel server) StationIndex.get(server.getServer()).projectBlockUnloaded(this);
     }
 
     @Override protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {

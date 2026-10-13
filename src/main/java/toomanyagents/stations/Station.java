@@ -62,12 +62,17 @@ public record Station(String id, String name, String projectId, String providerI
             behaviors, radius, height, body, agentId);
     }
 
+    Station withProject(String projectId) {
+        return new Station(id, name, projectId, providerId, model, reasoningLevel, serviceTier, permissionMode, instructions,
+            behaviors, radius, height, body, agentId);
+    }
+
     Station withName(String name) {
         return new Station(id, name, projectId, providerId, model, reasoningLevel, serviceTier, permissionMode, instructions,
             behaviors, radius, height, body, agentId);
     }
 
-    boolean occupied() { return !agentId.isEmpty(); }
+    public boolean occupied() { return !agentId.isEmpty(); }
 
     /**
      * This station with a request's fields applied. Every field is optional. Names are only checked for shape here;
@@ -148,7 +153,7 @@ public record Station(String id, String name, String projectId, String providerI
     }
 
     /** Every field, as tools and diagnostics show it. */
-    JsonObject json() {
+    public JsonObject json() {
         var result = new JsonObject();
         result.addProperty("id", id);
         result.addProperty("name", name);
