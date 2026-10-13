@@ -103,7 +103,7 @@ final class ScreenIndex extends SavedData {
         return entries.values().stream().anyMatch(entry -> !entry.screen.id().equals(id) && entry.screen.name().equalsIgnoreCase(name));
     }
 
-    /** Saved items keep their name when possible. Blank items get a readable pair; collisions get a suffix. */
+    /** Named items and older saves keep their name when possible. Blank items get a readable pair; collisions get a suffix. */
     private String availableName(String preferred, UUID entity) {
         String base;
         try { base = validName(preferred); }

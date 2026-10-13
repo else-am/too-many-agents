@@ -177,9 +177,10 @@ def foundation():
     wait_for(lambda state: all(screen['id'] != copied['id'] for screen in state['screens']))
     assert all(screen['id'] != copied['id'] for screen in ui('screens')['index']['screens'])
     command('tp @s 163 -60 167')
-    state = wait_for(lambda state: any(item['name'] == 'Acceptance copy' for item in state['items']))
-    item = next(item for item in state['items'] if item['name'] == 'Acceptance copy')
-    assert item['name'] == 'Acceptance copy' and 'id' not in item and 'openedBy' not in item
+    state = wait_for(lambda state: bool(state['items']))
+    item = state['items'][0]
+    assert not item['name'] and not item['url'] and item.get('saved') is None
+    assert 'id' not in item and 'openedBy' not in item
     if item['slot'] < 9:
         ui('dev_key', key=49 + item['slot'])
     else:
@@ -187,10 +188,11 @@ def foundation():
     command('setblock 162 -57 168 stone')
     command('tp @s 164 -60 164')
     place((164.5, -57.5), (161.5, -55.5))
-    state = wait_for(lambda state: any(screen['name'] == 'Acceptance copy' for screen in state['screens']))
-    restored = next(screen for screen in state['screens'] if screen['name'] == 'Acceptance copy')
+    state = wait_for(lambda state: len(fixture_screens(state)) == 2)
+    restored = next(screen for screen in fixture_screens(state) if screen['id'] != screen_id)
     assert restored['id'] not in (screen_id, copied['id'])
-    print('PASS: Support loss saves the name; replacing the item allocates a fresh ID', flush=True)
+    assert restored['name'] and restored['name'] != 'Acceptance copy'
+    print('PASS: Support loss drops the name; replacing the item allocates a fresh ID and name', flush=True)
 
     expected = {screen['id']: (screen['name'], screen['url'], screen['blocks'], screen['pos'])
                 for screen in fixture_screens(state)}
@@ -383,6 +385,7 @@ def menu_actions():
     ui('dev_key', key=257)
     wait_for(lambda state: any(row['id'] == screen_id and row.get('painted') and row['url'] == url for row in state['screens']))
     saved = {key: screen_row(screen_id)[key] for key in ('name', 'url')}
+    carried = {'name': '', 'url': saved['url']}
     command('gamemode survival @s')
     command('tp @s 172 -60 164')
     menu_action(screen_id, 'pick_up')
@@ -391,24 +394,24 @@ def menu_actions():
     assert not state['items'], 'Pickup must pop off the panel, not go straight to inventory'
     dropped = state['droppedItems']
     assert len(dropped) == 1 and dropped[0]['count'] == 1, dropped
-    assert {key: dropped[0][key] for key in saved} == saved
+    assert {key: dropped[0][key] for key in carried} == carried
     assert 'id' not in dropped[0] and 'openedBy' not in dropped[0]
     command('tp @s 172.5 -60 167')
     state = wait_for(lambda state: bool(state['items']))
     item = state['items'][0]
-    assert item['count'] == 1 and {key: item[key] for key in saved} == saved
+    assert item['count'] == 1 and {key: item[key] for key in carried} == carried
     assert 'id' not in item and 'openedBy' not in item
     assert item['slot'] < 9
     ui('dev_key', key=49 + item['slot'])
     command('tp @s 172 -60 165')
     place((172.5, -57.5), (172.5, -57.5))
-    state = wait_for(lambda state: any(row['name'] == 'Tiny' and row.get('painted') for row in state['screens']))
-    restored = next(row for row in state['screens'] if row['name'] == 'Tiny')
+    state = wait_for(lambda state: any(row['blocks'] == '1x1' and row['id'] != screen_id and row.get('painted') for row in fixture_screens(state)))
+    restored = next(row for row in fixture_screens(state) if row['blocks'] == '1x1' and row['id'] != screen_id)
     assert restored['id'] != screen_id and not restored['openedBy']
-    assert {key: restored[key] for key in saved} == saved
+    assert restored['name'] and restored['name'] != saved['name'] and restored['url'] == saved['url']
     screen_id = restored['id']
     assert not state['items'], 'Survival placement must consume the returned item'
-    print('PASS: Pickup drops saved name/URL; replacing it creates a fresh ID without agent attribution', flush=True)
+    print('PASS: Pickup saves only URL; replacing it creates a fresh name and ID without agent attribution', flush=True)
 
     command('gamemode creative @s')
     command('tp @s 172 -60 164')
@@ -504,7 +507,7 @@ def saved_items_and_crafting():
         state = wait_for(lambda state: any(row['id'] not in before for row in state['screens']))
         screen_id = next(row['id'] for row in state['screens'] if row['id'] not in before)
         ids.append(screen_id)
-        # Pick up before placing the next copy: its name becomes available, and matching items still stack.
+        # Different placed names must not prevent picked-up items with the same URL from stacking.
         command('tp @s 172 -60 162')
         command('item replace entity @s weapon.mainhand with air')
         menu_action(screen_id, 'pick_up')
@@ -513,17 +516,17 @@ def saved_items_and_crafting():
     state = ui('screens')
     assert not state['items'], 'All four items must drop into the world first'
     for drop in state['droppedItems']:
-        if drop['name'] in ('Twin', 'Other'):
+        if not drop['name'] and drop['url'] in {url for _, url in pages}:
             command(f'tp @s {drop["x"]} -60 {drop["z"]}')
             time.sleep(.3)
     state = wait_for(lambda state: sum(item['count'] for item in state['items']) == 4)
     actual = {(item['name'], item['url']): item['count'] for item in state['items']}
-    assert actual == {pages[0]: 2, pages[2]: 1, pages[3]: 1}, actual
+    assert actual == {('', pages[0][1]): 3, ('', pages[2][1]): 1}, actual
     for item in state['items']:
-        assert item['saved'] == {'name': item['name'], 'url': item['url']}, item
-        assert item['tooltip'] == ['Screen', item['name'] + ' - ' + item['url']], item
-    print('PASS: Matching name/URL drops stack; different names or URLs stay separate, with no ID/provenance', flush=True)
-    print('PASS: Saved-item tooltip uses name - URL', flush=True)
+        assert item['saved'] == {'url': item['url']}, item
+        assert item['tooltip'] == ['Screen', item['url']], item
+    print('PASS: Picked-up screens stack by URL regardless of old names, with no ID/provenance', flush=True)
+    print('PASS: Saved-item tooltip shows only URL', flush=True)
 
     # A real two-by-two crafting interaction: one saved item in, one component-free item out.
     command('gamemode survival @s')

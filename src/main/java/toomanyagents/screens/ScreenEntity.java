@@ -125,8 +125,8 @@ public final class ScreenEntity extends HangingEntity {
     }
 
     /**
-     * Server: the screen is taken down and pops off the wall as an item, saving its name and page, or blank when
-     * reset. Removing it closes its page, fails waiting calls and ends its lease.
+     * Server: the screen is taken down and pops off the wall as an item, saving its page but not its name, or
+     * blank when reset. Removing it closes its page, fails waiting calls and ends its lease.
      */
     void pickUp(boolean reset) {
         var stack = reset ? new ItemStack(Screens.ITEM.get()) : ScreenItem.stack(record());
