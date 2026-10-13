@@ -1,6 +1,6 @@
 ---
 name: minecraft-agents
-description: Create embodied agents, roles and stations in an attached Minecraft world. Use BB itself for conversation and coordination.
+description: Create embodied agents, roles and stations, and use screens, in an attached Minecraft world. Use BB itself for conversation and coordination.
 ---
 
 # Embodied agents
@@ -107,3 +107,23 @@ Creative physical actions. A child cannot gain abilities its caller lacks.
 
 Project colors are configured in Minecraft’s project settings and persisted in BB,
 shared across worlds. Agents have no individual color setting.
+
+## Screens
+
+A screen is a page placed in the world: a dashboard, whiteboard, site or your own
+HTML. Use one to show the user something, or to work on a page together; they
+watch and can take over in-game.
+
+- `screen_list { mine: true }` finds your station's screens. Without `mine`,
+  `distance` from the user and from you tells screens apart when the user says
+  "over here" or "by you".
+- Omit `screen` when your station has exactly one; otherwise pass its UUID
+  or unique name. Keep the UUID for future calls: renaming preserves it, but
+  picking up and replacing a screen creates a new identity. `choose_screen` lists the candidates.
+- `screen_open` shows a URL or file; `screen_cdp` drives the page (usually
+  `Runtime.evaluate`); `screen_screenshot` shows you what it looks like;
+  `screen_close` makes it idle.
+- A `leased` screen is in use by another thread for a few seconds. Wait and
+  retry, or use another screen.
+- Nothing is retried automatically. After `timeout` the outcome is unknown:
+  check with `screen_list` or `screen_screenshot` before acting again.

@@ -157,13 +157,14 @@ export function minecraftWorlds(bb: BbPluginApi) {
     return object(await callback(live, "agents", {}), "agents").agents as unknown as Agent[];
   }
 
-  async function caller(threadId: string) {
+  /** Screen tools need no body, so they may allow a removed one. */
+  async function caller(threadId: string, allowRemoved = false) {
     const identity = await identify(threadId);
     if (!identity) throw new ApiError("access_denied", "This thread has no Minecraft body.");
     const live = session(identity.worldId);
     const all = await agents(live);
     const agent = all.find((row) => row.agentId === identity.agentId && row.threadId === threadId);
-    if (!agent || agent.removed || agent.archived)
+    if (!agent || (agent.removed && !allowRemoved) || agent.archived)
       throw new ApiError("access_denied", "This thread is not the body's conversation.");
     return { live, agent };
   }

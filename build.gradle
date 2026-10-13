@@ -12,6 +12,8 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
 def clientGameDirectory = file(providers.gradleProperty('personalDev').isPresent() ? 'run/play' : 'run')
 repositories { mavenCentral() }
+configurations { jcef { transitive = false } }
+def jcefApi = 'me.friwi:jcef-api:jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83'
 def imageLibraries = ['com.twelvemonkeys.imageio:imageio-webp', 'com.twelvemonkeys.imageio:imageio-core',
     'com.twelvemonkeys.imageio:imageio-metadata', 'com.twelvemonkeys.common:common-lang',
     'com.twelvemonkeys.common:common-io', 'com.twelvemonkeys.common:common-image']
@@ -29,7 +31,18 @@ dependencies {
     jarJar(implementation('org.nibor.autolink:autolink')) {
         version { strictly '[0.12.0,0.13.0)'; prefer '0.12.0' }
     }
+    // Embedded Chromium for screens. Minecraft already ships the commons/gson libraries jcefmaven wants.
+    jcef 'me.friwi:jcefmaven:152.0.6'
+    jcef jcefApi
+    compileOnly files(configurations.jcef)
 }
+// jcef's classes join our mod's own module, so our off-screen browser can extend its package-private base.
+def unpackJcef = tasks.register('unpackJcef', Sync) {
+    from { configurations.jcef.collect { zipTree(it) } }
+    exclude 'META-INF/**'
+    into layout.buildDirectory.dir('jcef-classes')
+}
+sourceSets.main.output.dir(layout.buildDirectory.dir('jcef-classes'), builtBy: unpackJcef)
 def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
     delete fileTree(new File(clientGameDirectory, 'mods')) { include 'too-many-agents*.jar' }
 }

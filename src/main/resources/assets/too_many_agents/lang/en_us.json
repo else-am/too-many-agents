@@ -1,3 +1,5 @@
 {
-  "entity.too_many_agents.hacker_dolphin": "Hacker Dolphin"
+  "entity.too_many_agents.hacker_dolphin": "Hacker Dolphin",
+  "item.too_many_agents.screen": "Screen",
+  "entity.too_many_agents.screen": "Screen"
 }

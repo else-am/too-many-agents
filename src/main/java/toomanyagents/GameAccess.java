@@ -49,12 +49,14 @@ import java.util.function.BooleanSupplier;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import toomanyagents.screens.ScreenTools;
 
 /** All live world access runs on the integrated server thread. */
 final class GameAccess {
     private static final Logger LOG = LogUtils.getLogger();
     private static final long QUEUE_SECONDS = 5;
-    enum Operation { OBSERVE, SETTINGS, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT }
+    enum Operation { OBSERVE, SETTINGS, POV, BLOCKS, ACTION, ACTION_STATUS, CANCEL, COMMAND, SCRIPT,
+        SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE }
     // What an agent's body perceives by default.
     private static final double OBSERVE_RADIUS = 16, LOOK_DISTANCE = 16;
     private static final int ENTITY_LIMIT = 64;
@@ -264,6 +266,43 @@ final class GameAccess {
                 } else call.result.complete(executeOperation(current, call.body, call.operation, call.args));
             } catch (Exception | LinkageError failure) { call.result.completeExceptionally(failure); }
         }
+    }
+
+    /**
+     * A screen tool call: resolved and leased on the server, carried out on the client, and settled off both threads.
+     * Closing the scope fails the wait; work already handed to a page can't be recalled, and its lease still ends.
+     */
+    CompletableFuture<JsonObject> screen(ToolScope scope, ScreenTools.Caller caller, String tool, JsonObject args, long expiresAt) {
+        var arguments = args == null ? new JsonObject() : args.deepCopy();
+        var resolved = schedule(scope.session, expiresAt, true, current -> {
+            synchronized (queueLock) { if (scope.closed != null) throw error(scope.closed); }
+            BooleanSupplier live = () -> {
+                synchronized (queueLock) { return scope.closed == null && server.get() == current && Objects.equals(scope.session, worldSession.get()); }
+            };
+            return ScreenTools.begin(current, WorldState.get(current).snapshot(), localPlayer.get(), caller, tool, arguments, live);
+        });
+        // Bounded overall, even if a game thread stalls before a step starts. Once the result is in, the scope closes,
+        // so no step still queued can run, and the call's waits and lease end.
+        var result = resolved.thenCompose(ScreenTools.Call::run).orTimeout(ScreenTools.CALL_SECONDS, TimeUnit.SECONDS);
+        var closed = result.whenComplete((done, failure) -> scope.close("tool_finished"));
+        resolved.thenAccept(call -> result.whenComplete((done, failure) -> {
+            scope.close("tool_finished");
+            call.finish();
+        }));
+        synchronized (queueLock) {
+            if (scope.closed != null) result.completeExceptionally(error(scope.closed));
+            else scope.waits.add(result);
+        }
+        result.whenComplete((done, failure) -> { synchronized (queueLock) { scope.waits.remove(result); } });
+        // Settled only after the scope is closed, so nothing of the call runs after its answer.
+        return ScreenTools.settle(closed);
+    }
+
+    /** Ends a thread's screen leases early, or everyone's when thread is null. */
+    void releaseScreenLeases(String thread, String expectedSession) {
+        var current = server.get();
+        if (current == null || expectedSession == null || !expectedSession.equals(worldSession.get())) return;
+        current.execute(() -> { if (server.get() == current && current.isRunning()) ScreenTools.release(current, thread); });
     }
 
     /** Stop is accepted even while paused, and applied before the next action controller tick. */
@@ -826,6 +865,7 @@ final class GameAccess {
             case COMMAND -> { controller.requireUnscripted(); yield command(current, mob, arguments); }
             case SCRIPT -> script(current, body, mob, controller, arguments);
             case POV -> throw error("pov_requires_client_renderer");
+            case SCREEN_LIST, SCREEN_OPEN, SCREEN_CDP, SCREEN_SCREENSHOT, SCREEN_CLOSE -> throw error("screen_tools_use_their_own_callback");
         };
     }
 
@@ -1272,11 +1312,16 @@ final class GameAccess {
     }
 
     private <T> CompletableFuture<T> schedule(String expectedSession, long expiresAt, Function<MinecraftServer, T> work) {
+        return schedule(expectedSession, expiresAt, false, work);
+    }
+
+    /** whilePaused is for screens: their pages keep running while the game is paused, unlike agents' bodies. */
+    private <T> CompletableFuture<T> schedule(String expectedSession, long expiresAt, boolean whilePaused, Function<MinecraftServer, T> work) {
         var current = server.get();
         if (current == null || expectedSession == null || !expectedSession.equals(worldSession.get())) {
             return CompletableFuture.failedFuture(error("world_session_changed"));
         }
-        if (paused.getAsBoolean()) return CompletableFuture.failedFuture(error("game_paused"));
+        if (!whilePaused && paused.getAsBoolean()) return CompletableFuture.failedFuture(error("game_paused"));
         var result = new CompletableFuture<T>();
         var state = new AtomicReference<>("queued");
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(QUEUE_SECONDS);
@@ -1291,7 +1336,7 @@ final class GameAccess {
                 try {
                     if (System.nanoTime() > deadline || System.currentTimeMillis() >= expiresAt) throw error("expired_before_execution");
                     if (server.get() != current || !expectedSession.equals(worldSession.get())) throw error("world_session_changed");
-                    if (paused.getAsBoolean()) throw error("game_paused");
+                    if (!whilePaused && paused.getAsBoolean()) throw error("game_paused");
                     result.complete(work.apply(current));
                 } catch (Exception | LinkageError exception) {
                     result.completeExceptionally(exception);

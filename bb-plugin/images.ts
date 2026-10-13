@@ -3,12 +3,41 @@ import { basename, extname, isAbsolute, posix, win32 } from "node:path";
 import type { BbPluginApi, PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { ApiError, object, type Json, type ObjectValue } from "./protocol.js";
 
+const OPEN_IMAGE = "Open this path with your image-viewing tool (Codex: view_image; Claude Code: Read) to see it.";
+
 export async function savePovSnapshot(
   bb: BbPluginApi,
   ctx: PluginAgentToolContext,
   result: PluginAgentToolResult,
 ): Promise<PluginAgentToolResult> {
   if (typeof result === "string" || result.isError) return result;
+  const { path } = await saveSnapshot(bb, ctx, result, "minecraft-pov");
+  return {
+    content: [
+      ...result.content.filter(part => part.type === "text"),
+      { type: "text", text: JSON.stringify({ path, mimeType: "image/png", message: `Snapshot saved. ${OPEN_IMAGE}` }) },
+    ],
+  };
+}
+
+export async function saveScreenSnapshot(
+  bb: BbPluginApi,
+  ctx: PluginAgentToolContext,
+  result: PluginAgentToolResult,
+): Promise<PluginAgentToolResult> {
+  if (typeof result === "string" || result.isError) return result;
+  const { path, metadata } = await saveSnapshot(bb, ctx, result, "screen");
+  const { url, title } = metadata;
+  return { content: [{ type: "text", text: JSON.stringify({ path, url, title, message: `Screenshot saved. ${OPEN_IMAGE}` }) }] };
+}
+
+/** Saves a result's one PNG to the thread's Attachments folder. The first text part is JSON metadata with `capturedAtMs`. */
+async function saveSnapshot(
+  bb: BbPluginApi,
+  ctx: PluginAgentToolContext,
+  result: Exclude<PluginAgentToolResult, string>,
+  prefix: string,
+) {
   const images = result.content.filter(part => part.type === "image");
   const image = images[0];
   if (images.length !== 1 || !image || image.mimeType !== "image/png"
@@ -19,8 +48,9 @@ export async function savePovSnapshot(
       || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])))
     throw new ApiError("invalid_snapshot", "Snapshot must be a PNG under 5 MB");
 
-  const metadata = result.content.find(part => part.type === "text");
-  const capturedAtMs = metadata ? object(JSON.parse(metadata.text), "snapshot metadata").capturedAtMs : undefined;
+  const text = result.content.find(part => part.type === "text");
+  const metadata = text ? object(JSON.parse(text.text), "snapshot metadata") : {};
+  const capturedAtMs = metadata.capturedAtMs;
   if (typeof capturedAtMs !== "number" || !Number.isSafeInteger(capturedAtMs) || capturedAtMs <= 0)
     throw new ApiError("invalid_snapshot", "Snapshot is missing its capture timestamp");
 
@@ -28,7 +58,7 @@ export async function savePovSnapshot(
   const storage = await bb.sdk.threads.storageLocation({ threadId: ctx.threadId });
   // The agent's host may use different path separators from the plugin server.
   const paths = storage.storageRootPath.startsWith("/") ? posix : win32;
-  const path = paths.join(storage.storageRootPath, "Attachments", `minecraft-pov-${capturedAtMs}.png`);
+  const path = paths.join(storage.storageRootPath, "Attachments", `${prefix}-${capturedAtMs}.png`);
   ctx.signal.throwIfAborted();
   const saved = await bb.sdk.files.write({
     hostId: storage.hostId,
@@ -41,16 +71,7 @@ export async function savePovSnapshot(
   });
   if (saved.outcome !== "written")
     throw new ApiError("snapshot_exists", "A snapshot already exists at this capture timestamp");
-  return {
-    content: [
-      ...result.content.filter(part => part.type === "text"),
-      { type: "text", text: JSON.stringify({
-        path,
-        mimeType: "image/png",
-        message: "Snapshot saved. Open this path with your image-viewing tool (Codex: view_image; Claude Code: Read) to see it.",
-      }) },
-    ],
-  };
+  return { path, metadata };
 }
 
 export function imageUploads(bb: BbPluginApi) {

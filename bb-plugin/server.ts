@@ -11,10 +11,12 @@ import { describe } from "./protocol.js";
 import { savePovSnapshot } from "./images.js";
 import { publishDiscovery } from "./discovery.js";
 import { minecraftScripts } from "./scripts.js";
+import { screenTools } from "./screens.js";
 
 export default async function minecraft(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
   const scripts = minecraftScripts(bb, worlds);
+  const screen = screenTools(bb, worlds);
   const threads = minecraftThreads(bb, worlds);
   const projects = minecraftProjects(bb, worlds);
   const agents = minecraftAgents(bb, worlds, threads, projects);
@@ -35,15 +37,16 @@ export default async function minecraft(bb: BbPluginApi) {
   const instructions = await readFile(new URL("./surface/agents.md", import.meta.url), "utf8");
   const scriptingInstructions = await readFile(new URL("./surface/scripting.md", import.meta.url), "utf8");
   // Tools marked agent: false stay available to development diagnostics only.
-  const physicalTools = tools.filter((tool) => tool.minecraft && tool.agent !== false);
+  const agentTools = tools.filter((tool) => tool.agent !== false);
 
-  for (const tool of physicalTools) {
+  for (const tool of agentTools) {
     bb.agents.registerTool({
       name: tool.name,
       description: tool.description,
       parameters: tool.inputSchema,
       ...(tool.name === "minecraft_run" ? { instructions: scriptingInstructions } : {}),
       async execute(args, ctx): Promise<PluginAgentToolResult> {
+        if (tool.name.startsWith("screen_")) return screen(tool.name, args, ctx);
         try {
           const { live, agent } = await worlds.caller(ctx.threadId);
           if (tool.name === "minecraft_run") return await scripts(args, ctx, live, agent.agentId);
@@ -72,7 +75,7 @@ export default async function minecraft(bb: BbPluginApi) {
     if (typeof pluginMetadata.worldId !== "string" || typeof pluginMetadata.agentId !== "string")
       return { tools: [], skills: [] };
     return {
-      tools: physicalTools
+      tools: agentTools
         .filter((tool) => !tool.minecraft || pluginMetadata.minecraftAccess === true)
         .map((tool) => tool.name),
       skills: ["minecraft-agents", ...(pluginMetadata.minecraftAccess === true ? ["minecraft-scripting"] : [])],

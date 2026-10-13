@@ -47,6 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public final class TooManyAgents {
     private static final Logger LOG = LogUtils.getLogger();
     private static final Gson JSON = new Gson();
+    /** Long enough for a screen call's own limits to answer first. */
+    private static final int SCREEN_WAIT_SECONDS = 45;
     private record WorldSession(MinecraftServer server, String id) {}
     private final AtomicReference<WorldSession> session = new AtomicReference<>();
     // JSON objects are completed on their owning game thread, then never mutated.
@@ -77,6 +79,7 @@ public final class TooManyAgents {
         modBus.addListener((net.neoforged.neoforge.client.event.EntityRenderersEvent.RegisterRenderers event) ->
             event.registerEntityRenderer(BodyFishingHook.TYPE.get(), net.minecraft.client.renderer.entity.FishingHookRenderer::new));
         toomanyagents.mobs.Mobs.register(modBus);
+        toomanyagents.screens.Screens.register(modBus);
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));
         controls = new ClientControls(modBus, () -> agents);
@@ -201,7 +204,9 @@ public final class TooManyAgents {
                 boolean scriptWait = "script".equals(field(request, "op"))
                     && request.has("arguments") && request.get("arguments").isJsonObject()
                     && java.util.Set.of("awaitAction", "awaitTicks").contains(field(request.getAsJsonObject("arguments"), "operation"));
-                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(scriptWait ? 310 : 15,TimeUnit.SECONDS)); }
+                // Screen calls bound their own waits: page loads at 15s, DevTools at 30s.
+                boolean screen = "screen".equals(field(request, "op"));
+                try { result = JsonState.object("ok",true,"result",agents.callback(request).get(scriptWait ? 310 : screen ? SCREEN_WAIT_SECONDS : 15,TimeUnit.SECONDS)); }
                 catch(java.util.concurrent.TimeoutException failure) { return new LocalBridge.Reply(504,JSON.toJson(JsonState.object("ok",false,"error",JsonState.object("message","callback_outcome_unknown_do_not_retry")))); }
                 catch(InterruptedException failure) {
                     Thread.currentThread().interrupt();
@@ -251,7 +256,8 @@ public final class TooManyAgents {
                         case "conversation-archive" -> agents.archiveConversation(id, true).get(100, TimeUnit.SECONDS);
                         case "conversation-restore" -> agents.archiveConversation(id, false).get(100, TimeUnit.SECONDS);
                         case "respond" -> agents.respond(id, field(request, "requestId"), request.getAsJsonObject("resolution")).get(100, TimeUnit.SECONDS);
-                        case "tool" -> agents.call(id, field(request, "tool"), request.getAsJsonObject("arguments")).get(10, TimeUnit.SECONDS);
+                        case "tool" -> agents.call(id, field(request, "tool"), request.getAsJsonObject("arguments"))
+                            .get(field(request, "tool").startsWith("screen_") ? SCREEN_WAIT_SECONDS : 10, TimeUnit.SECONDS);
                         default -> throw new IllegalArgumentException("unknown_endpoint");
                     };
                     if (result == null) result = new JsonObject();
