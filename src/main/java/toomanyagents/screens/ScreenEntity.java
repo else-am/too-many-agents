@@ -27,13 +27,14 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * A placed screen: a thin panel hanging on a wall, like a painting. pos is its bottom-left cell as seen from the
+ * A placed screen: a thin panel attached to a block face. pos is its bottom-left cell as seen from the
  * front, and it extends right and up from there. Its record reaches the client as ordinary synced entity data.
  */
 public final class ScreenEntity extends HangingEntity {
     public static final int MAX_SIZE = 16;
     static final double DEPTH = 1 / 16.0;
 
+    private static final EntityDataAccessor<Direction> UP = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.DIRECTION);
     private static final EntityDataAccessor<String> ID = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> NAME = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.STRING);
     private static final EntityDataAccessor<String> URL = SynchedEntityData.defineId(ScreenEntity.class, EntityDataSerializers.STRING);
@@ -47,8 +48,9 @@ public final class ScreenEntity extends HangingEntity {
         super(type, level);
     }
 
-    ScreenEntity(Level level, BlockPos pos, Direction facing, int width, int height, Screen record) {
+    ScreenEntity(Level level, BlockPos pos, Direction facing, Direction up, int width, int height, Screen record) {
         super(Screens.ENTITY.get(), level, pos);
+        entityData.set(UP, up);
         entityData.set(WIDTH, width);
         entityData.set(HEIGHT, height);
         setRecord(record);
@@ -56,11 +58,11 @@ public final class ScreenEntity extends HangingEntity {
     }
 
     @Override protected void defineSynchedData(SynchedEntityData.Builder builder) {
-        builder.define(ID, "").define(NAME, "").define(URL, "").define(OPENED_BY, "").define(WIDTH, 1).define(HEIGHT, 1).define(HOLDER, "");
+        builder.define(UP, Direction.UP).define(ID, "").define(NAME, "").define(URL, "").define(OPENED_BY, "").define(WIDTH, 1).define(HEIGHT, 1).define(HOLDER, "");
     }
 
     @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
-        if (WIDTH.equals(key) || HEIGHT.equals(key)) recalculateBoundingBox();
+        if (WIDTH.equals(key) || HEIGHT.equals(key) || UP.equals(key)) recalculateBoundingBox();
     }
 
     public Screen record() { return new Screen(entityData.get(ID), entityData.get(NAME), entityData.get(URL), entityData.get(OPENED_BY)); }
@@ -69,8 +71,20 @@ public final class ScreenEntity extends HangingEntity {
     String holder() { return entityData.get(HOLDER); }
     void setHolder(String holder) { entityData.set(HOLDER, holder); }
     public Direction facing() { return direction; }
-    /** The viewer's right when looking at the front of a screen facing this way. */
-    static Direction right(Direction facing) { return facing.getCounterClockWise(); }
+    public Direction up() { return entityData.get(UP); }
+    /** Page-right is page-up crossed with the outward normal. */
+    static Direction right(Direction facing, Direction up) {
+        return Direction.fromDelta(up.getStepY() * facing.getStepZ() - up.getStepZ() * facing.getStepY(),
+            up.getStepZ() * facing.getStepX() - up.getStepX() * facing.getStepZ(),
+            up.getStepX() * facing.getStepY() - up.getStepY() * facing.getStepX());
+    }
+
+    @Override protected void setDirection(Direction facing) {
+        direction = facing;
+        setYRot(facing.getAxis().isHorizontal() ? facing.get2DDataValue() * 90 : 0);
+        yRotO = getYRot();
+        recalculateBoundingBox();
+    }
 
     /** Server only: changes the record and keeps the world's index in step. */
     void setRecord(Screen record) {
@@ -105,13 +119,19 @@ public final class ScreenEntity extends HangingEntity {
     }
 
     @Override protected AABB calculateBoundingBox(BlockPos pos, Direction facing) {
-        var far = pos.relative(right(facing), width() - 1).above(height() - 1);
+        var up = up();
+        // During spawn, the face and synced page-up arrive separately.
+        if (up.getAxis() == facing.getAxis()) up = facing.getAxis().isHorizontal() ? Direction.UP : Direction.NORTH;
+        return bounds(pos, facing, up, width(), height());
+    }
+
+    static AABB bounds(BlockPos pos, Direction facing, Direction up, int width, int height) {
+        var far = pos.relative(right(facing, up), width - 1).relative(up, height - 1);
         var cells = AABB.encapsulatingFullBlocks(pos, far);
-        // Only the thin slab against the wall.
         Vec3 center = cells.getCenter().relative(facing, -0.5 + DEPTH / 2);
         var axis = facing.getAxis();
-        return AABB.ofSize(center, axis == Direction.Axis.X ? DEPTH : cells.getXsize(), cells.getYsize(),
-            axis == Direction.Axis.Z ? DEPTH : cells.getZsize());
+        return AABB.ofSize(center, axis == Direction.Axis.X ? DEPTH : cells.getXsize(),
+            axis == Direction.Axis.Y ? DEPTH : cells.getYsize(), axis == Direction.Axis.Z ? DEPTH : cells.getZsize());
     }
 
     /** Players never break a screen by hitting it: bare hands use the page, and its menu picks it up. */
@@ -125,7 +145,7 @@ public final class ScreenEntity extends HangingEntity {
     }
 
     /**
-     * Server: the screen is taken down and pops off the wall as an item, saving its page but not its name, or
+     * Server: the screen is taken down and pops off its surface as an item, saving its page but not its name, or
      * blank when reset. Removing it closes its page, fails waiting calls and ends its lease.
      */
     void pickUp(boolean reset) {
@@ -143,14 +163,16 @@ public final class ScreenEntity extends HangingEntity {
         if (!level().getGameRules().getBoolean(GameRules.RULE_DOENTITYDROPS)) return;
         playSound(SoundEvents.COPPER_BREAK, 1, 1);
         if (breaker instanceof Player player && player.hasInfiniteMaterials()) return;
-        spawnAtLocation(ScreenItem.stack(record()));
+        // A ceiling drop must start below the remaining support blocks.
+        spawnAtLocation(ScreenItem.stack(record()), direction == Direction.DOWN ? -0.3F : 0);
     }
 
     @Override public void playPlacementSound() { playSound(SoundEvents.COPPER_PLACE, 1, 1); }
 
     @Override public void addAdditionalSaveData(CompoundTag tag) {
         Screen.CODEC.encodeStart(NbtOps.INSTANCE, record()).ifSuccess(value -> tag.put("screen", value));
-        tag.putByte("facing", (byte) direction.get2DDataValue());
+        tag.putString("face", direction.getName());
+        tag.putString("up", up().getName());
         tag.putInt("width", width());
         tag.putInt("height", height());
         super.addAdditionalSaveData(tag);
@@ -160,7 +182,11 @@ public final class ScreenEntity extends HangingEntity {
         Screen.CODEC.parse(NbtOps.INSTANCE, tag.get("screen")).ifSuccess(this::setRecord);
         entityData.set(WIDTH, Math.clamp(tag.getInt("width"), 1, MAX_SIZE));
         entityData.set(HEIGHT, Math.clamp(tag.getInt("height"), 1, MAX_SIZE));
-        direction = Direction.from2DDataValue(tag.getByte("facing"));
+        direction = tag.contains("face") ? Direction.byName(tag.getString("face")) : Direction.from2DDataValue(tag.getByte("facing"));
+        if (direction == null) direction = Direction.NORTH;
+        var up = Direction.byName(tag.getString("up"));
+        if (up == null || up.getAxis() == direction.getAxis()) up = direction.getAxis().isHorizontal() ? Direction.UP : Direction.NORTH;
+        entityData.set(UP, up);
         super.readAdditionalSaveData(tag);
         setDirection(direction);
     }
@@ -171,12 +197,14 @@ public final class ScreenEntity extends HangingEntity {
     @Override public Vec3 trackingPosition() { return Vec3.atLowerCornerOf(pos); }
 
     @Override public Packet<ClientGamePacketListener> getAddEntityPacket(ServerEntity entity) {
-        return new ClientboundAddEntityPacket(this, direction.get3DDataValue(), getPos());
+        // Carry both axes so the first rendered frame already has its orientation.
+        return new ClientboundAddEntityPacket(this, direction.get3DDataValue() + 6 * up().get3DDataValue(), getPos());
     }
 
     @Override public void recreateFromPacket(ClientboundAddEntityPacket packet) {
         super.recreateFromPacket(packet);
-        setDirection(Direction.from3DDataValue(packet.getData()));
+        entityData.set(UP, Direction.from3DDataValue(packet.getData() / 6));
+        setDirection(Direction.from3DDataValue(packet.getData() % 6));
     }
 
     @Override public ItemStack getPickResult() { return new ItemStack(Screens.ITEM.get()); }

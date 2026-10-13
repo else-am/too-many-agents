@@ -46,8 +46,12 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         // Page space: x right and y down across the page in blocks from its top-left corner; -z comes toward the viewer.
         var origin = view.topLeft.subtract(screen.position());
         pose.translate(origin.x, origin.y, origin.z);
-        Vec3 r = view.rightVector, n = view.normal;
-        pose.mulPose(new Matrix4f((float) r.x, (float) r.y, (float) r.z, 0, 0, -1, 0, 0, (float) -n.x, (float) -n.y, (float) -n.z, 0, 0, 0, 0, 1));
+        Vec3 r = view.rightVector, n = view.normal, u = view.upVector;
+        pose.mulPose(new Matrix4f(
+            (float) r.x, (float) r.y, (float) r.z, 0,
+            (float) -u.x, (float) -u.y, (float) -u.z, 0,
+            (float) -n.x, (float) -n.y, (float) -n.z, 0,
+            0, 0, 0, 1));
         var matrix = pose.last().pose();
         double w = view.pageWidth, h = view.pageHeight;
         boolean trusted = Trust.allowedHere();

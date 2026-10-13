@@ -2,6 +2,7 @@
 """Exercise screen placement and persistence through the isolated client's native input handlers."""
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import time
@@ -555,6 +556,123 @@ def saved_items_and_crafting():
     command('gamemode creative @s')
 
 
+def horizontal_surfaces():
+    command('gamemode creative @s')
+    command('tp @s 200.5 -60 199.5')
+    time.sleep(3)
+    command('kill @e[type=too_many_agents:screen,x=195,y=-61,z=195,dx=12,dy=8,dz=12]')
+    command('kill @e[type=minecraft:item,x=195,y=-61,z=195,dx=12,dy=8,dz=12]')
+    command('fill 195 -60 195 207 -54 207 air')
+    command('fill 195 -61 195 207 -61 207 stone')
+    command('fill 195 -55 195 207 -55 207 stone')
+    ui('dev_key', key=57)
+    fixture = ROOT / 'run/too-many-agents/screens-acceptance'
+    fixture.mkdir(parents=True, exist_ok=True)
+    (fixture / 'horizontal.html').write_text('''<!doctype html><title>Horizontal screen</title>
+<style>body{background:#eee7d5;color:#182a39;font:40px Georgia;text-align:center}
+input{position:absolute;left:15%;top:40%;width:70%;height:20%;box-sizing:border-box;font:32px Georgia}</style>
+<h1>Floor / ceiling</h1><input placeholder="Type here" oninput="document.title=this.value">''')
+    url = (fixture / 'horizontal.html').as_uri()
+    saved = {}
+    for face, y in [('up', -60), ('down', -55)]:
+        for heading, dx, dz in [('north', 0, -1), ('east', 1, 0), ('south', 0, 1), ('west', -1, 0)]:
+            command(f'tp @s {200.5 - dx * 2} -60 {201.5 - dz * 2}')
+            command('item replace entity @s weapon.mainhand with too_many_agents:screen')
+            before = {row['id'] for row in ui('screens')['screens']}
+            first = (200.5, y, 201.5)
+            # Camera-right and forward span a rectangle on either surface.
+            second = (200.5 - dz, y, 201.5 + dx)
+            second = (second[0] + dx * 2, y, second[2] + dz * 2)
+            aim(*first)
+            click()
+            preview = ui('screens')['placement']
+            assert preview['active'] and preview['facing'] == face, preview
+            expected_up = heading if face == 'up' else {'north':'south','south':'north','east':'west','west':'east'}[heading]
+            assert preview['up'] == expected_up, preview
+            aim(*second)
+            preview = ui('screens')['placement']
+            assert preview['size'] == '2x3' and not preview['invalid'], preview
+            click()
+            state = wait_for(lambda state: any(row['id'] not in before for row in state['screens']))
+            row = next(row for row in state['screens'] if row['id'] not in before)
+            sid = row['id']
+            assert (row['facing'], row['up'], row['blocks']) == (face, expected_up, '2x3'), row
+            command('item replace entity @s weapon.mainhand with air')
+            screen_control(sid, 'name')
+            assert ui('screens')['input'] == 'name'
+            name = f'{face}-{heading}'
+            ui('dev_char', text=name)
+            ui('dev_key', key=257)
+            wait_for(lambda state: any(row['id'] == sid and row['name'] == name for row in state['screens']))
+            if heading == 'west':
+                screen_control(sid, 'address')
+                ui('dev_char', text=url)
+                ui('dev_key', key=257)
+                wait_for(lambda state: any(row['id'] == sid and row.get('painted') and not row['loading'] for row in state['screens']), timeout=45)
+                row = screen_row(sid)
+                aim(*map(float, row['pageCenter'].split(',')))
+                click(0)
+                wait_for(lambda state: state['input'] == 'typing')
+                ui('dev_char', text=name)
+                wait_for(lambda state: any(row['id'] == sid and row.get('title') == name for row in state['screens']))
+                ui('dev_key', key=256)
+                shot = ui('screenshot')
+                shutil.copyfile(shot['path'], fixture / f'{face}.png')
+                saved[sid] = (name, face, expected_up, row['pos'], '2x3', url)
+            else:
+                menu_action(sid, 'reset', confirm=True)
+                wait_for(lambda state: all(row['id'] != sid for row in state['screens']))
+            print(f'PASS: {face}-facing panel toward {heading}: 2x3 placement, name field, ' + ('page typing' if heading == 'west' else 'menu reset'), flush=True)
+    ui('dev_leave')
+    ui('dev_open_world', name='too-many-agents-development')
+    deadline = time.monotonic() + 20
+    while True:
+        snapshot = json.loads(subprocess.check_output([sys.executable, str(ROOT / 'tools/too_many_agents.py'), '--game-dir', str(ROOT / 'run'), 'state']))
+        if snapshot['state'] == 'world':
+            break
+        assert time.monotonic() < deadline, 'Development world did not reopen'
+        time.sleep(.2)
+    state = wait_for(lambda state: all(any(row['id'] == sid for row in state['screens']) for sid in saved), timeout=15)
+    for row in state['screens']:
+        if row['id'] in saved:
+            assert (row['name'], row['facing'], row['up'], row['pos'], row['blocks'], row['url']) == saved[row['id']], row
+    print('PASS: Floor and ceiling screens retain orientation, dimensions, names, pages and UUIDs after reopening', flush=True)
+
+    for sid, (_, face, _, pos, _, _) in saved.items():
+        command('tp @s 202.5 -60 201.5')
+        command('item replace entity @s weapon.mainhand with too_many_agents:screen')
+        surface_y, support_y, cell_y = (-60, -61, -60) if face == 'up' else (-55, -55, -56)
+        aim(201.5, surface_y, 201.5)
+        click()
+        aim(200.5, surface_y, 201.5)
+        assert ui('screens')['placement']['invalid'], 'Overlapping screens must be rejected'
+        click()
+        assert ui('screens')['placement']['active']
+        ui('dev_key', key=256)
+        for obstruction in ('missing_support', 'occupied_cell'):
+            aim(201.5, surface_y, 201.5)
+            click()
+            if obstruction == 'missing_support':
+                command(f'setblock 201 {support_y} 201 air')
+            else:
+                command(f'setblock 201 {cell_y} 201 stone')
+            assert ui('screens')['placement']['invalid'], obstruction
+            click()
+            assert ui('screens')['placement']['active']
+            ui('dev_key', key=256)
+            command(f'setblock 201 {support_y} 201 stone')
+            command(f'setblock 201 {cell_y} 201 air')
+        x, y, z = map(int, pos.split(', '))
+        old_drops = {row['entity'] for row in ui('screens')['droppedItems']}
+        command('item replace entity @s weapon.mainhand with air')
+        command(f'setblock {x} {y - 1 if face == "up" else y + 1} {z} air')
+        state = wait_for(lambda state: all(row['id'] != sid for row in state['index']['screens']))
+        state = wait_for(lambda state: any(row['entity'] not in old_drops and row['url'] == url
+            and (face != 'down' or row['y'] < -55.25) for row in state['droppedItems']))
+        print(f'PASS: {face}-facing overlap, missing support and occupied cells rejected; support loss drops the saved page', flush=True)
+    command('kill @e[type=minecraft:item,x=195,y=-61,z=195,dx=12,dy=8,dz=12]')
+
+
 if __name__ == '__main__':
     foundation()
     facings()
@@ -562,3 +680,4 @@ if __name__ == '__main__':
     menu_actions()
     saved_items_and_crafting()
     unique_names()
+    horizontal_surfaces()

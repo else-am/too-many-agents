@@ -28,7 +28,7 @@ final class ScreenIndex extends SavedData {
     private static final String FILE = "too_many_agents_screens";
 
     /** Where a placed screen is, as last seen on the server. */
-    record Entry(UUID entity, Screen screen, String dimension, BlockPos pos, String facing, int width, int height) {}
+    record Entry(UUID entity, Screen screen, String dimension, BlockPos pos, String facing, String up, int width, int height) {}
 
     private final Map<String, Entry> entries = new LinkedHashMap<>();
     private static final String[] ADJECTIVES = {"slim", "quiet", "bright", "swift", "gentle", "calm", "bold", "clever",
@@ -127,7 +127,7 @@ final class ScreenIndex extends SavedData {
         // Another live screen owns this id; that screen keeps it.
         if (existing != null && !existing.entity.equals(screen.getUUID())) return;
         entries.put(record.id(), new Entry(screen.getUUID(), record, screen.level().dimension().location().toString(),
-            screen.getPos(), screen.facing().getName(), screen.width(), screen.height()));
+            screen.getPos(), screen.facing().getName(), screen.up().getName(), screen.width(), screen.height()));
         changed(screen.getServer());
     }
 
@@ -209,6 +209,7 @@ final class ScreenIndex extends SavedData {
             row.addProperty("dimension", entry.dimension);
             row.addProperty("pos", entry.pos.toShortString());
             row.addProperty("facing", entry.facing);
+            row.addProperty("up", entry.up);
             row.addProperty("size", entry.width + "x" + entry.height);
             var lease = lease(entry.screen.id());
             if (lease != null) {
@@ -234,6 +235,7 @@ final class ScreenIndex extends SavedData {
             row.putString("dimension", entry.dimension);
             row.put("pos", NbtUtils.writeBlockPos(entry.pos));
             row.putString("facing", entry.facing);
+            row.putString("up", entry.up);
             row.putInt("width", entry.width);
             row.putInt("height", entry.height);
             list.add(row);
@@ -253,7 +255,7 @@ final class ScreenIndex extends SavedData {
             var normalized = new Screen(entity.toString(), index.availableName(screen.name(), entity), screen.url(), screen.openedBy());
             if (!normalized.equals(screen)) index.setDirty();
             index.entries.put(normalized.id(), new Entry(entity, normalized, row.getString("dimension"), pos,
-                row.getString("facing"), row.getInt("width"), row.getInt("height")));
+                row.getString("facing"), row.contains("up") ? row.getString("up") : "up", row.getInt("width"), row.getInt("height")));
         }
         return index;
     }

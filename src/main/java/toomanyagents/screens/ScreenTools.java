@@ -469,15 +469,13 @@ public final class ScreenTools {
         return linked;
     }
 
-    /** The screen's panel: the thin slab against the wall, as ScreenEntity's bounding box. */
+    /** The screen's panel: the thin slab against its support, as ScreenEntity's bounding box. */
     private static AABB panel(ScreenIndex.Entry entry) {
         var facing = Direction.byName(entry.facing());
         if (facing == null) facing = Direction.NORTH;
-        var cells = AABB.encapsulatingFullBlocks(entry.pos(), entry.pos().relative(ScreenEntity.right(facing), entry.width() - 1).above(entry.height() - 1));
-        Vec3 center = cells.getCenter().relative(facing, -0.5 + ScreenEntity.DEPTH / 2);
-        var axis = facing.getAxis();
-        return AABB.ofSize(center, axis == Direction.Axis.X ? ScreenEntity.DEPTH : cells.getXsize(), cells.getYsize(),
-            axis == Direction.Axis.Z ? ScreenEntity.DEPTH : cells.getZsize());
+        var up = Direction.byName(entry.up());
+        if (up == null || up.getAxis() == facing.getAxis()) up = facing.getAxis().isHorizontal() ? Direction.UP : Direction.NORTH;
+        return ScreenEntity.bounds(entry.pos(), facing, up, entry.width(), entry.height());
     }
 
     /** How far an entity is from a screen, or null when it's absent or in another dimension. */

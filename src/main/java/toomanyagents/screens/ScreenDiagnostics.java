@@ -42,6 +42,7 @@ public final class ScreenDiagnostics {
             screen.addProperty("entity", placed.getUUID().toString());
             screen.addProperty("pos", placed.getPos().toShortString());
             screen.addProperty("facing", placed.facing().getName());
+            screen.addProperty("up", placed.up().getName());
             screen.addProperty("blocks", placed.width() + "x" + placed.height());
             screen.addProperty("holder", placed.holder());
             var view = Screens.views().stream().filter(candidate -> candidate.screen == placed).findFirst().orElse(null);
