@@ -161,11 +161,16 @@ final class Chromium {
             @Override public void onLoadError(CefBrowser browser, CefFrame frame, ErrorCode code, String text, String failedUrl) {
                 // An aborted load is only the previous page giving way to the next.
                 var view = views.get(browser);
-                if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED) view.loadStarted((ScreenBrowser) browser, failedUrl);
+                if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED) {
+                    view.loadStarted((ScreenBrowser) browser, failedUrl);
+                    view.loadFinished((ScreenBrowser) browser, failedUrl);
+                }
             }
             @Override public void onLoadEnd(CefBrowser browser, CefFrame frame, int status) {
                 if (!((ScreenBrowser) browser).ready()) return;
                 frame.executeJavaScript(PAGE_SCRIPT + CAPTURE_SCRIPT, "", 0);
+                var view = views.get(browser);
+                if (view != null && frame.isMain()) view.loadFinished((ScreenBrowser) browser, frame.getURL());
             }
         });
         client.addDisplayHandler(new CefDisplayHandlerAdapter() {
@@ -183,11 +188,17 @@ final class Chromium {
         client.addRequestHandler(new CefRequestHandlerAdapter() {
             @Override public void onRenderProcessTerminated(CefBrowser browser, CefRequestHandler.TerminationStatus status, int code, String message) {
                 var view = views.get(browser);
-                if (view != null) view.crashed((ScreenBrowser) browser);
+                if (view != null) {
+                    LOG.warn("Screen renderer terminated: {} (code {})", status, code);
+                    view.crashed((ScreenBrowser) browser);
+                }
             }
             @Override public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean userGesture, boolean redirect) {
                 var view = views.get(browser);
-                if (view != null && frame.isMain() && userGesture && !redirect) view.gesture((ScreenBrowser) browser);
+                if (view != null && frame.isMain()) {
+                    view.browsing((ScreenBrowser) browser, request.getURL());
+                    if (userGesture && !redirect) view.gesture((ScreenBrowser) browser);
+                }
                 return false;
             }
         });

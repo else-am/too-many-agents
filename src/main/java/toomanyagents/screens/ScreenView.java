@@ -68,7 +68,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** Agent calls waiting on this page; closing it fails them. An open waits for its page's load to finish. */
     private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
     private CompletableFuture<Void> opening;
-    private boolean openingStarted;
+    private boolean openingStarted, openingFinished;
     /** The page an open replaced, whose late loads mustn't complete it. */
     private String superseded = "";
     /** Changes whenever an agent opens a page or the browser closes, so a call's answer can't come from another page. */
@@ -263,7 +263,7 @@ final class ScreenView implements ScreenBrowser.View {
         // Ready before Chromium is asked, in case it answers at once.
         var waiter = track(new CompletableFuture<Void>());
         opening = waiter;
-        openingStarted = false;
+        openingStarted = openingFinished = false;
         superseded = browser == null ? "" : url;
         generation++;
         url = target;
@@ -276,10 +276,12 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** Physical input uses Chromium's complete keyboard mapping, while retaining player navigation ownership. */
     void playerInput(String method, com.google.gson.JsonObject params) {
+        if (browser == null || crashed) return;
         playerInput();
+        var source = browser;
         if (devTools == null) devTools = browser.getDevToolsClient();
         devTools.executeDevToolsMethod(method, params.toString()).exceptionally(error -> {
-            onRender(() -> ScreenInput.closing(this));
+            onRender(() -> { if (browser == source) ScreenInput.closing(this); });
             com.mojang.logging.LogUtils.getLogger().warn("Screen input failed", error);
             return null;
         });
@@ -287,6 +289,7 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** Runs one DevTools method on the page. */
     CompletableFuture<String> devTools(String method, String params) {
+        requirePage();
         agentInput();
         if (devTools == null) devTools = browser.getDevToolsClient();
         var result = track(new CompletableFuture<String>());
@@ -298,7 +301,11 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** The page's last painted frame, exactly as painted. Owned by the caller. */
-    NativeImage frame() { return page.read(); }
+    NativeImage frame() { requirePage(); return page.read(); }
+
+    private void requirePage() {
+        if (crashed) throw new ScreenTools.ScreenError("unavailable", "The page crashed. Reload or open a page before using it again.");
+    }
 
     private <T> CompletableFuture<T> track(CompletableFuture<T> call) {
         pending.add(call);
@@ -374,17 +381,39 @@ final class ScreenView implements ScreenBrowser.View {
 
     void loading(ScreenBrowser source, boolean value, boolean back, boolean forward) {
         onRender(() -> {
-            if (source != browser) return;
+            if (source != browser || crashed) return;
             loading = value;
             canGoBack = back;
             canGoForward = forward;
             if (value) return;
             playerNavigating = false;
-            if (opening != null && !opening.isDone() && openingStarted) {
-                opening.complete(null);
-                opening = null;
-            }
+            finishOpening();
         });
+    }
+
+    /** Once the requested navigation begins, a redirect may legitimately return to the previous page. */
+    void browsing(ScreenBrowser source, String address) {
+        onRender(() -> {
+            if (source == browser && opening != null && !opening.isDone() && trimSlash(address).equals(trimSlash(url)))
+                superseded = "";
+        });
+    }
+
+    /** Stopping loading alone can mean the renderer died. Require the main frame to finish too. */
+    void loadFinished(ScreenBrowser source, String address) {
+        onRender(() -> {
+            if (source != browser || crashed || !openingStarted) return;
+            String loaded = trimSlash(address);
+            if (!loaded.equals(trimSlash(url)) && loaded.equals(trimSlash(superseded))) return;
+            openingFinished = true;
+            finishOpening();
+        });
+    }
+
+    private void finishOpening() {
+        if (loading || !openingFinished || opening == null || opening.isDone()) return;
+        opening.complete(null);
+        opening = null;
     }
 
     /**
@@ -397,7 +426,10 @@ final class ScreenView implements ScreenBrowser.View {
             ScreenInput.pageLoading(this);
             if (opening == null || opening.isDone()) return;
             String loaded = trimSlash(address);
-            if (loaded.equals(trimSlash(url)) || !loaded.equals(trimSlash(superseded))) openingStarted = true;
+            if (loaded.equals(trimSlash(url)) || !loaded.equals(trimSlash(superseded))) {
+                openingStarted = true;
+                openingFinished = false;
+            }
         });
     }
 
@@ -429,11 +461,27 @@ final class ScreenView implements ScreenBrowser.View {
     /** Same-page navigations skip the gesture check, so a click just before still counts. */
     private boolean recentInput() { return playerInput && System.nanoTime() - inputAt < 1_000_000_000L; }
 
-    void crashed(ScreenBrowser source) { onRender(() -> { if (source == browser) crashed = true; }); }
+    void crashed(ScreenBrowser source) {
+        onRender(() -> {
+            if (source != browser || crashed) return;
+            crashed = true;
+            generation++;
+            loading = editable = popupShown = playerNavigating = false;
+            popupBounds = null;
+            cursor = 0;
+            ScreenInput.forget(this);
+            opening = null;
+            var failure = new ScreenTools.ScreenError("unavailable",
+                "The page crashed. The outcome is unknown; check the page before repeating any action.");
+            for (var call : pending) call.completeExceptionally(failure);
+            if (devTools != null) devTools.close();
+            devTools = null;
+        });
+    }
 
     void editing(ScreenBrowser source, boolean value) {
         onRender(() -> {
-            if (source != browser) return;
+            if (source != browser || crashed) return;
             editable = value;
             ScreenInput.editingChanged(this, value);
         });
