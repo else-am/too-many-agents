@@ -154,6 +154,10 @@ final class Chromium {
                 default -> "Starting browser";
             });
             builder.addJcefArgs("--mute-audio");
+            // M152 soft-navigation metrics CHECK on stale NSApp timestamps from synthetic macOS input.
+            // Disable only those metrics; retain native OSR input routing, including select popups.
+            if (System.getProperty("os.name", "").startsWith("Mac"))
+                builder.addJcefArgs("--disable-features=SoftNavigationDetection");
             builder.setAppHandler(new MavenCefAppHandlerAdapter() {
                 // Standard, so pages have an origin; display-isolated, so only tma: pages can link, frame or embed tma:
                 // URLs; not local, so tma: pages can't reach file: URLs. jcef passes this to every Chromium process.
@@ -258,7 +262,7 @@ final class Chromium {
             @Override public void onRenderProcessTerminated(CefBrowser browser, CefRequestHandler.TerminationStatus status, int code, String message) {
                 var view = views.get(browser);
                 if (view != null) {
-                    LOG.warn("Screen renderer terminated: {} (code {})", status, code);
+                    LOG.warn("Screen renderer terminated: {} (code {}): {}", status, code, message);
                     view.crashed((ScreenBrowser) browser);
                 }
             }
