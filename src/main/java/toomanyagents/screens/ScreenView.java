@@ -63,11 +63,22 @@ final class ScreenView implements ScreenBrowser.View {
      * What the current built-in browser may load, bound to that native browser and the page generation it was granted
      * for; the authorized root joins it with the files view. Null on the web and for every browser but the current one.
      */
-    record Access(ScreenBrowser browser, long generation) {}
+    enum Provenance { HUMAN, AGENT }
+    record Grant(ConfinedFiles.Root root, Provenance provenance, String notice, String owner) {}
+    private static final java.util.concurrent.atomic.AtomicLong nextDocument = new java.util.concurrent.atomic.AtomicLong();
+    record Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner, long document) {
+        Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner) {
+            this(browser, generation, root, provenance, notice, owner, nextDocument.incrementAndGet());
+        }
+    }
+    private Grant fileGrant;
+    private CompletableFuture<FilePages.Opened> granting;
+    private String grantAttempt = "";
+    String fileError = "";
     volatile Access access;
     /** Addresses outside the current native history, nearest first. Crossing browser kinds always reopens fresh. */
     final LinkedList<Entry> behind = new LinkedList<>(), ahead = new LinkedList<>();
-    record Entry(String url, String title) {}
+    record Entry(String url, String title, Grant grant) {}
     private static final int HISTORY = 50;
     private boolean browserBack, browserForward;
     /** Detached only long enough to read its history, then closed before the replacement opens. */
@@ -203,6 +214,24 @@ final class ScreenView implements ScreenBrowser.View {
         return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(upVector.scale(-(pageHeight + barHeight / 2)));
     }
 
+    enum BlankAction { ADDRESS, FILES }
+    record Bounds(double x, double y, double width, double height) {
+        boolean contains(double px, double py) { return px >= x && py >= y && px < x + width && py < y + height; }
+    }
+
+    Bounds blankBounds(BlankAction action) {
+        double width = Math.min(pageWidth * 0.34, barHeight * 3.5), height = Math.min(pageHeight * 0.3, barHeight * 1.2);
+        double gap = barHeight * 0.3;
+        return new Bounds(pageWidth / 2 - width - gap / 2 + action.ordinal() * (width + gap),
+            pageHeight - height - barHeight * 0.5, width, height);
+    }
+
+    BlankAction blankAction(double x, double y) {
+        if (!url.isBlank()) return null;
+        for (var action : BlankAction.values()) if (blankBounds(action).contains(x, y)) return action;
+        return null;
+    }
+
     boolean onPage(double x, double y) { return x >= 0 && y >= 0 && x <= pageWidth && y < pageHeight; }
     int pixelX(double x) { return Math.clamp((int) Math.floor(x / pageWidth * pixelWidth), 0, pixelWidth - 1); }
     int pixelY(double y) { return Math.clamp((int) Math.floor(y / pageHeight * pixelHeight), 0, pixelHeight - 1); }
@@ -214,28 +243,91 @@ final class ScreenView implements ScreenBrowser.View {
         if (!value.equals(saved)) {
             saved = value;
             if (!value.equals(url)) {
+                cancelGrant();
+                fileGrant = null;
+                grantAttempt = "";
                 url = value;
                 crashed = false;
                 if (browser != null && !url.isBlank()) load(url);
             }
         }
         if (url.isBlank() && browser != null) close();
-        if (browser == null && departing == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
+        if (trusted && FilePages.location(url) && fileGrant == null && !url.equals(grantAttempt)
+            && entry.screen().openedBy().isEmpty()) openFiles(url, false);
+        if (browser == null && departing == null && granting == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
             start(url);
         }
     }
 
     void navigate(String target) {
+        if (FilePages.location(target)) { openFiles(target, true); return; }
         // A typed script runs in the page rather than becoming the screen's address. Built-in pages run only their own.
         if (target.regionMatches(true, 0, "javascript:", 0, 11)) {
             if (browser != null && !browser.builtin) browser.getMainFrame().executeJavaScript(target.substring(11), "", 0);
             return;
         }
         if (Chromium.place(target) == Chromium.Place.NOWHERE) return;
+        cancelGrant();
+        fileGrant = null;
+        fileError = "";
         url = target;
         crashed = false;
         load(target);
         Screens.saveUrl(this, target, true);
+    }
+
+    /** Native human controls are the only live source of broader file grants. */
+    void files() {
+        Trust.allow(Minecraft.getInstance().getSingleplayerServer());
+        openFiles(Builtin.files(java.nio.file.Path.of(System.getProperty("user.home"))) + "?pick", true);
+    }
+
+    private void cancelGrant() {
+        if (granting != null) granting.cancel(true);
+        granting = null;
+    }
+
+    private void openFiles(String target, boolean takeover) {
+        cancelGrant();
+        grantAttempt = target;
+        fileError = "";
+        var request = FilePages.submit(() -> FilePages.grant(target));
+        granting = request;
+        request.whenComplete((opened, failure) -> onRender(() -> {
+            if (granting != request) return;
+            granting = null;
+            if (failure != null) {
+                var cause = failure instanceof java.util.concurrent.CompletionException ? failure.getCause() : failure;
+                fileError = cause.getMessage() == null ? "Could not open this location." : cause.getMessage();
+                return;
+            }
+            fileGrant = new Grant(opened.root(), Provenance.HUMAN, opened.notice(), "");
+            url = opened.url();
+            grantAttempt = url;
+            crashed = false;
+            if (browser != null) {
+                drop(ahead);
+                leave(behind, false);
+            } else Chromium.start();
+            Screens.saveUrl(this, url, takeover);
+        }));
+    }
+
+    /** Only a trusted main-frame navigation from bundled controls can choose another grant. */
+    void filesIntent(ScreenBrowser source, String target) {
+        onRender(() -> {
+            if (source != browser || !recentInput() || !FilePages.location(target)) return;
+            playerInput = false;
+            var grant = access;
+            if (grant == null) return;
+            boolean picker = FilePages.picker(target);
+            // Only leaving through the picker may take over an agent view or choose a broader root.
+            if (!picker && (grant.provenance() == Provenance.AGENT || !FilePages.picker(source.getURL()))) {
+                if (grant.root() != null && FilePages.sameRoot(grant, target)) browser.loadURL(target);
+                return;
+            }
+            openFiles(target, grant.provenance() == Provenance.AGENT);
+        });
     }
 
     /** The player clicked a link from a built-in page out to the web. */
@@ -246,7 +338,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** Loads a page in this browser, or in a new one when it moves between web and built-in content. */
     private void load(String target) {
         if (browser == null) return;
-        if (Chromium.builtin(target) == browser.builtin) {
+        if (Chromium.builtin(target) == browser.builtin && (!browser.builtin || access == null || access.root() == (fileGrant == null ? null : fileGrant.root()))) {
             authorize();
             browser.loadURL(target);
             return;
@@ -255,13 +347,40 @@ final class ScreenView implements ScreenBrowser.View {
         leave(behind, false);
     }
 
-    private void authorize() { access = browser != null && browser.builtin ? new Access(browser, generation) : null; }
+    private void authorize() {
+        setAccess(browser != null && browser.builtin ? new Access(browser, generation,
+            fileGrant == null ? null : fileGrant.root(), fileGrant == null ? Provenance.AGENT : fileGrant.provenance(), fileGrant == null ? "" : fileGrant.notice(), fileGrant == null ? entry.screen().openedBy() : fileGrant.owner()) : null);
+    }
+
+    private void setAccess(Access value) {
+        Access previous;
+        synchronized (this) {
+            previous = access;
+            access = value;
+        }
+        FilePages.cancel(previous);
+    }
+
+    /** Runs directly in onBeforeBrowse, before the new document can start any data requests. */
+    void documentStarting(ScreenBrowser source, String target) {
+        String current = source.getURL();
+        if (current != null && !current.equals(target) && current.split("#", 2)[0].equals(target.split("#", 2)[0])) return;
+        Access previous;
+        synchronized (this) {
+            previous = access;
+            if (source != browser || previous == null || previous.browser() != source || previous.generation() != generation) return;
+            // A document boundary keeps the pinned permission, but has its own cancellation identity.
+            access = new Access(source, generation, previous.root(), previous.provenance(), previous.notice(), previous.owner());
+        }
+        FilePages.cancel(previous);
+    }
 
     /** A new browser at target becomes the current one. Its access is in place before it makes any request. */
     private void start(String target) {
         browser = Chromium.open(this, target, pixelWidth, pixelHeight);
         title = "";
         browserBack = browserForward = pageReady = false;
+        loading = true;
         crashed = popupShown = editable = false;
         live = true;
         authorize();
@@ -273,9 +392,10 @@ final class ScreenView implements ScreenBrowser.View {
     private void leave(LinkedList<Entry> stack, boolean back) {
         var old = browser;
         String oldTitle = title;
+        var oldGrant = access == null ? null : new Grant(access.root(), access.provenance(), access.notice(), access.owner());
         ScreenInput.pageLoading(this);
         failCommands("The page moved to another browser before DevTools answered. The outcome is unknown; check the page before acting again.");
-        access = null;
+        setAccess(null);
         generation++;
         browser = null;
         departing = old;
@@ -296,14 +416,14 @@ final class ScreenView implements ScreenBrowser.View {
                             var item = nativeEntries.get(i).getAsJsonObject();
                             String address = item.get("url").getAsString();
                             if (Chromium.place(address) != Chromium.Place.NOWHERE)
-                                entries.push(new Entry(address, item.get("title").getAsString()));
+                                entries.push(new Entry(address, item.get("title").getAsString(), oldGrant));
                         }
                     }
                 } catch (RuntimeException ignored) {
                     entries.clear();
                 }
                 if (entries.isEmpty() && Chromium.place(old.getURL()) != Chromium.Place.NOWHERE)
-                    entries.push(new Entry(old.getURL(), oldTitle));
+                    entries.push(new Entry(old.getURL(), oldTitle, oldGrant));
                 stack.addAll(0, entries);
                 while (stack.size() > HISTORY) stack.removeLast();
                 Chromium.close(old);
@@ -317,9 +437,13 @@ final class ScreenView implements ScreenBrowser.View {
     /** Returns to an address outside this browser's history, as the player's own navigation. */
     private void restore(LinkedList<Entry> from, boolean back) {
         var entry = from.pop();
+        cancelGrant();
+        fileGrant = entry.grant();
         url = entry.url();
         playerNavigating = false;
-        Screens.saveUrl(this, url, true);
+        String owner = fileGrant == null ? "" : fileGrant.owner();
+        String restoredUrl = url;
+        Screens.edit(this, record -> new Screen(record.id(), record.name(), restoredUrl, owner));
         leave(back ? ahead : behind, back);
     }
 
@@ -355,7 +479,7 @@ final class ScreenView implements ScreenBrowser.View {
         crashed = false;
         authorize();
         if (browser != null) browser.reload();
-        Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
+        if (browser == null || !browser.builtin) Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
     }
 
     void back() {
@@ -403,8 +527,12 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** An agent shows a page here. Completes once that page has loaded. */
-    CompletableFuture<Void> open(String target) {
+    CompletableFuture<Void> open(String target, String owner) {
         agentInput();
+        cancelGrant();
+        fileGrant = new Grant(null, Provenance.AGENT, "", owner);
+        grantAttempt = target;
+        fileError = "";
         if (opening != null) opening.completeExceptionally(new ScreenTools.ScreenError("unavailable", "Another page was opened on this screen."));
         // Ready before Chromium is asked, in case it answers at once.
         var waiter = track(new CompletableFuture<Void>());
@@ -501,11 +629,15 @@ final class ScreenView implements ScreenBrowser.View {
 
     void close() {
         ScreenInput.closing(this);
+        cancelGrant();
         var current = browser;
         var old = departing;
         browser = null;
         departing = null;
-        access = null;
+        setAccess(null);
+        fileGrant = null;
+        grantAttempt = "";
+        fileError = "";
         drop(behind);
         drop(ahead);
         pageReady = false;
@@ -639,7 +771,7 @@ final class ScreenView implements ScreenBrowser.View {
             if (address.equals(url) || Chromium.place(address) == Chromium.Place.NOWHERE) return;
             url = address;
             // Following a link the player clicked takes the page over; redirects and scripted changes don't.
-            Screens.saveUrl(this, address, playerNavigating || recentInput());
+            Screens.saveUrl(this, address, !source.builtin && (playerNavigating || recentInput()));
             playerNavigating = false;
         });
     }

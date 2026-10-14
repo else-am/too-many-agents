@@ -1,5 +1,25 @@
-html { height: 100%; background: #0b0b0c; color: #d8d6d0; }
-body { margin: 0; height: 100%; display: grid; place-items: center; font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; }
-main { max-width: 80%; text-align: center; }
-.label { margin: 0 0 0.5em; letter-spacing: 0.2em; text-transform: uppercase; font-size: 12px; color: #7d7a72; }
-.path { margin: 0; font: 18px/1.4 ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+:root { color-scheme: dark; font: 15px/1.5 ui-sans-serif, system-ui, sans-serif; background: #101112; color: #dededb; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { height: 100vh; display: flex; flex-direction: column; padding: 24px; max-width: 1100px; margin: auto; }
+header { display: flex; align-items: baseline; gap: 24px; padding-bottom: 18px; }
+header a { color: inherit; font: 14px/1.5 ui-monospace, Menlo, Consolas, monospace; text-decoration: none; overflow-wrap: anywhere; }
+header a:hover { text-decoration: underline; }
+#label { margin-left: auto; color: #838782; font-size: 12px; }
+#picker { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+[hidden] { display: none !important; }
+form { display: flex; gap: 8px; padding-bottom: 16px; }
+input, button { border: 1px solid #373a39; background: #191c1c; border-radius: 4px; color: inherit; font: inherit; padding: 9px 12px; }
+input { min-width: 0; flex: 1; font-family: ui-monospace, Menlo, Consolas, monospace; }
+button { cursor: pointer; padding-inline: 22px; }
+button:hover { background: #2a302d; }
+:focus-visible { outline: 1px solid #b7c8bc; outline-offset: 2px; }
+#listing { overflow: auto; min-height: 0; border-top: 1px solid #303331; padding-top: 8px; }
+.item { display: flex; gap: 10px; color: inherit; text-decoration: none; padding: 7px 12px; border-radius: 3px; overflow-wrap: anywhere; }
+.item .icon { width: 18px; flex: 0 0 18px; color: #99aaa0; }
+.item.hidden-file { color: #818782; }
+.item:hover, .item.selected { background: #252c28; }
+#notice, .muted { color: #90958f; font-size: 13px; }
+#notice { margin: 12px 0 0; }
+#selection { font-family: ui-monospace, Menlo, Consolas, monospace; overflow-wrap: anywhere; }
+@media (max-width: 480px) { main { padding: 12px; } header { gap: 8px; } input, button { padding: 8px; } }

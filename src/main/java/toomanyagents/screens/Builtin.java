@@ -33,7 +33,7 @@ final class Builtin {
 
     /** The file address for an absolute path, e.g. tma://files/Users/you/project. */
     static String files(java.nio.file.Path path) {
-        String text = path.toString().replace('\\', '/');
+        String text = java.io.File.separatorChar == '\\' ? path.toString().replace('\\', '/') : path.toString();
         try {
             return new URI(SCHEME, "files", text.startsWith("/") ? text : "/" + text, null).toASCIIString();
         } catch (java.net.URISyntaxException e) {
@@ -41,11 +41,77 @@ final class Builtin {
         }
     }
 
-    static final CefResourceRequestHandler REQUESTS = new CefResourceRequestHandlerAdapter() {
-        @Override public CefResourceHandler getResourceHandler(CefBrowser browser, CefFrame frame, CefRequest request) {
-            return new Response(request.getURL());
+    static CefResourceRequestHandler requests(ScreenView view, ScreenView.Access access, CefFrame frame) {
+        boolean main = frame.isMain();
+        return new CefResourceRequestHandlerAdapter() {
+            @Override public CefResourceHandler getResourceHandler(CefBrowser browser, CefFrame requesting, CefRequest request) {
+                if (URI.create(request.getURL()).getPath().startsWith("/_api/"))
+                    return new Data(view, access, main, request.getURL());
+                return new Response(request.getURL());
+            }
+        };
+    }
+
+    /** Async data responses retain the exact native grant captured when Chromium made the request. */
+    private static final class Data extends CefResourceHandlerAdapter {
+        private final ScreenView view;
+        private final ScreenView.Access access;
+        private final boolean main;
+        private final String url;
+        private volatile byte[] bytes = new byte[0];
+        private volatile int status = 200;
+        private int offset;
+        private volatile java.util.concurrent.CompletableFuture<String> work;
+        private volatile boolean cancelled;
+
+        Data(ScreenView view, ScreenView.Access access, boolean main, String url) {
+            this.view = view; this.access = access; this.main = main; this.url = url;
         }
-    };
+
+        @Override public boolean open(CefRequest request, BoolRef handleRequest, CefCallback callback) {
+            handleRequest.set(false);
+            work = main ? FilePages.request(view, access, url)
+                : java.util.concurrent.CompletableFuture.failedFuture(new IOException("Only the main files page may request data."));
+            work.whenComplete((value, failure) -> {
+                if (cancelled) return;
+                if (!FilePages.current(view, access)) { callback.cancel(); return; }
+                if (failure != null) {
+                    status = 403;
+                    var error = new com.google.gson.JsonObject();
+                    var cause = failure instanceof java.util.concurrent.CompletionException ? failure.getCause() : failure;
+                    error.addProperty("error", cause.getMessage() == null ? "Files request failed." : cause.getMessage());
+                    value = error.toString();
+                }
+                bytes = value.getBytes(StandardCharsets.UTF_8);
+                callback.Continue();
+            });
+            if (cancelled) work.cancel(true);
+            return true;
+        }
+
+        @Override public void getResponseHeaders(CefResponse response, IntRef length, StringRef redirect) {
+            response.setStatus(FilePages.current(view, access) ? status : 403);
+            response.setMimeType("application/json");
+            response.setHeaderByName("Cache-Control", "no-store", true);
+            response.setHeaderByName("X-Content-Type-Options", "nosniff", true);
+            length.set(FilePages.current(view, access) ? bytes.length : 0);
+        }
+
+        @Override public boolean read(byte[] out, int wanted, IntRef read, CefResourceReadCallback callback) {
+            if (cancelled || !FilePages.current(view, access)) { read.set(0); return false; }
+            int count = Math.min(wanted, bytes.length - offset);
+            read.set(Math.max(0, count));
+            if (count <= 0) return false;
+            System.arraycopy(bytes, offset, out, 0, count);
+            offset += count;
+            return true;
+        }
+
+        @Override public void cancel() {
+            cancelled = true;
+            if (work != null) work.cancel(true);
+        }
+    }
 
     /** tma://files/_app/NAME is a bundled file; any other tma://files/ address is the files page. */
     private static byte[] body(String url, StringRef type) throws IOException {

@@ -263,7 +263,7 @@ public final class ScreenTools {
         }).thenCompose(ignored -> onClient(live, () -> {
             var view = view(entry);
             if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
-            var loaded = wait(waiters, view.open(url), OPEN_SECONDS,
+            var loaded = wait(waiters, view.open(url, thread), OPEN_SECONDS,
                 "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
             return new Opened(view, view.generation, loaded);
         })).thenCompose(opened -> onServer(server, live, () -> {

@@ -88,6 +88,23 @@ public final class ScreenDiagnostics {
                     control.addProperty("z", center.z);
                     controls.add(part.name().toLowerCase(), control);
                 }
+                for (var action : ScreenView.BlankAction.values()) {
+                    var bounds = view.blankBounds(action);
+                    var center = view.topLeft.add(view.rightVector.scale(bounds.x() + bounds.width() / 2))
+                        .add(view.upVector.scale(-(bounds.y() + bounds.height() / 2)));
+                    var control = new JsonObject();
+                    control.addProperty("visible", view.url.isBlank());
+                    control.addProperty("left", bounds.x());
+                    control.addProperty("top", bounds.y());
+                    control.addProperty("width", bounds.width());
+                    control.addProperty("height", bounds.height());
+                    control.addProperty("x", center.x());
+                    control.addProperty("y", center.y());
+                    control.addProperty("z", center.z());
+                    controls.add("blank_" + action.name().toLowerCase(java.util.Locale.ROOT), control);
+                }
+                screen.addProperty("fileError", view.fileError);
+                screen.addProperty("fileGrant", view.access != null && view.access.root() != null);
                 screen.add("controls", controls);
                 // The menu's rows, where they are whether or not it's open.
                 var rows = new JsonArray();
@@ -115,6 +132,7 @@ public final class ScreenDiagnostics {
             browser.addProperty("screen", view.entry.screen().id());
             browser.addProperty("tracked", view.screen != null && !view.screen.isRemoved());
             browser.addProperty("browser", view.browser != null);
+            browser.addProperty("ready", view.browser != null && view.browser.ready());
             browser.addProperty("builtin", view.browser != null && view.browser.builtin);
             browser.addProperty("browserId", view.browser == null ? -1 : view.browser.getIdentifier());
             browser.addProperty("access", view.access != null);

@@ -250,7 +250,8 @@ public final class ScreenInput {
             // Our own controls; the page never sees these clicks.
             consumedButtons.add(button);
             if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
-            if (part == ScreenView.Part.NAME) startField(view, ScreenView.Part.NAME, view.screen.record().name());
+            if (view.blankAction(aim.x, aim.y) == ScreenView.BlankAction.FILES) view.files();
+            else if (part == ScreenView.Part.NAME) startField(view, ScreenView.Part.NAME, view.screen.record().name());
             else if (part == ScreenView.Part.BACK) view.back();
             else if (part == ScreenView.Part.FORWARD) view.forward();
             else if (part == ScreenView.Part.RELOAD) view.reload();
@@ -660,6 +661,8 @@ public final class ScreenInput {
     static String target(String typed) {
         String text = typed.strip();
         if (text.isEmpty()) return "";
+        String file = FilePages.typedPath(text);
+        if (!file.isEmpty()) return file;
         boolean port = text.matches("^[^/\\s]+:\\d+([/?#].*)?$");
         if (!port && text.matches("^[a-zA-Z][a-zA-Z0-9+.-]*:.*")) return text;
         if (!text.contains(" ") && (port || text.contains(".") || text.startsWith("localhost"))) {
@@ -684,6 +687,7 @@ public final class ScreenInput {
     static int cursorShape(ScreenView view) {
         if (aim == null || aim.view != view || pressed != null) return view.cursor;
         var part = view.barPart(aim.x, aim.y);
+        if (view.blankAction(aim.x, aim.y) != null) return Cursor.HAND_CURSOR;
         if (menu != null) return menuHovered(view) != null ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR;
         if (part == ScreenView.Part.ADDRESS || part == ScreenView.Part.NAME || (part == null && view.url.isBlank())) return Cursor.TEXT_CURSOR;
         if (part != null || view.browser == null || view.crashed || !Trust.allowedHere()) return Cursor.HAND_CURSOR;

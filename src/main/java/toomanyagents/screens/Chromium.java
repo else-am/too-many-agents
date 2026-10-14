@@ -59,8 +59,6 @@ final class Chromium {
     private static volatile CefApp app;
     private static volatile CefClient client;
     private static final Map<CefBrowser, ScreenView> views = new ConcurrentHashMap<>();
-    /** Built-in pages share one in-memory profile, apart from the web's cookies, storage and processes. */
-    private static volatile CefRequestContext builtinContext;
     private static final AtomicLong deniedNavigations = new AtomicLong(), deniedRequests = new AtomicLong();
 
     // Runs in every frame once it loads. It reports whether the focused element takes text, so clicking into a field
@@ -147,6 +145,7 @@ final class Chromium {
 
     private static void startNow() {
         try {
+            var contextReady = new java.util.concurrent.CompletableFuture<Void>();
             var builder = new CefAppBuilder();
             builder.setInstallDir(HOME.resolve(MANAGED ? "cef-152.0.6" : "cef").toFile());
             builder.setProgressHandler((state, percent) -> progress = switch (state) {
@@ -161,6 +160,7 @@ final class Chromium {
                 @Override public void onRegisterCustomSchemes(CefSchemeRegistrar registrar) {
                     registrar.addCustomScheme(Builtin.SCHEME, true, false, true, true, true, false, true);
                 }
+                @Override public void onContextInitialized() { contextReady.complete(null); }
                 // macOS: Cmd+Q reaches Chromium first. Quit through Minecraft so the world saves.
                 @Override public boolean onBeforeTerminate() {
                     Minecraft.getInstance().execute(() -> Minecraft.getInstance().stop());
@@ -187,9 +187,11 @@ final class Chromium {
             var app = builder.build();
             var client = app.createClient();
             handle(client);
-            builtinContext = CefRequestContext.createContext(new CefRequestContextHandlerAdapter() {});
             Chromium.app = app;
             Chromium.client = client;
+            // createClient returning is not the browser-process context-ready callback.
+            contextReady.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            if (phase != Phase.STARTING) return;
             phase = Phase.READY;
             LOG.info("Chromium {} ready in {} ms", app.getVersion(), (System.nanoTime() - started) / 1_000_000);
         } catch (Throwable e) {
@@ -272,7 +274,20 @@ final class Chromium {
                         view.follow(screen, request.getURL());
                     return true;
                 }
+                if (view != null && frame.isMain() && screen.builtin && screen.ready() && FilePages.location(request.getURL())) {
+                    if (userGesture && !redirect) {
+                        view.filesIntent(screen, request.getURL());
+                        return true;
+                    }
+                    var access = view.access;
+                    // A script can change presentation within its root; it cannot choose a new root.
+                    if (access != null && !FilePages.sameRoot(access, request.getURL())) {
+                        deniedNavigations.incrementAndGet();
+                        return true;
+                    }
+                }
                 if (view != null && frame.isMain()) {
+                    if (screen.builtin) view.documentStarting(screen, request.getURL());
                     view.browsing((ScreenBrowser) browser, request.getURL());
                     if (userGesture && !redirect) view.gesture((ScreenBrowser) browser);
                 }
@@ -289,11 +304,14 @@ final class Chromium {
                 if (place != Place.BUILTIN) return null;
                 var view = views.get(browser);
                 var access = view == null ? null : view.access;
-                boolean allowed = access != null && access.browser() == browser && access.generation() == view.generation && frame != null
-                    && (navigation ? frame.isMain() : builtin(frame.getURL()));
+                boolean allowed = access != null && access.browser() == browser && access.generation() == view.generation
+                    && ((ScreenBrowser) browser).builtin && frame != null
+                    && (frame.isMain() || !navigation && builtin(frame.getURL()));
                 if (!allowed) return DENY;
+                // The preload scanner can request CSS before CEF publishes the main frame's URL. Its native
+                // browser kind and current grant identify it; consulting that provisional URL loses early assets.
                 // Blob URLs the page made itself load as usual.
-                return url.regionMatches(true, 0, Builtin.SCHEME + ":", 0, Builtin.SCHEME.length() + 1) ? Builtin.REQUESTS : null;
+                return url.regionMatches(true, 0, Builtin.SCHEME + ":", 0, Builtin.SCHEME.length() + 1) ? Builtin.requests(view, access, frame) : null;
             }
         });
         client.addKeyboardHandler(new CefKeyboardHandlerAdapter() {
@@ -351,7 +369,11 @@ final class Chromium {
     /** A browser for the page at url: built-in for tma: pages, web for everything else. The caller creates it. */
     static ScreenBrowser open(ScreenView view, String url, int width, int height) {
         boolean builtin = builtin(url);
-        var browser = new ScreenBrowser(client, builtin ? builtinContext : null, builtin, url, width, height, FPS, view);
+        // CefBrowser_N.onBeforeClose disposes the request context passed to its constructor.
+        // Each built-in browser therefore owns a fresh in-memory context, separate from the web profile.
+        var context = builtin ? java.util.Objects.requireNonNull(
+            CefRequestContext.createContext(new CefRequestContextHandlerAdapter() {}), "Could not create the built-in browser context") : null;
+        var browser = new ScreenBrowser(client, context, builtin, url, width, height, FPS, view);
         views.put(browser, view);
         browser.setCloseAllowed();
         return browser;
@@ -372,7 +394,6 @@ final class Chromium {
         if (app == null) return;
         views.keySet().forEach(browser -> browser.close(true));
         views.clear();
-        if (builtinContext != null) builtinContext.dispose();
         client.dispose();
         app.dispose();
         // Chromium's shutdown finishes on the main thread, so keep its run loop turning until it does.

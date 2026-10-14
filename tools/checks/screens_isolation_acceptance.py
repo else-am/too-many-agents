@@ -73,7 +73,7 @@ def main():
     success(agent, 'screen_open', screen=screen, kind='url', target=web + '?injected=1')
     native.wait_for(lambda s: any(r['id'] == screen and r['title'] == marker for r in s['screens']))
     web_id = next(r['browserId'] for r in native.ui('screens')['browserViews'] if r['screen'] == screen)
-    opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(target))
+    opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(native.ROOT))
     builtin = opened['url']
     assert builtin.startswith('tma://files/'), opened
     wait_url(builtin)
@@ -91,7 +91,7 @@ def main():
     # More crossings than a small live-browser cache can retain must still have usable history.
     history = [builtin]
     for i in range(4):
-        for url in (web + f'?crossing={i}', builtin + ('&' if '?' in builtin else '?') + f'crossing={i}'):
+        for url in (web + f'?crossing={i}', builtin + f'#crossing={i}'):
             navigate(url)
             history.append(url)
             if url.startswith('tma:'):

@@ -209,7 +209,7 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 ## Order
 
 1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS and Linux x86_64; root-scoped serving acceptance and Linux arm64/Windows runtime validation remain.
-2. Picker, address-bar paths and blank-screen buttons.
+2. ~~Picker, address-bar paths and blank-screen buttons.~~ Packaged-client checks cover home/Tab completion, folder history, file-to-repository promotion, typed paths, ownership changes and saved-world restoration. Built-in-first startup and early stylesheet requests are handled using stock JCEF callbacks and per-browser request contexts. Agent data access remains disabled pending provider read-policy support.
 3. Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews, bounded loading and agent `kind:file`.
 4. Changes mode and base picker using the validated Git path. Agent `kind:changes`.
 5. Watcher and live updates.

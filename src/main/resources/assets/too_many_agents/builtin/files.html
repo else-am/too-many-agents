@@ -1,10 +1,17 @@
 <!doctype html>
 <html lang="en">
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Files</title>
 <link rel="stylesheet" href="/_app/files.css">
 <script src="/_app/files.js" defer></script>
 <main>
-  <p class="label">Files</p>
-  <p class="path" id="path"></p>
+  <header><a id="location" title="Choose a file or folder"></a><span id="label">Files</span></header>
+  <section id="picker" hidden>
+    <form id="path-form"><input id="path" aria-label="File or folder path" spellcheck="false" autocomplete="off"><button id="open" type="button">Open</button></form>
+    <nav id="listing" aria-label="Files and folders" tabindex="0"></nav>
+  </section>
+  <section id="viewer" hidden><p id="selection"></p><p class="muted">File preview is coming next.</p></section>
+  <p id="notice" role="status"></p>
 </main>
+</html>

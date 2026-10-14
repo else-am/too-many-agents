@@ -71,6 +71,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             double size = Math.min(Math.clamp(h * 0.05, 0.08, 0.2), w * 0.8 * 9 / Minecraft.getInstance().font.width(status));
             text(pose, buffers, status, w / 2, h / 2 - size / 2, size, STATUS, true, -0.002);
         }
+        if (view.url.isBlank()) blankButtons(pose, buffers, view);
         bar(pose, buffers, view);
         if (ScreenInput.menuOpen(view)) menu(pose, buffers, view);
         if (ScreenInput.capturedCursor(view)) {
@@ -106,13 +107,24 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     }
 
     private static String status(ScreenView view, boolean trusted) {
-        if (view.url.isBlank()) return ScreenInput.fieldText(view, ScreenView.Part.ADDRESS) != null ? null : "Click to enter an address";
+        if (!view.fileError.isEmpty()) return view.fileError;
+        if (view.url.isBlank()) return null;
         if (!trusted) return "Click to load pages in this world";
         if (view.crashed) return "Page crashed, click to reload";
         if (Chromium.phase() == Chromium.Phase.FAILED) return "The browser failed to start";
         if (Chromium.phase() != Chromium.Phase.READY) return Chromium.progress();
         if (!view.painted()) return "Loading";
         return null;
+    }
+
+    private static void blankButtons(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
+        for (var action : ScreenView.BlankAction.values()) {
+            var b = view.blankBounds(action);
+            rect(buffers, pose.last().pose(), b.x(), b.y(), b.x() + b.width(), b.y() + b.height(), -0.002, FIELD);
+            double size = Math.min(b.height() * 0.4, b.width() * 0.2);
+            text(pose, buffers, action == ScreenView.BlankAction.ADDRESS ? "Address" : "Files",
+                b.x() + b.width() / 2, b.y() + (b.height() - size) / 2, size, TEXT, true, -0.003);
+        }
     }
 
     private static void bar(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
