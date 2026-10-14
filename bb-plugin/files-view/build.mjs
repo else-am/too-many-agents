@@ -2,10 +2,9 @@ import { build } from "esbuild";
 import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("../../", import.meta.url));
 await build({
-  entryPoints: [fileURLToPath(new URL("./viewer.ts", import.meta.url))],
-  outfile:
-    root +
-    "build/generated/files-view/assets/too_many_agents/builtin/viewer.js",
+  // The picker is its own small bundle, so it never loads syntax highlighting.
+  entryPoints: ["viewer", "picker"].map((name) => fileURLToPath(new URL(`./${name}.ts`, import.meta.url))),
+  outdir: root + "build/generated/files-view/assets/too_many_agents/builtin",
   bundle: true,
   format: "iife",
   platform: "browser",

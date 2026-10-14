@@ -70,7 +70,8 @@ def main():
         _, shot = call(agent, 'screen_screenshot', screen=screen)
         png = base64.b64decode(next(part['data'] for part in shot['content'] if part['type'] == 'image'))
         assert max(corner(png)) < 80, 'Picker stylesheet did not render'
-        page_click(180, 84)
+        native.ui('dev_focus', active=True)
+        page_click(180, 78)
         native.ui('dev_key', key=65, modifiers=8 if sys.platform == 'darwin' else 2)
         native.ui('dev_char', text=text)
 
@@ -120,6 +121,9 @@ def main():
         try:
             if row().get('fileGrant'):
                 break
+        except StopIteration:
+            # The world is open before its screen entities reach the client.
+            pass
         except AssertionError as failure:
             if 'Open a local singleplayer world first' not in str(failure):
                 raise

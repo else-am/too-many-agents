@@ -116,6 +116,8 @@ final class FilePages {
         String normalized = Builtin.files(Path.of(root.path()));
         var params = new java.util.ArrayList<String>();
         if (query.containsKey("pick")) params.add("pick");
+        // Presentation only: the picker's hidden-files choice, kept while browsing.
+        if (query.containsKey("pick") && query.containsKey("hidden")) params.add("hidden");
         if (!selected.isEmpty()) params.add("open=" + encode(selected));
         for (String key : new String[] {"mode", "base"}) if (query.containsKey(key)) params.add(key + "=" + encode(query.get(key)));
         if (!params.isEmpty()) normalized += "?" + String.join("&", params);
