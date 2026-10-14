@@ -327,7 +327,7 @@ function mount(element: HTMLElement, state: State) {
     scroll: boolean,
   ) {
     const range = rangeFromURL();
-    view.setSelectedLines(range);
+    view.setSelectedLines(range, { notify: false });
     if (!range || !scroll) return;
     if (view instanceof FileDiff) {
       view.revealLine(range.start);
@@ -610,9 +610,9 @@ function mount(element: HTMLElement, state: State) {
               return;
             commit();
             if (preserveScroll) restoreScroll();
-            else if (!located) {
+            if (!located) {
               located = true;
-              applyLines(instance, content, true);
+              applyLines(instance, content, !preserveScroll);
             }
           },
         });

@@ -300,7 +300,7 @@
         },
         "target": {
           "type": "string",
-          "description": "URL, or file path (relative paths resolve from your working directory)."
+          "description": "For kind url: an http/https URL. For file/changes: a raw file path (relative paths resolve from your working directory) or an explicit tma://files/absolute/root?open=relative/file#L20-L40 location. Raw paths keep literal ? and #. Kind file preserves a location's mode/base; kind changes forces Changes, and base overrides the location's base. Picker/internal URLs and other query keys are refused. File locations do not grant access."
         },
         "base": {
           "type": "string",

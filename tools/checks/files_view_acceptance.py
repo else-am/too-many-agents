@@ -3,13 +3,14 @@
 import argparse
 import base64
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
 from urllib.parse import quote, urlencode, urlsplit, parse_qs
 
 import screens_acceptance as native
-from screens_tools_acceptance import call, error
+from screens_tools_acceptance import call, error, success
 from files_view_fixture import create
 
 
@@ -99,11 +100,44 @@ def main():
     click(939, 116)
     time.sleep(1)
     capture('markdown-preview')
-    show('text.txt', lines='L20-L40')
+    shared = show('text.txt', lines='L20-L40')
     capture('line-range')
     error('view_only', args.agent, 'screen_cdp', screen=args.screen,
           method='Runtime.evaluate', params={'expression': 'document.body.innerText'})
     print('PASS: preview requests, script sentinels and built-in CDP refusal; inspect saved previews', flush=True)
+
+    opened = success(args.agent, 'screen_open', screen=args.screen, kind='file', target=shared)
+    assert opened['url'] == shared and not row().get('fileGrant'), opened
+    error('view_only', args.agent, 'screen_cdp', screen=args.screen,
+          method='Runtime.evaluate', params={'expression': 'document.body.innerText'})
+    opened = success(args.agent, 'screen_open', screen=args.screen, kind='changes', target=shared, base='uncommitted')
+    location = urlsplit(opened['url'])
+    assert parse_qs(location.query) == {'open': ['text.txt'], 'mode': ['changes'], 'base': ['uncommitted']}
+    assert location.fragment == 'L20-L40' and not row().get('fileGrant')
+    for target in ['tma://files/_api/file', 'tma://files/_app/viewer.js',
+                   'tma://user@files/tmp', 'tma://files:42/tmp', 'tma://files/tmp?pick',
+                   'tma://files/tmp?open=../secret', 'tma://files/tmp?root=/etc',
+                   'tma://files/tmp#L0', 'tma://files/tmp#L40-L20', 'file:///etc/hosts']:
+        error('invalid_request', args.agent, 'screen_open', screen=args.screen, kind='file', target=target)
+        assert row()['url'] == opened['url'], 'Rejected location changed the screen'
+    if os.name != 'nt':
+        literal = Path(fixture['repo']) / 'literal?#.txt'
+        literal.write_text('Literal filename\n')
+        opened = success(args.agent, 'screen_open', screen=args.screen, kind='file', target=str(literal))
+        location = urlsplit(opened['url'])
+        assert location.path.endswith('literal%3F%23.txt') and not location.query and not location.fragment
+    show('text.txt', lines='L20-L40')
+    capture('shared-location-human-authorized')
+    selected = Path(fixture['repo']) / 'text.txt'
+    original = selected.read_text()
+    revision = native.ui('screens')['fileWatches']['revision']
+    selected.write_text(original.replace('Line 20\n', 'LIVE selected line 20\n'))
+    native.wait_for(lambda state: state['fileWatches']['revision'] > revision)
+    time.sleep(1)
+    assert urlsplit(row()['url']).fragment == 'L20-L40'
+    capture('shared-line-range-after-edit')
+    selected.write_text(original)
+    print('PASS: shared location/line tool roundtrip, unchanged authorization, and literal filenames', flush=True)
 
     show(mode='changes')
     time.sleep(1)

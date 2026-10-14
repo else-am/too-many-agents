@@ -15,6 +15,11 @@ export function screenTools(bb: BbPluginApi, worlds: MinecraftWorlds) {
     const { primaryHostId } = await bb.sdk.system.config();
     if (environment && environment.hostId !== primaryHostId)
       throw new ApiError("unavailable", "Screens can only open files on the computer running Minecraft.");
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target)) {
+      if (!/^tma:/i.test(target)) throw new ApiError("invalid_request", "Use a file path or a tma://files location.");
+      // Java validates this explicit location. Never resolve it against the working directory.
+      return target;
+    }
     if (isAbsolutePath(target)) return target;
     if (!environment?.path || !isAbsolutePath(environment.path))
       throw new ApiError("invalid_request", "Use an absolute file path; your working directory is unknown.");

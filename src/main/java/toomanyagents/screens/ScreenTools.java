@@ -248,18 +248,15 @@ public final class ScreenTools {
                                                                 BooleanSupplier live, Set<CompletableFuture<?>> waiters) {
         String kind = string(args, "kind"), target = string(args, "target");
         if (kind == null || target == null) throw invalid("screen_open needs kind and target.");
+        String baseOverride = args.has("base") ? string(args, "base") : null;
+        if (args.has("base") && (!kind.equals("changes") || baseOverride == null || baseOverride.isBlank() || baseOverride.length() > 1024
+            || baseOverride.chars().anyMatch(Character::isISOControl)))
+            throw invalid("base must be a nonblank Git ref of at most 1024 characters, for kind changes.");
         String url = switch (kind) {
             case "url" -> webAddress(target.strip());
-            case "file" -> fileAddress(target);
-            case "changes" -> fileAddress(target) + "?mode=changes";
+            case "file", "changes" -> fileAddress(target, kind.equals("changes"), baseOverride);
             default -> throw invalid("kind must be url, file or changes.");
         };
-        if (args.has("base")) {
-            String base = string(args, "base");
-            if (!kind.equals("changes") || base == null || base.isBlank() || base.length() > 1024)
-                throw invalid("base must be a nonblank Git ref of at most 1024 characters, for kind changes.");
-            url += "&base=" + FilePages.encode(base);
-        }
         String destination = url;
         String name = args.has("name") ? name(args) : null;
         String id = entry.screen().id(), thread = caller.threadId();
@@ -595,12 +592,63 @@ public final class ScreenTools {
         throw invalid("target must be an http or https URL. Use kind file for a file.");
     }
 
-    private static String fileAddress(String target) {
+    private static String fileAddress(String target, boolean changes, String baseOverride) {
+        // Only explicit URLs carry query/fragment syntax. Raw filenames keep literal ? and #.
+        boolean location = target.matches("(?i)^[a-z][a-z0-9+.-]*:.*") && !target.matches("(?i)^[a-z]:[\\\\/].*");
         Path path;
-        try { path = Path.of(target); } catch (Exception e) { throw invalid("target isn't a valid file path."); }
-        // Checked as text only: the server thread doesn't wait on the filesystem.
+        var params = new java.util.LinkedHashMap<String, String>();
+        String fragment = "";
+        try {
+            if (location) {
+                var uri = new URI(target);
+                if (!"tma".equalsIgnoreCase(uri.getScheme()) || !"files".equalsIgnoreCase(uri.getRawAuthority())
+                    || uri.getPath() == null || !uri.getPath().startsWith("/") || uri.getPath().startsWith("//"))
+                    throw invalid("Use a tma://files location with an absolute root, without a username or port.");
+                path = FilePages.path(target);
+                var query = FilePages.query(uri);
+                if (!Set.of("open", "mode", "base").containsAll(query.keySet()))
+                    throw invalid("Files locations accept only open, mode and base; agents cannot open the picker.");
+                String open = query.get("open");
+                if (open != null && !open.isEmpty()) {
+                    var selected = Path.of(open);
+                    if (open.length() > 4096 || selected.isAbsolute() || open.startsWith("\\") || open.matches("(?i)^[a-z]:.*")
+                        || open.chars().anyMatch(Character::isISOControl)) throw invalid("open must be a relative file path inside the root.");
+                    for (var part : selected) if (part.toString().equals("..")) throw invalid("open must stay inside the root.");
+                    params.put("open", selected.normalize().toString().replace(java.io.File.separatorChar, '/'));
+                }
+                String mode = query.get("mode");
+                if (mode != null) {
+                    if (!Set.of("files", "changes").contains(mode)) throw invalid("mode must be files or changes.");
+                    params.put("mode", mode);
+                }
+                String base = query.get("base");
+                if (base != null) {
+                    if (base.isBlank() || base.length() > 1024 || base.chars().anyMatch(Character::isISOControl))
+                        throw invalid("base must be a nonblank Git ref of at most 1024 characters.");
+                    params.put("base", base);
+                }
+                if (uri.getFragment() != null && !uri.getFragment().isEmpty()) {
+                    var lines = java.util.regex.Pattern.compile("L([0-9]{1,7})(?:-L?([0-9]{1,7}))?").matcher(uri.getFragment());
+                    if (!lines.matches()) throw invalid("Use a line fragment such as #L20 or #L20-L40.");
+                    int start = Integer.parseInt(lines.group(1));
+                    int end = lines.group(2) == null ? start : Integer.parseInt(lines.group(2));
+                    if (start < 1 || end < start || end > 2_097_153) throw invalid("The line range is outside the preview limit.");
+                    fragment = "#L" + start + (end == start ? "" : "-L" + end);
+                }
+            } else path = Path.of(target);
+        } catch (ScreenError error) { throw error; }
+        catch (Exception error) { throw invalid("target isn't a valid file path or tma://files location."); }
+        // Checked as text only: the server thread doesn't wait on the filesystem or grant access.
         if (!path.isAbsolute()) throw invalid("Use an absolute file path.");
-        return Builtin.files(path.normalize());
+        String address = Builtin.files(path.normalize());
+        String root = URI.create(address).getPath();
+        if (root.equals("/_app") || root.startsWith("/_app/") || root.equals("/_api") || root.startsWith("/_api/"))
+            throw invalid("Internal files resources are not screen locations.");
+        if (changes) params.put("mode", "changes");
+        if (baseOverride != null) params.put("base", baseOverride);
+        var query = new ArrayList<String>();
+        params.forEach((key, value) -> query.add(key + "=" + FilePages.encode(value)));
+        return address + (query.isEmpty() ? "" : "?" + String.join("&", query)) + fragment;
     }
 
     /** DevTools domains that act within the page. The rest reach the browser, other pages or the computer's files. */
