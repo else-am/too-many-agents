@@ -3,6 +3,7 @@
 import json
 import time
 import screens_acceptance as native
+from screen_web_fixture import fixture_url
 
 ui, command, aim, click, wait_for = native.ui, native.command, native.aim, native.click, native.wait_for
 
@@ -30,6 +31,7 @@ def main():
       document.addEventListener('click', () => requestLock().catch(e => {state.error=e.name; show();}));
       document.addEventListener('pointerlockchange', () => {state.locked=!!document.pointerLockElement; show();});
       show();</script>''')
+    url = fixture_url(fixture)
     command('gamemode creative @s')
     command('tp @s 192 -60 164')
     time.sleep(2)
@@ -44,7 +46,7 @@ def main():
     screen_id = row['id']
     command('item replace entity @s weapon.mainhand with air')
     native.screen_control(screen_id, 'address')
-    ui('dev_char', text=fixture.as_uri())
+    ui('dev_char', text=url)
     ui('dev_key', key=257)
     wait_for(lambda s: any(r['id'] == screen_id and r['painted'] and r['title'].startswith('{') for r in s['screens']), timeout=60)
 
@@ -157,12 +159,12 @@ def main():
     assert ui('screens')['menu']['screen'] == ''
     assert not page()['locked']
     control('address')
-    ui('dev_char', text=fixture.as_uri() + '?toolbar=1')
+    ui('dev_char', text=url + '?toolbar=1')
     ui('dev_key', key=257)
     wait_for(lambda s: any(r['id'] == screen_id and r['url'].endswith('?toolbar=1') and not r['loading'] for r in s['screens']))
     assert ui('screens')['input'] == 'captured'
     control('back')
-    wait_for(lambda s: any(r['id'] == screen_id and r['url'] == fixture.as_uri() and not r['loading'] for r in s['screens']))
+    wait_for(lambda s: any(r['id'] == screen_id and r['url'] == url and not r['loading'] for r in s['screens']))
     control('forward')
     wait_for(lambda s: any(r['id'] == screen_id and r['url'].endswith('?toolbar=1') and not r['loading'] for r in s['screens']))
     control('reload')
@@ -171,9 +173,9 @@ def main():
     assert ui('screens')['player'] == before
     print('PASS: Captured cursor operates name, address, history, reload and dropdown without moving the player or leaking keys', flush=True)
     control('address')
-    ui('dev_char', text=fixture.as_uri())
+    ui('dev_char', text=url)
     ui('dev_key', key=257)
-    wait_for(lambda s: any(r['id'] == screen_id and r['url'] == fixture.as_uri() and not r['loading'] for r in s['screens']))
+    wait_for(lambda s: any(r['id'] == screen_id and r['url'] == url and not r['loading'] for r in s['screens']))
 
     # Reopening the real world must preserve the panel without restoring capture.
     ui('dev_leave')
@@ -187,7 +189,7 @@ def main():
         if time.monotonic() >= deadline: raise AssertionError('Test world did not reopen')
         time.sleep(.2)
     assert ui('screens')['input'] not in ('captured', 'pointer_locked')
-    assert native.screen_row(screen_id)['url'] == fixture.as_uri()
+    assert native.screen_row(screen_id)['url'] == url
     print('PASS: Panel persists across world reopen; capture does not', flush=True)
 
 

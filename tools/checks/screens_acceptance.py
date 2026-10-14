@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import uuid
+from screen_web_fixture import fixture_url
 
 ROOT = Path(__file__).resolve().parents[2]
 GAME = fixture_directory()
@@ -179,7 +180,9 @@ def foundation():
     command('setblock 162 -57 168 air')
     wait_for(lambda state: all(screen['id'] != copied['id'] for screen in state['screens']))
     assert all(screen['id'] != copied['id'] for screen in ui('screens')['index']['screens'])
-    command('tp @s 163 -60 167')
+    dropped = next(row for row in wait_for(lambda state: bool(state['droppedItems']))['droppedItems']
+                   if 158 <= row['x'] <= 176 and 166 <= row['z'] <= 170)
+    command(f"tp @s {dropped['x']} -60 {dropped['z']}")
     state = wait_for(lambda state: bool(state['items']))
     item = state['items'][0]
     assert not item['name'] and not item['url'] and item.get('saved') is None
@@ -277,7 +280,8 @@ input{position:absolute;left:20px;top:180px;width:300px;height:60px;font:32px Ge
 a{position:absolute;left:20px;top:280px}</style>
 <h1>Shared screen</h1><a href="next.html">Next page</a><input placeholder="Type here">''')
     (fixture / 'next.html').write_text('<!doctype html><title>Second page</title><h1>Second page</h1>')
-    url = (fixture / 'index.html').as_uri()
+    fixture_url(fixture / 'next.html')
+    url = fixture_url(fixture / 'index.html')
     control('address')
     ui('dev_char', text=url)
     ui('dev_key', key=257)
@@ -295,7 +299,7 @@ a{position:absolute;left:20px;top:280px}</style>
     wait_for(lambda state: state['input'] != 'typing')
     print('PASS: Native page click enters typing; Esc returns control to the game', flush=True)
     control('address')
-    ui('dev_char', text=(fixture / 'next.html').as_uri())
+    ui('dev_char', text=fixture_url(fixture / 'next.html'))
     ui('dev_key', key=257)
     wait_for(lambda state: any(row['id'] == screen_id and row['url'].endswith('next.html') and row['back'] for row in state['screens']))
     control('back')
@@ -382,7 +386,7 @@ def menu_actions():
     ui('dev_key', key=256)
     print('PASS: Reset cancellation and expired confirmation preserve the screen', flush=True)
 
-    url = (GAME / 'too-many-agents/screens-acceptance/index.html').as_uri()
+    url = fixture_url(GAME / 'too-many-agents/screens-acceptance/index.html')
     screen_control(screen_id, 'address')
     ui('dev_char', text=url)
     ui('dev_key', key=257)
@@ -498,7 +502,7 @@ def saved_items_and_crafting():
     ui('dev_key', key=49)
     command('tp @s 172 -60 162')
     pages = [('Twin', 'about:blank'), ('Twin', 'about:blank'),
-             ('Twin', (GAME / 'too-many-agents/screens-acceptance/index.html').as_uri()),
+             ('Twin', fixture_url(GAME / 'too-many-agents/screens-acceptance/index.html')),
              ('Other', 'about:blank')]
     ids = []
     for x, (name, url) in zip(range(171, 175), pages):
@@ -574,7 +578,7 @@ def horizontal_surfaces():
 <style>body{background:#eee7d5;color:#182a39;font:40px Georgia;text-align:center}
 input{position:absolute;left:15%;top:40%;width:70%;height:20%;box-sizing:border-box;font:32px Georgia}</style>
 <h1>Floor / ceiling</h1><input placeholder="Type here" oninput="document.title=this.value">''')
-    url = (fixture / 'horizontal.html').as_uri()
+    url = fixture_url(fixture / 'horizontal.html')
     saved = {}
     for face, y in [('up', -60), ('down', -55)]:
         for heading, dx, dz in [('north', 0, -1), ('east', 1, 0), ('south', 0, 1), ('west', -1, 0)]:

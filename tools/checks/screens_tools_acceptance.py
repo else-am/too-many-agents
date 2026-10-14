@@ -12,6 +12,7 @@ import struct
 import time
 
 import screens_acceptance as native
+from screen_web_fixture import fixture_url
 
 
 def call(agent, tool, **arguments):
@@ -91,9 +92,10 @@ def main():
 <body style="background:#e8eddf;color:#173e36;font:32px Georgia;margin:32px">
 <h1>Agent and player share this page</h1><p id="value">Initial value</p>
 <input id="entry" placeholder="Shared input"><script>window.fixtureReady=true</script>''')
-    opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture), name='Tool acceptance')
+    url = fixture_url(fixture)
+    opened = success(agent, 'screen_open', screen=screen, kind='url', target=url, name='Tool acceptance')
     assert opened['screen'] == screen and opened['title'] == 'Screen tool acceptance', opened
-    assert opened['url'] == fixture.as_uri(), opened
+    assert opened['url'] == url, opened
     after_open = next(r for r in success(agent, 'screen_list')['screens'] if r['id'] == screen)
     assert after_open['openedByYou'], after_open
     after_other = next(r for r in success(other, 'screen_list')['screens'] if r['id'] == screen)
@@ -104,7 +106,7 @@ def main():
             continue
         error('invalid_request', agent, 'screen_open', screen=screen, kind='url', target='about:blank', name=invalid_name.upper())
         unchanged = next(r for r in success(agent, 'screen_list')['screens'] if r['id'] == screen)
-        assert unchanged['name'] == 'Tool acceptance' and unchanged['url'] == fixture.as_uri(), unchanged
+        assert unchanged['name'] == 'Tool acceptance' and unchanged['url'] == url, unchanged
     result = evaluate(agent, screen, '({answer:42,title:document.title})')
     assert result['result']['result']['value'] == {'answer': 42, 'title': 'Screen tool acceptance'}, result
     awaited = evaluate(agent, screen, 'new Promise(resolve=>setTimeout(()=>resolve(23),100))', awaitPromise=True)
@@ -115,11 +117,11 @@ def main():
     assert envelope.get('isError', False) and 'error' in bad, bad
     error('too_large', agent, 'screen_cdp', screen=screen, method='Runtime.evaluate',
           params={'expression': '"x".repeat(70000)', 'returnByValue': True})
-    print('PASS: File open, CDP values/promises/exceptions, protocol errors and result cap', flush=True)
+    print('PASS: Web open, CDP values/promises/exceptions, protocol errors and result cap', flush=True)
 
     leased = error('leased', other, 'screen_cdp', screen=screen, method='Runtime.evaluate', params={'expression': '1'})
     details = leased['leased']
-    assert details['thread'] and details['secondsLeft'] > 0 and details['url'] == fixture.as_uri(), leased
+    assert details['thread'] and details['secondsLeft'] > 0 and details['url'] == url, leased
     view = next(row for row in success(other, 'screen_list')['screens'] if row['id'] == screen)
     assert view['lease']['thread'] == details['thread'], view
     # Wait for a real paint, without requesting a synthetic screenshot frame.
@@ -145,7 +147,7 @@ def main():
     success(other, 'screen_close', screen=screen)
     print('PASS: Close releases the lease; idle CDP/screenshots fail; blank name rejected and unique name resolves to stable UUID', flush=True)
 
-    success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
+    success(agent, 'screen_open', screen=screen, kind='url', target=url)
     # A pending CEF call must settle when the player powers off; it must not wait for its 30s timeout.
     with ThreadPoolExecutor(max_workers=1) as executor:
         pending = executor.submit(call, agent, 'screen_cdp', screen=screen, method='Runtime.evaluate',
@@ -158,11 +160,11 @@ def main():
         value, envelope = pending.result(timeout=5)
         assert envelope.get('isError') and value['error']['code'] == 'unavailable', value
     native.wait_for(lambda state: any(row['id'] == screen and not row['browser'] and not row['url'] and not row['openedBy'] for row in state['screens']))
-    success(other, 'screen_open', screen=screen, kind='file', target=str(fixture))
+    success(other, 'screen_open', screen=screen, kind='url', target=url)
     success(other, 'screen_close', screen=screen)
     print('PASS: Player menu turn-off closes pending CDP promptly and releases the lease', flush=True)
 
-    success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
+    success(agent, 'screen_open', screen=screen, kind='url', target=url)
     error('leased', other, 'screen_close', screen=screen)
     time.sleep(21)
     success(other, 'screen_close', screen=screen)
@@ -170,7 +172,7 @@ def main():
 
     native.ui('dev_pause')
     try:
-        opened = success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
+        opened = success(agent, 'screen_open', screen=screen, kind='url', target=url)
         assert opened['title'] == 'Screen tool acceptance', opened
         paused = evaluate(agent, screen, '21 * 2')
         assert paused['result']['result']['value'] == 42, paused
@@ -184,7 +186,7 @@ def main():
 
     if not args.check_timeout:
         return
-    success(agent, 'screen_open', screen=screen, kind='file', target=str(fixture))
+    success(agent, 'screen_open', screen=screen, kind='url', target=url)
     started = time.monotonic()
     error('timeout', agent, 'screen_cdp', screen=screen, method='Runtime.evaluate',
           params={'expression': 'new Promise(()=>{})', 'awaitPromise': True})
