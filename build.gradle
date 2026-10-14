@@ -34,6 +34,18 @@ def imageLibraries = ['com.twelvemonkeys.imageio:imageio-webp', 'com.twelvemonke
     'com.twelvemonkeys.imageio:imageio-metadata', 'com.twelvemonkeys.common:common-lang',
     'com.twelvemonkeys.common:common-io', 'com.twelvemonkeys.common:common-image']
 dependencies {
+    // Only the confined DFS object reader is used; never JGit's filesystem repository or transports.
+    jarJar(implementation('org.eclipse.jgit:org.eclipse.jgit') {
+        // Minecraft supplies these; the confined object reader uses no newer codec APIs.
+        exclude group: 'commons-codec', module: 'commons-codec'
+        exclude group: 'org.slf4j', module: 'slf4j-api'
+    }) {
+        version { strictly '7.4.0.202509020913-r' }
+    }
+    jarJar(implementation('com.googlecode.javaewah:JavaEWAH')) {
+        version { strictly '1.2.3' }
+    }
+
     imageLibraries.each { artifact ->
         jarJar(implementation(artifact)) { version { strictly '[3.12.0,3.13.0)'; prefer '3.12.0' } }
     }

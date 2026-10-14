@@ -193,13 +193,13 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 - ~~Prove browser-instance authorization, context isolation, fresh-instance transitions and CDP restrictions with stock CEF/JCEF, including seamless back/forward navigation.~~ Live packaged-client isolation and native input checks pass. Root-scoped data authorization is the next slice; no browser fork or custom native extension.
 - Prove file access under concurrent root/path/symlink replacement on supported platforms, and establish how agent read restrictions reach the viewer. A second path check alone is not proof.
-- Exercise the confined JGit object/metadata path against malicious configuration, redirects and concurrent swaps before using it for the tree or changes mode. Verify comparisons against independent Git fixture results.
+- ~~Exercise the confined JGit object/metadata path against malicious configuration, redirects and concurrent swaps; verify comparisons against independent Git fixture results.~~ Ordinary, linked, unborn and nested repositories match the fixture results, including staged cancellation, modes, line endings and attribute fallback. External-object swap probes returned no outside bytes and no helpers ran. Unsupported index formats and submodules report partial results; Windows runtime remains unverified.
 
 ### To confirm while building
 
 - `@pierre/trees` provides an expand event to load folders lazily (otherwise wrap it).
 - Large-file and large-repo performance of `@pierre/trees` and `@pierre/diffs`.
-- ~~JNA is available at runtime.~~ Minecraft ships JNA and jna-platform 5.14; the macOS held-handle probes passed. Linux and Windows still need runtime checks.
+- ~~JNA is available at runtime.~~ Minecraft ships JNA and jna-platform 5.14; the macOS and Linux x86_64 held-handle probes passed. Linux was exercised in a local container; Linux arm64 and Windows still need runtime checks.
 
 ### Not supported
 
@@ -208,7 +208,7 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 ## Order
 
-1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS; root-scoped serving and Linux/Windows runtime validation remain.
+1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS and Linux x86_64; root-scoped serving acceptance and Linux arm64/Windows runtime validation remain.
 2. Picker, address-bar paths and blank-screen buttons.
 3. Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews, bounded loading and agent `kind:file`.
 4. Changes mode and base picker using the validated Git path. Agent `kind:changes`.

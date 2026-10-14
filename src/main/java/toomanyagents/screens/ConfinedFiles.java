@@ -15,6 +15,10 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.NonWritableChannelException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.FileSystemException;
 import java.nio.file.InvalidPathException;
@@ -90,6 +94,91 @@ public final class ConfinedFiles {
             var real = handle.realPath();
             if (handle.kind() != Kind.DIRECTORY) throw new FileSystemException(folder.toString(), null, "not a folder");
             return new Root(real);
+        }
+    }
+
+    /** Pins an expected real directory without accepting a symlink redirect during metadata discovery. */
+    public static Root grantExact(Path folder) throws IOException {
+        String expected = folder.toAbsolutePath().normalize().toString();
+        try (var handle = os().open(expected)) {
+            if (!expected.equals(handle.realPath())) throw new OutsideRoot(expected);
+            if (handle.kind() != Kind.DIRECTORY) throw new FileSystemException(expected, null, "not a folder");
+            if (!expected.equals(handle.realPath())) throw new OutsideRoot(expected);
+            return new Root(expected);
+        }
+    }
+
+    /** Size, modification time and Git's executable bit, read from the held file. */
+    public record Stamp(long size, long modified, boolean executable) {}
+
+    /** A read-only positional channel, retaining and checking the original OS handle for every read. */
+    public static ReadChannel channel(Root root, String path) throws IOException {
+        return channel(root, path, false);
+    }
+
+    /** Metadata callers can reject redirects even when the target remains inside the root. */
+    public static ReadChannel channel(Root root, String path, boolean exactPath) throws IOException {
+        Handle handle = openInside(root, path);
+        try {
+            var found = info(root, path, handle);
+            if (found.kind() != Kind.FILE) throw new FileSystemException(path, null, "not a file");
+            String expected = Path.of(root.path).resolve(path).normalize().toString();
+            if (exactPath && !expected.equals(found.path())) throw new OutsideRoot(path);
+            return new ReadChannel(root, path, exactPath ? expected : null, handle);
+        } catch (Throwable failure) { handle.close(); throw failure; }
+    }
+
+    public static final class ReadChannel implements SeekableByteChannel {
+        private final Root root;
+        private final String path, expected;
+        private final Handle handle;
+        private boolean open = true;
+        private long position;
+        private ReadChannel(Root root, String path, String expected, Handle handle) {
+            this.root = root; this.path = path; this.expected = expected; this.handle = handle;
+        }
+        private void validate() throws IOException {
+            if (!open) throw new ClosedChannelException();
+            cancelled();
+            checkInside(root, path, handle);
+            if (expected != null && !expected.equals(handle.realPath())) throw new OutsideRoot(path);
+        }
+        @Override public synchronized int read(ByteBuffer target) throws IOException {
+            validate();
+            if (!target.hasRemaining()) return 0;
+            // Keep bytes private until the post-read check has succeeded.
+            byte[] bytes = new byte[Math.min(target.remaining(), 64 * 1024)];
+            int count = handle.readAt(position, bytes);
+            validate();
+            if (count > 0) { target.put(bytes, 0, count); position += count; }
+            return count;
+        }
+        @Override public synchronized long position() throws IOException { validate(); return position; }
+        @Override public synchronized ReadChannel position(long value) throws IOException {
+            validate();
+            if (value < 0) throw new IllegalArgumentException("negative position");
+            position = value;
+            return this;
+        }
+        public synchronized Stamp stamp() throws IOException {
+            validate(); var stamp = handle.stamp(); validate(); return stamp;
+        }
+        @Override public synchronized long size() throws IOException { return stamp().size(); }
+        @Override public int write(ByteBuffer bytes) { throw new NonWritableChannelException(); }
+        @Override public SeekableByteChannel truncate(long size) { throw new NonWritableChannelException(); }
+        @Override public synchronized boolean isOpen() { return open; }
+        @Override public synchronized void close() { if (open) { open = false; handle.close(); } }
+    }
+
+    /** Reads the link text through its held parent directory, without opening or reading the target. */
+    public static byte[] readLink(Root root, String path) throws IOException {
+        Path requested = Path.of(root.path).resolve(path).normalize();
+        if (requested.getParent() == null) throw new NoSuchFileException(path);
+        try (var parent = openInside(root, requested.getParent().toString())) {
+            info(root, path, parent);
+            byte[] text = parent.readLink(requested.getFileName().toString());
+            checkInside(root, path, parent);
+            return text;
         }
     }
 
@@ -210,6 +299,14 @@ public final class ConfinedFiles {
 
         long size() throws IOException;
 
+        int readAt(long offset, byte[] bytes) throws IOException;
+
+        Stamp stamp() throws IOException;
+
+        default byte[] readLink(String name) throws IOException {
+            throw new IOException("Symbolic link comparison is unavailable on this platform");
+        }
+
         /** Reads to the end or to {@code limit + 1} bytes, so the caller can tell the file was larger. */
         byte[] read(int limit) throws IOException;
 
@@ -228,7 +325,13 @@ public final class ConfinedFiles {
 
         int close(int fd);
 
+        int fstat(int fd, Pointer stat);
+
         long read(int fd, byte[] buffer, long count);
+
+        long pread(int fd, byte[] buffer, long count, long offset);
+
+        long readlinkat(int fd, byte[] name, byte[] buffer, long size);
 
         /** Variadic; JNA passes the trailing arguments the right way on Apple arm64. */
         int fcntl(int fd, int command, Object... arguments);
@@ -249,7 +352,7 @@ public final class ConfinedFiles {
     private static Libc libc() {
         // Intel macOS keeps a 32-bit-inode dirent under the plain names; the 64-bit-inode versions are suffixed.
         FunctionMapper mapper = (library, method) -> Platform.isMac() && Platform.isIntel()
-            && (method.getName().equals("fdopendir") || method.getName().equals("readdir"))
+            && (method.getName().equals("fdopendir") || method.getName().equals("readdir") || method.getName().equals("fstat"))
             ? method.getName() + "$INODE64" : method.getName();
         return Native.load("c", Libc.class, Map.of(Library.OPTION_FUNCTION_MAPPER, mapper));
     }
@@ -332,6 +435,38 @@ public final class ConfinedFiles {
         @Override
         public long size() throws IOException {
             return attributes().size();
+        }
+
+        @Override
+        public Stamp stamp() throws IOException {
+            if (os.mac) {
+                // Darwin stat64: mode at 4, mtime at 48/56, size at 96. /dev/fd masks executable bits.
+                try (var stat = new Memory(256)) {
+                    if (Posix.LIBC.fstat(fd, stat) < 0) throw error(requested, Native.getLastError(), true);
+                    return new Stamp(stat.getLong(96), stat.getLong(48) * 1_000_000_000L + stat.getLong(56),
+                        (stat.getShort(4) & 0100) != 0);
+                }
+            }
+            var attributes = Files.readAttributes(self(), BasicFileAttributes.class);
+            int mode = (Integer) Files.getAttribute(self(), "unix:mode");
+            return new Stamp(attributes.size(), attributes.lastModifiedTime().to(java.util.concurrent.TimeUnit.NANOSECONDS), (mode & 0100) != 0);
+        }
+
+        @Override
+        public byte[] readLink(String name) throws IOException {
+            byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
+            byte[] buffer = new byte[4096];
+            long count = Posix.LIBC.readlinkat(fd, Arrays.copyOf(utf8, utf8.length + 1), buffer, buffer.length);
+            if (count < 0) throw error(requested, Native.getLastError(), os.mac);
+            if (count == buffer.length) throw new IOException("Symbolic link text exceeds the read limit");
+            return Arrays.copyOf(buffer, (int) count);
+        }
+
+        @Override
+        public int readAt(long offset, byte[] bytes) throws IOException {
+            long count = Posix.LIBC.pread(fd, bytes, bytes.length, offset);
+            if (count < 0) throw error(requested, Native.getLastError(), os.mac);
+            return count == 0 ? -1 : (int) count;
         }
 
         @Override
@@ -429,6 +564,8 @@ public final class ConfinedFiles {
 
     /** Not in jna-platform 5.14. */
     private interface Kernel32Paths extends Library {
+        boolean SetFilePointerEx(WinNT.HANDLE handle, long offset, Pointer newPosition, int origin);
+
         int GetFinalPathNameByHandleW(WinNT.HANDLE handle, char[] buffer, int length, int flags);
     }
 
@@ -512,6 +649,26 @@ public final class ConfinedFiles {
         @Override
         public long size() throws IOException {
             return standard().EndOfFile.getValue();
+        }
+
+        @Override
+        public Stamp stamp() throws IOException {
+            var info = new WinBase.FILE_BASIC_INFO();
+            if (!Kernel32.INSTANCE.GetFileInformationByHandleEx(handle, WinBase.FileBasicInfo, info.getPointer(),
+                new WinDef.DWORD(info.size()))) throw windowsError(requested, Kernel32.INSTANCE.GetLastError());
+            info.read();
+            standard = null;
+            return new Stamp(size(), info.LastWriteTime.getValue(), false);
+        }
+
+        @Override
+        public int readAt(long offset, byte[] bytes) throws IOException {
+            if (!Windows.PATHS.SetFilePointerEx(handle, offset, null, 0))
+                throw windowsError(requested, Kernel32.INSTANCE.GetLastError());
+            var count = new IntByReference();
+            if (!Kernel32.INSTANCE.ReadFile(handle, bytes, bytes.length, count, null))
+                throw windowsError(requested, Kernel32.INSTANCE.GetLastError());
+            return count.getValue() == 0 ? -1 : count.getValue();
         }
 
         @Override
