@@ -59,7 +59,7 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
       let project = existing;
       if (!project) {
         project = await bb.sdk.projects.create({
-          name: `Minecraft: ${world.name}`,
+          name: `Too Many Agents: ${world.name}`,
           source: { type: "local_path", hostId: primaryHostId, path },
         });
         await hideInSidebar(project.id);

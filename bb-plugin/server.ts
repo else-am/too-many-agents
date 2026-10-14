@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import type { BbPluginApi, PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import { communicationNotices } from "./communication.js";
 import { registerGameApi } from "./game-api.js";
-import { registerMinecraftCli } from "./cli.js";
+import { registerTmaCli } from "./cli.js";
 import { minecraftWorlds } from "./minecraft.js";
 import { minecraftThreads } from "./threads.js";
 import { minecraftAgents } from "./agents.js";
@@ -14,7 +14,7 @@ import { namespace } from "./stage-development.mjs";
 import { minecraftScripts } from "./scripts.js";
 import { screenTools } from "./screens.js";
 
-export default async function minecraft(bb: BbPluginApi) {
+export default async function tma(bb: BbPluginApi) {
   const worlds = minecraftWorlds(bb);
   const scripts = minecraftScripts(bb, worlds);
   const screen = screenTools(bb, worlds);
@@ -37,7 +37,7 @@ export default async function minecraft(bb: BbPluginApi) {
   }>;
   // Java always receives canonical tool names; agents see this instance's names.
   const names = namespace(bb.pluginId, tools.map((tool) => tool.name));
-  registerMinecraftCli(bb, worlds, agents, names);
+  registerTmaCli(bb, worlds, agents, names);
   const instructions = names.rewrite(await readFile(new URL("./surface/agents.md", import.meta.url), "utf8"));
   const scriptingInstructions = names.rewrite(await readFile(new URL("./surface/scripting.md", import.meta.url), "utf8"));
   // Tools marked agent: false stay available to development diagnostics only.
@@ -92,8 +92,10 @@ export default async function minecraft(bb: BbPluginApi) {
     const access = project.id === worlds.worldProjects.get(pluginMetadata.worldId);
     return {
       tools: agentTools.filter((tool) => !tool.minecraft || access).map((tool) => names.tool(tool.name)),
-      skills: ["minecraft-agents", ...(access ? ["minecraft-scripting"] : [])].map(names.skill),
-      instructions,
+      skills: ["tma-agents", ...(access ? ["tma-scripting"] : [])].map(names.skill),
+      instructions: access ? `${instructions}
+
+Physical tools control only your own Minecraft body. Use registered tools for game actions; do not bypass them using shell or HTTP. Access follows the project, and children cannot gain Creative/cheat abilities beyond the caller. Never retry an uncertain physical mutation. World departure makes physical tools unavailable; BB conversation changes never undo world mutations.` : instructions,
     };
   });
 }

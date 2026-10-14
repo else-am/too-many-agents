@@ -45,7 +45,7 @@ export function registerGameApi(
     if (agent?.threadId) {
       const ownership = await worlds.ownership(live(), agent);
       if (ownership === "foreign")
-        throw new ApiError("thread_not_owned", "This body's conversation belongs to another Minecraft plugin instance. Close the game using it there, then reconnect.");
+        throw new ApiError("thread_not_owned", "This body's conversation belongs to another Too Many Agents plugin instance. Close the game using it there, then reconnect.");
       if (ownership === "missing" && op !== "agent.archive")
         throw new ApiError("thread_missing", "This body's conversation no longer exists in BB.");
     }
@@ -128,7 +128,7 @@ export function registerGameApi(
         if (data.protocol !== PROTOCOL)
           throw new ApiError(
             "protocol_mismatch",
-            "Minecraft plugin protocol changed; rebuild and restart the mod.",
+            "Too Many Agents plugin protocol changed; rebuild and restart the mod.",
           );
         const worldId = uuid(data.worldId, "worldId");
         const joined = await worlds.attach({

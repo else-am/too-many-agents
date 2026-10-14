@@ -35,7 +35,7 @@ public final class BbSetup {
     private final String developmentPluginId = System.getProperty("too_many_agents.devPluginId", "");
     private final Path developmentStatus = FMLPaths.GAMEDIR.get().resolve("too-many-agents/development.json");
     public boolean development() { return !developmentClient.isBlank(); }
-    public String pluginId() { return development() ? developmentPluginId : "minecraft"; }
+    public String pluginId() { return development() ? developmentPluginId : "tma"; }
     private String setupPath() { return "/api/v1/plugins/" + pluginId() + "/http/v1/setup"; }
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("minecraft-bb-setup").factory());
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(3)).build();
@@ -187,7 +187,7 @@ public final class BbSetup {
                     publish("Connected to BB", installed, true, false, instances); return;
                 }
             }
-            if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Minecraft plugin.");
+            if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Too Many Agents plugin.");
             if (!locked) {
                 Files.createDirectories(root.resolve("locks"));
                 try (var channel = FileChannel.open(root.resolve("locks").resolve(selected + ".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
@@ -211,7 +211,10 @@ public final class BbSetup {
             if (!selected.equals(digest(text(status,"dataDir")))) throw new IOException("This CLI reaches a different BB. Choose the intended BB again.");
             JsonObject plugin = null;
             for (var row : array(command(url, "plugin", "list", "--json"), "plugins")) {
-                if (text(row.getAsJsonObject(),"id").equals("minecraft")) plugin = row.getAsJsonObject();
+                var entry = row.getAsJsonObject();
+                if (text(entry,"id").equals("minecraft") && !text(entry,"status").equals("disabled"))
+                    throw new IOException("Close games using the old plugin, then disable the old Minecraft plugin in BB. Too Many Agents keeps the same physical tool names.");
+                if (text(entry,"id").equals("tma")) plugin = entry;
             }
             if (plugin != null) installed = text(plugin,"version");
             if (installPending && !explicit) {
@@ -222,17 +225,17 @@ public final class BbSetup {
             boolean canAuto = automatic && (plugin == null || older);
             if (!explicit && !canAuto) {
                 action = plugin == null || older ? Action.ALLOW_UPDATES : Action.RESTORE;
-                String message = plugin == null ? "Allow plugin management to install the Minecraft integration."
+                String message = plugin == null ? "Allow plugin management to install the Too Many Agents integration."
                     : version().equals(installed) ? "The matching plugin is not running. Enable it in BB, or reinstall the bundled plugin."
-                    : older ? "Allow plugin management to update the Minecraft integration."
-                    : "BB's Minecraft plugin is newer or from a different release. Update this mod, or explicitly restore its bundled plugin.";
+                    : older ? "Allow plugin management to update the Too Many Agents integration."
+                    : "BB's Too Many Agents plugin is newer or from a different release. Update this mod, or explicitly restore its bundled plugin.";
                 publish(message, installed, false, false, instances); return;
             }
             installing = true;
             try {
                 var service = agents;
                 if (service != null) service.disconnectBb();
-                publish("Installing Minecraft plugin…", installed, false, true, instances);
+                publish("Installing Too Many Agents plugin…", installed, false, true, instances);
                 String replacedRoot = plugin == null ? "" : text(plugin,"rootDir");
                 installPlugin(url, plugin, found, generation);
                 // Verify rather than repeating a mutation whose outcome may be unknown.
@@ -272,12 +275,12 @@ public final class BbSetup {
             if (found == null) {
                 // An older or broken plugin cannot prove that it is safe to replace.
                 if (!text(plugin,"status").equals("disabled"))
-                    throw new IOException("This plugin cannot report active games. Close its games and disable Minecraft in BB before replacing it.");
+                    throw new IOException("This plugin cannot report active games. Close its games and disable Too Many Agents in BB before replacing it.");
             } else {
-                var prepared = request(url, "/api/v1/plugins/minecraft/http/v1/setup/prepare", new JsonObject());
+                var prepared = request(url, "/api/v1/plugins/tma/http/v1/setup/prepare", new JsonObject());
                 if (!flag(prepared,"ok")) throw new IOException(text(prepared,"error"));
                 if (!selected.equals(text(prepared,"instanceId")) || !generation.equals(text(prepared,"generation")))
-                    throw new IOException("BB's Minecraft plugin changed during setup. Reload again to use this version.");
+                    throw new IOException("BB's Too Many Agents plugin changed during setup. Reload again to use this version.");
                 generation = text(prepared,"generation");
             }
         }
@@ -286,10 +289,10 @@ public final class BbSetup {
         error = ""; installPending = true; persist();
         if (!error.isBlank()) throw new IOException(error);
         if (plugin != null && expectedPluginRoot.equals(text(plugin,"rootDir")))
-            command(url, "plugin", "reload", "minecraft", "--json");
+            command(url, "plugin", "reload", "tma", "--json");
         else command(url, "plugin", "install", "path:" + directory, "--yes", "--json");
         // A path move preserves a disabled plugin's state. Enabling is part of the user's install action.
-        command(url, "plugin", "enable", "minecraft", "--json");
+        command(url, "plugin", "enable", "tma", "--json");
     }
 
     private Path extractBundle() throws Exception {
@@ -355,7 +358,7 @@ public final class BbSetup {
             for (var file:files) try {
                 var data=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
                 String id=text(data,"instanceId"), url=text(data,"serverUrl"), plugin=text(data,"pluginId");
-                // Every Minecraft plugin instance in a BB advertises; older plugins were all `minecraft`.
+                // Records without a plugin ID belong to the old packaged plugin.
                 if (!(plugin.isBlank() ? "minecraft" : plugin).equals(pluginId())) continue;
                 if (data.get("protocol").getAsInt()!=1 || data.get("expiresAt").getAsLong()<=System.currentTimeMillis() || !id.matches("[a-f0-9]{64}")) continue;
                 loopback(url);

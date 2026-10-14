@@ -11,7 +11,7 @@ import { createMetadataDecoder, createItemDecoder, createItemEncoder, encodeItem
 
 export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
   const running = new Map<string, AbortController>();
-  bb.onDispose(() => { for (const controller of running.values()) controller.abort(new Error('Minecraft plugin stopped')); });
+  bb.onDispose(() => { for (const controller of running.values()) controller.abort(new Error('Too Many Agents plugin stopped')); });
 
   return async function execute(
     args: unknown, ctx: { threadId: string; signal: AbortSignal }, live: Session, agentId: string,
@@ -66,7 +66,7 @@ export function minecraftScripts(bb: BbPluginApi, worlds: MinecraftWorlds) {
     };
     try {
       const plugin = (await bb.sdk.plugins.list()).plugins.find(item => item.id === bb.pluginId);
-      if (!plugin) throw new Error('Minecraft plugin directory is unavailable');
+      if (!plugin) throw new Error('Too Many Agents plugin directory is unavailable');
       const bootstrap = await readFile(join(plugin.rootDir, 'dist/scripting/bot.js'), 'utf8');
       // If begin loses its reply, release is still attempted once for this ID.
       began = true;

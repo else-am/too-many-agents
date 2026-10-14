@@ -71,11 +71,12 @@ def fixture_directory():
 def plugin_id(directory=None):
     folder = Path(directory) if directory else fixture_directory()
     status = folder / 'too-many-agents/development.json'
-    return json.loads(status.read_text())['pluginId'] if status.is_file() else 'minecraft'
+    return json.loads(status.read_text())['pluginId'] if status.is_file() else 'tma'
 
 
 def tool_name(name, directory=None):
     plugin = plugin_id(directory)
-    if plugin == 'minecraft': return name
+    if plugin in ('tma', 'minecraft'): return name
     suffix = name.removeprefix('minecraft_')
-    return plugin.replace('-', '_') + '_' + suffix
+    prefix = 'minecraft' + plugin[3:] if plugin == 'tma' or plugin.startswith('tma-') else plugin
+    return prefix.replace('-', '_') + '_' + suffix

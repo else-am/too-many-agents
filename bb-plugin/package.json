@@ -1,5 +1,5 @@
 {
-  "name": "bb-plugin-minecraft",
+  "name": "bb-plugin-tma",
   "version": "0.9.0",
   "private": true,
   "type": "module",
@@ -8,8 +8,8 @@
     "bbPluginSdk": "^0.6.37"
   },
   "bb": {
-    "name": "Minecraft",
-    "description": "Native Minecraft agents, bodies and physical tools.",
+    "name": "Too Many Agents",
+    "description": "Too Many Agents, bodies and physical tools.",
     "branding": {
       "icon": "Box"
     },

@@ -130,7 +130,7 @@ A plain CDP passthrough to the screen's page.
 
 ### Agent instructions
 
-~~Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `minecraft-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list {}` lists usable screens with yours first, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.~~
+~~Every agent in the mod is told about screens, the way Codex or Claude Code agents know about their built-in browser: in the standing instructions (`surface/agents.md`) and the `tma-agents` skill. Briefly: what screens are for (showing the user something, working on a shared page), that `screen_list {}` lists usable screens with yours first, how `distance` helps pick the one the user means, and that a `leased` screen is someone else's for a few seconds.~~
 
 ### Lease
 

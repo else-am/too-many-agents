@@ -36,7 +36,7 @@ def main():
         except (OSError, ValueError, KeyError, TypeError, AttributeError):
             continue
     if len(addresses) != 1:
-        parser.error('The test game must have one reachable selected BB with its Minecraft plugin enabled')
+        parser.error('The test game must have one reachable selected BB with its Too Many Agents plugin enabled')
     server_url = addresses.pop().rstrip('/')
     descriptor = game.info
     opener = game.opener

@@ -22,7 +22,7 @@ export function chatAssets(bb: BbPluginApi) {
     if (cached) { cache.delete(source); cache.set(source, cached); return cached; }
     if (workers.size >= 2) throw new Error('Diagram renderer is busy. Click Retry shortly.');
     const plugin = (await bb.sdk.plugins.list()).plugins.find(item => item.id === bb.pluginId);
-    if (!plugin) throw new Error('Minecraft plugin directory is unavailable.');
+    if (!plugin) throw new Error('Too Many Agents plugin directory is unavailable.');
     return new Promise((accept, reject) => {
       const worker = new Worker(join(plugin.rootDir, 'diagram-worker.mjs'), {
         workerData:{source}, resourceLimits:{maxOldGenerationSizeMb:128,stackSizeMb:4},

@@ -16,7 +16,7 @@ integrated server.
 - Minecraft 1.21.1 with NeoForge 21.1.251+, singleplayer.
 - Java 21 to build the mod.
 - Your installed, running BB 0.46.0 or newer.
-- Node.js and npm to build the bundled Minecraft TypeScript plugin; players do not need them.
+- Node.js and npm to build the bundled Too Many Agents TypeScript plugin; players do not need them.
 - At least one signed-in coding agent supported by BB, such as Codex or Claude Code.
 
 The TypeScript plugin in `bb-plugin/` uses the BB plugin SDK. BB remains your
@@ -39,10 +39,10 @@ folder. The JAR includes its matching BB plugin. Open the agent interface (G),
 or **Mod settings**. BB connection appears at the top; opening the agent interface
 before setup is complete takes you there automatically. BB is detected for you;
 choose an instance only if more than one is found. Choose **Allow plugin installation
-and updates** to let the mod manage its Minecraft plugin. Manual location and repair
+and updates** to let the mod manage its Too Many Agents plugin. Manual location and repair
 controls expand inline under **Connection details**. This permission applies only to the selected BB.
 
-The Minecraft plugin publishes its running BB address automatically, and the mod
+The Too Many Agents plugin publishes its running BB address automatically, and the mod
 finds it without environment variables or JVM options, including when BB uses a
 custom data directory. Each Minecraft installation remembers its selected BB.
 Mod and plugin versions must match exactly. A missing or older plugin can update
@@ -77,7 +77,7 @@ and project blocks with the world. Only the selected BB is connected. Switching
 BB leaves the other instance's agents disconnected; switching back reconnects them.
 
 New agents belong to **This world** unless you choose another project. Each world
-gets a BB project ("Minecraft: <save name>") the first time it is used, and its
+gets a BB project ("Too Many Agents: <save name>") the first time it is used, and its
 agents share one folder inside the save, `too-many-agents/workspace/`, so their
 files travel with the world. Agents with **No project** use BB's Personal project.
 
@@ -120,10 +120,10 @@ are shared, and players can use any screen. `screen_list` lists only usable scre
 your station's first, then unlinked screens by proximity to you or the player.
 It defaults to 20 rows (maximum 50); `truncated` counts omitted rows.
 
-From an embodied thread, use `bb minecraft spawn --parent-self --prompt 'Task'`
+From an embodied thread, use `bb tma spawn --parent-self --prompt 'Task'`
 for a child, or omit `--parent-self` for an independent thread. Use
-`bb minecraft spawn --help` for BB execution/environment options and Minecraft
-body/station options. `bb minecraft bodies` and `bb minecraft stations` describe
+`bb tma spawn --help` for BB execution/environment options and Minecraft
+body/station options. `bb tma bodies` and `bb tma stations` describe
 the current world. Other coordination uses ordinary `bb thread` commands.
 The plugin prepares BB requests for both the native UI and CLI, including
 project and environment selection, first messages, and lifecycle changes. The
@@ -138,8 +138,8 @@ project agents and unavailable to world agents. Occupancy begins at spawn and
 lasts until archive or deletion.
 
 ```sh
-bb minecraft stations --json
-bb minecraft spawn --parent-self --station desk --prompt 'Fix the issue'
+bb tma stations --json
+bb tma spawn --parent-self --station desk --prompt 'Fix the issue'
 ```
 
 Explicit spawn flags override station execution choices, subject to the caller's
@@ -251,7 +251,7 @@ bundles are ignored.
 form with no project classes on their classpath. To test ordinary packaged setup
 separately, first stop the `test` client, then run
 `tools/build runPackagedClient -PpackagedJarRun -PdevWorld` after the build finishes.
-This uses the default `minecraft` plugin and the guarded world in `run/`.
+This uses the default `tma` plugin and the guarded world in `run/`.
 
 For rich-chat acceptance:
 

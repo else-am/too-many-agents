@@ -68,8 +68,8 @@ def run(*args, timeout=60):
 
 
 def own(plugin_id):
-    if not plugin_id.startswith('minecraft-dev-'):
-        raise RuntimeError(f'Refusing to manage plugin {plugin_id}; development clients only own minecraft-dev-* plugins.')
+    if not plugin_id.startswith('tma-dev-'):
+        raise RuntimeError(f'Refusing to manage plugin {plugin_id}; development clients only own tma-dev-* plugins.')
 
 
 def installed(plugin_id):

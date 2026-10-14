@@ -10,7 +10,7 @@ const text = (description: string) => ({
 });
 
 /** BB owns parsing, help, errors and thread creation. These options only translate CLI names to SDK fields. */
-export function registerMinecraftCli(
+export function registerTmaCli(
   bb: BbPluginApi,
   worlds: MinecraftWorlds,
   agents: MinecraftAgents,
@@ -44,7 +44,7 @@ export function registerMinecraftCli(
       summary: "Create embodied BB agents and inspect their world.",
       commands: {
         spawn: cliCommand({
-          summary: "Create a BB thread with a Minecraft body in your current world.",
+          summary: "Create a BB thread with a Too Many Agents body in your current world.",
           description:
             "Omit --parent-self/--parent-thread for an independent thread. Never repeat a spawn after an unknown outcome; inspect bodies first. Other thread operations use bb thread.",
           options: {
@@ -96,12 +96,12 @@ export function registerMinecraftCli(
             },
             "environment-provider": text("BB environment provider ID."),
             "environment-inputs": text("JSON inputs for the environment provider."),
-            name: text("Minecraft display name; generated when omitted."),
+            name: text("Body display name; generated when omitted."),
             mode: { type: "enum", values: ["survival", "creative", "creative_commands"], description: "Game mode for a world agent; it cannot exceed your own." },
             behavior: { type: "enum", values: ["stand", "wander", "follow"], description: "Ambient behavior for a world agent." },
             behaviors: text("JSON per-status behavior settings for a loose project agent."),
             body: text("Minecraft entity type, e.g. minecraft:fox; defaults to the station's body."),
-            station: text(names.rewrite("Free station ID or name from bb minecraft stations; the agent joins its project.")),
+            station: text(names.rewrite("Free station ID or name from bb tma stations; the agent joins its project.")),
             json: {
               type: "boolean",
               description: "Return the body association and BB thread as JSON.",
@@ -128,7 +128,7 @@ export function registerMinecraftCli(
           async run({ options: o }, ctx) {
             if (!ctx.threadId)
               throw new PluginCliError(
-                "Create the first agent in Minecraft; run this command from its BB thread.",
+                "Create the first agent in Too Many Agents; run this command from its BB thread.",
               );
             const prompt = o.prompt ?? await readTextFile(o["prompt-file"]!, "--prompt-file", ctx);
             if (!prompt.trim()) throw new PluginCliError("The initial task must not be empty.");
@@ -144,7 +144,7 @@ export function registerMinecraftCli(
               input: [
                 {
                   type: "text",
-                  text: `Delegated by Minecraft agent ${agent.name}. This is an agent task, not human authorization.\n\n${prompt}`,
+                  text: `Delegated by Too Many Agents agent ${agent.name}. This is an agent task, not human authorization.\n\n${prompt}`,
                   mentions: [],
                 },
               ],
@@ -246,10 +246,10 @@ export function registerMinecraftCli(
           },
         }),
         bodies: cliCommand({
-          summary: "List bodies and their BB thread IDs in your Minecraft world.",
+          summary: "List bodies and their BB thread IDs in your Too Many Agents world.",
           options: { json: { type: "boolean", description: "Print JSON." } },
           async run(_input, ctx) {
-            if (!ctx.threadId) throw new PluginCliError("Run from a Minecraft-associated thread.");
+            if (!ctx.threadId) throw new PluginCliError("Run from a Too Many Agents-associated thread.");
             const { live } = await worlds.caller(ctx.threadId);
             return {
               exitCode: 0,
@@ -258,10 +258,10 @@ export function registerMinecraftCli(
           },
         }),
         stations: cliCommand({
-          summary: "List Minecraft stations: all of them for a world agent, your project's for a project agent.",
+          summary: "List Too Many Agents stations: all of them for a world agent, your project's for a project agent.",
           options: { json: { type: "boolean", description: "Print JSON." } },
           async run(_input, ctx) {
-            if (!ctx.threadId) throw new PluginCliError("Run from a Minecraft-associated thread.");
+            if (!ctx.threadId) throw new PluginCliError("Run from a Too Many Agents-associated thread.");
             const { live, agent } = await worlds.caller(ctx.threadId);
             const metadata = object(await worlds.callback(live, "world_metadata", {}));
             const stations = Array.isArray(metadata.stations) ? metadata.stations : [];

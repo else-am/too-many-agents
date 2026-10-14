@@ -15,14 +15,14 @@ export function bbInstanceId(bb: BbPluginApi) {
 
 export type Development = { client: string; fingerprint: string } | null;
 
-/** A development client's plugin is a staged copy with development.json; the packaged `minecraft` plugin has none. */
+/** A development client's plugin is a staged copy with development.json; the packaged `tma` plugin has none. */
 export async function loadDevelopment(bb: BbPluginApi): Promise<Development> {
   let data;
   try {
     data = JSON.parse(await readFile(new URL("./development.json", import.meta.url), "utf8"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    if (bb.pluginId !== "minecraft") throw new Error("Install development plugins through tools/dev; this copy was not staged.");
+    if (bb.pluginId !== "tma") throw new Error("Install development plugins through tools/dev; this copy was not staged.");
     return null;
   }
   if (data.pluginId !== bb.pluginId || typeof data.client !== "string" || typeof data.fingerprint !== "string")
@@ -57,7 +57,7 @@ export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds, devel
       return ctx.json({ ok: true, ...identity() });
     } catch (error) { return ctx.json({ ok: false, error: describe(error) }, 409); }
   });
-  bb.background.service("minecraft-discovery", {
+  bb.background.service("tma-discovery", {
     async start(signal) {
       const directory = join(homedir(), ".too-many-agents", "bb");
       const file = join(directory, `${randomUUID()}.json`);
@@ -87,12 +87,12 @@ export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds, devel
       if (data.bbInstanceId !== instanceId)
         throw new ApiError("bb_instance_changed", "This request belongs to a different BB instance.");
       if (data.modVersion !== MOD_VERSION)
-        throw new ApiError("version_mismatch", `Minecraft mod ${String(data.modVersion ?? "unknown")} and plugin ${MOD_VERSION} must match. Open BB connection in mod settings.`);
+        throw new ApiError("version_mismatch", `Too Many Agents mod ${String(data.modVersion ?? "unknown")} and plugin ${MOD_VERSION} must match. Open BB connection in mod settings.`);
       // A development game names the exact staged bundle it was launched against.
       if ((data.developmentFingerprint ?? null) !== (development?.fingerprint ?? null))
-        throw new ApiError("plugin_changed", "This Minecraft plugin is not the one this game was set up for. Open BB connection in mod settings.");
+        throw new ApiError("plugin_changed", "This Too Many Agents plugin is not the one this game was set up for. Open BB connection in mod settings.");
       if ((preparing || updatingUntil > Date.now()) && data.op !== "session.detach")
-        throw new ApiError("plugin_updating", "The Minecraft plugin is being updated. Retry shortly.");
+        throw new ApiError("plugin_updating", "The Too Many Agents plugin is being updated. Retry shortly.");
     },
   };
 }

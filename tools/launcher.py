@@ -63,7 +63,7 @@ def client(client_id):
         raise ValueError(f'Client ids are 1-16 lowercase letters, digits and single hyphens, not {client_id!r}.')
     game_dir = {'play': ROOT / 'run/play', 'test': ROOT / 'run'}.get(client_id, ROOT / 'run/clients' / client_id)
     suffix = hashlib.sha256(f'{CHECKOUT}\n{client_id}'.encode()).hexdigest()[:8]
-    return Client(client_id, game_dir, CLIENTS / client_id, f'minecraft-dev-{client_id}-{suffix}', client_id != 'play')
+    return Client(client_id, game_dir, CLIENTS / client_id, f'tma-dev-{client_id}-{suffix}', client_id != 'play')
 
 
 def clients():

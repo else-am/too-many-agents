@@ -138,22 +138,22 @@ Station blocks replace drawn station boxes, project boxes, roles and the per-age
 ### Building stations
 
 - World agents create stations by placing the block through `minecraft_run`, and configure them through a new scripting API. They can set any project except a world project.
-- `bb minecraft spawn --station <id>` stays.
+- `bb tma spawn --station <id>` stays.
 - **No assigning or unassigning.** An agent gets a station only by being spawned there, with **Spawn agent here** or `--station`, and keeps it until it's archived or deleted. Either releases the station, as archiving does today, and is the only way out. An unarchived agent comes back loose. "Leave the desk for a while" is a station behavior (`follow`), not an unassignment.
 
 ### CLI
 
 | Command | |
 |---|---|
-| `bb minecraft stations` | Keep. Reads the index and returns id, name, position, project, pinned execution and occupant: every station for world agents, and the caller's project's stations for project agents |
-| `bb minecraft station assign <id> [--agent] [--unassign]` | Remove. There's no assigning or unassigning |
-| `bb minecraft station create/update/delete` | Remove. Stations are made and broken physically |
-| `bb minecraft role *` | Remove |
-| `bb minecraft spawn --role` | Remove. `--station` applies the station's execution fields, body, behaviors and instructions, and explicit flags still override |
-| `bb minecraft spawn --minecraft-access` | Remove. Access comes from the project |
-| `bb minecraft spawn --behaviors` | Project agents without a station. World agents use `--behavior stand\|wander\|follow` |
-| `bb minecraft spawn --mode` | World agents only |
-| `bb minecraft spawn --station <id\|name>` | Implies the station's project. Passing a different `--project` is rejected |
+| `bb tma stations` | Keep. Reads the index and returns id, name, position, project, pinned execution and occupant: every station for world agents, and the caller's project's stations for project agents |
+| `bb tma station assign <id> [--agent] [--unassign]` | Remove. There's no assigning or unassigning |
+| `bb tma station create/update/delete` | Remove. Stations are made and broken physically |
+| `bb tma role *` | Remove |
+| `bb tma spawn --role` | Remove. `--station` applies the station's execution fields, body, behaviors and instructions, and explicit flags still override |
+| `bb tma spawn --minecraft-access` | Remove. Access comes from the project |
+| `bb tma spawn --behaviors` | Project agents without a station. World agents use `--behavior stand\|wander\|follow` |
+| `bb tma spawn --mode` | World agents only |
+| `bb tma spawn --station <id\|name>` | Implies the station's project. Passing a different `--project` is rejected |
 
 ### Scripting API (`minecraft_run`, world agents)
 
@@ -276,9 +276,9 @@ record Station(
 
 - **Docs:**
   - `README.md`: the lines on bounds and stations, survey mode (B, now view-only), roles, Minecraft access, and `station create`.
-  - `bb-plugin/skills/minecraft-agents/SKILL.md`: the Stations and Roles sections, `--minecraft-access`, and Notify in chat.
+  - `bb-plugin/skills/tma-agents/SKILL.md`: the Stations and Roles sections, `--minecraft-access`, and Notify in chat.
   - `bb-plugin/surface/agents.md`: the screens and access paragraphs.
-  - `bb-plugin/skills/minecraft-scripting/SKILL.md`: movement "inside your permitted box".
+  - `bb-plugin/skills/tma-scripting/SKILL.md`: movement "inside your permitted box".
   - `screens-plan.md`: the Access section is superseded here.
 - **Tests and tools:**
   - `tools/bb-smoke.py`: creates and deletes stations over HTTP. It needs a dev hook to place and configure a station block in the test world.

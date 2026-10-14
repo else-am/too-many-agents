@@ -192,13 +192,13 @@ def run_children(request, agent_id, project_id, model, reasoning_level, timeout)
     station = next(row for row in placed['index']['stations'] if row['pos'] == pos)
     observed = set()
     parent_thread = request(path)['threadId']
-    prompt = ('This is an embodied coordination check. Run bb minecraft stations --json. Then run exactly once '
-              f'bb minecraft spawn --parent-self --name "BB child smoke" --body minecraft:pig --station {station["id"]} '
+    prompt = ('This is an embodied coordination check. Run bb tma stations --json. Then run exactly once '
+              f'bb tma spawn --parent-self --name "BB child smoke" --body minecraft:pig --station {station["id"]} '
               f'--model {model} --reasoning-level {reasoning_level} --json '
               '--prompt "Reply BB_CHILD_OK. Do not call any tools or send messages.". '
               'Use ordinary bb thread wait/show for the returned threadId until idle with no pending interactions. '
               'Then run bb thread archive for that thread exactly once. Finally reply BB_COORDINATION_OK. '
-              'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.').replace('bb minecraft ', 'bb ' + plugin_id() + ' ')
+              'Never repeat a spawn or archive after an unknown outcome; inspect bb tma bodies instead.').replace('bb tma ', 'bb ' + plugin_id() + ' ')
     request(path + '/message', {'text': prompt, 'delivery': 'auto'})
     deadline = time.monotonic() + timeout + 60
     while time.monotonic() < deadline:

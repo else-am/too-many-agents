@@ -95,7 +95,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
             note("Install and open BB, then return here. Minecraft will connect automatically.");
             action("", "Get BB…", () -> net.minecraft.Util.getPlatform().openUri(java.net.URI.create("https://getbb.app/")), true);
         } else if (bb.action() == BbSetup.Action.ALLOW_UPDATES) {
-            note("Let this mod install and update its Minecraft plugin in BB.");
+            note("Let this mod install and update its Too Many Agents plugin in BB.");
             action("", "Allow plugin installation and updates", () -> setup.automatic(true), enabled);
         } else if (bb.action() == BbSetup.Action.RESTORE && !confirmInstall) {
             action("", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled);
@@ -104,7 +104,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         if (details) {
             if (setup.development()) value("Plugin source", "This checkout (development)");
             else toggle("Plugin auto-updates", bb.automatic(), setup::automatic, enabled)
-                .setTooltip(Tooltip.create(Component.literal("Allow this mod to install and update its Minecraft plugin in the selected BB.")));
+                .setTooltip(Tooltip.create(Component.literal("Allow this mod to install and update its Too Many Agents plugin in the selected BB.")));
             value("Mod version", BbSetup.version());
             value("Plugin version", bb.pluginVersion().isBlank() ? "Not connected" : bb.pluginVersion());
             bb.instances().stream().filter(i -> i.id().equals(bb.instanceId())).findFirst()
@@ -113,7 +113,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
                 action("Plugin", installLabel, () -> { confirmInstall = true; rebuildForm(); }, enabled && !bb.cli().isBlank());
         }
         if (confirmInstall) {
-            note((setup.development() ? "Reload the plugin from this checkout?" : "Install the bundled Minecraft plugin " + BbSetup.version() + "?")
+            note((setup.development() ? "Reload the plugin from this checkout?" : "Install the bundled Too Many Agents plugin " + BbSetup.version() + "?")
                 + " Agents’ Minecraft actions will stop briefly. Your world stays open.");
             if (!bb.pluginVersion().isBlank() && !bb.pluginVersion().equals(BbSetup.version()))
                 note("This replaces plugin version " + bb.pluginVersion() + " with " + BbSetup.version() + ".");

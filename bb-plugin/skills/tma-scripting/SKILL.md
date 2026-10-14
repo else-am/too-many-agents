@@ -1,5 +1,5 @@
 ---
-name: minecraft-scripting
+name: tma-scripting
 description: "Write minecraft_run scripts that drive your Minecraft NPC body: find blocks and entities, move with native navigation, mine, place, craft, use containers and workstations, fight, chat, and inspect the results. Use this whenever you act in or inspect the Minecraft world through code, including quick one-off checks, and whenever you are tempted to use Mineflayer APIs such as pathfinder."
 ---
 
@@ -281,3 +281,32 @@ The core API covers most tasks. Open a reference only when a task needs somethin
 - [actions.md](references/actions.md): when you need direct movement controls, precise placement (hit point, offhand, slab half), vehicles, creative flight/items or commands.
 - [inventory.md](references/inventory.md): when you need exact slots, a specific component variant, merchant details, or recovery after a failed inventory operation.
 - [observations.md](references/observations.md): when you need events (sounds, particles, block updates, entity hurt), chat patterns, registries or scoreboards.
+
+## Bodies and stations
+
+Station radius is 0–49 (square width `2r+1`), height 1–99 upwards from the block;
+defaults are radius 1 and height 3. Only stationed project agents are confined,
+except while following. **B** toggles view-only station-area outlines.
+
+World agents use `--behavior stand|wander|follow`, default stand. Wander stays near
+where it began. `minecraft_behavior` changes it; the first script or physical
+action pauses it until the turn ends, and it resumes from where the body is. Project agents use per-status `behaviors`
+(`working`, `wants_you`, `idle`), each with a `type` of stand, wander, follow, jump,
+spin or look (at the player). A station supplies these for its occupant; otherwise
+use the agent's settings or `--behaviors` at spawn.
+
+World-agent `--mode` accepts `survival`, `creative`, or `creative_commands`
+(Creative + commands). Only `creative_commands` allows Minecraft commands; both
+Creative modes allow Creative physical actions. A child cannot gain physical
+abilities its caller lacks.
+
+Project colors are configured in Minecraft’s project settings and persisted in BB,
+shared across worlds. Agents have no individual color setting.
+
+
+Agents in **This world** get physical tools; other project agents get screens only.
+World agents can spawn into their world project or a non-world project. Project
+agents spawn only into their own project; children derive access from their project.
+Stations and project blocks are placed blocks configured with `minecraft_run`.
+A project block can stamp its project onto a station item without changing its
+other settings. Neither block accepts a world project; a blank station cannot spawn.

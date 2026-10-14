@@ -4,7 +4,8 @@ import { ApiError, PROTOCOL, describe, notFound, object, type Session, type Iden
 import { bbInstanceId } from "./discovery.js";
 
 const START_EXPIRY_MS = 10_000;
-const PACKAGED = "minecraft";
+// Keep saved conversation ownership compatible with earlier plugin IDs.
+const OWNERSHIP_NAMESPACE = "minecraft";
 const busy = (thread: { status: string }) => ["active", "pending", "starting", "stopping"].includes(thread.status);
 
 function connectionRefused(error: unknown): boolean {
@@ -169,7 +170,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
     if (!identity) {
       const owner = await ownerOf(threadId);
       throw new ApiError("access_denied", owner && owner !== bb.pluginId
-        ? `This conversation moved to Minecraft plugin ${owner}. Its tools load when the thread next starts; run bb thread stop ${threadId} if it still offers these old tools.`
+        ? `This conversation moved to Too Many Agents plugin ${owner}. Its tools load when the thread next starts; run bb thread stop ${threadId} if it still offers these old tools.`
         : "This thread has no Minecraft body.");
     }
     const live = session(identity.worldId);
@@ -223,19 +224,19 @@ export function minecraftWorlds(bb: BbPluginApi) {
     return await ownership(live, agent) === "owned";
   }
 
-  // The packaged namespace records every Minecraft conversation's owner: its own
+  // The original namespace records every conversation's owner: its own
   // identity, or `owner` naming the instance that holds it, even an uninstalled one.
   async function ownerOf(threadId: string) {
-    const registry = await bb.sdk.threads.getPluginMetadata({ threadId, pluginId: PACKAGED });
-    return typeof registry.owner === "string" ? registry.owner : typeof registry.worldId === "string" ? PACKAGED : null;
+    const registry = await bb.sdk.threads.getPluginMetadata({ threadId, pluginId: OWNERSHIP_NAMESPACE });
+    return typeof registry.owner === "string" ? registry.owner : typeof registry.worldId === "string" ? OWNERSHIP_NAMESPACE : null;
   }
 
   /** Records a conversation this instance created. */
   async function register(threadId: string) {
     const owner = await ownerOf(threadId);
     if (owner && owner !== bb.pluginId) throw new Error(`Conversation ${threadId} is already owned by ${owner}`);
-    if (bb.pluginId !== PACKAGED)
-      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId } });
+    if (bb.pluginId !== OWNERSHIP_NAMESPACE)
+      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: OWNERSHIP_NAMESPACE, set: { owner: bb.pluginId } });
   }
 
   /**
@@ -276,7 +277,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
       return;
     }
     source ??= owner;
-    if (!source || source === bb.pluginId || !/^minecraft(-[a-z0-9]+)*$/.test(source)) return;
+    if (!source || source === bb.pluginId || !/^(?:tma|minecraft)(-[a-z0-9]+)*$/.test(source)) return;
     // An unfinished move may resume only while the registry still names either participant.
     if (owner && owner !== source && owner !== bb.pluginId) return;
     const previous = await bb.sdk.threads.getPluginMetadata({ threadId, pluginId: source });
@@ -288,7 +289,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
     // of the same world must not both take its conversations from an offline owner.
     const plugins = (await bb.sdk.plugins.list()).plugins;
     const others = new Set([source, ...plugins.map((plugin) => plugin.id)
-      .filter((id) => /^minecraft(-[a-z0-9]+)*$/.test(id))]);
+      .filter((id) => /^(?:tma|minecraft)(-[a-z0-9]+)*$/.test(id))]);
     others.delete(bb.pluginId);
     for (const id of others) if (await hasWorld(id, body.live.worldId)) return;
     if (sessions.get(body.live.worldId) !== body.live || busy(await bb.sdk.threads.get({ threadId }))) return;
@@ -297,12 +298,12 @@ export function minecraftWorlds(bb: BbPluginApi) {
       set: { worldId: body.live.worldId, agentId: body.agentId, adoptedFrom: source }, remove: ["owner"] });
     identities.set(threadId, { worldId: body.live.worldId, agentId: body.agentId });
     const identity = ["worldId", "agentId", "nonce"];
-    if (source === PACKAGED)
-      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId }, remove: identity });
+    if (source === OWNERSHIP_NAMESPACE)
+      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: OWNERSHIP_NAMESPACE, set: { owner: bb.pluginId }, remove: identity });
     else {
       await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: source, remove: identity });
-      if (bb.pluginId !== PACKAGED)
-        await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId } });
+      if (bb.pluginId !== OWNERSHIP_NAMESPACE)
+        await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: OWNERSHIP_NAMESPACE, set: { owner: bb.pluginId } });
     }
     // Keep the move pending until its old tool session has been released.
     if (busy(await bb.sdk.threads.get({ threadId }))) return;
