@@ -116,7 +116,8 @@ public final class Screens {
         return view;
     }
 
-    static boolean canOpen() { return views.values().stream().filter(view -> view.browser != null).count() < MAX_BROWSERS; }
+    /** Counts every browser, including one briefly finishing its history snapshot. */
+    static boolean canOpen() { return Chromium.browsers() < MAX_BROWSERS; }
 
     /** Stops Chromium on the render thread as the game closes. */
     public static void shutdown() {

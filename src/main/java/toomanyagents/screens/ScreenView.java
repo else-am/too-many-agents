@@ -6,6 +6,7 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import java.awt.Rectangle;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.LinkedList;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,7 +16,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
 import net.minecraft.world.phys.Vec3;
-import org.cef.browser.CefDevToolsClient;
 import org.cef.browser.ScreenBrowser;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
@@ -58,7 +58,21 @@ final class ScreenView implements ScreenBrowser.View {
     /** The menu rises from the bar's right end over the page: its left edge, top, width and row height, in blocks. */
     final double menuX, menuTop, menuWidth, menuRow;
 
-    ScreenBrowser browser;
+    volatile ScreenBrowser browser;
+    /**
+     * What the current built-in browser may load, bound to that native browser and the page generation it was granted
+     * for; the authorized root joins it with the files view. Null on the web and for every browser but the current one.
+     */
+    record Access(ScreenBrowser browser, long generation) {}
+    volatile Access access;
+    /** Addresses outside the current native history, nearest first. Crossing browser kinds always reopens fresh. */
+    final LinkedList<Entry> behind = new LinkedList<>(), ahead = new LinkedList<>();
+    record Entry(String url, String title) {}
+    private static final int HISTORY = 50;
+    private boolean browserBack, browserForward;
+    /** Detached only long enough to read its history, then closed before the replacement opens. */
+    private ScreenBrowser departing;
+    private long historyReading;
     String url = "", title = "";
     /**
      * The player's last click or key on the page, unless an agent's call has come since, and whether the page's next
@@ -69,6 +83,8 @@ final class ScreenView implements ScreenBrowser.View {
     /** Agent calls waiting on this page; closing it fails them. An open waits for its page's load to finish. */
     private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
     private final Set<CompletableFuture<Void>> frames = ConcurrentHashMap.newKeySet();
+    /** Agents' DevTools calls, which must not outlive the browser they were sent to. */
+    private final Set<CompletableFuture<String>> commands = ConcurrentHashMap.newKeySet();
     private CompletableFuture<Void> opening;
     private CompletableFuture<Void> waking;
     private boolean pageReady;
@@ -76,8 +92,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** The page an open replaced, whose late loads mustn't complete it. */
     private String superseded = "";
     /** Changes whenever an agent opens a page or the browser closes, so a call's answer can't come from another page. */
-    long generation;
-    private CefDevToolsClient devTools;
+    volatile long generation;
     /** The page last read from the entity; our own saves reach it a tick later. */
     private String saved = "";
     boolean loading, canGoBack, canGoForward, crashed;
@@ -194,36 +209,151 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** Keeps the browser in step with the screen's saved page. An idle screen has no browser. */
     void sync(String value, boolean trusted) {
+        // A saved address no browser may load, such as an old file: page, leaves the screen idle.
+        if (Chromium.place(value) == Chromium.Place.NOWHERE) value = "";
         if (!value.equals(saved)) {
             saved = value;
             if (!value.equals(url)) {
                 url = value;
                 crashed = false;
-                if (browser != null && !url.isBlank()) browser.loadURL(url);
+                if (browser != null && !url.isBlank()) load(url);
             }
         }
         if (url.isBlank() && browser != null) close();
-        if (browser == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
-            browser = Chromium.open(this, url, pixelWidth, pixelHeight);
-            live = true;
+        if (browser == null && departing == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
+            start(url);
         }
     }
 
     void navigate(String target) {
-        // A typed script runs in the page rather than becoming the screen's address.
+        // A typed script runs in the page rather than becoming the screen's address. Built-in pages run only their own.
         if (target.regionMatches(true, 0, "javascript:", 0, 11)) {
-            if (browser != null) browser.getMainFrame().executeJavaScript(target.substring(11), "", 0);
+            if (browser != null && !browser.builtin) browser.getMainFrame().executeJavaScript(target.substring(11), "", 0);
             return;
         }
+        if (Chromium.place(target) == Chromium.Place.NOWHERE) return;
         url = target;
         crashed = false;
-        if (browser != null) browser.loadURL(target);
+        load(target);
         Screens.saveUrl(this, target, true);
+    }
+
+    /** The player clicked a link from a built-in page out to the web. */
+    void follow(ScreenBrowser source, String target) {
+        onRender(() -> { if (source == browser && recentInput()) navigate(target); });
+    }
+
+    /** Loads a page in this browser, or in a new one when it moves between web and built-in content. */
+    private void load(String target) {
+        if (browser == null) return;
+        if (Chromium.builtin(target) == browser.builtin) {
+            authorize();
+            browser.loadURL(target);
+            return;
+        }
+        drop(ahead);
+        leave(behind, false);
+    }
+
+    private void authorize() { access = browser != null && browser.builtin ? new Access(browser, generation) : null; }
+
+    /** A new browser at target becomes the current one. Its access is in place before it makes any request. */
+    private void start(String target) {
+        browser = Chromium.open(this, target, pixelWidth, pixelHeight);
+        title = "";
+        browserBack = browserForward = pageReady = false;
+        crashed = popupShown = editable = false;
+        live = true;
+        authorize();
+        history();
+        browser.createImmediately();
+    }
+
+    /** Detaches access immediately and saves only addresses. No old native browser survives restoration. */
+    private void leave(LinkedList<Entry> stack, boolean back) {
+        var old = browser;
+        String oldTitle = title;
+        ScreenInput.pageLoading(this);
+        failCommands("The page moved to another browser before DevTools answered. The outcome is unknown; check the page before acting again.");
+        access = null;
+        generation++;
+        browser = null;
+        departing = old;
+        browserBack = browserForward = false;
+        old.devTools("Page.getNavigationHistory", "{}").orTimeout(2, java.util.concurrent.TimeUnit.SECONDS)
+            .whenComplete((answer, failure) -> onRender(() -> {
+                if (departing != old) return;
+                var entries = new LinkedList<Entry>();
+                try {
+                    if (failure == null) {
+                        var result = com.google.gson.JsonParser.parseString(answer).getAsJsonObject();
+                        var nativeEntries = result.getAsJsonArray("entries");
+                        int current = result.get("currentIndex").getAsInt();
+                        // Push farthest first, leaving the page we just left nearest the top.
+                        int first = back ? nativeEntries.size() - 1 : old.firstEntry();
+                        int step = back ? -1 : 1;
+                        for (int i = first; back ? i >= current : i <= current; i += step) {
+                            var item = nativeEntries.get(i).getAsJsonObject();
+                            String address = item.get("url").getAsString();
+                            if (Chromium.place(address) != Chromium.Place.NOWHERE)
+                                entries.push(new Entry(address, item.get("title").getAsString()));
+                        }
+                    }
+                } catch (RuntimeException ignored) {
+                    entries.clear();
+                }
+                if (entries.isEmpty() && Chromium.place(old.getURL()) != Chromium.Place.NOWHERE)
+                    entries.push(new Entry(old.getURL(), oldTitle));
+                stack.addAll(0, entries);
+                while (stack.size() > HISTORY) stack.removeLast();
+                Chromium.close(old);
+                departing = null;
+                if (!url.isBlank()) start(url);
+            }));
+    }
+
+    private void drop(LinkedList<Entry> stack) { stack.clear(); }
+
+    /** Returns to an address outside this browser's history, as the player's own navigation. */
+    private void restore(LinkedList<Entry> from, boolean back) {
+        var entry = from.pop();
+        url = entry.url();
+        playerNavigating = false;
+        Screens.saveUrl(this, url, true);
+        leave(back ? ahead : behind, back);
+    }
+
+    /** Chromium's index controls traversal; the bootstrap page never becomes a Back destination. */
+    private void readHistory(ScreenBrowser source) {
+        if (source != browser || !source.ready()) return;
+        long reading = ++historyReading;
+        source.devTools("Page.getNavigationHistory", "{}").thenAccept(answer -> onRender(() -> {
+            if (source != browser || reading != historyReading || crashed) return;
+            var result = com.google.gson.JsonParser.parseString(answer).getAsJsonObject();
+            int length = result.getAsJsonArray("entries").size(), current = result.get("currentIndex").getAsInt();
+            browserBack = current > source.firstEntry();
+            browserForward = current < length - 1;
+            // Restored browsers start with one real entry. A second is a push, including a hash change;
+            // replaceState leaves one and therefore preserves the external forward stack.
+            if (length - source.firstEntry() > 1) drop(ahead);
+            history();
+        })).exceptionally(failure -> null);
+    }
+
+    private void history() {
+        canGoBack = browserBack || !behind.isEmpty();
+        canGoForward = browserForward || !ahead.isEmpty();
+    }
+
+    private void failCommands(String message) {
+        var failure = new ScreenTools.ScreenError("unavailable", message);
+        for (var command : commands) command.completeExceptionally(failure);
     }
 
     /** The player reloading takes the page over, like navigating. */
     void reload() {
         crashed = false;
+        authorize();
         if (browser != null) browser.reload();
         Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
     }
@@ -231,13 +361,15 @@ final class ScreenView implements ScreenBrowser.View {
     void back() {
         if (browser == null || !canGoBack) return;
         playerNavigating = true;
-        browser.goBack();
+        if (browserBack) browser.goBack();
+        else restore(behind, true);
     }
 
     void forward() {
         if (browser == null || !canGoForward) return;
         playerNavigating = true;
-        browser.goForward();
+        if (browserForward) browser.goForward();
+        else restore(ahead, false);
     }
 
     /** Closes the browser and leaves the screen idle, keeping its id and name. */
@@ -250,7 +382,7 @@ final class ScreenView implements ScreenBrowser.View {
     void shutDown() {
         close();
         url = "";
-        crashed = loading = canGoBack = canGoForward = editable = false;
+        crashed = loading = canGoBack = canGoForward = browserBack = browserForward = editable = false;
         playerNavigating = false;
     }
 
@@ -283,7 +415,7 @@ final class ScreenView implements ScreenBrowser.View {
         url = target;
         title = "";
         crashed = false;
-        if (browser != null) browser.loadURL(target);
+        if (browser != null) load(target);
         else Chromium.start();
         return waiter;
     }
@@ -293,8 +425,7 @@ final class ScreenView implements ScreenBrowser.View {
         if (browser == null || crashed) return;
         playerInput();
         var source = browser;
-        if (devTools == null) devTools = browser.getDevToolsClient();
-        devTools.executeDevToolsMethod(method, params.toString()).exceptionally(error -> {
+        browser.devTools(method, params.toString()).exceptionally(error -> {
             onRender(() -> { if (browser == source) ScreenInput.closing(this); });
             com.mojang.logging.LogUtils.getLogger().warn("Screen input failed", error);
             return null;
@@ -304,10 +435,14 @@ final class ScreenView implements ScreenBrowser.View {
     /** Runs one DevTools method on the page. */
     CompletableFuture<String> devTools(String method, String params) {
         requirePage();
+        if (browser == null) throw new ScreenTools.ScreenError("unavailable", "Open a page on the screen first.");
+        if (browser.builtin) throw new ScreenTools.ScreenError("view_only", "Built-in pages are view-only. Use screen_screenshot to see them.");
+        ScreenTools.refuseUnsafe(method, com.google.gson.JsonParser.parseString(params));
         agentInput();
-        if (devTools == null) devTools = browser.getDevToolsClient();
         var result = track(new CompletableFuture<String>());
-        devTools.executeDevToolsMethod(method, params).whenComplete((value, failure) -> {
+        commands.add(result);
+        result.whenComplete((value, failure) -> commands.remove(result));
+        browser.devTools(method, params).whenComplete((value, failure) -> {
             if (failure != null) result.completeExceptionally(failure);
             else result.complete(value);
         });
@@ -366,10 +501,13 @@ final class ScreenView implements ScreenBrowser.View {
 
     void close() {
         ScreenInput.closing(this);
-        if (devTools != null) devTools.close();
-        devTools = null;
-        if (browser != null) Chromium.close(browser);
+        var current = browser;
+        var old = departing;
         browser = null;
+        departing = null;
+        access = null;
+        drop(behind);
+        drop(ahead);
         pageReady = false;
         generation++;
         opening = null;
@@ -378,6 +516,9 @@ final class ScreenView implements ScreenBrowser.View {
         popup.release();
         var failure = new ScreenTools.ScreenError("unavailable", "The screen's page was closed.");
         for (var call : pending) call.completeExceptionally(failure);
+        // Native close completes raw DevTools futures synchronously; screen calls must fail first.
+        if (old != null) Chromium.close(old);
+        if (current != null) Chromium.close(current);
     }
 
     /** Regenerates the distance mip levels after new frames, once per drawn frame. */
@@ -418,12 +559,11 @@ final class ScreenView implements ScreenBrowser.View {
 
     @Override public void cursor(ScreenBrowser source, int type) { if (source == browser) cursor = type; }
 
-    void loading(ScreenBrowser source, boolean value, boolean back, boolean forward) {
+    void loading(ScreenBrowser source, boolean value) {
         onRender(() -> {
             if (source != browser || crashed) return;
             loading = value;
-            canGoBack = back;
-            canGoForward = forward;
+            readHistory(source);
             if (value) return;
             playerNavigating = false;
             finishOpening();
@@ -443,6 +583,7 @@ final class ScreenView implements ScreenBrowser.View {
         onRender(() -> {
             if (source == browser && !crashed) {
                 pageReady = true;
+                readHistory(source);
                 if (waking != null) waking.complete(null);
             }
             if (source != browser || crashed || !openingStarted) return;
@@ -493,7 +634,9 @@ final class ScreenView implements ScreenBrowser.View {
 
     void address(ScreenBrowser source, String address) {
         onRender(() -> {
-            if (source != browser || address.equals(url)) return;
+            if (source != browser) return;
+            readHistory(source);
+            if (address.equals(url) || Chromium.place(address) == Chromium.Place.NOWHERE) return;
             url = address;
             // Following a link the player clicked takes the page over; redirects and scripted changes don't.
             Screens.saveUrl(this, address, playerNavigating || recentInput());
@@ -517,8 +660,6 @@ final class ScreenView implements ScreenBrowser.View {
             var failure = new ScreenTools.ScreenError("unavailable",
                 "The page crashed. The outcome is unknown; check the page before repeating any action.");
             for (var call : pending) call.completeExceptionally(failure);
-            if (devTools != null) devTools.close();
-            devTools = null;
         });
     }
 

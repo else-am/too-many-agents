@@ -576,9 +576,27 @@ public final class ScreenTools {
     private static String fileAddress(String target) {
         Path path;
         try { path = Path.of(target); } catch (Exception e) { throw invalid("target isn't a valid file path."); }
-        // Checked as text only: the server thread doesn't wait on the filesystem. A missing file shows Chromium's error page.
+        // Checked as text only: the server thread doesn't wait on the filesystem.
         if (!path.isAbsolute()) throw invalid("Use an absolute file path.");
-        return path.toUri().toString();
+        return Builtin.files(path.normalize());
+    }
+
+    /** DevTools domains that act within the page. The rest reach the browser, other pages or the computer's files. */
+    private static final Set<String> CDP_DOMAINS = Set.of("Accessibility", "Animation", "Audits", "CSS", "CacheStorage", "Console", "DOM",
+        "DOMDebugger", "DOMSnapshot", "DOMStorage", "Debugger", "DeviceOrientation", "Emulation", "EventBreakpoints", "Fetch", "HeapProfiler",
+        "IO", "IndexedDB", "Input", "Inspector", "LayerTree", "Log", "Media", "Network", "Overlay", "Page", "Performance",
+        "PerformanceTimeline", "Profiler", "Runtime", "Schema", "Storage", "WebAudio");
+    /** Methods in those domains that read or write local files, or close the browser out from under the screen. */
+    private static final Set<String> CDP_REFUSED = Set.of("DOM.setFileInputFiles", "Page.handleFileChooser", "Page.setDownloadBehavior",
+        "Page.close", "Network.loadNetworkResource");
+
+    /** Checked on the client after view_only, so a built-in page always answers view_only. */
+    static void refuseUnsafe(String method, JsonElement params) {
+        int dot = method.indexOf('.');
+        boolean files = method.equals("Input.dispatchDragEvent") && params != null && params.isJsonObject()
+            && params.getAsJsonObject().get("data") instanceof JsonObject data && data.get("files") instanceof JsonArray list && !list.isEmpty();
+        if (dot < 0 || !CDP_DOMAINS.contains(method.substring(0, dot)) || CDP_REFUSED.contains(method) || files)
+            throw new ScreenError("refused", method + " isn't available on screens: it reaches beyond the page.");
     }
 
     /** Explicit names must be nonblank. Uniqueness is checked on the server before changing the page. */

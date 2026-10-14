@@ -115,12 +115,19 @@ public final class ScreenDiagnostics {
             browser.addProperty("screen", view.entry.screen().id());
             browser.addProperty("tracked", view.screen != null && !view.screen.isRemoved());
             browser.addProperty("browser", view.browser != null);
+            browser.addProperty("builtin", view.browser != null && view.browser.builtin);
+            browser.addProperty("browserId", view.browser == null ? -1 : view.browser.getIdentifier());
+            browser.addProperty("access", view.access != null);
+            browser.addProperty("historyBehind", view.behind.size());
+            browser.addProperty("historyAhead", view.ahead.size());
             browser.addProperty("generation", view.generation);
             browser.addProperty("live", view.live());
             browser.addProperty("pendingCalls", view.pendingCalls());
             browsers.add(browser);
         }
         result.add("browserViews", browsers);
+        result.addProperty("deniedNavigations", Chromium.deniedNavigations());
+        result.addProperty("deniedRequests", Chromium.deniedRequests());
         result.add("placement", ScreenPlacement.state());
         var menu = new JsonObject();
         var open = Screens.views().stream().filter(ScreenInput::menuOpen).findFirst().orElse(null);

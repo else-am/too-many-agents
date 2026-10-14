@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import me.friwi.jcefmaven.CefAppBuilder;
 import me.friwi.jcefmaven.EnumProgress;
 import me.friwi.jcefmaven.MavenCefAppHandlerAdapter;
@@ -14,11 +15,13 @@ import org.cef.CefSettings;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefFrame;
 import org.cef.browser.CefMessageRouter;
+import org.cef.browser.CefRequestContext;
 import org.cef.browser.ScreenBrowser;
 import org.cef.callback.CefContextMenuParams;
 import org.cef.callback.CefFileDialogCallback;
 import org.cef.callback.CefMenuModel;
 import org.cef.callback.CefQueryCallback;
+import org.cef.callback.CefSchemeRegistrar;
 import org.cef.handler.CefContextMenuHandlerAdapter;
 import org.cef.handler.CefKeyboardHandler;
 import org.cef.handler.CefKeyboardHandlerAdapter;
@@ -29,6 +32,10 @@ import org.cef.handler.CefLifeSpanHandlerAdapter;
 import org.cef.handler.CefMessageRouterHandlerAdapter;
 import org.cef.handler.CefRequestHandler;
 import org.cef.handler.CefRequestHandlerAdapter;
+import org.cef.handler.CefRequestContextHandlerAdapter;
+import org.cef.handler.CefResourceRequestHandler;
+import org.cef.handler.CefResourceRequestHandlerAdapter;
+import org.cef.misc.BoolRef;
 import org.cef.network.CefRequest;
 import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
@@ -52,6 +59,9 @@ final class Chromium {
     private static volatile CefApp app;
     private static volatile CefClient client;
     private static final Map<CefBrowser, ScreenView> views = new ConcurrentHashMap<>();
+    /** Built-in pages share one in-memory profile, apart from the web's cookies, storage and processes. */
+    private static volatile CefRequestContext builtinContext;
+    private static final AtomicLong deniedNavigations = new AtomicLong(), deniedRequests = new AtomicLong();
 
     // Runs in every frame once it loads. It reports whether the focused element takes text, so clicking into a field
     // starts typing mode; focus inside an iframe never reaches the top document. New windows open in the same screen:
@@ -93,6 +103,39 @@ final class Chromium {
     static Phase phase() { return phase; }
     static int browsers() { return views.size(); }
     static String progress() { return progress; }
+    static long deniedNavigations() { return deniedNavigations.get(); }
+    static long deniedRequests() { return deniedRequests.get(); }
+
+    /**
+     * Where a URL may load: only in a web browser, only in a built-in one, in either (about:), or nowhere. Nowhere
+     * covers file: and every scheme not listed, such as chrome: and devtools:.
+     */
+    enum Place { WEB, BUILTIN, EITHER, NOWHERE }
+
+    static Place place(String url) {
+        int colon = url == null ? -1 : url.indexOf(':');
+        if (colon < 0) return Place.NOWHERE;
+        String rest = url.substring(colon + 1);
+        return switch (url.substring(0, colon).toLowerCase(java.util.Locale.ROOT)) {
+            case "http", "https", "ws", "wss", "data" -> Place.WEB;
+            case Builtin.SCHEME -> Place.BUILTIN;
+            case "about" -> Place.EITHER;
+            // These carry the origin they belong to.
+            case "blob", "filesystem" -> place(rest);
+            case "view-source" -> place(rest) == Place.WEB ? Place.WEB : Place.NOWHERE;
+            default -> Place.NOWHERE;
+        };
+    }
+
+    static boolean builtin(String url) { return place(url) == Place.BUILTIN; }
+
+    /**
+     * Chromium's PDF viewer, which a web page's PDF loads in a frame of its own. Allowed only there, never as the
+     * page itself; agents' DevTools can't reach that frame's separate process without the refused Target domain.
+     */
+    private static boolean pdfViewer(String url, CefFrame frame) {
+        return frame != null && !frame.isMain() && url.startsWith("chrome-extension://mhjfbmdgcfjbbpaeojofohoefgiehjai/");
+    }
 
     static void start() {
         if (phase != Phase.OFF) return;
@@ -113,6 +156,11 @@ final class Chromium {
             });
             builder.addJcefArgs("--mute-audio");
             builder.setAppHandler(new MavenCefAppHandlerAdapter() {
+                // Standard, so pages have an origin; display-isolated, so only tma: pages can link, frame or embed tma:
+                // URLs; not local, so tma: pages can't reach file: URLs. jcef passes this to every Chromium process.
+                @Override public void onRegisterCustomSchemes(CefSchemeRegistrar registrar) {
+                    registrar.addCustomScheme(Builtin.SCHEME, true, false, true, true, true, false, true);
+                }
                 // macOS: Cmd+Q reaches Chromium first. Quit through Minecraft so the world saves.
                 @Override public boolean onBeforeTerminate() {
                     Minecraft.getInstance().execute(() -> Minecraft.getInstance().stop());
@@ -139,6 +187,7 @@ final class Chromium {
             var app = builder.build();
             var client = app.createClient();
             handle(client);
+            builtinContext = CefRequestContext.createContext(new CefRequestContextHandlerAdapter() {});
             Chromium.app = app;
             Chromium.client = client;
             phase = Phase.READY;
@@ -165,7 +214,7 @@ final class Chromium {
             @Override public void onLoadingStateChange(CefBrowser browser, boolean loading, boolean back, boolean forward) {
                 if (!((ScreenBrowser) browser).ready()) return;
                 var view = views.get(browser);
-                if (view != null) view.loading((ScreenBrowser) browser, loading, back, forward);
+                if (view != null) view.loading((ScreenBrowser) browser, loading);
             }
             @Override public void onLoadStart(CefBrowser browser, CefFrame frame, CefRequest.TransitionType transition) {
                 if (!((ScreenBrowser) browser).pageStarted(frame)) return;
@@ -173,15 +222,19 @@ final class Chromium {
                 if (view != null && frame.isMain()) view.loadStarted((ScreenBrowser) browser, frame.getURL());
             }
             @Override public void onLoadError(CefBrowser browser, CefFrame frame, ErrorCode code, String text, String failedUrl) {
+                if (!((ScreenBrowser) browser).ready() && frame.isMain()) ((ScreenBrowser) browser).startPageDone();
                 // An aborted load is only the previous page giving way to the next.
                 var view = views.get(browser);
-                if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED) {
+                if (view != null && frame.isMain() && code != ErrorCode.ERR_ABORTED && place(failedUrl) != Place.NOWHERE) {
                     view.loadStarted((ScreenBrowser) browser, failedUrl);
                     view.loadFinished((ScreenBrowser) browser, failedUrl);
                 }
             }
             @Override public void onLoadEnd(CefBrowser browser, CefFrame frame, int status) {
-                if (!((ScreenBrowser) browser).ready()) return;
+                if (!((ScreenBrowser) browser).ready()) {
+                    if (frame.isMain()) ((ScreenBrowser) browser).startPageDone();
+                    return;
+                }
                 frame.executeJavaScript(PAGE_SCRIPT + CAPTURE_SCRIPT, "", 0);
                 var view = views.get(browser);
                 if (view != null && frame.isMain()) view.loadFinished((ScreenBrowser) browser, frame.getURL());
@@ -209,11 +262,38 @@ final class Chromium {
             }
             @Override public boolean onBeforeBrowse(CefBrowser browser, CefFrame frame, CefRequest request, boolean userGesture, boolean redirect) {
                 var view = views.get(browser);
+                var screen = (ScreenBrowser) browser;
+                var place = pdfViewer(request.getURL(), frame) ? Place.WEB : place(request.getURL());
+                // A browser never changes between web and built-in content; nothing loads file: URLs. Only the
+                // player's own click on a built-in page's link follows it out, into a new web browser.
+                if (place != Place.EITHER && place != (screen.builtin ? Place.BUILTIN : Place.WEB)) {
+                    deniedNavigations.incrementAndGet();
+                    if (view != null && frame.isMain() && screen.builtin && place == Place.WEB && userGesture && !redirect)
+                        view.follow(screen, request.getURL());
+                    return true;
+                }
                 if (view != null && frame.isMain()) {
                     view.browsing((ScreenBrowser) browser, request.getURL());
                     if (userGesture && !redirect) view.gesture((ScreenBrowser) browser);
                 }
                 return false;
+            }
+            // Runs on Chromium's IO thread for every request. tma: content goes only to a screen's current built-in
+            // browser, under the access granted for it, and to that browser's main frame and the tma: documents in it.
+            // A URL alone grants nothing; browsers set aside or closing have no access.
+            @Override public CefResourceRequestHandler getResourceRequestHandler(CefBrowser browser, CefFrame frame, CefRequest request,
+                                                                                boolean navigation, boolean download, String initiator, BoolRef disableDefault) {
+                String url = request.getURL();
+                var place = pdfViewer(url, frame) ? Place.WEB : place(url);
+                if (place == Place.NOWHERE) return DENY;
+                if (place != Place.BUILTIN) return null;
+                var view = views.get(browser);
+                var access = view == null ? null : view.access;
+                boolean allowed = access != null && access.browser() == browser && access.generation() == view.generation && frame != null
+                    && (navigation ? frame.isMain() : builtin(frame.getURL()));
+                if (!allowed) return DENY;
+                // Blob URLs the page made itself load as usual.
+                return url.regionMatches(true, 0, Builtin.SCHEME + ":", 0, Builtin.SCHEME.length() + 1) ? Builtin.REQUESTS : null;
             }
         });
         client.addKeyboardHandler(new CefKeyboardHandlerAdapter() {
@@ -261,16 +341,24 @@ final class Chromium {
         client.addMessageRouter(router);
     }
 
+    private static final CefResourceRequestHandler DENY = new CefResourceRequestHandlerAdapter() {
+        @Override public boolean onBeforeResourceLoad(CefBrowser browser, CefFrame frame, CefRequest request) {
+            deniedRequests.incrementAndGet();
+            return true;
+        }
+    };
+
+    /** A browser for the page at url: built-in for tma: pages, web for everything else. The caller creates it. */
     static ScreenBrowser open(ScreenView view, String url, int width, int height) {
-        var browser = new ScreenBrowser(client, url, width, height, FPS, view);
+        boolean builtin = builtin(url);
+        var browser = new ScreenBrowser(client, builtin ? builtinContext : null, builtin, url, width, height, FPS, view);
         views.put(browser, view);
         browser.setCloseAllowed();
-        browser.createImmediately();
         return browser;
     }
 
     static void close(ScreenBrowser browser) {
-        views.remove(browser);
+        if (views.remove(browser) == null) return;
         browser.close(true);
     }
 
@@ -284,6 +372,7 @@ final class Chromium {
         if (app == null) return;
         views.keySet().forEach(browser -> browser.close(true));
         views.clear();
+        if (builtinContext != null) builtinContext.dispose();
         client.dispose();
         app.dispose();
         // Chromium's shutdown finishes on the main thread, so keep its run loop turning until it does.

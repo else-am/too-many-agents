@@ -154,12 +154,13 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 ## Security
 
 - **Repository content is untrusted, even in a human-opened viewer.** Escape text and filenames, sanitize rendered Markdown with a maintained sanitizer, and allow only bundled viewer code to execute under a restrictive Content Security Policy. Disallow executable embeds and script URLs. Relative images go through the same authorized file reader. External links remain usable through explicit human navigation; remote preview resources must not become a channel for leaking local content. Never serve repository HTML or SVG as an executable document on the viewer origin.
-- **Git runs outside the agent's sandbox, and repository configuration and attributes can change during a request.** Before implementing either Git-backed tree discovery or changes mode, settle a small, explicit set of commands and how each avoids command execution, unintended writes, network access and reads beyond its authorized scope:
-  - Use `ProcessBuilder` argument arrays, a controlled environment, bounded output and timeouts. Use command-specific option terminators and validated refs; resolve refs to commit IDs before diffing.
-  - Disable external diff and text conversion on diff commands, and fsmonitor wherever relevant. These are command-specific protections, not a universal flag string.
-  - Do not enumerate configured drivers and then assume overriding that list is safe: configuration, includes and attributes can change before the next process reads them. Use an execution path that cannot activate repository-defined filters/helpers even under concurrent edits. If the chosen Git invocation cannot provide that, change the invocation or use a controlled metadata/object-reading approach before proceeding.
-  - Account for system/global configuration, conditional includes, inherited `GIT_*` variables, worktree metadata and repository redirects. Git metadata outside a worktree is a narrowly defined metadata dependency, not permission to expose arbitrary external files in the viewer.
-  - Preserve ordinary diff usefulness, including staged/unstaged changes and binary placeholders; verify the resulting semantics rather than assuming disabled filters produce the same comparison.
+- **Git metadata is untrusted, even in a human-opened viewer.** Use JGit's object, ref, ignore and text-conversion parsers with application-owned confined readers; do not launch Git or invoke repository-defined helpers. This replaces the proposed subprocess approach, whose working-tree walks and attribute processing could escape the intended boundary.
+  - Working-tree bytes, directory entries, ignore files and metadata come only from verified handles. JGit's pack reader receives a confined random-access channel, never an unchecked repository pathname.
+  - Keep the pinned JGit DFS adapter small. Do not construct a normal filesystem repository or transport that could read configuration/includes, follow alternates, execute filters or fetch objects independently.
+  - Recognize repository and linked-worktree metadata narrowly, including reciprocal worktree links. A metadata dependency never authorizes file content outside the viewer's root. Scope base-tree paths before returning content.
+  - Parse configuration as data without following includes; use only explicitly supported settings. Resolve and validate refs before comparisons. Invalid explicit refs fail visibly.
+  - Bound pack caches, inflation, enumeration and comparison work; cancel stale requests. Use a separate cache identity for each authorization grant.
+  - Preserve net staged/unstaged comparisons, normal line-ending handling, LFS where content is already available, and binary placeholders. Custom executable filters remain disabled and affected files explain that their raw content is shown.
 - **CDP isolation is a prerequisite.** Test ordinary-page CDP for cross-browser access (`Target.*`), filesystem access (including uploads/downloads), persistent scripts/bindings, and commands racing navigation. Deny unsafe capabilities while retaining ordinary page interaction. Combine this with fresh built-in browser instances and separate request contexts; a check of the current URL alone is insufficient.
 - Raw `file://` pages are removed.
 
@@ -170,11 +171,8 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
     - `_app/*`: the page bundle
     - `_api/list`, `tree`, `file`, `changes`, `diff`, `refs`
   - Navigation rules, the CDP refusal, path mapping in the address bar, the blank-screen buttons, and closing on archive.
-- **Git:** `ProcessBuilder`, off the game thread, hardened as above. Tree sources:
-  - `git ls-files -z -co --exclude-standard`
-  - `git ls-files -z -oi --exclude-standard --directory` for ignored entries, returned as collapsed folders
-  - Parse paths as NUL-delimited records and scope results to the viewer root.
-- **Budgets:** bound tree enumeration, searches, subprocess output, image decoding and total diff work, not just individual file size. Cancel work on navigation/close and discard obsolete results. Large repositories stay navigable while work progresses; expose partial results and limits rather than freezing or silently omitting paths.
+- **Git:** a pinned JGit dependency, off the game thread, using confined object channels and working-tree reads. JGit supplies pack/delta parsing, revision walking, ignore rules and supported line-ending conversion. The application owns metadata discovery and authorization. The index is an optional bounded optimization; comparisons must remain correct when it cannot be used. No subprocess, private Git directory or hard-link cache is required.
+- **Budgets:** bound tree enumeration, searches, object decoding, image decoding and total diff work, not just individual file size. Cancel work on navigation/close and discard obsolete results. Large repositories stay navigable while work progresses; expose partial results and limits rather than freezing or silently omitting paths.
 - **Watching:**
   - One recursive watcher per root while a screen showing it is loaded, shared by screens with the same root, and stopped when they sleep or close.
   - Resolve each repository's actual Git directory and common Git directory, including linked worktrees. Watch the relevant `HEAD`, index, refs, `packed-refs` and configuration/ignore inputs there as well as working-tree changes. Refresh watches if the metadata location changes; keep their access scoped to the authorized repository metadata.
@@ -193,15 +191,15 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 ### Resolve before depending on it
 
-- Prove the browser authorization, context isolation, fresh-instance transition and CDP restrictions with stock CEF/JCEF, including seamless back/forward navigation. No browser fork or custom native extension.
+- ~~Prove browser-instance authorization, context isolation, fresh-instance transitions and CDP restrictions with stock CEF/JCEF, including seamless back/forward navigation.~~ Live packaged-client isolation and native input checks pass. Root-scoped data authorization is the next slice; no browser fork or custom native extension.
 - Prove file access under concurrent root/path/symlink replacement on supported platforms, and establish how agent read restrictions reach the viewer. A second path check alone is not proof.
-- Specify and exercise the exact Git command set against malicious and concurrently changing configuration before using it for the tree or changes mode.
+- Exercise the confined JGit object/metadata path against malicious configuration, redirects and concurrent swaps before using it for the tree or changes mode. Verify comparisons against independent Git fixture results.
 
 ### To confirm while building
 
 - `@pierre/trees` provides an expand event to load folders lazily (otherwise wrap it).
 - Large-file and large-repo performance of `@pierre/trees` and `@pierre/diffs`.
-- JNA is available at runtime.
+- ~~JNA is available at runtime.~~ Minecraft ships JNA and jna-platform 5.14; the macOS held-handle probes passed. Linux and Windows still need runtime checks.
 
 ### Not supported
 
@@ -210,7 +208,7 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 ## Order
 
-1. Prove browser/CDP isolation and race-safe file access using supported APIs. Implement the scheme, native authorization, `file:` block, safe navigation and content policy.
+1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS; root-scoped serving and Linux/Windows runtime validation remain.
 2. Picker, address-bar paths and blank-screen buttons.
 3. Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews, bounded loading and agent `kind:file`.
 4. Changes mode and base picker using the validated Git path. Agent `kind:changes`.

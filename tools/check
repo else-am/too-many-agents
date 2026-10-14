@@ -19,6 +19,7 @@ CHECKS = {
     'screens': ('screens_acceptance.py', 'Native screen placement, browser controls and persistence'),
     'screen-tools': ('screens_tools_acceptance.py', 'Screen tools and ownership; requires fixture agents/screens'),
     'screen-capture': ('screens_capture_acceptance.py', 'Real browser frame capture'),
+    'screen-isolation': ('screens_isolation_acceptance.py', 'Web/built-in security and navigation; requires --agent and --screen'),
     'stations': ('stations_acceptance.py', 'Station block acceptance; choose a phase'),
     'station-ui': ('station_ui_acceptance.py', 'Station native UI'),
     'station-screens': ('station_screens_acceptance.py', 'Station screen ownership'),
