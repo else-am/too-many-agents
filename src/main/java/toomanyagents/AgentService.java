@@ -581,6 +581,16 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         localScreenScopes.remove(requestId);
     }
 
+    /**
+     * The local environment folder of this world's active agent on threadId, as its own plugin reports it now.
+     * Null until BB is connected. File screens pin and confine themselves to it.
+     */
+    synchronized CompletableFuture<String> environment(String threadId) {
+        if(!connected) return null;
+        var agent=agents.values().stream().filter(row -> !threadId.isBlank() && row.threadId.equals(threadId) && !row.deleted && !row.archived).findFirst().orElse(null);
+        if(agent==null) return failed("This agent is no longer active in this world.");
+        return agentRpc("agent.environment",agent.id,new JsonObject()).thenApply(value -> text(value.getAsJsonObject(),"path"));
+    }
     /** Who is calling a screen tool. Screens need no body; one that is present gives distances from it. */
     private ScreenTools.Caller screenCaller(Agent agent) {
         var threads=new HashMap<String,String>();

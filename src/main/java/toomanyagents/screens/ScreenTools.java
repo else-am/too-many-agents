@@ -252,32 +252,89 @@ public final class ScreenTools {
         if (args.has("base") && (!kind.equals("changes") || baseOverride == null || baseOverride.isBlank() || baseOverride.length() > 1024
             || baseOverride.chars().anyMatch(Character::isISOControl)))
             throw invalid("base must be a nonblank Git ref of at most 1024 characters, for kind changes.");
-        String url = switch (kind) {
-            case "url" -> webAddress(target.strip());
-            case "file", "changes" -> fileAddress(target, kind.equals("changes"), baseOverride);
-            default -> throw invalid("kind must be url, file or changes.");
-        };
-        String destination = url;
+        if (!Set.of("url", "file", "changes").contains(kind)) throw invalid("kind must be url, file or changes.");
+        String web = kind.equals("url") ? webAddress(target.strip()) : null;
         String name = args.has("name") ? name(args) : null;
         String id = entry.screen().id(), thread = caller.threadId();
         if (name != null) ScreenIndex.get(server).requireName(name, id);
-        return () -> onServer(server, live, () -> {
-            // Reserve the name before navigating, so a conflicting rename cannot change the page.
-            if (name != null) edit(server, entry, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
-            return null;
-        }).thenCompose(ignored -> onClient(live, () -> {
-            var view = view(entry);
-            if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
-            var loaded = wait(waiters, view.open(destination, thread), OPEN_SECONDS,
-                "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
-            return new Opened(view, view.generation, loaded);
-        })).thenCompose(opened -> onServer(server, live, () -> {
-            edit(server, entry, record -> new Screen(record.id(), record.name(), destination, thread));
-            return opened;
-        })).thenCompose(opened -> opened.loaded.thenCompose(ignored -> onClient(live, () -> result(page(opened.view, opened.generation, id)))));
+        // Files are granted inside the agent's environment before the screen changes, so a refusal leaves it as it was.
+        return () -> files(thread, web == null ? environment -> fileAddress(target, environment, kind.equals("changes"), baseOverride) : null, waiters)
+            .thenCompose(files -> onServer(server, live, () -> {
+                // Reserve the name before navigating, so a conflicting rename cannot change the page.
+                if (name != null) edit(server, entry, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
+                return files;
+            })).thenCompose(files -> onClient(live, () -> {
+                var view = view(entry);
+                if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
+                String destination = files == null ? web : files.url();
+                var loaded = wait(waiters, view.open(destination, thread, files), OPEN_SECONDS,
+                    "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
+                return new Opened(view, view.generation, destination, loaded);
+            })).thenCompose(opened -> onServer(server, live, () -> {
+                edit(server, entry, record -> new Screen(record.id(), record.name(), opened.url, thread));
+                return opened;
+            })).thenCompose(opened -> opened.loaded.thenCompose(ignored -> onClient(live, () -> result(page(opened.view, opened.generation, id)))));
     }
 
-    private record Opened(ScreenView view, long generation, CompletableFuture<Void> loaded) {}
+    private record Opened(ScreenView view, long generation, String url, CompletableFuture<Void> loaded) {}
+
+    private static CompletableFuture<FilePages.Opened> files(String thread, java.util.function.Function<Path, String> address, Set<CompletableFuture<?>> waiters) {
+        if (address == null) return CompletableFuture.completedFuture(null);
+        var granted = agentFiles(thread, address);
+        if (granted == null) throw new ScreenError("unavailable", "Minecraft isn't connected to BB yet.");
+        return wait(waiters, granted, OPEN_SECONDS, "Opening the files didn't finish in " + OPEN_SECONDS + "s.");
+    }
+
+    /** Asks the game's agent service for an agent thread's environment folder; null until it can answer. */
+    private static volatile java.util.function.Function<String, CompletableFuture<String>> environments = thread -> null;
+
+    public static void environments(java.util.function.Function<String, CompletableFuture<String>> resolver) { environments = resolver; }
+
+    /**
+     * Grants an agent's files location inside its environment folder, freshly reported by its plugin. address builds the
+     * location from that folder, which relative paths resolve against. Null until the agent service can answer.
+     */
+    static CompletableFuture<FilePages.Opened> agentFiles(String thread, java.util.function.Function<Path, String> address) {
+        var folder = environments.apply(thread);
+        if (folder == null) return null;
+        return folder.handle((path, failure) -> {
+            if (failure != null || path == null || path.isBlank())
+                throw new ScreenError("no_environment", failure == null ? "This thread has no local environment folder." : reason(failure));
+            return path;
+        }).thenCompose(path -> {
+            String url = address.apply(Path.of(path));
+            return FilePages.submit(() -> agentGrant(url, path));
+        }).handle((opened, failure) -> {
+            if (failure == null) return opened;
+            var cause = failure instanceof CompletionException && failure.getCause() != null ? failure.getCause() : failure;
+            throw cause instanceof ScreenError error ? error : new ScreenError("unavailable", reason(cause));
+        });
+    }
+
+    private static FilePages.Opened agentGrant(String url, String folder) throws IOException {
+        ConfinedFiles.Root environment;
+        try {
+            // Its ancestors may be aliases, such as /tmp, but the folder itself must be real, not a link elsewhere.
+            Path lexical = Path.of(folder).normalize(), parent = lexical.getParent();
+            environment = parent == null ? ConfinedFiles.grantExact(lexical)
+                : ConfinedFiles.grantExact(Path.of(ConfinedFiles.grant(parent).path()).resolve(lexical.getFileName()));
+        } catch (IOException | RuntimeException missing) {
+            throw new ScreenError("no_environment", "Your environment folder " + folder + " isn't available.");
+        }
+        try { return FilePages.grant(url, environment); }
+        catch (ConfinedFiles.OutsideRoot outside) {
+            throw new ScreenError("outside_environment", "That location is outside your environment folder " + environment.path() + ".");
+        } catch (java.nio.file.NoSuchFileException missing) {
+            throw new ScreenError("not_found", "Nothing exists at " + FilePages.path(url) + ".");
+        } catch (IOException failure) {
+            throw new ScreenError("unavailable", failure.getMessage() == null ? "Could not open this location." : failure.getMessage());
+        }
+    }
+
+    private static String reason(Throwable failure) {
+        while (failure instanceof CompletionException && failure.getCause() != null) failure = failure.getCause();
+        return failure.getMessage() == null ? failure.getClass().getSimpleName() : failure.getMessage();
+    }
 
     private static Supplier<CompletableFuture<JsonObject>> cdp(ScreenIndex.Entry entry, JsonObject args, BooleanSupplier live, Set<CompletableFuture<?>> waiters) {
         String method = string(args, "method");
@@ -592,7 +649,7 @@ public final class ScreenTools {
         throw invalid("target must be an http or https URL. Use kind file for a file.");
     }
 
-    private static String fileAddress(String target, boolean changes, String baseOverride) {
+    private static String fileAddress(String target, Path environment, boolean changes, String baseOverride) {
         // Only explicit URLs carry query/fragment syntax. Raw filenames keep literal ? and #.
         boolean location = target.matches("(?i)^[a-z][a-z0-9+.-]*:.*") && !target.matches("(?i)^[a-z]:[\\\\/].*");
         Path path;
@@ -635,7 +692,7 @@ public final class ScreenTools {
                     if (start < 1 || end < start || end > 2_097_153) throw invalid("The line range is outside the preview limit.");
                     fragment = "#L" + start + (end == start ? "" : "-L" + end);
                 }
-            } else path = Path.of(target);
+            } else path = environment.resolve(target);
         } catch (ScreenError error) { throw error; }
         catch (Exception error) { throw invalid("target isn't a valid file path or tma://files location."); }
         // Checked as text only: the server thread doesn't wait on the filesystem or grant access.

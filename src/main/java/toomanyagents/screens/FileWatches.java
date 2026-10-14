@@ -118,8 +118,8 @@ final class FileWatches {
 
     static void subscribe(ScreenView view, ScreenView.Access access, long query, CefQueryCallback callback) {
         LOOP.execute(() -> {
-            if (!FilePages.current(view, access) || access.root() == null || access.provenance() != ScreenView.Provenance.HUMAN) {
-                fail(callback, "The files page changed or has no human grant."); return;
+            if (!FilePages.current(view, access) || access.root() == null) {
+                fail(callback, "The files page changed or has no file access."); return;
             }
             if (!subscriptions.containsKey(access) && subscriptions.size() >= MAX_SUBSCRIPTIONS) {
                 fail(callback, "Too many files pages are watching. Close another files page and retry."); return;

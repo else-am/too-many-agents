@@ -86,9 +86,15 @@ Use one to show the user something, or to work on a page together; they can take
 - Omit `screen` when your station has exactly one; otherwise pass its UUID
   or unique name. Keep the UUID for future calls: renaming preserves it, but
   picking up and replacing a screen creates a new identity. `choose_screen` lists the candidates.
-- `screen_open` shows a URL or file; `screen_cdp` drives the page (usually
+- `screen_open` shows a URL, file/folder or Git changes. File and changes views
+  are read-only and confined to your local environment folder, including symlink
+  targets. Relative paths resolve from that folder. You can reopen a shared
+  `tma://files/…?open=relative/file#L20-L40` location within that boundary.
+  Use `kind: changes` and optional `base` for a Git comparison.
+- `screen_cdp` drives web pages (usually
   `Runtime.evaluate`); `screen_screenshot` shows you what it looks like;
-  `screen_close` turns it off and clears its URL. Screens work outside the player's
+  built-in file views return `view_only` to CDP. `screen_close` turns a screen off
+  and clears its URL. Screens work outside the player's
   loaded area. Listing never wakes them; using one wakes its saved URL and keeps
   the page alive through your active task and a short idle grace period. After
   sleep, the URL survives but in-memory page state does not. Browser capacity is

@@ -105,13 +105,13 @@ def main():
     error('view_only', agent, 'screen_cdp', screen=screen, method='Runtime.evaluate', params={'expression': '1'})
     print('PASS: File selection promotes the human repository root; agent CDP remains refused', flush=True)
     success(agent, 'screen_open', screen=screen, kind='file', target=fixture['repo'])
-    native.wait_for(lambda state: any(item['id'] == screen and not item.get('fileGrant') and item['openedBy']
+    native.wait_for(lambda state: any(item['id'] == screen and item.get('fileGrant') and item['openedBy']
                                     for item in state['screens']))
     address('~/' + relative)
     expected = uri(native.ROOT)
     wait(expected)
     assert not row()['openedBy']
-    print('PASS: Agent replacement drops the human grant; typed home path explicitly takes ownership', flush=True)
+    print('PASS: Agent replacement obtains its own confined grant; typed home path explicitly takes ownership', flush=True)
 
     native.ui('dev_leave')
     native.ui('dev_open_world', name='too-many-agents-development')

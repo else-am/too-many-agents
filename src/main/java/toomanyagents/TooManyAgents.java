@@ -15,6 +15,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
+import toomanyagents.screens.ScreenTools;
 import toomanyagents.ui.TooManyAgentsSettingsScreen;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.loading.FMLPaths;
@@ -145,6 +146,7 @@ public final class TooManyAgents {
                 game = new GameAccess(this::currentServer, this::currentSession, () -> localPlayer, () -> paused);
                 game.setPov(new PovCapture(this::currentSession));
                 agents = new AgentService(game, this::currentSession);
+                ScreenTools.environments(agents::environment);
                 var bridge = new LocalBridge(directory, () -> snapshot, this::command, this::agentRoute);
                 agents.bridgeConnection(bridge.url(),bridge.token());
                 Runtime.getRuntime().addShutdownHook(new Thread(() -> {

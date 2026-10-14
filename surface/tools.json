@@ -282,7 +282,7 @@
   },
   {
     "name": "screen_open",
-    "description": "Show a URL, file/folder, or Git changes on a screen. File views currently require the human to authorize a folder on the screen; an agent open does not grant file access. Built-in views can be listed, captured and closed, but not driven through CDP. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Rename a screen when its name no longer describes its use; otherwise leave it alone.",
+    "description": "Show a URL, file/folder, or Git changes on a screen. File and changes views are read-only and confined to your local environment folder; paths and symlinks outside it are refused. Built-in views can be listed, captured and closed, but not driven through CDP. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Rename a screen when its name no longer describes its use; otherwise leave it alone.",
     "inputSchema": {
       "type": "object",
       "properties": {

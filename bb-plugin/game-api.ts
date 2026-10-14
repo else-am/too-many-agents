@@ -4,6 +4,7 @@ import type { MinecraftProjects } from "./projects.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import type { MinecraftThreads } from "./threads.js";
 import { chatAssets } from "./chat-assets.js";
+import { environmentFolder } from "./screens.js";
 import { MOD_VERSION, type Development } from "./discovery.js";
 import {
   ApiError,
@@ -159,6 +160,8 @@ export function registerGameApi(
       }
       case "agent.stop":
         return agent && !agent.threadId ? {} : bb.sdk.threads.stop({ threadId: threadId() });
+      case "agent.environment":
+        return environmentFolder(bb, string(requireAgent().threadId, "threadId"));
       case "agent.archive":
         return agents.archive(live(), requireAgent(), data.archived === true);
       case "timeline":

@@ -72,22 +72,33 @@ final class FilePages {
     }
 
     /** Called only for native human intent, or a human-owned saved location after world trust. */
-    static Opened grant(String url) throws IOException {
+    static Opened grant(String url) throws IOException { return grant(url, null); }
+
+    /**
+     * With an environment, everything resolves inside it: links within it work, others are outside, and a file's
+     * repository root is used only when it lies within the environment, which is otherwise the root.
+     */
+    static Opened grant(String url, ConfinedFiles.Root environment) throws IOException {
         if (!location(url)) throw new IOException("This is not a files location.");
         Path wanted = path(url);
         var query = query(URI.create(url));
+        if (environment != null) query.remove("pick");
         ConfinedFiles.Root root;
         String selected = query.getOrDefault("open", "");
         String notice = "";
-        try { root = ConfinedFiles.grant(wanted); }
+        try { root = environment == null ? ConfinedFiles.grant(wanted) : folder(environment, wanted); }
         catch (IOException notFolder) {
             if (wanted.getParent() == null) throw notFolder;
-            root = ConfinedFiles.grant(wanted.getParent());
-            var file = ConfinedFiles.info(root, wanted.getFileName().toString());
+            var scope = environment != null ? environment : ConfinedFiles.grant(wanted.getParent());
+            var file = ConfinedFiles.info(scope, wanted.toString());
             if (file.kind() != ConfinedFiles.Kind.FILE) throw notFolder;
+            root = ConfinedFiles.grantExact(Path.of(file.path()).getParent());
             try {
                 var repository = FileRepository.discover(root);
-                if (repository != null) root = ConfinedFiles.grantExact(Path.of(repository.repositoryRoot()));
+                if (repository != null) {
+                    Path top = Path.of(repository.repositoryRoot());
+                    root = environment == null || top.startsWith(environment.path()) ? ConfinedFiles.grantExact(top) : environment;
+                }
             } catch (IOException unavailable) {
                 notice = "Git unavailable - showing the file's folder. " + unavailable.getMessage();
             }
@@ -110,6 +121,13 @@ final class FilePages {
         if (!params.isEmpty()) normalized += "?" + String.join("&", params);
         if (URI.create(url).getRawFragment() != null) normalized += "#" + URI.create(url).getRawFragment();
         return new Opened(root, normalized, notice);
+    }
+
+    /** A folder inside the environment, pinned at the real path it resolves to there. */
+    private static ConfinedFiles.Root folder(ConfinedFiles.Root environment, Path path) throws IOException {
+        var info = ConfinedFiles.info(environment, path.toString());
+        if (info.kind() != ConfinedFiles.Kind.DIRECTORY) throw new java.nio.file.FileSystemException(path.toString(), null, "not a folder");
+        return ConfinedFiles.grantExact(Path.of(info.path()));
     }
 
     static String encode(String value) { return java.net.URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20"); }
@@ -139,14 +157,17 @@ final class FilePages {
 
     static CompletableFuture<String> request(ScreenView view, ScreenView.Access access, String url) {
         if (!current(view, access)) return CompletableFuture.failedFuture(new IOException("The page changed."));
-        if (access.root() == null || access.provenance() != ScreenView.Provenance.HUMAN)
-            return CompletableFuture.failedFuture(new IOException("Use the screen's address bar or Files button to open a folder. Agent file access is not enabled."));
+        if (access.root() == null)
+            return CompletableFuture.failedFuture(new IOException("This view has no file access. Use the path button or address bar to open a folder yourself."));
         var session = sessions.computeIfAbsent(access, ignored -> new FileData(access.root()));
         var pending = requests.computeIfAbsent(access, ignored -> ConcurrentHashMap.newKeySet());
         var result = submit(() -> {
             if (!current(view, access)) throw new IOException("The page changed.");
             JsonObject value = session.data(URI.create(url), access.notice());
-            if (URI.create(url).getPath().equals("/_api/state")) value.addProperty("document", access.document());
+            if (URI.create(url).getPath().equals("/_api/state")) {
+                value.addProperty("document", access.document());
+                value.addProperty("human", access.provenance() == ScreenView.Provenance.HUMAN);
+            }
             FileWatches.inputs(view, access, session.watchInputs(), session.watchInputsLimited());
             if (!current(view, access)) throw new IOException("The page changed.");
             return value.toString();

@@ -120,7 +120,7 @@ final class FileData implements AutoCloseable {
         var result = new JsonObject();
         result.addProperty("root", root.path());
         if (operation.equals("/_api/state")) {
-            result.addProperty("home", System.getProperty("user.home")); result.addProperty("human", true);
+            result.addProperty("home", System.getProperty("user.home"));
             result.addProperty("notice", grantNotice); result.addProperty("git", repository != null);
             result.add("notices", JSON.toJsonTree(notices)); return result;
         }

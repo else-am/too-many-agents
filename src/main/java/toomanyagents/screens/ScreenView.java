@@ -252,9 +252,10 @@ final class ScreenView implements ScreenBrowser.View {
             }
         }
         if (url.isBlank() && browser != null) close();
-        if (trusted && FilePages.location(url) && fileGrant == null && !url.equals(grantAttempt)
-            && entry.screen().openedBy().isEmpty()) openFiles(url, false);
-        if (browser == null && departing == null && granting == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
+        // A saved location is granted afresh before its page starts. An agent's waits until its environment can be checked.
+        boolean grantDue = trusted && FilePages.location(url) && fileGrant == null && !url.equals(grantAttempt);
+        if (grantDue) openFiles(url, false, entry.screen().openedBy());
+        if (browser == null && departing == null && granting == null && !grantDue && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
             start(url);
         }
     }
@@ -287,11 +288,24 @@ final class ScreenView implements ScreenBrowser.View {
         granting = null;
     }
 
-    private void openFiles(String target, boolean takeover) {
+    private void openFiles(String target, boolean takeover) { openFiles(target, takeover, ""); }
+
+    /**
+     * owner is the agent thread whose saved view this is, or "" for the player. An agent's view is granted only inside
+     * the environment its plugin reports now, and only at exactly the root it was saved with, so a moved or replaced root
+     * fails closed instead of following the change.
+     */
+    private void openFiles(String target, boolean takeover, String owner) {
+        var agent = owner.isEmpty() ? null : ScreenTools.agentFiles(owner, environment -> target);
+        if (!owner.isEmpty() && agent == null) return;
+        var request = agent == null ? FilePages.submit(() -> FilePages.grant(target)) : agent.thenApply(opened -> {
+            if (!opened.root().path().equals(FilePages.path(target).toString()))
+                throw new java.util.concurrent.CompletionException(new java.io.IOException("This view's folder has moved. Reopen it."));
+            return opened;
+        });
         cancelGrant();
         grantAttempt = target;
         fileError = "";
-        var request = FilePages.submit(() -> FilePages.grant(target));
         granting = request;
         request.whenComplete((opened, failure) -> onRender(() -> {
             if (granting != request) return;
@@ -301,7 +315,7 @@ final class ScreenView implements ScreenBrowser.View {
                 fileError = cause.getMessage() == null ? "Could not open this location." : cause.getMessage();
                 return;
             }
-            fileGrant = new Grant(opened.root(), Provenance.HUMAN, opened.notice(), "");
+            fileGrant = new Grant(opened.root(), owner.isEmpty() ? Provenance.HUMAN : Provenance.AGENT, opened.notice(), owner);
             url = opened.url();
             grantAttempt = url;
             crashed = false;
@@ -474,9 +488,16 @@ final class ScreenView implements ScreenBrowser.View {
         for (var command : commands) command.completeExceptionally(failure);
     }
 
-    /** The player reloading takes the page over, like navigating. */
+    /**
+     * The player reloading a web page takes it over, like navigating. A files location without file access retries its
+     * grant on the same terms as a restore, keeping its owner; a pinned grant is kept as it is.
+     */
     void reload() {
         crashed = false;
+        if (browser != null && FilePages.location(url) && (fileGrant == null || fileGrant.root() == null)) {
+            openFiles(url, false, entry.screen().openedBy());
+            return;
+        }
         authorize();
         if (browser != null) browser.reload();
         if (browser == null || !browser.builtin) Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
@@ -526,11 +547,11 @@ final class ScreenView implements ScreenBrowser.View {
         playerNavigating = false;
     }
 
-    /** An agent shows a page here. Completes once that page has loaded. */
-    CompletableFuture<Void> open(String target, String owner) {
+    /** An agent shows a page here, with files already granted for a files location. Completes once that page has loaded. */
+    CompletableFuture<Void> open(String target, String owner, FilePages.Opened files) {
         agentInput();
         cancelGrant();
-        fileGrant = new Grant(null, Provenance.AGENT, "", owner);
+        fileGrant = new Grant(files == null ? null : files.root(), Provenance.AGENT, files == null ? "" : files.notice(), owner);
         grantAttempt = target;
         fileError = "";
         if (opening != null) opening.completeExceptionally(new ScreenTools.ScreenError("unavailable", "Another page was opened on this screen."));

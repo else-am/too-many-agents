@@ -21,6 +21,7 @@ CHECKS = {
     'screen-capture': ('screens_capture_acceptance.py', 'Real browser frame capture'),
     'files-picker': ('files_picker_acceptance.py', 'Native human files picker, scoped grants and persistence'),
     'files-view': ('files_view_acceptance.py', 'Native file selection, large search, previews and changes'),
+    'files-agent': ('files_agent_acceptance.py', 'Agent environment boundary, nested repositories and saved-view revalidation'),
     'files-live': ('files_live_acceptance.py', 'File edits, linked Git updates, sleep/wake and watcher cleanup'),
     'files-archive': ('files_archive_acceptance.py', 'Archive a station fixture; preserve web and loose screens'),
     'screen-isolation': ('screens_isolation_acceptance.py', 'Web/built-in security and navigation; requires --agent and --screen'),

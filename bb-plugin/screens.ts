@@ -1,41 +1,37 @@
 import type { BbPluginApi, PluginAgentToolContext, PluginAgentToolResult } from "@get-bb/plugin-sdk";
 import type { MinecraftWorlds } from "./minecraft.js";
-import { isAbsolutePath, pathStyle } from "./paths.js";
+import { isAbsolutePath } from "./paths.js";
 import { ApiError, describe, object } from "./protocol.js";
 import { saveScreenSnapshot } from "./images.js";
 
 // Java times out its own calls first (open ~15s, CDP ~30s). This only catches a game that never answers.
 const CALL_TIMEOUT_MS = 60_000;
 
-/** Screen tools run in Minecraft's client. Java owns access, leases and screen errors; this adds paths, screenshots and transport errors. */
-export function screenTools(bb: BbPluginApi, worlds: MinecraftWorlds) {
-  async function filePath(threadId: string, target: string) {
-    const thread = await bb.sdk.threads.get({ threadId });
-    const environment = thread.environmentId ? await bb.sdk.environments.get({ environmentId: thread.environmentId }) : null;
-    const { primaryHostId } = await bb.sdk.system.config();
-    if (environment && environment.hostId !== primaryHostId)
-      throw new ApiError("unavailable", "Screens can only open files on the computer running Minecraft.");
-    if (/^[a-z][a-z0-9+.-]*:/i.test(target) && !/^[a-z]:[\\/]/i.test(target)) {
-      if (!/^tma:/i.test(target)) throw new ApiError("invalid_request", "Use a file path or a tma://files location.");
-      // Java validates this explicit location. Never resolve it against the working directory.
-      return target;
-    }
-    if (isAbsolutePath(target)) return target;
-    if (!environment?.path || !isAbsolutePath(environment.path))
-      throw new ApiError("invalid_request", "Use an absolute file path; your working directory is unknown.");
-    return pathStyle(environment.path).resolve(environment.path, target);
-  }
+/**
+ * The local folder a thread's agent may show on screens. Java asks for it through the game API, pins it and confines
+ * file views to it; agent arguments never carry it.
+ */
+export async function environmentFolder(bb: BbPluginApi, threadId: string) {
+  const thread = await bb.sdk.threads.get({ threadId });
+  const environment = thread.environmentId ? await bb.sdk.environments.get({ environmentId: thread.environmentId }) : null;
+  if (!environment?.path || !isAbsolutePath(environment.path))
+    throw new ApiError("no_environment", "This thread has no local environment folder, so it can't show files on screens.");
+  const { primaryHostId } = await bb.sdk.system.config();
+  if (environment.hostId !== primaryHostId)
+    throw new ApiError("no_environment", "Screens can only show files on the computer running Minecraft.");
+  return { path: environment.path };
+}
 
+/** Screen tools run in Minecraft's client. Java owns access, leases, paths and screen errors; this adds screenshots and transport errors. */
+export function screenTools(bb: BbPluginApi, worlds: MinecraftWorlds) {
   return async function screen(tool: string, input: unknown, ctx: PluginAgentToolContext): Promise<PluginAgentToolResult> {
     const timeout = AbortSignal.timeout(CALL_TIMEOUT_MS);
     // A timeout aborts like a cancellation, so Java is told to cancel the request too.
     const signal = AbortSignal.any([ctx.signal, timeout]);
     let result: PluginAgentToolResult;
     try {
-      let args = object(input);
+      const args = object(input);
       const { live, agent } = await abortable(() => worlds.caller(ctx.threadId, true), signal);
-      if (tool === "screen_open" && (args.kind === "file" || args.kind === "changes") && typeof args.target === "string")
-        args = { ...args, target: await abortable(() => filePath(ctx.threadId, args.target as string), signal) };
       // toolCallback checks the signal first, so nothing is sent after a timeout.
       result = (await worlds.toolCallback(live, { ...ctx, signal }, "screen", {
         agentId: agent.agentId,
