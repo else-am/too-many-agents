@@ -1,6 +1,6 @@
 // Exercises the real worker/WASM boundary. This does not claim Minecraft conformance.
 import assert from 'node:assert/strict';
-import { runScript } from '../bb-plugin/scripting/runner.mjs';
+import { runScript } from '../../bb-plugin/scripting/runner.mjs';
 
 const bootstrap = `
   const bot = {

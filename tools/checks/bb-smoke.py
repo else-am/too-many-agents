@@ -5,6 +5,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+from game_client import tool_name, fixture_directory, GameClient, plugin_id
 import sys
 import time
 import urllib.error
@@ -12,12 +13,13 @@ import urllib.request
 from urllib.parse import quote, urlparse
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--game-dir', type=Path, default=ROOT / 'run')
+    parser.add_argument('--game-dir', type=Path, default=GAME)
     parser.add_argument('--provider', default='codex')
     parser.add_argument('--model', required=True)
     parser.add_argument('--reasoning-level', default='high')
@@ -26,18 +28,10 @@ def main():
     parser.add_argument('--children', action='store_true', help='Also spawn, wait for and archive a child in a station')
     args = parser.parse_args()
     game = args.game_dir.resolve()
-    if game != ROOT / 'run':
-        parser.error('This fixture only runs in the repository run/ test profile.')
-    descriptor = json.loads((game / 'too-many-agents/connection.json').read_text())
-    parsed = urlparse(descriptor['url'])
-    if descriptor.get('protocol') != 1 or parsed.scheme != 'http' or parsed.hostname != '127.0.0.1':
-        raise RuntimeError('Invalid local Minecraft descriptor')
-
-    class NoRedirect(urllib.request.HTTPRedirectHandler):
-        def redirect_request(self, *values, **kwargs):
-            return None
-
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+    GameClient(game).require_fixture()
+    client = GameClient(game)
+    descriptor = client.info
+    opener = client.opener
 
     def send(path, data=None):
         body = None if data is None else json.dumps(data).encode()
@@ -88,7 +82,7 @@ def main():
         raise RuntimeError('Body was not observed in the actual world; fixture retained.')
     print('PASS: NPC body observed in the world', flush=True)
     body_uuid = body['body']['entityUuid']
-    request(path + '/message', {'text': 'Call minecraft_run five times sequentially, each with the code `return { uuid: bot.entity.uuid }`. After all five succeed, reply exactly ' + first + '. Do not call other tools.', 'delivery': 'send'})
+    request(path + '/message', {'text': 'Call ' + tool_name('minecraft_run') + ' five times sequentially, each with the code `return { uuid: bot.entity.uuid }`. After all five succeed, reply exactly ' + first + '. Do not call other tools.', 'delivery': 'send'})
     # BB can combine messages during provisioning. Queue only after native execution starts.
     while time.monotonic() < deadline:
         current = request(path)
@@ -121,7 +115,7 @@ def main():
             if row.get('role') == 'assistant':
                 seen_first = seen_first or first in row.get('text', '')
                 seen_second = seen_second or second in row.get('text', '')
-            if row.get('workKind') == 'tool' and 'minecraft_run' in row.get('toolName', ''):
+            if row.get('workKind') == 'tool' and tool_name('minecraft_run') in row.get('toolName', ''):
                 try:
                     observation = json.loads(row.get('output', ''))
                 except ValueError:
@@ -204,7 +198,7 @@ def run_children(request, agent_id, project_id, model, reasoning_level, timeout)
               '--prompt "Reply BB_CHILD_OK. Do not call any tools or send messages.". '
               'Use ordinary bb thread wait/show for the returned threadId until idle with no pending interactions. '
               'Then run bb thread archive for that thread exactly once. Finally reply BB_COORDINATION_OK. '
-              'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.')
+              'Never repeat a spawn or archive after an unknown outcome; inspect bb minecraft bodies instead.').replace('bb minecraft ', 'bb ' + plugin_id() + ' ')
     request(path + '/message', {'text': prompt, 'delivery': 'auto'})
     deadline = time.monotonic() + timeout + 60
     while time.monotonic() < deadline:

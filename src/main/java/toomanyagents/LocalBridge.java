@@ -110,6 +110,8 @@ final class LocalBridge implements AutoCloseable {
         info.addProperty("url", "http://127.0.0.1:" + http.getAddress().getPort());
         info.addProperty("token", token);
         info.addProperty("pid", ProcessHandle.current().pid());
+        info.addProperty("startedAt", ProcessHandle.current().info().startInstant().map(java.time.Instant::toEpochMilli).orElse(0L));
+        info.addProperty("gameDirectory", directory.toAbsolutePath().normalize().getParent().toString());
         Path temporary = directory.resolve("connection.json.tmp");
         try {
             Files.deleteIfExists(temporary);

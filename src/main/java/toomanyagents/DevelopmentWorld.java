@@ -20,7 +20,7 @@ final class DevelopmentWorld {
     private static boolean opened;
 
     static void tick() {
-        if (!ENABLED || opened) return;
+        if (!ENABLED || opened || DevelopmentClient.hasStartupWorld()) return;
         var mc = Minecraft.getInstance();
         if (!(mc.screen instanceof TitleScreen) || mc.getOverlay() != null) return;
         opened = true;

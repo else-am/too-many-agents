@@ -86,7 +86,7 @@ def main():
     error('not_found', agent, 'screen_close', screen='00000000-0000-0000-0000-000000000000')
     print('PASS: Listing, defaults, and explicit access checks', flush=True)
 
-    fixture = native.ROOT / 'run/too-many-agents/screens-tool-acceptance.html'
+    fixture = native.GAME / 'too-many-agents/screens-tool-acceptance.html'
     fixture.write_text('''<!doctype html><title>Screen tool acceptance</title>
 <body style="background:#e8eddf;color:#173e36;font:32px Georgia;margin:32px">
 <h1>Agent and player share this page</h1><p id="value">Initial value</p>
@@ -129,7 +129,7 @@ def main():
     png = base64.b64decode(next(part['data'] for part in shot['content'] if part['type'] == 'image'))
     assert png[:8] == b'\x89PNG\r\n\x1a\n' and len(png) <= 5 * 1024 * 1024
     assert list(struct.unpack('>II', png[16:24])) == view['viewport']
-    (native.ROOT / 'run/too-many-agents/screen-tool-acceptance.png').write_bytes(png)
+    (native.GAME / 'too-many-agents/screen-tool-acceptance.png').write_bytes(png)
     assert metadata['title'] == opened['title'] and metadata['url'] == opened['url']
     print('PASS: Another thread is leased out of CDP but can list and capture exact viewport PNG', flush=True)
 

@@ -73,6 +73,7 @@ public final class ClientControls {
         NeoForge.EVENT_BUS.addListener(this::interact);
         NeoForge.EVENT_BUS.addListener(this::interactBlock);
         NeoForge.EVENT_BUS.addListener(this::frame);
+        NeoForge.EVENT_BUS.addListener(DevelopmentClient::pauseMenu);
         toomanyagents.ui.ScreenScale.register();
         inventoryAgents = new toomanyagents.ui.InventoryAgents(() -> service.get(), id -> selectedAgent = id);
         survey = new toomanyagents.ui.SurveyMode(() -> service.get());
@@ -101,6 +102,7 @@ public final class ClientControls {
 
     private void tick(ClientTickEvent.Post event) {
         var client = Minecraft.getInstance();
+        DevelopmentClient.tick(service.get(), inventoryAgents);
         if (heldButton != null && --heldTicks <= 0) { KeyMapping.set(heldButton, false); heldButton = null; }
         if (openChatOnTick != null) {
             String id = openChatOnTick;
@@ -279,6 +281,16 @@ public final class ClientControls {
                 }
                 if ("widgets".equals(action)) {
                     result.complete(widgets());
+                    return;
+                }
+                if (action.startsWith("development_")) {
+                    if (!DevelopmentClient.enabled()) throw new IllegalStateException("This game is not managed by tools/dev");
+                    result.complete(switch (action) {
+                        case "development_status" -> DevelopmentClient.snapshot();
+                        case "development_reload" -> DevelopmentClient.requestReload();
+                        case "development_shutdown" -> DevelopmentClient.shutdown(request, inventoryAgents);
+                        default -> throw new IllegalArgumentException("Unknown development action");
+                    });
                     return;
                 }
                 if ("dev_open_world".equals(action)) {
@@ -617,7 +629,7 @@ public final class ClientControls {
         reply.addProperty("width", client.getWindow().getGuiScaledWidth());
         reply.addProperty("height", client.getWindow().getGuiScaledHeight());
         var children = new JsonArray();
-        if (ours(screen) || inventoryAgents.supports(screen)) {
+        if (ours(screen) || screen instanceof PauseScreen || inventoryAgents.supports(screen)) {
             for (var widget : allWidgets(screen)) {
                 var item = new JsonObject();
                 item.addProperty("index", children.size());

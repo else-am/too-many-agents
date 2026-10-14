@@ -106,6 +106,15 @@ export function minecraftProjects(bb: BbPluginApi, worlds: MinecraftWorlds) {
   }
 
   async function selection(live: Session, selection: Partial<SpawnOptions>, worktree?: boolean) {
+    // Drafts arrive as JSON. Reject malformed native selectors before body.begin
+    // records a start nonce; after spawn is dispatched its outcome may be unknown.
+    if (selection.environment != null) {
+      const environment = object(selection.environment, "environment");
+      if (typeof environment.type !== "string" || !["reuse", "host", "project-default", "provider"].includes(environment.type))
+        throw new ApiError("invalid_environment", "environment.type must be reuse, host, project-default, or provider. To reuse an environment, pass {type: 'reuse', environmentId: 'env_...'}.");
+      if (environment.type === "reuse") string(environment.environmentId, "environment.environmentId");
+      if (environment.type === "provider") string(environment.environmentProviderId, "environment.environmentProviderId");
+    }
     const world = await metadata(live);
     const own =
       !selection.projectId ||

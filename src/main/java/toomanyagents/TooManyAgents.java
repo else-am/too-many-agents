@@ -350,12 +350,14 @@ public final class TooManyAgents {
         var result = new JsonObject();
         var current = session.get();
         result.addProperty("protocol", 1);
+        result.addProperty("pid", ProcessHandle.current().pid());
         result.addProperty("sampledAtMs", System.currentTimeMillis());
         result.addProperty("state", mc.level == null ? "menu" : current == null ? "multiplayer_unsupported" : "world");
         result.addProperty("paused", paused);
         result.addProperty("screen", mc.screen == null ? "game" : mc.screen.getClass().getSimpleName());
         result.addProperty("fps", mc.getFps());
         result.addProperty("heapUsedBytes", Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
+        if (DevelopmentClient.enabled()) result.add("development", DevelopmentClient.snapshot());
         result.add("povResources", RemoteTerrain.snapshot());
         if (current != null && mc.level != null) {
             result.addProperty("session", current.id());

@@ -2,48 +2,17 @@
 """Build the plugin and bundle its runtime files for installation from the mod JAR."""
 import json
 import hashlib
-import os
 from pathlib import Path
-import plistlib
 import shutil
 import subprocess
 import sys
 import zipfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from bbcli import bb_command, build_environment  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / 'bb-plugin'
-
-
-def build_environment():
-    env = dict(os.environ)
-    # Finder does not inherit the terminal's Homebrew/user PATH.
-    if sys.platform == 'darwin':
-        env['PATH'] = os.pathsep.join([env.get('PATH', ''), '/opt/homebrew/bin',
-                                     '/usr/local/bin', str(Path.home() / '.local/bin')])
-    return env
-
-
-def bb_command(env):
-    executable = env.get('BB_CLI') or shutil.which('bb', path=env.get('PATH'))
-    candidates = [Path(executable)] if executable else []
-    if not executable and sys.platform == 'darwin':
-        candidates += [Path('/Applications/BB.app'), Path.home() / 'Applications/BB.app']
-    for candidate in candidates:
-        path = candidate.resolve()
-        app = next((parent for parent in [path, *path.parents] if parent.suffix == '.app'), None)
-        if app and (app / 'Contents/Info.plist').is_file():
-            script = app / 'Contents/Resources/app.asar.unpacked/node_modules/bb-app/host-daemon/dist/bb'
-            with (app / 'Contents/Info.plist').open('rb') as source:
-                binary = plistlib.load(source)['CFBundleExecutable']
-            runtime = app / 'Contents/MacOS' / binary
-            if script.is_file() and runtime.is_file():
-                # Use BB's bundled runtime without opening another desktop app.
-                env.pop('BB_CLI', None)
-                env['ELECTRON_RUN_AS_NODE'] = '1'
-                return [str(runtime), str(script)]
-        elif path.is_file():
-            return [str(path)]
-    raise RuntimeError('Could not find the installed BB CLI. Install BB in Applications, add bb to PATH, or set BB_CLI.')
 
 
 def minecraft_data_files(data):

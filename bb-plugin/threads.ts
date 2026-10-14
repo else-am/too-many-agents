@@ -140,6 +140,8 @@ export function minecraftThreads(bb: BbPluginApi, worlds: MinecraftWorlds) {
     });
     worlds.identities.set(created.id, { worldId: live.worldId, agentId });
     await worlds.callback(live, "body.bind", { agentId, threadId: created.id, nonce });
+    // A missed record is repaired on the next world sync.
+    await worlds.register(created.id).catch((error) => bb.log.warn(`Could not record conversation ${created.id}: ${describe(error)}`));
     await sync(live, agentId, created.id);
     return created;
   }

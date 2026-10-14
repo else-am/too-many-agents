@@ -1,6 +1,7 @@
 package toomanyagents.ui;
 
 import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +54,8 @@ public final class AgentChatScreen extends Screen {
     private String draft = "", requestKey = "", feedback = "", transcriptKey = "";
     private boolean loadingModels, sending, stopping, bodyChecked;
     private int left, contentWidth, transcriptTop, transcriptBottom, scroll, maxScroll;
+    private int restoredScroll = -1;
+    private boolean restoredAtBottom;
     private final List<Line> lines = new ArrayList<>();
     private ChatInput composer;
     private Button permissionsButton;
@@ -371,6 +374,42 @@ public final class AgentChatScreen extends Screen {
     }
 
     public String agentId() { return agentId; }
+    /** Local composition state only; conversations continue to belong to BB. */
+    public JsonObject developmentState() {
+        var result = new JsonObject();
+        result.addProperty("agentId", agentId);
+        result.addProperty("draft", draft);
+        result.addProperty("scroll", scroll);
+        result.addProperty("atBottom", scroll >= maxScroll);
+        result.addProperty("model", models.model);
+        result.addProperty("effort", models.effort);
+        result.addProperty("serviceTier", models.serviceTier);
+        result.addProperty("executionEdited", executionEdited);
+        if (permissionOverride != null) result.addProperty("permissionOverride", permissionOverride);
+        if (pointing != null) result.add("pointing", pointing.deepCopy());
+        var attachments = new JsonArray();
+        images().forEach(attachments::add);
+        result.add("images", attachments);
+        if (creationSettings != null) result.add("creation", settings());
+        return result;
+    }
+
+    public void restoreDevelopmentState(JsonObject saved) {
+        draft = AgentModels.text(saved, "draft");
+        draftImages = new ArrayList<>();
+        if (saved.get("images") instanceof JsonArray images)
+            for (var image : images) if (image.isJsonPrimitive()) draftImages.add(image.getAsString());
+        restoredScroll = saved.has("scroll") ? Math.max(0, saved.get("scroll").getAsInt()) : 0;
+        restoredAtBottom = saved.has("atBottom") && saved.get("atBottom").getAsBoolean();
+        models.model = AgentModels.text(saved, "model");
+        models.effort = AgentModels.text(saved, "effort");
+        models.serviceTier = AgentModels.text(saved, "serviceTier");
+        executionEdited = saved.has("executionEdited") && saved.get("executionEdited").getAsBoolean();
+        permissionOverride = saved.has("permissionOverride") ? AgentModels.text(saved, "permissionOverride") : null;
+        pointing = saved.get("pointing") instanceof JsonObject context ? context.deepCopy() : null;
+        if (composer != null) composer.setValue(draft);
+        transcriptKey = "";
+    }
     public boolean draft() { return agentId.isBlank(); }
 
     private boolean worldDraft() {
@@ -995,6 +1034,11 @@ public final class AgentChatScreen extends Screen {
         readRequest();
         requestTranscript();
         rebuildTranscript();
+        if (restoredScroll >= 0 && (draft() || loadedSequence >= 0)) {
+            scroll = restoredAtBottom ? maxScroll : Math.clamp(restoredScroll, 0, maxScroll);
+            restoredScroll = -1;
+            positionDisclosures();
+        }
         refreshButtons();
     }
 

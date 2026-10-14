@@ -2,18 +2,20 @@
 """Exercise screen placement and persistence through the isolated client's native input handlers."""
 import json
 from pathlib import Path
+from game_client import fixture_directory, GameClient
 import shutil
 import subprocess
 import sys
 import time
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def cli(*arguments):
     result = subprocess.run(
-        [sys.executable, str(ROOT / 'tools/agents.py'), '--game-dir', str(ROOT / 'run'), *arguments],
+        [sys.executable, str(ROOT / 'tools/game'), '--game-dir', str(GAME), *arguments],
         cwd=ROOT, capture_output=True, text=True)
     if result.returncode:
         raise AssertionError(result.stderr or result.stdout)
@@ -202,7 +204,7 @@ def foundation():
     deadline = time.monotonic() + 20
     while True:
         snapshot = json.loads(subprocess.check_output(
-            [sys.executable, str(ROOT / 'tools/too_many_agents.py'), '--game-dir', str(ROOT / 'run'), 'state']))
+            [sys.executable, str(ROOT / 'tools/game'), '--game-dir', str(GAME), 'state']))
         if snapshot['state'] == 'world':
             break
         if time.monotonic() >= deadline:
@@ -267,7 +269,7 @@ def controls():
     assert screen_row(screen_id)['name'] == 'Acceptance board'
     print('PASS: Native bar renames without changing identity and rejects blank names', flush=True)
 
-    fixture = ROOT / 'run/too-many-agents/screens-acceptance'
+    fixture = GAME / 'too-many-agents/screens-acceptance'
     fixture.mkdir(parents=True, exist_ok=True)
     (fixture / 'index.html').write_text('''<!doctype html><title>Screen acceptance</title>
 <style>body{background:#eee7d5;font:32px Georgia;margin:20px}
@@ -380,7 +382,7 @@ def menu_actions():
     ui('dev_key', key=256)
     print('PASS: Reset cancellation and expired confirmation preserve the screen', flush=True)
 
-    url = (ROOT / 'run/too-many-agents/screens-acceptance/index.html').as_uri()
+    url = (GAME / 'too-many-agents/screens-acceptance/index.html').as_uri()
     screen_control(screen_id, 'address')
     ui('dev_char', text=url)
     ui('dev_key', key=257)
@@ -496,7 +498,7 @@ def saved_items_and_crafting():
     ui('dev_key', key=49)
     command('tp @s 172 -60 162')
     pages = [('Twin', 'about:blank'), ('Twin', 'about:blank'),
-             ('Twin', (ROOT / 'run/too-many-agents/screens-acceptance/index.html').as_uri()),
+             ('Twin', (GAME / 'too-many-agents/screens-acceptance/index.html').as_uri()),
              ('Other', 'about:blank')]
     ids = []
     for x, (name, url) in zip(range(171, 175), pages):
@@ -566,7 +568,7 @@ def horizontal_surfaces():
     command('fill 195 -61 195 207 -61 207 stone')
     command('fill 195 -55 195 207 -55 207 stone')
     ui('dev_key', key=57)
-    fixture = ROOT / 'run/too-many-agents/screens-acceptance'
+    fixture = GAME / 'too-many-agents/screens-acceptance'
     fixture.mkdir(parents=True, exist_ok=True)
     (fixture / 'horizontal.html').write_text('''<!doctype html><title>Horizontal screen</title>
 <style>body{background:#eee7d5;color:#182a39;font:40px Georgia;text-align:center}
@@ -627,7 +629,7 @@ input{position:absolute;left:15%;top:40%;width:70%;height:20%;box-sizing:border-
     ui('dev_open_world', name='too-many-agents-development')
     deadline = time.monotonic() + 20
     while True:
-        snapshot = json.loads(subprocess.check_output([sys.executable, str(ROOT / 'tools/too_many_agents.py'), '--game-dir', str(ROOT / 'run'), 'state']))
+        snapshot = json.loads(subprocess.check_output([sys.executable, str(ROOT / 'tools/game'), '--game-dir', str(GAME), 'state']))
         if snapshot['state'] == 'world':
             break
         assert time.monotonic() < deadline, 'Development world did not reopen'

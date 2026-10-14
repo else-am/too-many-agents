@@ -28,7 +28,7 @@ input. Developed on macOS; `tools/dev` requires macOS or Linux.
 
 ```sh
 tools/build build
-tools/build runClient -PdevWorld          # isolated flat test world
+tools/dev --test          # isolated flat test world
 ```
 
 `tools/build` uses a Java 21 `JAVA_HOME`, or finds a JDK in common locations.
@@ -56,10 +56,9 @@ through another package manager require manual source changes in BB.
 Setup preferences live in `<game dir>/config/too-many-agents-bb.json`; extracted
 plugin releases live in `~/.too-many-agents/plugins/`. BB installs them through its
 CLI, preserving plugin settings when moving between local releases.
-Running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR or
-changing physical tools in `surface/`. After editing plugin code or its prompts,
-restart development, or run `tools/build packageBbPlugin` and choose **Reload plugin**
-under mod settings → Connection details.
+Running games reconnect within a few seconds. Restart Minecraft after replacing an installed JAR.
+For checkout development, use the managed clients and **Reload changes** described
+below; each client keeps its own matching game and plugin build.
 
 The shared release version is `bb-plugin/package.json`'s `version`; Gradle reads
 it and packages the built plugin and its runtime dependencies with the mod.
@@ -193,60 +192,78 @@ See [AGENTS.md](AGENTS.md) for development rules and packaged-JAR verification,
 and [TODO.md](TODO.md) for outstanding work.
 
 ```sh
-tools/dev --test                         # build and launch the guarded run/ test world
-tools/dev                                # personal development game in run/play/
+tools/dev                       # personal client, worlds in run/play/
+tools/dev start alpha           # isolated test client, run/clients/alpha/
+tools/dev --test                 # existing guarded test world, run/
+tools/dev list
+tools/dev reload alpha
+tools/dev stop alpha
 ```
 
-Both build the plugin once through Gradle, then Minecraft uses its normal BB setup
-to install or reload this checkout before connecting. `tools/build runClient` uses
-the same development mode. A same-version plugin is refreshed once per launch;
-the current world's BB connection pauses during replacement, then reconnects.
-The world stays open and conversations keep running in BB. Other connected games
-block replacement. A failed reload waits for **Reload plugin**; background
-connection checks do not repeat it. Development does not change your permission
-for automatic updates in packaged games. Newer plugins still require explicit
-confirmation before a downgrade. Packaged-JAR runs do not enable development mode.
+Each client has its own world directory, browser profile, logs and BB plugin.
+Clients in different worktrees also get distinct plugin identities, even with the
+same client name. They share your installed BB; the launcher never starts or
+replaces BB. Client names use lowercase letters, digits and single hyphens, up to
+16 characters. `tools/Play.command` opens the personal client on macOS.
 
-`tools/dev` uses Java 21 through `tools/build`; no special JetBrains runtime is
-needed. After changing Java, resources, or the BB plugin, close Minecraft normally
-and rerun `tools/dev` (or `tools/dev --test`). Each launch builds the current code;
-there is no file watcher, debugger, or live class replacement.
-`tools/Play.command` opens the personal development game on macOS.
+Use **Reload changes** in the Escape menu, or `tools/dev reload NAME`, after an
+edit. The launcher builds first: a failed build leaves the running game open.
+Plugin changes reload only that client's plugin; Java, resources and other game
+changes save and restart that client. Shared tool-schema changes replace both.
+Nothing changed means nothing restarts. Running tool calls can be interrupted by
+a reload and are never automatically replayed. Java uses ordinary Java 21 with
+no live class replacement.
+
+Existing agents keep their model context and may retain their original instructions.
+After changing plugin instructions, stop and start the client (`tools/dev stop NAME`,
+then `tools/dev start NAME`) to load the updated game/plugin, and spawn a new agent.
+There is no instruction-refresh or context-clearing feature.
+
+Each game runs a frozen packaged JAR, independent of later builds in the same
+checkout. Restarts reopen its saved world and restore agent panels and drafts.
+`tools/dev status NAME --json` reports the running fingerprints and last request,
+including build failures and log paths. If a game crashes, fix the code and reload;
+if its supervisor stops, `tools/dev start NAME` reattaches to the existing game.
+`tools/dev dispose NAME` removes that stopped client's plugin registration and
+staged plugins, keeping its worlds.
+
+Diagnostics always name a client (or an explicit `--game-dir`):
 
 ```sh
-python3 tools/agents.py --game-dir run list
-python3 tools/agents.py --game-dir run ui widgets
-python3 tools/too_many_agents.py --game-dir run state
-python3 tools/smoke.py run --command
-python3 tools/bb-smoke.py --model gpt-6.1-sol --children
-python3 tools/bb-lifecycle-smoke.py --model gpt-6.1-sol
-python3 tools/bb-boundary-smoke.py --model gpt-6.1-sol
-python3 tools/bb-recovery-smoke.py --agent-id AGENT_ID_FROM_BOUNDARY_CHECK
+tools/game --client alpha state
+tools/game --client alpha list
+tools/game --client alpha ui widgets
+tools/game --client alpha ui mod_settings
+tools/check --client alpha transport --command
+tools/check --client alpha agents --model gpt-6.1-sol --children
+tools/check --client alpha lifecycle --model gpt-6.1-sol
+tools/check --client alpha boundaries --model gpt-6.1-sol
+tools/check --help
 ```
 
-These diagnostics exercise the real mod and native UI. Validate releases with
-`tools/build build`, followed separately by
-`tools/build runPackagedClient -PpackagedJarRun -PdevWorld`. Game runs, installed npm
-dependencies and generated plugin bundles are ignored.
-The BB safety fixture requires an exclusive game window in the guarded `run/`
-test world. It probes physical callback boundaries and world switching; it never
-stops BB. The fixture is retained for persistence inspection.
+Checks require a guarded test world and retain their fixtures for inspection.
+They exercise the actual mod, native event handlers and BB integration, and never
+stop BB. Choose a client that no other agent is testing. Results are recorded in
+that game's `too-many-agents/checks/` directory. Game runs, caches and generated
+bundles are ignored.
 
-In the guarded test world, `ui dev_drop --json '{"paths":["/absolute/test/image.png"]}'`
-exercises native file drops; files must be inside this checkout's `run/` or `scratch/`.
+`tools/build build` creates the release JAR. Managed clients run that packaged
+form with no project classes on their classpath. To test ordinary packaged setup
+separately, first stop the `test` client, then run
+`tools/build runPackagedClient -PpackagedJarRun -PdevWorld` after the build finishes.
+This uses the default `minecraft` plugin and the guarded world in `run/`.
 
-Rich-chat acceptance uses real native event handlers and the installed BB plugin:
+For rich-chat acceptance:
 
 ```sh
-uv run --with pillow python tools/rich_chat_fixtures.py
-python3 tools/rich_chat_acceptance.py --game-dir run --assets
+tools/check chat-assets
+tools/check --client alpha chat --assets
 ```
 
 Run from a BB thread whose workspace is this checkout, or supply `--thread-id`.
-The harness uses the guarded development world, uploads a small test attachment
-to that thread's project, and exercises parsing, streaming, copying, image
-formats/failures, diagrams, native viewing, and texture cleanup. It starts no
-agent turns. Inspect the fixture screenshots as well as the assertions.
+The harness uploads a small test attachment and exercises parsing, streaming,
+copying, images, diagrams, native viewing and texture cleanup. It starts no agent
+turns. Inspect its screenshots as well as its assertions.
 
 ## License
 

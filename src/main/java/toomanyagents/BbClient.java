@@ -19,7 +19,8 @@ final class BbClient implements AutoCloseable {
             request = request.deepCopy();
             request.addProperty("modVersion", BbSetup.version());
             request.addProperty("bbInstanceId",connection.instanceId());
-            var message=HttpRequest.newBuilder(connection.address().resolve("/api/v1/plugins/minecraft/http/v1/rpc"))
+            if(!connection.developmentFingerprint().isBlank()) request.addProperty("developmentFingerprint",connection.developmentFingerprint());
+            var message=HttpRequest.newBuilder(connection.address().resolve("/api/v1/plugins/"+connection.pluginId()+"/http/v1/rpc"))
                 .timeout(Duration.ofSeconds(QUICK.contains(JsonState.text(request,"op"))?5:110)).header("Content-Type","application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(request.toString())).build();
             return http.sendAsync(message,HttpResponse.BodyHandlers.ofString()).thenApply(reply -> {

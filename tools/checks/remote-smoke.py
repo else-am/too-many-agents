@@ -7,11 +7,12 @@ with a conversation, and a remote screen with a saved page. Reopens the test wor
 import argparse
 import json
 from pathlib import Path
+from game_client import fixture_directory, GameClient
 import subprocess
 import time
 
-ROOT = Path(__file__).resolve().parents[1]
-GAME = ROOT / 'run'
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def main():
@@ -28,10 +29,10 @@ def main():
             ['python3', str(ROOT / 'tools' / script), '--game-dir', str(GAME), *values], timeout=120))
 
     def agents(*values):
-        return cli('agents.py', *values)
+        return cli('game', *values)
 
     def state():
-        return cli('too_many_agents.py', 'state')
+        return cli('game', 'state')
 
     def tool(agent, name, arguments):
         result = agents('tool', agent, name, json.dumps(arguments))

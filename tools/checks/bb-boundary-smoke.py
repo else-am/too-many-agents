@@ -4,31 +4,27 @@ import argparse
 import json
 import os
 from pathlib import Path
+from game_client import fixture_directory, GameClient, plugin_id
 import subprocess
 import time
 import urllib.request
 import urllib.error
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model', required=True)
     args = parser.parse_args()
-    descriptor = json.loads((ROOT / 'run/too-many-agents/connection.json').read_text())
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    game = GameClient(GAME)
+    descriptor = game.info
+    opener = game.opener
 
     def request(path, data=None):
-        message = urllib.request.Request(descriptor['url'] + path,
-            data=None if data is None else json.dumps(data).encode(),
-            headers={'Authorization': 'Bearer ' + descriptor['token'], 'Content-Type': 'application/json'})
-        try:
-            with opener.open(message, timeout=120) as response:
-                return json.load(response)
-        except urllib.error.HTTPError as error:
-            raise RuntimeError(error.read().decode()) from error
+        return game.request(path, data)
 
     def wait(check, label, timeout=100):
         deadline = time.monotonic() + timeout
@@ -75,7 +71,7 @@ def main():
 
     request('/v1/dev')
     projects = request('/v1/agents/projects')
-    assert projects['world']['directory'] == str(ROOT / 'run/saves/too-many-agents-development')
+    assert projects['world']['directory'] == str(GAME / 'saves/too-many-agents-development')
     own = next(row['id'] for row in projects['projects'] if row.get('kind') == 'world')
     marker = 'boundary-' + uuid.uuid4().hex[:8]
     ui('spawn', projectId=own)
@@ -99,10 +95,10 @@ def main():
     assert not get(draft).get('threadId')
     request('/v1/agents/' + draft + '/settings', {'reasoningLevel': 'medium', 'name': marker + '-draft-edited'})
     archive(draft)
-    bb('plugin', 'reload', 'minecraft')
+    bb('plugin', 'reload', plugin_id())
     def attached():
         env = dict(os.environ, BB_THREAD_ID=first['threadId'])
-        result = subprocess.run(['bb', 'minecraft', 'bodies', '--json'], env=env, capture_output=True, text=True, timeout=15)
+        result = subprocess.run(['bb', plugin_id(), 'bodies', '--json'], env=env, capture_output=True, text=True, timeout=15)
         return result.returncode == 0
     wait(attached, 'Plugin world reattachment')
     request('/v1/agents/' + draft + '/conversation-restore', {})
@@ -115,7 +111,7 @@ def main():
     print('PASS: unstarted body, opaque execution draft, archive/restore and reload survive before first send', flush=True)
 
     # Only this test's own repository and BB project are created or changed.
-    folder = ROOT / 'run' / marker
+    folder = GAME / marker
     folder.mkdir()
     subprocess.run(['git', 'init', '--initial-branch=main', str(folder)], check=True, capture_output=True)
     (folder / 'README.md').write_text('Minecraft BB boundary integration fixture.\n')
@@ -152,7 +148,7 @@ def main():
     assert state['projectId'] == personal and not state['minecraftAccess'] and state['bodyLoaded']
     archive(no_project)
     print('PASS: Personal project derives no Minecraft access from its project', flush=True)
-    result = ROOT / 'run/too-many-agents/bb-boundary-result.json'
+    result = GAME / 'too-many-agents/bb-boundary-result.json'
     result.write_text(json.dumps({'agentId': agent, 'threadId': first['threadId'], 'projectId': project,
         'fixtures': [draft, worktree, checkout, no_project]}, indent=2) + '\n')
     print('PASS: boundary checks complete; native UI fixture remains for stop/recovery checks:', agent, flush=True)

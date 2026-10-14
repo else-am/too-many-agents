@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { BbPluginApi } from "@get-bb/plugin-sdk";
-import { ApiError, PROTOCOL, object, type Session, type Identity, type Agent } from "./protocol.js";
+import { ApiError, PROTOCOL, describe, notFound, object, type Session, type Identity, type Agent } from "./protocol.js";
 import { bbInstanceId } from "./discovery.js";
 
 const START_EXPIRY_MS = 10_000;
+const PACKAGED = "minecraft";
+const busy = (thread: { status: string }) => ["active", "pending", "starting", "stopping"].includes(thread.status);
 
 function connectionRefused(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -16,6 +18,7 @@ export function minecraftWorlds(bb: BbPluginApi) {
   const lifetime = new AbortController();
   const sessions = new Map<string, Session>();
   const seen = new Map<string, number>();
+  const adopting = new Set<string>();
   // Thread metadata is writable by others, so it only names a candidate. Java checks each thread against its own record.
   const identities = new Map<string, Identity | null>();
   // Each world's own BB project, as last reported by its game; its agents have Minecraft access.
@@ -26,8 +29,8 @@ export function minecraftWorlds(bb: BbPluginApi) {
     if (!live) throw new ApiError("world_disconnected", "Minecraft world is disconnected");
     return live;
   }
-  async function identify(threadId: string): Promise<Identity | null> {
-    if (identities.has(threadId)) return identities.get(threadId)!;
+  async function identify(threadId: string, fresh = false): Promise<Identity | null> {
+    if (!fresh && identities.has(threadId)) return identities.get(threadId)!;
     const metadata = await bb.sdk.threads.getPluginMetadata({ threadId });
     const identity =
       typeof metadata.worldId === "string" && typeof metadata.agentId === "string"
@@ -161,8 +164,14 @@ export function minecraftWorlds(bb: BbPluginApi) {
 
   /** Screen tools need no body, so they may allow a removed one. */
   async function caller(threadId: string, allowRemoved = false) {
-    const identity = await identify(threadId);
-    if (!identity) throw new ApiError("access_denied", "This thread has no Minecraft body.");
+    // Conversations can move between plugin instances, so tool calls reread ownership.
+    const identity = await identify(threadId, true);
+    if (!identity) {
+      const owner = await ownerOf(threadId);
+      throw new ApiError("access_denied", owner && owner !== bb.pluginId
+        ? `This conversation moved to Minecraft plugin ${owner}. Its tools load when the thread next starts; run bb thread stop ${threadId} if it still offers these old tools.`
+        : "This thread has no Minecraft body.");
+    }
     const live = session(identity.worldId);
     const all = await agents(live);
     const agent = all.find((row) => row.agentId === identity.agentId && row.threadId === threadId);
@@ -171,8 +180,15 @@ export function minecraftWorlds(bb: BbPluginApi) {
     return { live, agent };
   }
 
-  function attach(live: Session) {
+  async function attach(live: Session) {
     const previous = sessions.get(live.worldId);
+    if (previous && previous.connectionId !== live.connectionId) {
+      // A copied world, or this game before it reconnected. callback forgets the
+      // old session only when its game definitively refuses or no longer listens.
+      await callback(previous, "agents", {}, AbortSignal.timeout(3000)).catch(() => undefined);
+      if (sessions.get(live.worldId) === previous)
+        throw new ApiError("world_in_use", "Another Minecraft game is using this world with this plugin. Close it first.");
+    }
     sessions.set(live.worldId, live);
     seen.set(live.worldId, Date.now());
     return !previous || previous.worldSessionId !== live.worldSessionId || previous.connectionId !== live.connectionId;
@@ -186,6 +202,136 @@ export function minecraftWorlds(bb: BbPluginApi) {
     if (sessions.get(live.worldId) === live) { sessions.delete(live.worldId); seen.delete(live.worldId); }
   }
 
+  /** Only a confirmed absent/deleted BB thread permits local cleanup without ownership. */
+  async function threadMissing(threadId: string) {
+    try { return (await bb.sdk.threads.get({ threadId })).deletedAt != null; }
+    catch (error) { if (notFound(error)) return true; throw error; }
+  }
+
+  async function ownership(live: Session, agent: Agent): Promise<"owned" | "foreign" | "missing"> {
+    let identity;
+    try { identity = await identify(agent.threadId, true); }
+    catch (error) {
+      if (notFound(error) && await threadMissing(agent.threadId)) return "missing";
+      throw error;
+    }
+    if (identity?.worldId === live.worldId && identity.agentId === agent.agentId) return "owned";
+    return await threadMissing(agent.threadId) ? "missing" : "foreign";
+  }
+
+  async function owns(live: Session, agent: Agent) {
+    return await ownership(live, agent) === "owned";
+  }
+
+  // The packaged namespace records every Minecraft conversation's owner: its own
+  // identity, or `owner` naming the instance that holds it, even an uninstalled one.
+  async function ownerOf(threadId: string) {
+    const registry = await bb.sdk.threads.getPluginMetadata({ threadId, pluginId: PACKAGED });
+    return typeof registry.owner === "string" ? registry.owner : typeof registry.worldId === "string" ? PACKAGED : null;
+  }
+
+  /** Records a conversation this instance created. */
+  async function register(threadId: string) {
+    const owner = await ownerOf(threadId);
+    if (owner && owner !== bb.pluginId) throw new Error(`Conversation ${threadId} is already owned by ${owner}`);
+    if (bb.pluginId !== PACKAGED)
+      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId } });
+  }
+
+  /**
+   * Keeps a body's conversation current with this plugin instance, between turns.
+   * A conversation from another instance moves here, so a world keeps its
+   * conversations whether it opens with the packaged plugin or a development
+   * client: Java's record must name the thread and the owner must not have the
+   * world open. `adoptedFrom` marks an unfinished move; a retry completes it.
+   * Release a moved conversation's session so its tools use the new namespace.
+   */
+  async function adopt(threadId: string) {
+    // World sync and the stop's own idle event can arrive together.
+    if (adopting.has(threadId)) return;
+    adopting.add(threadId);
+    try { await adoptIdle(threadId); }
+    finally { adopting.delete(threadId); }
+  }
+
+  async function adoptIdle(threadId: string) {
+    const own = await bb.sdk.threads.getPluginMetadata({ threadId });
+    const owner = await ownerOf(threadId);
+    let owned = typeof own.worldId === "string" && typeof own.agentId === "string";
+    // Removing and reinstalling this same instance can clear its namespace while
+    // the packaged registry and Java's saved body still identify its conversation.
+    if (!owned && owner === bb.pluginId && typeof own.adoptedFrom !== "string") {
+      const body = await bodyFor(threadId, own);
+      if (!body) return;
+      const identity = { worldId: body.live.worldId, agentId: body.agentId };
+      await bb.sdk.threads.updatePluginMetadata({ threadId, set: identity });
+      Object.assign(own, identity);
+      identities.set(threadId, identity);
+      owned = true;
+    }
+    let source = typeof own.adoptedFrom === "string" ? own.adoptedFrom : null;
+    if (owned && !source && (!owner || owner === bb.pluginId)) {
+      if (!(await bodyFor(threadId, own))) return;
+      if (!owner) await register(threadId); // created before the registry existed
+      return;
+    }
+    source ??= owner;
+    if (!source || source === bb.pluginId || !/^minecraft(-[a-z0-9]+)*$/.test(source)) return;
+    // An unfinished move may resume only while the registry still names either participant.
+    if (owner && owner !== source && owner !== bb.pluginId) return;
+    const previous = await bb.sdk.threads.getPluginMetadata({ threadId, pluginId: source });
+    const body = await bodyFor(threadId, owned ? own : previous);
+    if (!body) return;
+    if (typeof previous.worldId === "string" && previous.worldId !== body.live.worldId
+        || typeof previous.agentId === "string" && previous.agentId !== body.agentId) return;
+    // Check every instance, not just the old owner: two clients opening copies
+    // of the same world must not both take its conversations from an offline owner.
+    const plugins = (await bb.sdk.plugins.list()).plugins;
+    const others = new Set([source, ...plugins.map((plugin) => plugin.id)
+      .filter((id) => /^minecraft(-[a-z0-9]+)*$/.test(id))]);
+    others.delete(bb.pluginId);
+    for (const id of others) if (await hasWorld(id, body.live.worldId)) return;
+    if (sessions.get(body.live.worldId) !== body.live || busy(await bb.sdk.threads.get({ threadId }))) return;
+    // Copy before clearing: an interrupted move leaves both names, never neither.
+    await bb.sdk.threads.updatePluginMetadata({ threadId,
+      set: { worldId: body.live.worldId, agentId: body.agentId, adoptedFrom: source }, remove: ["owner"] });
+    identities.set(threadId, { worldId: body.live.worldId, agentId: body.agentId });
+    const identity = ["worldId", "agentId", "nonce"];
+    if (source === PACKAGED)
+      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId }, remove: identity });
+    else {
+      await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: source, remove: identity });
+      if (bb.pluginId !== PACKAGED)
+        await bb.sdk.threads.updatePluginMetadata({ threadId, pluginId: PACKAGED, set: { owner: bb.pluginId } });
+    }
+    // Keep the move pending until its old tool session has been released.
+    if (busy(await bb.sdk.threads.get({ threadId }))) return;
+    await bb.sdk.threads.stop({ threadId });
+    await bb.sdk.threads.updatePluginMetadata({ threadId, remove: ["adoptedFrom"] });
+  }
+
+  /** Java's record in a world attached here must name the thread; an uninstalled owner may have left no metadata. */
+  async function bodyFor(threadId: string, previous: Record<string, unknown>) {
+    for (const live of sessions.values()) {
+      if (typeof previous.worldId === "string" && previous.worldId !== live.worldId) continue;
+      const row = (await agents(live)).find((agent) => agent.threadId === threadId);
+      if (row && (previous.agentId === undefined || previous.agentId === row.agentId)) return { live, agentId: row.agentId };
+    }
+    return null;
+  }
+
+  /** Whether another plugin instance may have this world open; only "not installed or not running" is definite. */
+  async function hasWorld(pluginId: string, worldId: string) {
+    try {
+      const response = await fetch(new URL(`/api/v1/plugins/${pluginId}/http/v1/setup`, bb.server.loopbackBaseUrl), { signal: AbortSignal.timeout(10_000) });
+      if (response.status === 404 || response.status === 503) return false;
+      const games = response.ok ? object(await response.json()).games : undefined;
+      return !Array.isArray(games) || games.some((game) => object(game).worldId === worldId);
+    } catch {
+      return true;
+    }
+  }
+
   async function activeGames(probe = false) {
     // A stopped JVM cannot keep blocking updates. Probe old sessions so a slow
     // world sync does not make a still-running game look disconnected.
@@ -196,6 +342,12 @@ export function minecraftWorlds(bb: BbPluginApi) {
     }));
     return [...sessions.values()].map(live => ({ worldId: live.worldId }));
   }
+
+  // A conversation that was mid-turn during a world sync moves once it is idle.
+  bb.events.on("thread.idle", ({ thread }) => {
+    if (sessions.size)
+      void adopt(thread.id).catch((error) => bb.log.warn(`Could not move conversation ${thread.id}: ${describe(error)}`));
+  });
 
   bb.onDispose(() => {
     lifetime.abort();
@@ -211,6 +363,11 @@ export function minecraftWorlds(bb: BbPluginApi) {
     attach,
     detach,
     identify,
+    owns,
+    ownership,
+    threadMissing,
+    adopt,
+    register,
     caller,
     agents,
     callback,

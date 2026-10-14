@@ -8,19 +8,21 @@ from pathlib import Path
 import sys
 import urllib.error
 import urllib.request
-from urllib.parse import quote, urlparse
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
+from urllib.parse import quote
+from game_client import GameClient, game_directory
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--game-dir', type=Path, default=os.environ.get('TOO_MANY_AGENTS_GAME_DIR'))
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument('--client', help='Managed development client ID')
+    target.add_argument('--game-dir', type=Path, help='Explicit Minecraft game directory')
     parser.add_argument('--timeout', type=float, default=120, help='HTTP timeout in seconds; timed out mutations must not be retried blindly')
     commands = parser.add_subparsers(dest='action', required=True)
+    commands.add_parser('state')
+    command = commands.add_parser('command')
+    command.add_argument('text', help='Minecraft command')
+    command.add_argument('--session', help='Require a previously observed world session')
     listing = commands.add_parser('list')
     listing.add_argument('--archived', action='store_true', help='Show only archived agents')
     commands.add_parser('catalog').add_argument('--provider', help='Native BB provider ID, such as codex or claude-code')
@@ -84,29 +86,29 @@ def main():
     projects = commands.add_parser('projects')
     projects.add_argument('--json', help='Project operation JSON; omit to list')
     args = parser.parse_args()
-    if not args.game_dir:
-        parser.error('supply --game-dir or set TOO_MANY_AGENTS_GAME_DIR to the Minecraft game directory (e.g. run)')
+    try:
+        args.game_dir = game_directory(args.client, args.game_dir)
+    except ValueError as error:
+        parser.error(str(error))
     if args.timeout <= 0:
         parser.error('--timeout must be positive')
 
     token = ''
     try:
-        info = json.loads((Path(args.game_dir) / 'too-many-agents/connection.json').read_text())
-        url = urlparse(info['url'])
-        if (info.get('protocol') != 1 or url.scheme != 'http' or url.hostname != '127.0.0.1'
-                or not url.port or url.username or url.password or url.path not in ('', '/')
-                or url.query or url.fragment):
-            raise ValueError('unsupported local connection descriptor')
-        credential = info['token']
-        if not isinstance(credential, str) or not credential:
-            raise ValueError('invalid local connection credential')
-        token = credential
-        # Never forward the credential through a system proxy or an HTTP redirect.
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+        game = GameClient(args.game_dir, args.timeout)
+        token = game.token
 
         path = '/v1/agents'
         data = None
-        if args.action in ('projects', 'stations'):
+        if args.action == 'state':
+            path = '/v1/state'
+        elif args.action == 'command':
+            session = args.session or game.request('/v1/state').get('session')
+            if not session:
+                raise ValueError('No singleplayer world is open')
+            path = '/v1/command'
+            data = {'session': session, 'command': args.text}
+        elif args.action in ('projects', 'stations'):
             path += '/projects'
             if getattr(args, 'json', None):
                 data = json.loads(args.json)
@@ -189,11 +191,7 @@ def main():
                 if not isinstance(arguments, dict):
                     raise ValueError('tool arguments must be a JSON object')
                 data = {'tool': args.name, 'arguments': arguments}
-        body = None if data is None else json.dumps(data, allow_nan=False).encode()
-        request = urllib.request.Request(info['url'].rstrip('/') + path, data=body, headers={
-            'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
-        with opener.open(request, timeout=args.timeout) as response:
-            result = json.load(response)
+        result = game.request(path, data)
         if args.action == 'stations':
             result = result.get('world', {}).get('stations', [])
         if args.action == 'list' and args.archived and isinstance(result, list):

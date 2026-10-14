@@ -14,6 +14,7 @@ export function registerMinecraftCli(
   bb: BbPluginApi,
   worlds: MinecraftWorlds,
   agents: MinecraftAgents,
+  names: { cli: string; rewrite(text: string): string },
 ) {
   async function callerLocation(ctx: PluginCliContext) {
     if (ctx.threadId) {
@@ -39,7 +40,7 @@ export function registerMinecraftCli(
   }
   bb.cli.register(
     defineCli({
-      name: "minecraft",
+      name: names.cli,
       summary: "Create embodied BB agents and inspect their world.",
       commands: {
         spawn: cliCommand({
@@ -100,7 +101,7 @@ export function registerMinecraftCli(
             behavior: { type: "enum", values: ["stand", "wander", "follow"], description: "Ambient behavior for a world agent." },
             behaviors: text("JSON per-status behavior settings for a loose project agent."),
             body: text("Minecraft entity type, e.g. minecraft:fox; defaults to the station's body."),
-            station: text("Free station ID or name from bb minecraft stations; the agent joins its project."),
+            station: text(names.rewrite("Free station ID or name from bb minecraft stations; the agent joins its project.")),
             json: {
               type: "boolean",
               description: "Return the body association and BB thread as JSON.",

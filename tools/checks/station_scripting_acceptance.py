@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Real BB turn placing and configuring station blocks through minecraft_run."""
+from game_client import tool_name
 import json
 import time
 import uuid
@@ -21,7 +22,7 @@ def run_script(game, agent_id, code, timeout=180):
                   {'includeNestedRows': 'true', 'summaryOnly': 'false'}).get('rows', []))}
     marker = 'STATION_SCRIPT_' + uuid.uuid4().hex
     game.request(path + '/message', {'delivery': 'send', 'text':
-        'Call minecraft_run exactly once with the following literal JavaScript. Do not use any other tools. '
+        'Call ' + tool_name('minecraft_run') + ' exactly once with the following literal JavaScript. Do not use any other tools. '
         'Do not retry failures or edit files. After the result, reply ' + marker + '.\n```js\n' + code + '\n```'})
     deadline = time.monotonic() + timeout
     while True:
@@ -30,7 +31,7 @@ def run_script(game, agent_id, code, timeout=180):
                     {'includeNestedRows': 'true', 'summaryOnly': 'false'}).get('rows', [])))
         fresh = [r for r in rows if r['id'] not in before]
         if agent['status'] == 'idle' and any(marker in r.get('text', '') for r in fresh if r.get('role') == 'assistant'):
-            calls = [r for r in fresh if r.get('workKind') == 'tool' and 'minecraft_run' in r.get('toolName', '')]
+            calls = [r for r in fresh if r.get('workKind') == 'tool' and tool_name('minecraft_run') in r.get('toolName', '')]
             assert len(calls) == 1, calls
             output = json.loads(calls[0].get('output', '{}'))
             assert calls[0].get('status') == 'completed' and 'error' not in output, output

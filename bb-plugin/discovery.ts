@@ -1,4 +1,4 @@
-import { mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
@@ -13,15 +13,34 @@ export function bbInstanceId(bb: BbPluginApi) {
   return createHash("sha256").update(bb.server.experimental_dataDir).digest("hex");
 }
 
+export type Development = { client: string; fingerprint: string } | null;
+
+/** A development client's plugin is a staged copy with development.json; the packaged `minecraft` plugin has none. */
+export async function loadDevelopment(bb: BbPluginApi): Promise<Development> {
+  let data;
+  try {
+    data = JSON.parse(await readFile(new URL("./development.json", import.meta.url), "utf8"));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    if (bb.pluginId !== "minecraft") throw new Error("Install development plugins through tools/dev; this copy was not staged.");
+    return null;
+  }
+  if (data.pluginId !== bb.pluginId || typeof data.client !== "string" || typeof data.fingerprint !== "string")
+    throw new Error("development.json was staged for another plugin.");
+  return { client: data.client, fingerprint: data.fingerprint };
+}
+
 /** A mod-owned rendezvous, independent of BB's installation and data directories. */
-export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds) {
+export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds, development: Development) {
   // This identity survives restarts and plugin replacement. BB provides its
   // configured directory; we never inspect or write its internal files.
   const instanceId = bbInstanceId(bb);
   let updatingUntil = 0;
   let preparing = false;
   const generation = randomUUID();
-  const identity = () => ({ instanceId, generation, label: bb.server.experimental_dataDir, pluginVersion: MOD_VERSION, serverUrl: bb.server.loopbackBaseUrl });
+  // Every plugin instance in one BB shares instanceId; games choose by pluginId.
+  const identity = () => ({ instanceId, generation, label: bb.server.experimental_dataDir, pluginId: bb.pluginId,
+    pluginVersion: MOD_VERSION, development, serverUrl: bb.server.loopbackBaseUrl });
   bb.http.route("GET", "/v1/setup", async ctx => {
     const plugin = (await bb.sdk.plugins.list()).plugins.find(plugin => plugin.id === bb.pluginId);
     return ctx.json({ ...identity(), pluginRoot: plugin?.rootDir, games: await worlds.activeGames() });
@@ -69,6 +88,9 @@ export function publishDiscovery(bb: BbPluginApi, worlds: MinecraftWorlds) {
         throw new ApiError("bb_instance_changed", "This request belongs to a different BB instance.");
       if (data.modVersion !== MOD_VERSION)
         throw new ApiError("version_mismatch", `Minecraft mod ${String(data.modVersion ?? "unknown")} and plugin ${MOD_VERSION} must match. Open BB connection in mod settings.`);
+      // A development game names the exact staged bundle it was launched against.
+      if ((data.developmentFingerprint ?? null) !== (development?.fingerprint ?? null))
+        throw new ApiError("plugin_changed", "This Minecraft plugin is not the one this game was set up for. Open BB connection in mod settings.");
       if ((preparing || updatingUntil > Date.now()) && data.op !== "session.detach")
         throw new ApiError("plugin_updating", "The Minecraft plugin is being updated. Retry shortly.");
     },

@@ -11,6 +11,7 @@ import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
 import net.minecraft.network.chat.Component;
 import toomanyagents.TooManyAgentsClientSettings;
 import toomanyagents.BbSetup;
+import toomanyagents.DevelopmentClient;
 
 /** Installation-wide preferences; each change saves immediately. */
 public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
@@ -80,6 +81,7 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
     private void bbConnection() {
         section("BB connection");
         note(bb.message());
+        if (DevelopmentClient.enabled()) return;
         String installLabel = setup.development() ? "Reload plugin…" : bb.pluginVersion().isBlank() ? "Install plugin…" : "Reinstall plugin…";
         boolean enabled = !bb.busy() && bb.action() != BbSetup.Action.WAIT;
         if (bb.instances().size() > 1) {

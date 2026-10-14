@@ -7,14 +7,15 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from game_client import GameClient
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('game_dir', type=Path)
 parser.add_argument('--command', action='store_true', help='send a private tellraw message in the open world')
 args = parser.parse_args()
-info = json.loads((args.game_dir / 'too-many-agents/connection.json').read_text())
-assert info['url'].startswith('http://127.0.0.1:')
-opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+client = GameClient(args.game_dir)
+info = client.info
+opener = client.opener
 
 
 def request(path='/v1/state', body=None, headers=None, auth=True):

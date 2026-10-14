@@ -4,6 +4,7 @@ import type { MinecraftThreads } from "./threads.js";
 import type { MinecraftProjects } from "./projects.js";
 import {
   ApiError,
+  describe,
   object,
   type Agent,
   type Args,
@@ -270,6 +271,9 @@ export function minecraftAgents(
 
   async function archive(live: Session, agent: Agent, archived: boolean) {
     if (agent.threadId) {
+      // Java keeps the binding and owns archive/restore of this disconnected body.
+      // Only confirmed BB absence permits this; a foreign live conversation is refused upstream.
+      if (await worlds.threadMissing(agent.threadId)) return { localArchive: true };
       await (archived
         ? bb.sdk.threads.archive({ threadId: agent.threadId })
         : bb.sdk.threads.unarchive({ threadId: agent.threadId }));
@@ -285,11 +289,17 @@ export function minecraftAgents(
 
   async function sync(live: Session) {
     const rows = await projects.list(live);
-    await Promise.all(
-      (await worlds.agents(live))
-        .filter((agent) => agent.threadId)
-        .map((agent) => threads.sync(live, agent.agentId, agent.threadId)),
-    );
+    const bodies = (await worlds.agents(live)).filter((agent) => agent.threadId);
+    await Promise.all(bodies.map(async (agent) => {
+      try {
+        await worlds.adopt(agent.threadId).catch((error) => bb.log.warn(`Could not move conversation ${agent.threadId}: ${describe(error)}`));
+        const ownership = await worlds.ownership(live, agent);
+        if (ownership !== "foreign") await threads.sync(live, agent.agentId, agent.threadId);
+      } catch (error) {
+        // One unavailable conversation must not disconnect the entire world's healthy agents.
+        bb.log.warn(`Could not sync conversation ${agent.threadId}: ${describe(error)}`);
+      }
+    }));
     return { projects: rows };
   }
   return { get, create, send, settings, archive, sync, draftDefaults, projectDefaults, station };

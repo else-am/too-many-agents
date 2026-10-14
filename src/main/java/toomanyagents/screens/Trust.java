@@ -18,7 +18,9 @@ import net.minecraft.world.level.storage.LevelResource;
  * world's screens wait for a click. Kept outside the save so a shared world can't carry its own consent.
  */
 final class Trust {
-    private static final Path FILE = Path.of(System.getProperty("user.home"), ".too-many-agents", "screens.json");
+    private static final Path FILE = System.getProperty("too_many_agents.devClient", "").isBlank()
+        ? Path.of(System.getProperty("user.home"), ".too-many-agents", "screens.json")
+        : net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("too-many-agents/screens.json");
     private static Set<String> worlds;
     private static MinecraftServer checkedServer;
     private static boolean checkedAllowed;

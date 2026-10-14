@@ -40,6 +40,10 @@ import org.slf4j.Logger;
 final class Chromium {
     private static final Logger LOG = LogUtils.getLogger();
     private static final Path HOME = Path.of(System.getProperty("user.home"), ".too-many-agents");
+    private static final Path PROFILE = System.getProperty("too_many_agents.devClient", "").isBlank()
+        ? HOME.resolve("browser-profile")
+        : net.neoforged.fml.loading.FMLPaths.GAMEDIR.get().resolve("too-many-agents/browser-profile").toAbsolutePath();
+    private static final boolean MANAGED = !System.getProperty("too_many_agents.devClient", "").isBlank();
     static final int FPS = 60;
 
     enum Phase { OFF, STARTING, READY, FAILED, STOPPED }
@@ -101,7 +105,7 @@ final class Chromium {
     private static void startNow() {
         try {
             var builder = new CefAppBuilder();
-            builder.setInstallDir(HOME.resolve("cef").toFile());
+            builder.setInstallDir(HOME.resolve(MANAGED ? "cef-152.0.6" : "cef").toFile());
             builder.setProgressHandler((state, percent) -> progress = switch (state) {
                 case DOWNLOADING -> percent >= 0 ? "Installing browser " + Math.round(percent) + "%" : "Installing browser";
                 case EXTRACTING, INSTALL -> "Installing browser";
@@ -117,10 +121,20 @@ final class Chromium {
             });
             CefSettings settings = builder.getCefSettings();
             settings.windowless_rendering_enabled = true;
-            settings.root_cache_path = HOME.resolve("browser-profile").toString();
+            settings.root_cache_path = PROFILE.toString();
             settings.cache_path = settings.root_cache_path;
-            settings.log_file = HOME.resolve("browser.log").toString();
+            settings.log_file = PROFILE.resolveSibling("browser.log").toString();
             settings.log_severity = CefSettings.LogSeverity.LOGSEVERITY_WARNING;
+            if (MANAGED) {
+                java.nio.file.Files.createDirectories(HOME);
+                // Clients share the native binaries, but must not extract them concurrently.
+                try (var file = java.nio.channels.FileChannel.open(HOME.resolve("cef-152.0.6.lock"),
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE);
+                     var lock = file.lock()) {
+                    builder.install();
+                }
+                builder.setSkipInstallation(true);
+            }
             long started = System.nanoTime();
             var app = builder.build();
             var client = app.createClient();

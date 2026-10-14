@@ -10,7 +10,23 @@ base.archivesName = 'too-many-agents'
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 def packagedJarRun = providers.gradleProperty('packagedJarRun').isPresent()
-def clientGameDirectory = file(providers.gradleProperty('personalDev').isPresent() ? 'run/play' : 'run')
+// Hold the game directory through staging and launch, including task failures.
+abstract class PackagedGameLock implements org.gradle.api.services.BuildService<org.gradle.api.services.BuildServiceParameters.None>, AutoCloseable {
+    private java.nio.channels.FileChannel channel
+    private java.nio.channels.FileLock lock
+    synchronized void acquire(File file) {
+        if (lock != null) return
+        file.parentFile.mkdirs()
+        channel = java.nio.channels.FileChannel.open(file.toPath(), java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.WRITE)
+        lock = channel.tryLock()
+        if (lock == null) {
+            channel.close()
+            throw new GradleException('Another development session is using run/. Stop it first (tools/dev stop test).')
+        }
+    }
+    @Override void close() { channel?.close() }
+}
+def packagedGameLock = gradle.sharedServices.registerIfAbsent('tooManyAgentsPackagedGameLock', PackagedGameLock) {}
 repositories { mavenCentral() }
 configurations { jcef { transitive = false } }
 def jcefApi = 'me.friwi:jcef-api:jcef-17e805a+cef-152.0.6+g708dc14+chromium-152.0.7977.83'
@@ -43,27 +59,28 @@ def unpackJcef = tasks.register('unpackJcef', Sync) {
     into layout.buildDirectory.dir('jcef-classes')
 }
 sourceSets.main.output.dir(layout.buildDirectory.dir('jcef-classes'), builtBy: unpackJcef)
-def cleanStagedTooManyAgents = tasks.register('cleanStagedTooManyAgents', Delete) {
-    delete fileTree(new File(clientGameDirectory, 'mods')) { include 'too-many-agents*.jar' }
-}
 // A fresh test run starts muted, without the narrator prompt or tutorial toasts.
 // Existing options are left alone.
 def quietTestOptions = tasks.register('quietTestOptions') {
+    usesService packagedGameLock
     def options = file('run/options.txt')
     onlyIf { !options.exists() }
     doLast {
+        packagedGameLock.get().acquire(file('run/dev.lock'))
         options.parentFile.mkdirs()
         options.text = ['version:3955', 'onboardAccessibility:false', 'narrator:0', 'soundCategory_master:0.0',
                         'tutorialStep:none', 'pauseOnLostFocus:false'].join('\n') + '\n'
     }
 }
 def stagePackagedTooManyAgents = tasks.register('stagePackagedTooManyAgents', Copy) {
+    usesService packagedGameLock
     def artifact = layout.buildDirectory.file("libs/too-many-agents-${version}.jar")
     from artifact
     into 'run/mods'
     doFirst {
         if (!packagedJarRun) throw new GradleException('Use runPackagedClient -PpackagedJarRun after tools/build build.')
         if (!artifact.get().asFile.isFile()) throw new GradleException('Build the TooManyAgents JAR first with tools/build build.')
+        packagedGameLock.get().acquire(file('run/dev.lock'))
         delete fileTree('run/mods') { include 'too-many-agents*.jar' }
     }
 }
@@ -73,15 +90,9 @@ neoForge {
     // Packaged runs must obtain access changes from the JAR, not the development sources.
     if (packagedJarRun) accessTransformers.files.setFrom([])
     runs {
+        // Compiles access transformers for development. tools/dev launches clients.
         client {
             client()
-            systemProperty 'too_many_agents.devPlugin', project.file('bb-plugin').absolutePath
-            taskBefore cleanStagedTooManyAgents
-            gameDirectory = clientGameDirectory
-            if (providers.gradleProperty('devWorld').isPresent()) {
-                taskBefore quietTestOptions
-                systemProperty 'too_many_agents.devWorld', 'true'
-            }
         }
         packagedClient {
             client()
@@ -98,27 +109,51 @@ neoForge {
     }
 }
 
-if (!packagedJarRun) {
-    dependencies {
-        imageLibraries.each { artifact -> additionalRuntimeClasspath "${artifact}:3.12.0" }
-        ['commonmark', 'commonmark-ext-gfm-tables', 'commonmark-ext-gfm-strikethrough',
-         'commonmark-ext-task-list-items', 'commonmark-ext-autolink'].each { artifact ->
-            additionalRuntimeClasspath "org.commonmark:${artifact}:0.30.0"
-        }
-        additionalRuntimeClasspath 'org.nibor.autolink:autolink:0.12.0'
-    }
-}
+// Every supported launch loads the packaged mod, which supplies these libraries through jar-in-jar.
+// Adding them to NeoForge's legacy classpath as well creates duplicate Java modules.
 
+tasks.named('runClient') {
+    doFirst { throw new GradleException('Start development clients with tools/dev (tools/dev start test for the test world).') }
+}
 tasks.named('runPackagedClient') {
     // Empty loadedMods alone still lets FML discover main's processed resources on the classpath.
     classpathProvider.setFrom(configurations.runtimeClasspath)
+    usesService packagedGameLock
     doFirst {
         if (!packagedJarRun) throw new GradleException('Use runPackagedClient -PpackagedJarRun after tools/build build.')
+        packagedGameLock.get().acquire(file('run/dev.lock'))
+    }
+}
+
+// tools/dev freezes the packaged JAR with this launch description and starts the JVM itself.
+def devLaunch = tasks.register('devLaunch') {
+    def prepare = tasks.named('preparePackagedClientRun')
+    def run = tasks.named('runPackagedClient')
+    def jar = tasks.named('jar')
+    def output = layout.buildDirectory.file('dev/launch.json')
+    def launcher = javaToolchains.launcherFor(java.toolchain)
+    dependsOn prepare, jar
+    outputs.file(output)
+    outputs.upToDateWhen { false }
+    doLast {
+        def classpath = run.get().classpathProvider.files
+        def projectOutput = [sourceSets.main.output.classesDirs.files, sourceSets.main.output.resourcesDir].flatten()
+        if (classpath.any { entry -> projectOutput.any { entry.toPath().startsWith(it.toPath()) } })
+            throw new GradleException('The packaged client classpath includes project output.')
+        output.get().asFile.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+            version: project.version,
+            jar: jar.get().archiveFile.get().asFile.absolutePath,
+            java: launcher.get().executablePath.asFile.absolutePath,
+            mainClass: run.get().mainClass.get(),
+            classpath: classpath*.absolutePath,
+            vmArgsFile: prepare.get().vmArgsFile.get().asFile.absolutePath,
+            programArgsFile: prepare.get().programArgsFile.get().asFile.absolutePath,
+        ])) + '\n'
     }
 }
 
 def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
-    inputs.files(fileTree('bb-plugin') { exclude 'node_modules/**', 'dist/**' }, fileTree('surface'), file('tools/package-plugin'))
+    inputs.files(fileTree('bb-plugin') { exclude 'node_modules/**', 'dist/**' }, fileTree('surface'), file('tools/package-plugin'), file('tools/bbcli.py'))
     outputs.file(layout.buildDirectory.file('bb-plugin.zip'))
     outputs.file(file('bb-plugin/dist/server.js'))
     outputs.file(file('bb-plugin/dist/scripting/bot.js'))
@@ -134,6 +169,8 @@ tasks.named('processResources', ProcessResources) {
     from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')
     filesMatching('META-INF/neoforge.mods.toml') { expand version: project.version }
+    // Local agent state can appear in any directory; keep it out of the JAR.
+    exclude '**/.claude', '**/.claude/**'
 }
 tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
 tasks.withType(AbstractArchiveTask).configureEach {

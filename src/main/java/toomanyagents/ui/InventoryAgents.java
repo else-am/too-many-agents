@@ -78,6 +78,58 @@ public final class InventoryAgents {
 
     public boolean standalone() { return parent instanceof AgentWorkspaceScreen; }
 
+    public JsonObject developmentState() {
+        var saved = new JsonObject();
+        saved.addProperty("selected", selected == null ? "" : selected);
+        saved.addProperty("open", supports(Minecraft.getInstance().screen));
+        saved.addProperty("settings", form instanceof TooManyAgentsSettingsScreen);
+        var conversations = new JsonObject();
+        chats.forEach((id, screen) -> conversations.add(id, screen.developmentState()));
+        saved.add("chats", conversations);
+        var compositions = new JsonObject();
+        drafts.forEach((id, screen) -> compositions.add(id, screen.developmentState()));
+        saved.add("drafts", compositions);
+        if (chat != null && chat.draft())
+            drafts.forEach((id, screen) -> { if (screen == chat) saved.addProperty("draftKey", id); });
+        return saved;
+    }
+
+    public void restoreDevelopmentState(JsonObject saved) {
+        var client = Minecraft.getInstance();
+        // prepare() establishes the new world's maps before restoring their contents.
+        client.setScreen(new AgentWorkspaceScreen(AgentModels.text(saved, "selected"), null));
+        prepare(client.screen);
+        if (saved.get("chats") instanceof JsonObject conversations) conversations.entrySet().forEach(entry -> {
+            if (!entry.getValue().isJsonObject()) return;
+            var screen = chats.computeIfAbsent(entry.getKey(), id -> new AgentChatScreen(access.get(), id));
+            screen.restoreDevelopmentState(entry.getValue().getAsJsonObject());
+        });
+        if (saved.get("drafts") instanceof JsonObject compositions) compositions.entrySet().forEach(entry -> {
+            if (!entry.getValue().isJsonObject()) return;
+            var state = entry.getValue().getAsJsonObject();
+            if (!(state.get("creation") instanceof JsonObject creation)) return;
+            var screen = new AgentChatScreen(access.get(), creation, id -> {
+                var created = drafts.remove(entry.getKey());
+                if (created != null) chats.put(id, created);
+                selected = id; select.accept(id);
+                if (sidebar != null) sidebar.selected(id);
+            });
+            screen.restoreDevelopmentState(state);
+            drafts.put(entry.getKey(), screen);
+        });
+        String draftKey = AgentModels.text(saved, "draftKey");
+        if (drafts.containsKey(draftKey)) {
+            chat = drafts.get(draftKey);
+            selected = null;
+            sidebar.selected(null);
+            chat.dock(parent, this::closeChat, this::toggleInventory);
+            right = null;
+        }
+        if (saved.has("settings") && saved.get("settings").getAsBoolean()) openModSettings();
+        else prepare(client.screen);
+        if (!saved.has("open") || !saved.get("open").getAsBoolean()) client.setScreen(null);
+    }
+
     public void forget(String id) {
         var forgotten=chats.remove(id);
         if(forgotten!=null)forgotten.removed();

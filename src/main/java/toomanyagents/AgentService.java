@@ -526,8 +526,9 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         return change.thenCompose(done -> {
                 synchronized(this) {
                     requireCurrent(agent,session);
-                    // Bound agents follow BB; only unstarted bodies need a local choice.
-                    agent.localArchive=hasThread?null:archive;
+                    // Keep a bound body's local choice only when BB confirms its conversation is missing.
+                    boolean local=!hasThread || done.isJsonObject() && flag(done.getAsJsonObject(),"localArchive");
+                    agent.localArchive=local?archive:null;
                     return save();
                 }
             })

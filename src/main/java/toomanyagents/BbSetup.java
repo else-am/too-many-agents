@@ -19,7 +19,7 @@ import static toomanyagents.JsonState.*;
 public final class BbSetup {
     public enum Action { WAIT, NONE, ALLOW_UPDATES, RESTORE }
     public record Instance(String id, String url, String version, String label) {}
-    public record Connection(String instanceId, URI address) {}
+    public record Connection(String instanceId, URI address, String pluginId, String developmentFingerprint) {}
     public record View(String message, String instanceId, String pluginVersion, boolean ready,
                        boolean automatic, boolean busy, String cli, List<Instance> instances, boolean bbNotFound,
                        Action action, boolean needsLocation) {}
@@ -30,12 +30,13 @@ public final class BbSetup {
     }
     private final Path root = Path.of(System.getProperty("user.home"), ".too-many-agents");
     private final Path settings = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-bb.json");
-    private final String developmentSource = System.getProperty("too_many_agents.devPlugin", "");
-    private boolean developmentLoaded;
-    private boolean developmentAttempted;
-    private boolean installStartedThisLaunch;
-    public boolean development() { return !developmentSource.isBlank(); }
-    public String pluginSourceLabel() { return development() ? "development plugin" : "bundled plugin"; }
+    // tools/dev pins its game to the plugin instance it installed for that game.
+    private final String developmentClient = System.getProperty("too_many_agents.devClient", "");
+    private final String developmentPluginId = System.getProperty("too_many_agents.devPluginId", "");
+    private final Path developmentStatus = FMLPaths.GAMEDIR.get().resolve("too-many-agents/development.json");
+    public boolean development() { return !developmentClient.isBlank(); }
+    public String pluginId() { return development() ? developmentPluginId : "minecraft"; }
+    private String setupPath() { return "/api/v1/plugins/" + pluginId() + "/http/v1/setup"; }
     private final ScheduledExecutorService worker = Executors.newSingleThreadScheduledExecutor(Thread.ofPlatform().daemon().name("minecraft-bb-setup").factory());
     private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(3)).build();
     private volatile View view = new View("Checking BB…", "", "", false, false, false, "", List.of(), false, Action.WAIT, false);
@@ -76,27 +77,27 @@ public final class BbSetup {
     }
     public synchronized boolean isCurrent(String instanceId) { return !installing && connection != null && selected.equals(instanceId) && connection.instanceId().equals(instanceId); }
     public void select(String id) { worker.execute(() -> {
-        developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
+        if (development()) return;
         selected = id; selectedUrl = ""; automatic = false; installPending = false; settingsUnreadable = false; error = "";
         persist(); check(false);
     }); }
     public void chooseCli(String path) { worker.execute(() -> {
+        if (development()) return;
         String previousCli = cli;
         try {
             cli = resolveCli(path).toString();
             var status = command("", "status", "--json");
             selected = digest(text(status,"dataDir")); selectedUrl = "";
-            developmentLoaded = false; developmentAttempted = false; installStartedThisLaunch = false;
             automatic = false; installPending = false; settingsUnreadable = false; error = ""; persist();
         } catch (Exception failure) { cli = previousCli; error = failure.getMessage(); }
         check(false);
     }); }
     public void automatic(boolean enabled) { worker.execute(() -> {
-        if (settingsUnreadable) return;
+        if (settingsUnreadable || development()) return;
         automatic = enabled; error = ""; persist(); check(false);
     }); }
     /** Explicit installation also authorizes a downgrade or retry of an uncertain attempt. */
-    public void install() { worker.execute(() -> { if (!settingsUnreadable) error = ""; check(true); }); }
+    public void install() { worker.execute(() -> { if (development()) return; if (!settingsUnreadable) error = ""; check(true); }); }
 
     private void persist() {
         try { JsonState.write(settings, object("instanceId",selected,"url",selectedUrl,"cli",cli,"automatic",automatic,"installPending",installPending,
@@ -105,7 +106,42 @@ public final class BbSetup {
     }
 
     private void check(boolean explicit) {
-        check(explicit, false);
+        if (development()) checkDevelopment();
+        else check(explicit, false);
+    }
+
+    /** A tools/dev game only connects to the exact plugin its launcher installed; it never installs or replaces one. */
+    private void checkDevelopment() {
+        List<Instance> instances = List.of();
+        String installed = "";
+        action = Action.NONE;
+        try {
+            if (developmentPluginId.isBlank()) throw new IOException("tools/dev did not name this game's development plugin.");
+            JsonObject expected;
+            try { expected = JsonParser.parseString(Files.readString(developmentStatus)).getAsJsonObject(); }
+            catch (NoSuchFileException missing) { throw new IOException("Waiting for tools/dev to install this game's plugin."); }
+            String fingerprint = text(expected,"fingerprint");
+            if (!developmentClient.equals(text(expected,"client")) || !developmentPluginId.equals(text(expected,"pluginId")) || fingerprint.isBlank())
+                throw new IOException("Waiting for tools/dev to install this game's plugin.");
+            instances = discover();
+            if (instances.isEmpty()) throw new IOException("Waiting for BB to run development plugin " + developmentPluginId + ".");
+            if (instances.size() > 1) throw new IOException("Several BB servers run development plugin " + developmentPluginId + ". Close the extra BB.");
+            var found = instances.getFirst();
+            var status = request(found.url(), setupPath(), null);
+            installed = text(status,"pluginVersion");
+            var staged = obj(status,"development");
+            if (!found.id().equals(text(status,"instanceId")) || !developmentPluginId.equals(text(status,"pluginId"))
+                || !developmentClient.equals(text(staged,"client")) || !fingerprint.equals(text(staged,"fingerprint")))
+                throw new IOException("BB is running another build of " + developmentPluginId + ". Waiting for tools/dev.");
+            if (!version().equals(installed))
+                throw new IOException("Development plugin " + installed + " does not match this game's mod " + version() + ". Restart through tools/dev.");
+            selected = found.id(); selectedUrl = found.url(); error = "";
+            synchronized (this) { connection = new Connection(selected, loopback(found.url()), developmentPluginId, fingerprint); }
+            publish("Connected to BB", installed, true, false, instances);
+        } catch (Exception failure) {
+            error = failure.getMessage() == null ? "Could not connect to BB." : failure.getMessage();
+            publish(error, installed, false, false, instances);
+        }
     }
 
     private void check(boolean explicit, boolean locked) {
@@ -114,7 +150,6 @@ public final class BbSetup {
         bbNotFound = false;
         action = Action.NONE;
         try {
-            Path developmentDirectory = development() ? developmentDirectory() : null;
             instances = discover();
             if (!cli.isBlank()) {
                 try { resolveCli(cli); }
@@ -138,25 +173,19 @@ public final class BbSetup {
             String url = found == null ? selectedUrl : found.url();
             String generation = "";
             if (found != null) {
-                var status = request(found.url(), "/api/v1/plugins/minecraft/http/v1/setup", null);
+                var status = request(found.url(), setupPath(), null);
                 if (!selected.equals(text(status,"instanceId"))) throw new IOException("BB identity changed. Choose BB again.");
                 installed = text(status,"pluginVersion");
                 generation = text(status,"generation");
                 if (!url.equals(selectedUrl)) { selectedUrl = url; persist(); }
-                boolean sourceMatches = !development() || developmentDirectory.toString().equals(text(status,"pluginRoot"));
-                if (installPending && sourceMatches && installationVerified(status)) {
-                    installPending = false; developmentLoaded = development() && installStartedThisLaunch; error = ""; persist();
+                if (installPending && installationVerified(status)) {
+                    installPending = false; error = ""; persist();
                 }
-                if (version().equals(installed) && !explicit && !installPending && sourceMatches && (!development() || developmentLoaded)) {
+                if (version().equals(installed) && !explicit && !installPending) {
                     action = Action.NONE; error = "";
-                    synchronized (this) { connection = new Connection(selected, loopback(url)); }
+                    synchronized (this) { connection = new Connection(selected, loopback(url), pluginId(), ""); }
                     publish("Connected to BB", installed, true, false, instances); return;
                 }
-            }
-            if (development() && developmentAttempted && !developmentLoaded && !explicit) {
-                action = Action.RESTORE;
-                publish(error.isBlank() ? "Development plugin reload did not finish. Reload it when ready." : error, installed, false, false, instances);
-                return;
             }
             if (cli.isBlank()) throw new IOException("Choose BB's installed app or CLI to install its Minecraft plugin.");
             if (!locked) {
@@ -190,38 +219,32 @@ public final class BbSetup {
                 throw new IOException("The previous installation was not verified. Check BB before reinstalling the plugin.");
             }
             boolean older = !installed.isBlank() && compareVersions(installed, version()) < 0;
-            boolean canAuto = development()
-                ? !developmentLoaded && (plugin == null || older || version().equals(installed))
-                : automatic && (plugin == null || older);
+            boolean canAuto = automatic && (plugin == null || older);
             if (!explicit && !canAuto) {
-                action = !development() && (plugin == null || older) ? Action.ALLOW_UPDATES : Action.RESTORE;
-                String message = development() ? "BB is using a different plugin. Reload this checkout's plugin, or restart development."
-                    : plugin == null ? "Allow plugin management to install the Minecraft integration."
+                action = plugin == null || older ? Action.ALLOW_UPDATES : Action.RESTORE;
+                String message = plugin == null ? "Allow plugin management to install the Minecraft integration."
                     : version().equals(installed) ? "The matching plugin is not running. Enable it in BB, or reinstall the bundled plugin."
                     : older ? "Allow plugin management to update the Minecraft integration."
                     : "BB's Minecraft plugin is newer or from a different release. Update this mod, or explicitly restore its bundled plugin.";
                 publish(message, installed, false, false, instances); return;
             }
-            // Background connection checks never repeat a blocked development reload.
-            if (development()) developmentAttempted = true;
             installing = true;
             try {
                 var service = agents;
                 if (service != null) service.disconnectBb();
-                publish(development() ? "Reloading development plugin…" : "Installing Minecraft plugin…", installed, false, true, instances);
+                publish("Installing Minecraft plugin…", installed, false, true, instances);
                 String replacedRoot = plugin == null ? "" : text(plugin,"rootDir");
-                installPlugin(url, plugin, found, developmentDirectory, generation);
+                installPlugin(url, plugin, found, generation);
                 // Verify rather than repeating a mutation whose outcome may be unknown.
                 for (int attempt=0; attempt<12; attempt++) {
                     Thread.sleep(500);
                     for (var candidate : discover()) if (candidate.id().equals(selected) && candidate.version().equals(version())) {
-                        var verified = request(candidate.url(), "/api/v1/plugins/minecraft/http/v1/setup", null);
+                        var verified = request(candidate.url(), setupPath(), null);
                         if (installationVerified(verified)) {
                             selectedUrl = candidate.url(); installPending = false; persist();
-                            developmentLoaded = development();
-                            synchronized (this) { connection = new Connection(selected, loopback(candidate.url())); }
+                            synchronized (this) { connection = new Connection(selected, loopback(candidate.url()), pluginId(), ""); }
                             action = Action.NONE;
-                            if (developmentDirectory == null) pruneReleases(replacedRoot);
+                            pruneReleases(replacedRoot);
                             publish("Connected to BB", version(), true, false, discover()); return;
                         }
                     }
@@ -230,7 +253,7 @@ public final class BbSetup {
             } finally { installing = false; }
         } catch (Exception failure) {
             error = failure.getMessage() == null ? "Could not connect to BB." : failure.getMessage();
-            if (explicit || installPending || development() && developmentAttempted && !developmentLoaded) action = Action.RESTORE;
+            if (explicit || installPending) action = Action.RESTORE;
             publish(error, installed, false, false, instances);
         }
     }
@@ -241,16 +264,7 @@ public final class BbSetup {
             && !text(status,"generation").isBlank() && !previousGeneration.equals(text(status,"generation"));
     }
 
-    private Path developmentDirectory() throws IOException {
-        Path directory = Path.of(developmentSource).toRealPath();
-        var manifest = JsonParser.parseString(Files.readString(directory.resolve("package.json"))).getAsJsonObject();
-        if (!text(manifest,"name").equals("bb-plugin-minecraft") || !text(manifest,"version").equals(version())
-            || !Files.isRegularFile(directory.resolve("dist/server.js")))
-            throw new IOException("Build this checkout's matching Minecraft plugin, then restart development.");
-        return directory;
-    }
-
-    private void installPlugin(String url, JsonObject plugin, Instance found, Path developmentDirectory, String generation) throws Exception {
+    private void installPlugin(String url, JsonObject plugin, Instance found, String generation) throws Exception {
         // check holds the selected instance's lock and has refreshed these inputs.
         if (plugin != null) {
             if (!text(plugin,"source").startsWith("path:"))
@@ -267,11 +281,10 @@ public final class BbSetup {
                 generation = text(prepared,"generation");
             }
         }
-        Path directory = developmentDirectory == null ? extractBundle() : developmentDirectory;
+        Path directory = extractBundle();
         expectedPluginRoot = directory.toRealPath().toString(); previousGeneration = generation;
         error = ""; installPending = true; persist();
         if (!error.isBlank()) throw new IOException(error);
-        installStartedThisLaunch = true;
         if (plugin != null && expectedPluginRoot.equals(text(plugin,"rootDir")))
             command(url, "plugin", "reload", "minecraft", "--json");
         else command(url, "plugin", "install", "path:" + directory, "--yes", "--json");
@@ -314,7 +327,7 @@ public final class BbSetup {
             Set<Path> keep = new HashSet<>();
             for (String used : List.of(expectedPluginRoot, replacedRoot)) if (!used.isBlank()) keep.add(Path.of(used));
             for (var instance : discover()) {
-                String used = text(request(instance.url(), "/api/v1/plugins/minecraft/http/v1/setup", null), "pluginRoot");
+                String used = text(request(instance.url(), setupPath(), null), "pluginRoot");
                 if (used.isBlank()) return; // An older plugin cannot say which release it uses.
                 keep.add(Path.of(used));
             }
@@ -341,7 +354,9 @@ public final class BbSetup {
         try (var files=Files.newDirectoryStream(directory,"*.json")) {
             for (var file:files) try {
                 var data=JsonParser.parseString(Files.readString(file)).getAsJsonObject();
-                String id=text(data,"instanceId"), url=text(data,"serverUrl");
+                String id=text(data,"instanceId"), url=text(data,"serverUrl"), plugin=text(data,"pluginId");
+                // Every Minecraft plugin instance in a BB advertises; older plugins were all `minecraft`.
+                if (!(plugin.isBlank() ? "minecraft" : plugin).equals(pluginId())) continue;
                 if (data.get("protocol").getAsInt()!=1 || data.get("expiresAt").getAsLong()<=System.currentTimeMillis() || !id.matches("[a-f0-9]{64}")) continue;
                 loopback(url);
                 String label=text(data,"label");

@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from game_client import tool_name, fixture_directory, GameClient, plugin_id
 import subprocess
 import time
 import urllib.error
@@ -11,20 +12,23 @@ import urllib.request
 from urllib.parse import urlparse
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--agent-id', required=True, help='An idle fixture in the guarded development world')
     args = parser.parse_args()
-    setup = json.loads((ROOT / 'run/config/too-many-agents-bb.json').read_text())
+    game = GameClient(GAME)
+    selected_instance = game.request('/v1/agents/' + args.agent_id)['bbInstanceId']
     addresses = set()
     for path in (Path.home() / '.too-many-agents/bb').glob('*.json'):
         try:
             record = json.loads(path.read_text())
             url = urlparse(record['serverUrl'])
-            if (record.get('instanceId') == setup['instanceId']
+            if (record.get('instanceId') == selected_instance
+                    and record.get('pluginId', 'minecraft') == plugin_id()
                     and record['protocol'] == 1 and record['expiresAt'] > time.time() * 1000
                     and url.scheme == 'http' and url.hostname in ('127.0.0.1', '::1')
                     and not (url.username or url.password or url.query or url.fragment)):
@@ -34,15 +38,11 @@ def main():
     if len(addresses) != 1:
         parser.error('The test game must have one reachable selected BB with its Minecraft plugin enabled')
     server_url = addresses.pop().rstrip('/')
-    descriptor = json.loads((ROOT / 'run/too-many-agents/connection.json').read_text())
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    descriptor = game.info
+    opener = game.opener
 
     def request(path, data=None):
-        message = urllib.request.Request(descriptor['url'] + path,
-            data=None if data is None else json.dumps(data).encode(),
-            headers={'Authorization': 'Bearer ' + descriptor['token'], 'Content-Type': 'application/json'})
-        with opener.open(message, timeout=120) as response:
-            return json.load(response)
+        return game.request(path, data)
 
     def wait(check, label):
         deadline = time.monotonic() + 100
@@ -63,7 +63,7 @@ def main():
 
     request('/v1/dev')
     world = request('/v1/agents/projects')['world']
-    folder = ROOT / 'run/saves/too-many-agents-development'
+    folder = GAME / 'saves/too-many-agents-development'
     assert world['directory'] == str(folder)
     path = '/v1/agents/' + args.agent_id
     agent = request(path)
@@ -72,7 +72,7 @@ def main():
     observation = request(path + '/tool', {'tool': 'minecraft_observe', 'arguments': {}})
     target = observation['body']['position'].copy()
     target['x'] += 50
-    request(path + '/message', {'text': 'Use one minecraft_run script to await bot.moveTo(new Vec3(' + ', '.join(str(target[k]) for k in 'xyz') +
+    request(path + '/message', {'text': 'Use one ' + tool_name('minecraft_run') + ' script to await bot.moveTo(new Vec3(' + ', '.join(str(target[k]) for k in 'xyz') +
         ')). Do not stop it yourself; this is an external BB stop check.'})
     def action():
         return request(path + '/tool', {'tool': 'minecraft_action_status', 'arguments': {}})
@@ -108,7 +108,7 @@ def main():
     print('PASS: wrong-thread, stale-world, expired and cancelled body creation produce no body', flush=True)
 
     # Emulate the exact disk state left if BB created the thread but its bind reply was lost.
-    with opener.open(server_url + '/api/v1/threads/' + thread + '/plugin-metadata?pluginId=minecraft', timeout=20) as response:
+    with opener.open(server_url + '/api/v1/threads/' + thread + '/plugin-metadata?pluginId=' + plugin_id(), timeout=20) as response:
         metadata = json.load(response)
     assert metadata['agentId'] == args.agent_id and metadata['worldId'] == world['id']
     threads_before = {row['id'] for row in bb('thread', 'list', '--project', agent['projectId'], '--include-hidden')}
@@ -116,7 +116,7 @@ def main():
     request('/v1/ui', {'action': 'dev_leave'})
     records = folder / 'too-many-agents/bb-bodies.json'
     saved = json.loads(records.read_text())
-    backup = ROOT / 'run/too-many-agents/bb-recovery-backup.json'
+    backup = GAME / 'too-many-agents/bb-recovery-backup.json'
     backup.write_text(json.dumps(saved, indent=2) + '\n')
     row = next(row for row in saved['agents'] if row['id'] == args.agent_id)
     assert row['threadId'] == thread

@@ -3,20 +3,22 @@
 import argparse
 import json
 from pathlib import Path
+from game_client import fixture_directory, GameClient
 import subprocess
 import sys
 import time
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--game-dir', default='run')
+parser.add_argument('--game-dir', default=str(GAME))
 parser.add_argument('--assets', action='store_true', help='Also test BB-backed images, Mermaid and cleanup; generate fixtures first')
 parser.add_argument('--thread-id', help='Existing BB thread whose workspace is this checkout (defaults to current bb thread)')
 args = parser.parse_args()
 
 
 def ui(action, **values):
-    result = subprocess.run([sys.executable, str(ROOT / 'tools/agents.py'), '--game-dir', args.game_dir,
+    result = subprocess.run([sys.executable, str(ROOT / 'tools/game'), '--game-dir', args.game_dir,
                              'ui', action, '--json', json.dumps(values)], cwd=ROOT, capture_output=True, text=True)
     if result.returncode:
         raise AssertionError(result.stderr or result.stdout)

@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Run a named acceptance check against one explicit development client."""
+import argparse
+import json
+import os
+from pathlib import Path
+import subprocess
+import sys
+import time
+from game_client import GameClient, game_directory
+
+ROOT = Path(__file__).resolve().parents[1]
+CHECKS = {
+    'transport': ('smoke.py', 'Local HTTP, authentication and world-session boundaries'),
+    'agents': ('bb-smoke.py', 'Real provider turns and physical tools; requires --model'),
+    'lifecycle': ('bb-lifecycle-smoke.py', 'Threads, bodies, plugin reload and persistence; requires --model'),
+    'boundaries': ('bb-boundary-smoke.py', 'Native UI and BB project/environment boundaries; requires --model'),
+    'recovery': ('bb-recovery-smoke.py', 'Interrupted work and lost acknowledgements; requires --agent-id'),
+    'screens': ('screens_acceptance.py', 'Native screen placement, browser controls and persistence'),
+    'screen-tools': ('screens_tools_acceptance.py', 'Screen tools and ownership; requires fixture agents/screens'),
+    'screen-capture': ('screens_capture_acceptance.py', 'Real browser frame capture'),
+    'stations': ('stations_acceptance.py', 'Station block acceptance; choose a phase'),
+    'station-ui': ('station_ui_acceptance.py', 'Station native UI'),
+    'station-screens': ('station_screens_acceptance.py', 'Station screen ownership'),
+    'station-scripting': ('station_scripting_acceptance.py', 'Station scripting access'),
+    'behaviors': ('behaviors_acceptance.py', 'Native body behaviors'),
+    'remote': ('remote-smoke.py', 'Remote terrain/POV/screens; requires fixture ids'),
+    'chat': ('rich_chat_acceptance.py', 'Native Markdown, composition and chat assets'),
+    'chat-assets': ('rich_chat_fixtures.py', 'Generate image fixtures using Pillow; no game needed'),
+    'script-runtime': ('script-runtime-check.mjs', 'Worker/WASM boundary; no game needed'),
+}
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, epilog='\n'.join(
+        f'{name:18} {description}' for name, (_, description) in CHECKS.items()),
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    target = parser.add_mutually_exclusive_group()
+    target.add_argument('--client', help='Managed development client ID')
+    target.add_argument('--game-dir', help='Explicit game directory')
+    parser.add_argument('check', choices=CHECKS)
+    parser.add_argument('arguments', nargs=argparse.REMAINDER, help='Arguments for the selected check')
+    args = parser.parse_args()
+    environment = dict(os.environ)
+    environment['PYTHONPATH'] = str(ROOT / 'tools') + os.pathsep + environment.get('PYTHONPATH', '')
+    file, _ = CHECKS[args.check]
+    path = ROOT / 'tools/checks' / file
+    arguments = args.arguments[1:] if args.arguments[:1] == ['--'] else args.arguments
+    game_dir = None
+    evidence = None
+    if args.check not in ('script-runtime', 'chat-assets'):
+        try:
+            game_dir = game_directory(args.client, args.game_dir)
+            game = GameClient(game_dir)
+            game.require_fixture()
+            state = game.request('/v1/state')
+            environment['TOO_MANY_AGENTS_GAME_DIR'] = str(game_dir)
+            if args.check == 'transport': arguments = [str(game_dir), *arguments]
+            evidence = {'check': args.check, 'gameDirectory': str(game_dir), 'pid': game.info.get('pid'),
+                        'build': state.get('development', {}).get('running'), 'startedAt': int(time.time() * 1000)}
+        except (OSError, ValueError, KeyError) as error:
+            parser.error(str(error))
+    command = ['node' if file.endswith('.mjs') else sys.executable, str(path), *arguments]
+    if args.check == 'chat-assets': command = ['uv', 'run', '--with', 'pillow', 'python', str(path), *arguments]
+    started = time.monotonic()
+    if evidence is None:
+        code = subprocess.call(command, cwd=ROOT, env=environment)
+    else:
+        folder = game_dir / 'too-many-agents/checks'
+        folder.mkdir(parents=True, exist_ok=True)
+        log = folder / f'{evidence["startedAt"]}-{args.check}.log'
+        evidence['log'] = str(log)
+        with log.open('w') as output:
+            process = subprocess.Popen(command, cwd=ROOT, env=environment, stdout=subprocess.PIPE,
+                                       stderr=subprocess.STDOUT, text=True)
+            for line in process.stdout:
+                output.write(line)
+                output.flush()
+                print(line, end='', flush=True)
+            code = process.wait()
+    if evidence is not None:
+        evidence.update(exitCode=code, elapsedSeconds=round(time.monotonic() - started, 2))
+        result = folder / f'{evidence["startedAt"]}-{args.check}.json'
+        result.write_text(json.dumps(evidence, indent=2) + '\n')
+        print(f'Result: {result}', flush=True)
+    return code
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

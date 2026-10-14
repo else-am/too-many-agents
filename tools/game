@@ -1,0 +1,6 @@
+#!/usr/bin/env python3
+"""Inspect a selected game, operate its native UI, and work with its agents."""
+from game_commands import main
+
+if __name__ == '__main__':
+    raise SystemExit(main())

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Create image acceptance fixtures: uv run --with pillow tools/rich_chat_fixtures.py."""
+"""Create image acceptance fixtures: tools/check chat-assets."""
 from pathlib import Path
 from PIL import Image, ImageDraw
 
-folder = Path(__file__).resolve().parents[1] / 'scratch/rich-chat'
+folder = Path(__file__).resolve().parents[2] / 'scratch/rich-chat'
 folder.mkdir(parents=True, exist_ok=True)
 image = Image.new('RGBA', (320, 160), (0, 0, 0, 0))
 draw = ImageDraw.Draw(image)

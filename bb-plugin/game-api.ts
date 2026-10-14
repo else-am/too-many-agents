@@ -4,7 +4,7 @@ import type { MinecraftProjects } from "./projects.js";
 import type { MinecraftWorlds } from "./minecraft.js";
 import type { MinecraftThreads } from "./threads.js";
 import { chatAssets } from "./chat-assets.js";
-import { MOD_VERSION } from "./discovery.js";
+import { MOD_VERSION, type Development } from "./discovery.js";
 import {
   ApiError,
   PROTOCOL,
@@ -28,6 +28,7 @@ export function registerGameApi(
   agents: MinecraftAgents,
   projects: MinecraftProjects,
   checkVersion: (data: ObjectValue) => void,
+  development: Development,
 ) {
   const chat = chatAssets(bb);
   async function dispatch(data: ObjectValue): Promise<unknown> {
@@ -41,6 +42,13 @@ export function registerGameApi(
     };
     const agent =
       typeof data.agentId === "string" ? await agents.get(live(), data.agentId) : undefined;
+    if (agent?.threadId) {
+      const ownership = await worlds.ownership(live(), agent);
+      if (ownership === "foreign")
+        throw new ApiError("thread_not_owned", "This body's conversation belongs to another Minecraft plugin instance. Close the game using it there, then reconnect.");
+      if (ownership === "missing" && op !== "agent.archive")
+        throw new ApiError("thread_missing", "This body's conversation no longer exists in BB.");
+    }
     const requireAgent = () => {
       if (!agent) throw new ApiError("agent_missing", "A Minecraft agent is required");
       return agent;
@@ -52,6 +60,7 @@ export function registerGameApi(
           protocol: PROTOCOL,
           pluginId: bb.pluginId,
           pluginVersion: MOD_VERSION,
+          development,
           runtimeVersion: (await bb.sdk.system.version()).currentVersion,
         };
       case "catalog":
@@ -122,7 +131,7 @@ export function registerGameApi(
             "Minecraft plugin protocol changed; rebuild and restart the mod.",
           );
         const worldId = uuid(data.worldId, "worldId");
-        const joined = worlds.attach({
+        const joined = await worlds.attach({
           worldId,
           connectionId: uuid(data.connectionId, "connectionId"),
           worldSessionId: uuid(data.worldSessionId, "worldSessionId"),
@@ -130,6 +139,8 @@ export function registerGameApi(
           callbackToken: string(data.callbackToken, "callbackToken"),
         });
         if (joined) {
+          // Conversations may have moved between plugin instances since this world was last open.
+          worlds.identities.clear();
           await projects.metadata(worlds.session(worldId));
           await threads.reconnect(worldId);
         }

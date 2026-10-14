@@ -8,7 +8,7 @@ ui, command, aim, click, wait_for = native.ui, native.command, native.aim, nativ
 
 
 def main():
-    fixture = native.ROOT / 'run/too-many-agents/capture-acceptance.html'
+    fixture = native.GAME / 'too-many-agents/capture-acceptance.html'
     fixture.parent.mkdir(parents=True, exist_ok=True)
     fixture.write_text('''<!doctype html><meta charset="utf-8"><style>
       body { margin:0; background:#182826; color:#f4e9cd; font:28px monospace; height:100vh; }

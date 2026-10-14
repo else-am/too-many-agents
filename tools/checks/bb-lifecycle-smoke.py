@@ -4,12 +4,14 @@ import argparse
 import json
 import os
 from pathlib import Path
+from game_client import tool_name, fixture_directory, GameClient, plugin_id
 import subprocess
 import time
 import urllib.request
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 
 
 def main():
@@ -17,16 +19,12 @@ def main():
     parser.add_argument('--model', required=True)
     parser.add_argument('--agent-id', help='Resume from an existing idle seed before creating any receiver')
     args = parser.parse_args()
-    descriptor = json.loads((ROOT / 'run/too-many-agents/connection.json').read_text())
-    assert descriptor['url'].startswith('http://127.0.0.1:')
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    game = GameClient(GAME)
+    descriptor = game.info
+    opener = game.opener
 
     def request(path, data=None):
-        message = urllib.request.Request(descriptor['url'] + path,
-            data=None if data is None else json.dumps(data).encode(),
-            headers={'Authorization': 'Bearer ' + descriptor['token'], 'Content-Type': 'application/json'})
-        with opener.open(message, timeout=120) as response:
-            return json.load(response)
+        return game.request(path, data)
 
     def wait(check, label, timeout=90):
         deadline = time.monotonic() + timeout
@@ -51,7 +49,7 @@ def main():
 
     request('/v1/dev')
     world = request('/v1/agents/projects')['world']
-    assert world['directory'] == str(ROOT / 'run/saves/too-many-agents-development') and not world.get('needsDecision')
+    assert world['directory'] == str(GAME / 'saves/too-many-agents-development') and not world.get('needsDecision')
     marker = 'mc-' + uuid.uuid4().hex[:12]
     root = request('/v1/agents/' + args.agent_id) if args.agent_id else request('/v1/agents/spawn', {'name': 'Lifecycle sender', 'providerId': 'codex',
         'model': args.model, 'reasoningLevel': 'low', 'mode': 'creative',
@@ -60,7 +58,7 @@ def main():
     get = lambda agent_id: request('/v1/agents/' + agent_id)
     root = wait(lambda: (a if (a := get(root_id)).get('threadId') and a.get('thread', {}).get('status') == 'idle' else None), 'Seed turn')
     print('Fixture sender:', root_id, root['threadId'], flush=True)
-    spawned = bb('minecraft', 'spawn', '--name', 'Independent receiver', '--body', 'minecraft:pig',
+    spawned = bb(plugin_id(), 'spawn', '--name', 'Independent receiver', '--body', 'minecraft:pig',
         '--provider', 'codex', '--model', args.model, '--reasoning-level', 'low',
         '--environment', root['thread']['environmentId'], '--prompt', 'Reply READY. Do not call tools.', actor=root['threadId'])
     receiver_id, receiver_thread = spawned['agentId'], spawned['threadId']
@@ -95,9 +93,16 @@ def main():
 
     # Archiving drops inventory; restoring the body must not duplicate those items.
     path = '/v1/agents/' + receiver_id
-    bb('thread', 'tell', receiver_thread, 'Use minecraft_run with bot.creative.setInventorySlot to create exactly 7 minecraft:diamond once in an empty slot, then reply INVENTORY_READY. Do not repeat an action after an unknown outcome.', '--mode', 'auto')
+    bb('thread', 'tell', receiver_thread, 'Use ' + tool_name('minecraft_run') + ' with bot.creative.setInventorySlot to create exactly 7 minecraft:diamond once in an empty slot, then reply INVENTORY_READY. Do not repeat an action after an unknown outcome.', '--mode', 'auto')
     wait(lambda: (inv if 'minecraft:diamond' in json.dumps(inv := inventory_contents()) else None), 'Inventory stack')
     wait(lambda: get(receiver_id).get('thread', {}).get('status') == 'idle', 'Inventory turn completion')
+    # Keep the dropped stack out of the player/sender's immediate pickup range.
+    state = request('/v1/state')
+    player = state['server']['player']['position']
+    request('/v1/command', {'session': state['session'],
+        'command': f"tp {receiver['body']['entityUuid']} {player['x'] + 12} {player['y']} {player['z']}"})
+    wait(lambda: any(e['uuid'] == receiver['body']['entityUuid'] and e['position']['x'] > player['x'] + 10
+        for e in request('/v1/state')['server']['entities']), 'Receiver moved out of pickup range')
     items_before = {e['uuid'] for e in request('/v1/state')['server']['entities'] if e['type'] == 'minecraft:item'}
     bb('thread', 'archive', receiver_thread)
     wait(lambda: get(receiver_id).get('conversationArchived', False) and not get(receiver_id).get('bodyLoaded', False), 'Archive suspension')
@@ -119,7 +124,7 @@ def main():
     print('PASS: archive drops inventory; unarchive preserves body UUID without duplicating items', flush=True)
 
     # A plugin reload must reconnect the same bodies without replaying chat.
-    bb('plugin', 'reload', 'minecraft')
+    bb('plugin', 'reload', plugin_id())
     wait(lambda: get(root_id).get('status') != 'disconnected', 'Plugin reconnect')
     time.sleep(2)
     assert sum(marker + '-queued' in row for row in request('/v1/state')['recentChat']) == 1
@@ -148,7 +153,7 @@ def main():
     print('PASS: BB deletion preserves the binding; disconnected agents archive and restore locally', flush=True)
     bb('thread', 'archive', root['threadId'])
     wait(lambda: not get(root_id)['bodyLoaded'], 'Sender archive')
-    result = ROOT / 'run/too-many-agents/bb-lifecycle-result.json'
+    result = GAME / 'too-many-agents/bb-lifecycle-result.json'
     result.write_text(json.dumps({'sender': root_id, 'threadId': root['threadId'], 'disconnectedReceiver': receiver_id, 'marker': marker}, indent=2) + '\n')
     print('PASS: BB lifecycle checks complete; archived sender retained in', result, flush=True)
 

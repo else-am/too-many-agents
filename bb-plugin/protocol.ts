@@ -42,6 +42,11 @@ export class ApiError extends Error {
     super(message);
   }
 }
+/** SDK HTTP errors keep a numeric status; message text is not proof of absence. */
+export function notFound(error: unknown): boolean {
+  return error instanceof Error && "status" in error && error.status === 404;
+}
+
 export const PROTOCOL = 3;
 export const MAX_BODY_BYTES = 1024 * 1024;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

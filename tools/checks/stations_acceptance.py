@@ -3,28 +3,20 @@
 import argparse
 import json
 from pathlib import Path
+from game_client import fixture_directory, GameClient
 import time
 import urllib.error
 import urllib.request
 import uuid
 
-ROOT = Path(__file__).resolve().parents[1]
-GAME = ROOT / 'run'
+ROOT = Path(__file__).resolve().parents[2]
+GAME = fixture_directory()
 MANIFEST = GAME / 'too-many-agents/stations-acceptance.json'
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
 
 
 class Game:
     def __init__(self):
-        self.connection = json.loads((GAME / 'too-many-agents/connection.json').read_text())
-        self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-        from urllib.parse import urlparse
-        url = urlparse(self.connection['url'])
-        assert url.scheme == 'http' and url.hostname == '127.0.0.1' and url.port
+        self.client = GameClient(GAME, timeout=30)
         self.request('/v1/dev')
         world = self.request('/v1/agents/projects')['world']
         assert world['directory'] == str(GAME / 'saves/too-many-agents-development')
@@ -32,13 +24,8 @@ class Game:
         self.session = self.request('/v1/state')['session']
 
     def request(self, path, data=None, error=False):
-        request = urllib.request.Request(self.connection['url'] + path,
-            data=None if data is None else json.dumps(data).encode(), headers={
-                'Authorization': 'Bearer ' + self.connection['token'],
-                'Content-Type': 'application/json'})
         try:
-            with self.opener.open(request, timeout=30) as response:
-                result = json.load(response)
+            result = self.client.request(path, data)
         except urllib.error.HTTPError as failure:
             result = json.load(failure)
             if error and failure.code == 400:

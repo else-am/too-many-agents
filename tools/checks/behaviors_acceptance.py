@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Observe ambient motion during real BB turns in the guarded development world."""
+from game_client import tool_name
 import json
 import math
 import time
@@ -73,10 +74,10 @@ def main():
     old = {r['id'] for r in transcript()}
     token = 'PHYSICAL_HOLD_' + uuid.uuid4().hex
     game.request(path + '/message', {'delivery': 'send', 'text':
-        'First call minecraft_run exactly once with `return {position: bot.entity.position}`. '
+        'First call ' + tool_name('minecraft_run') + ' exactly once with `return {position: bot.entity.position}`. '
         'After it succeeds, use your shell tool to run `sleep 20`. Then reply exactly ' + token +
         '. No other tools, retries or file changes.'})
-    wait(lambda: any(r['id'] not in old and 'minecraft_run' in r.get('toolName', '')
+    wait(lambda: any(r['id'] not in old and tool_name('minecraft_run') in r.get('toolName', '')
                     and r.get('status') == 'completed' for r in transcript()))
     assert game.request(path)['activity'] == 'working'
     assert behavior()['held'], behavior()

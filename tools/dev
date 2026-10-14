@@ -1,40 +1,15 @@
 #!/usr/bin/env python3
-"""Build and launch the personal or isolated test Minecraft client."""
-import argparse
-import fcntl
+"""Named development clients of this checkout; see tools/launcher.py.
+
+tools/dev            build and start your personal client (worlds in run/play)
+tools/dev --test     the guarded test client (run/)
+tools/dev start|list|status|reload|stop|dispose [ID] [--json]
+"""
 from pathlib import Path
-import subprocess
 import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--test', action='store_true', help='Open the guarded test world in run/; default: your worlds in run/play/')
-    args = parser.parse_args()
-    folder = ROOT / ('run' if args.test else 'run/play')
-    folder.mkdir(parents=True, exist_ok=True)
-    with (folder / 'dev.lock').open('a') as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            raise RuntimeError('This development profile is already running.') from None
-        print('[dev] Building and launching Minecraft. Close Minecraft and rerun this command after code changes.', flush=True)
-        print('[dev] Your saves: ' + str(folder / 'saves'), flush=True)
-        command = [str(ROOT / 'tools/build'), 'runClient', '-PdevWorld' if args.test else '-PpersonalDev', '--console=plain']
-        # Keep terminal interrupts from killing a game before the user saves it.
-        game = subprocess.Popen(command, cwd=ROOT, start_new_session=True)
-        while True:
-            try:
-                return game.wait()
-            except KeyboardInterrupt:
-                print('[dev] Close Minecraft normally to save your world and stop this session.', flush=True)
-
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from launcher import run  # noqa: E402
 
 if __name__ == '__main__':
-    try:
-        sys.exit(main())
-    except (RuntimeError, OSError) as error:
-        print('[dev] ' + str(error), flush=True)
-        sys.exit(1)
+    run()
