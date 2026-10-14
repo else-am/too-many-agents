@@ -61,8 +61,8 @@ final class Chromium {
     private static final Map<CefBrowser, ScreenView> views = new ConcurrentHashMap<>();
     private static final AtomicLong deniedNavigations = new AtomicLong(), deniedRequests = new AtomicLong();
 
-    // Runs in every frame once it loads. It reports whether the focused element takes text, so clicking into a field
-    // starts typing mode; focus inside an iframe never reaches the top document. New windows open in the same screen:
+    // Reports focused fields and trees, so clicking one routes keyboard input to the page.
+    // Focus inside an iframe never reaches the top document. New windows open in the same screen:
     // jcef cancels popups from windowless browsers before we could redirect them.
     private static final String PAGE_SCRIPT = """
         (() => {
@@ -76,12 +76,12 @@ final class Chromium {
             if (!named) link.target = '_top';
           }, true);
           window.open = url => { if (url) top.location.href = new URL(url, location.href).href; return top; };
-          const takesText = e => !!e && (e.isContentEditable || e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' &&
+          const takesKeys = e => !!e && (e.matches('[role="tree"], [role="treeitem"]') || e.isContentEditable || e.tagName === 'TEXTAREA' || (e.tagName === 'INPUT' &&
             !/^(button|checkbox|radio|submit|reset|file|image|color|range|hidden)$/i.test(e.type)));
           const report = () => {
             let e = document.activeElement;
             while (e && e.shadowRoot && e.shadowRoot.activeElement) e = e.shadowRoot.activeElement;
-            window.cefQuery({request: 'screen-editing:' + (document.hasFocus() && takesText(e) ? 1 : 0)});
+            window.cefQuery({request: 'screen-editing:' + (document.hasFocus() && takesKeys(e) ? 1 : 0)});
           };
           document.addEventListener('focusin', report, true);
           document.addEventListener('focusout', () => setTimeout(report, 0), true);

@@ -2,13 +2,10 @@ package toomanyagents.screens;
 
 import java.awt.Cursor;
 import java.awt.event.InputEvent;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.HashMap;
-import java.util.Map;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.neoforged.neoforge.client.settings.KeyConflictContext;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -58,8 +55,7 @@ public final class ScreenInput {
     private static double cursorX, cursorY;
     private static String lockedFrame;
     private static final Set<Integer> capturedKeys = new HashSet<>();
-    private record HeldKey(int code, char character) {}
-    private static final Map<Integer, HeldKey> heldKeys = new HashMap<>();
+    private static final Set<Integer> heldKeys = new HashSet<>();
     private static final Set<Integer> consumedKeys = new HashSet<>();
 
     private static ScreenView typing;
@@ -124,7 +120,7 @@ public final class ScreenInput {
         return menu == view && aim != null && aim.view == view ? view.menuAction(aim.x, aim.y) : null;
     }
 
-    /** The page reports whether its focused element takes text. Only a click of yours starts typing. */
+    /** The page reports a focused field or tree. Only a click of yours starts keyboard input. */
     static void editingChanged(ScreenView view, boolean editable) {
         if (captured != null) return;
         if (editable && menu == null && clicked == view && System.nanoTime() - lastClickAt < FOCUS_AFTER_CLICK_NANOS && (typing == null || typing == view)) {
@@ -520,46 +516,8 @@ public final class ScreenInput {
             return true;
         }
         if (pageShortcut(typing, key, action, mods)) return true;
-        int code;
-        char character = KeyEvent.CHAR_UNDEFINED;
-        switch (key) {
-            case GLFW.GLFW_KEY_SPACE -> { code = KeyEvent.VK_SPACE; character = ' '; }
-            case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> code = KeyEvent.VK_SHIFT;
-            case GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL -> code = KeyEvent.VK_CONTROL;
-            case GLFW.GLFW_KEY_LEFT_ALT, GLFW.GLFW_KEY_RIGHT_ALT -> code = KeyEvent.VK_ALT;
-            case GLFW.GLFW_KEY_LEFT_SUPER, GLFW.GLFW_KEY_RIGHT_SUPER -> code = KeyEvent.VK_META;
-            case GLFW.GLFW_KEY_BACKSPACE -> { code = KeyEvent.VK_BACK_SPACE; character = '\b'; }
-            case GLFW.GLFW_KEY_DELETE -> { code = KeyEvent.VK_DELETE; character = 127; }
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { code = KeyEvent.VK_ENTER; character = '\r'; }
-            case GLFW.GLFW_KEY_TAB -> { code = KeyEvent.VK_TAB; character = '\t'; }
-            case GLFW.GLFW_KEY_LEFT -> code = KeyEvent.VK_LEFT;
-            case GLFW.GLFW_KEY_RIGHT -> code = KeyEvent.VK_RIGHT;
-            case GLFW.GLFW_KEY_UP -> code = KeyEvent.VK_UP;
-            case GLFW.GLFW_KEY_DOWN -> code = KeyEvent.VK_DOWN;
-            case GLFW.GLFW_KEY_HOME -> code = KeyEvent.VK_HOME;
-            case GLFW.GLFW_KEY_END -> code = KeyEvent.VK_END;
-            case GLFW.GLFW_KEY_PAGE_UP -> code = KeyEvent.VK_PAGE_UP;
-            case GLFW.GLFW_KEY_PAGE_DOWN -> code = KeyEvent.VK_PAGE_DOWN;
-            default -> {
-                // Printable keys are named by the keyboard layout.
-                if (key >= GLFW.GLFW_KEY_F1 && key <= GLFW.GLFW_KEY_F12) {
-                    code = KeyEvent.VK_F1 + key - GLFW.GLFW_KEY_F1;
-                    break;
-                }
-                String name = GLFW.glfwGetKeyName(key, scancode);
-                if (name == null || name.length() != 1) return true;
-                character = name.charAt(0);
-                code = KeyEvent.getExtendedKeyCodeForChar(character);
-            }
-        }
-        int awtMods = awtModifiers(mods);
-        if (action == GLFW.GLFW_RELEASE) heldKeys.remove(key);
-        else heldKeys.put(key, new HeldKey(code, character));
-        browser.key(action == GLFW.GLFW_RELEASE ? KeyEvent.KEY_RELEASED : KeyEvent.KEY_PRESSED, code, character, awtMods);
-        // GLFW sends no character for Enter, so the page would never see it as typed.
-        if (key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER) {
-            if (action != GLFW.GLFW_RELEASE) browser.key(KeyEvent.KEY_TYPED, code, character, awtMods);
-        }
+        if (action == GLFW.GLFW_RELEASE) heldKeys.remove(key); else heldKeys.add(key);
+        ScreenKeys.send(typing, key, scancode, action, mods);
         return true;
     }
 
@@ -580,7 +538,7 @@ public final class ScreenInput {
         }
         if (typing.browser == null) return false;
         typing.playerInput();
-        for (char c : Character.toChars(codePoint)) typing.browser.key(KeyEvent.KEY_TYPED, KeyEvent.VK_UNDEFINED, c, awtModifiers(mods));
+        ScreenKeys.text(typing, new String(Character.toChars(codePoint)));
         return true;
     }
 
@@ -596,9 +554,9 @@ public final class ScreenInput {
 
     private static void stopTyping(boolean blurPage) {
         if (typing != null && typing.browser != null) {
-            for (var key : heldKeys.values()) typing.browser.key(KeyEvent.KEY_RELEASED, key.code, key.character, 0);
+            for (int key : heldKeys) ScreenKeys.send(typing, key, 0, GLFW.GLFW_RELEASE, 0);
         }
-        consumedKeys.addAll(heldKeys.keySet());
+        consumedKeys.addAll(heldKeys);
         heldKeys.clear();
         if (blurPage && typing != null && typing.browser != null)
             typing.browser.executeJavaScript("document.activeElement && document.activeElement.blur()", "", 0);
