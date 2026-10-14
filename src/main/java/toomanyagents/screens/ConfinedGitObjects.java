@@ -93,7 +93,8 @@ final class ConfinedGitObjects extends DfsObjDatabase {
         for (var entry : listing.entries()) if (entry.kind() == ConfinedFiles.Kind.FILE) names.add(entry.name());
         var result = new ArrayList<DfsPackDescription>();
         for (String name : names) {
-            if (!name.matches("pack-[0-9a-f]{40}\\.pack") || !names.contains(name.replace(".pack", ".idx"))) continue;
+            // Git maintenance writes loose-object packs as loose-<hash>.pack beside ordinary pack-<hash>.pack.
+            if (!name.matches("(pack|loose)-[0-9a-f]{40}\\.pack") || !names.contains(name.replace(".pack", ".idx"))) continue;
             if (result.size() >= 64) throw new Limit("Too many Git packs");
             String stem = name.substring(0, name.length() - 5);
             var pack = new DfsPackDescription(getRepository().getDescription(), stem, PackSource.RECEIVE);
@@ -122,7 +123,7 @@ final class ConfinedGitObjects extends DfsObjDatabase {
     @Override protected ReadableChannel openFile(DfsPackDescription pack, PackExt extension) throws IOException {
         if (extension != PackExt.PACK && extension != PackExt.INDEX) throw new IOException("Unsupported pack extension");
         String name = pack.getFileName(extension);
-        if (!name.matches("pack-[0-9a-f]{40}\\.(pack|idx)")) throw new IOException("Invalid pack name");
+        if (!name.matches("(pack|loose)-[0-9a-f]{40}\\.(pack|idx)")) throw new IOException("Invalid pack name");
         if (extension == PackExt.INDEX) {
             byte[] bytes = read(git, "objects/pack/" + name, MAX_INDEX_BYTES, budget);
             // Parse exactly the bytes validated here; a second pathname open could replace the header.
