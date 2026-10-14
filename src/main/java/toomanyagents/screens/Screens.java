@@ -44,7 +44,8 @@ public final class Screens {
     private static final long EXPIRY_NANOS = 2_000_000_000L;
 
     private static final Map<UUID, ScreenView> views = new HashMap<>();
-    private static ClientLevel viewsLevel;
+    private static MinecraftServer viewsServer;
+    private static final int MAX_BROWSERS = 8;
 
     private Screens() {}
 
@@ -67,8 +68,8 @@ public final class Screens {
 
     /** The view drawn for a screen, created the first time it is seen. */
     static ScreenView view(ScreenEntity screen) {
-        var level = Minecraft.getInstance().level;
-        if (level != viewsLevel) closeAll(level);
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != viewsServer) closeAll(server);
         var view = views.get(screen.getUUID());
         if (view != null && !view.matches(screen)) {
             ScreenInput.forget(view);
@@ -81,13 +82,41 @@ public final class Screens {
         }
         // The same screen comes back as a new entity when it is tracked again.
         view.screen = screen;
+        view.entry = ScreenIndex.visibleRecords(server).getOrDefault(screen.getUUID(), entry(screen));
         boolean trusted = Trust.allowedHere();
-        view.sync(screen.record().url(), trusted);
+        view.sync(view.entry.screen().url(), trusted);
         // An idle screen needs no browser, so it never starts Chromium.
         if (trusted && !view.url.isBlank()) Chromium.start();
         view.lastSeen = System.nanoTime();
         return view;
     }
+
+    static ScreenIndex.Entry entry(ScreenEntity screen) {
+        return new ScreenIndex.Entry(screen.getUUID(), screen.record(), screen.level().dimension().location().toString(),
+            screen.getPos(), screen.facing().getName(), screen.up().getName(), screen.width(), screen.height());
+    }
+
+    /** Tool access does not need a tracked client entity or Minecraft terrain graphics. */
+    static ScreenView view(ScreenIndex.Entry entry) {
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        if (server != viewsServer) closeAll(server);
+        var view = views.get(entry.entity());
+        if (view != null && !view.matches(entry)) {
+            ScreenInput.forget(view);
+            view.close();
+            views.remove(entry.entity());
+            view = null;
+        }
+        if ((view == null || view.browser == null) && !canOpen())
+            throw new ScreenTools.ScreenError("resource_limit", "All screen browsers are in use. Release a screen before opening another.");
+        if (view == null) { view = new ScreenView(entry); views.put(entry.entity(), view); }
+        view.entry = entry;
+        if (!entry.screen().url().isBlank()) Chromium.start();
+        view.sync(entry.screen().url(), Trust.allowedHere());
+        return view;
+    }
+
+    static boolean canOpen() { return views.values().stream().filter(view -> view.browser != null).count() < MAX_BROWSERS; }
 
     /** Stops Chromium on the render thread as the game closes. */
     public static void shutdown() {
@@ -110,18 +139,13 @@ public final class Screens {
         var mc = Minecraft.getInstance();
         MinecraftServer server = mc.getSingleplayerServer();
         if (server == null || mc.level == null) return;
-        var dimension = mc.level.dimension();
-        UUID id = view.screen.getUUID();
+        UUID id = view.entry.entity();
         UUID playerId = mc.player == null ? null : mc.player.getUUID();
         long deadline = System.nanoTime() + EXPIRY_NANOS;
         server.execute(() -> {
             if (System.nanoTime() > deadline || !server.isRunning()) return;
-            var level = server.getLevel(dimension);
-            if (level == null || !(level.getEntity(id) instanceof ScreenEntity screen)) return;
-            var record = screen.record();
-            var updated = change.apply(record);
             try {
-                if (!updated.equals(record)) screen.setRecord(updated);
+                ScreenIndex.get(server).edit(server, id.toString(), change);
             } catch (ScreenTools.ScreenError error) {
                 var player = playerId == null ? null : server.getPlayerList().getPlayer(playerId);
                 if (player != null) player.displayClientMessage(net.minecraft.network.chat.Component.literal(error.getMessage()), false);
@@ -138,7 +162,7 @@ public final class Screens {
         MinecraftServer server = mc.getSingleplayerServer();
         if (server == null || mc.level == null || mc.player == null) return;
         var dimension = mc.level.dimension();
-        UUID id = view.screen.getUUID(), playerId = mc.player.getUUID();
+        UUID id = view.entry.entity(), playerId = mc.player.getUUID();
         long deadline = System.nanoTime() + EXPIRY_NANOS;
         server.execute(() -> {
             if (System.nanoTime() > deadline || !server.isRunning()) return;
@@ -154,33 +178,38 @@ public final class Screens {
 
     private static void tick() {
         var mc = Minecraft.getInstance();
-        if (mc.level != viewsLevel) closeAll(mc.level);
+        var server = mc.getSingleplayerServer();
+        if (server != viewsServer) closeAll(server);
         if (mc.level == null || mc.player == null) return;
         var camera = mc.gameRenderer.getMainCamera().getPosition();
         double keep = (mc.options.getEffectiveRenderDistance() + 1) * 16;
         long now = System.nanoTime();
         for (var iterator = views.values().iterator(); iterator.hasNext(); ) {
             var view = iterator.next();
+            var record = ScreenIndex.visibleRecords(server).get(view.entry.entity());
             double distance = view.center().distanceTo(camera);
-            boolean stillThere = !view.screen.isRemoved() && view.matches(view.screen);
-            if (!stillThere || distance > keep) {
+            boolean tracked = view.screen != null && !view.screen.isRemoved() && view.screen.level() == mc.level;
+            boolean held = ScreenIndex.awake(server, view.entry.entity());
+            if (record == null || !view.matches(record) || (!held && (!tracked || distance > keep))) {
                 ScreenInput.forget(view);
                 view.close();
                 iterator.remove();
                 continue;
             }
+            if (!tracked && view.screen != null) { ScreenInput.forget(view); view.screen = null; }
+            view.entry = record;
             // Pages change on the server too; follow them even while the screen isn't drawn.
-            view.sync(view.screen.record().url(), Trust.allowedHere());
-            view.setLive(distance <= LIVE_DISTANCE && now - view.lastSeen < 500_000_000L);
+            view.sync(record.screen().url(), Trust.allowedHere());
+            view.setLive(tracked && distance <= LIVE_DISTANCE && now - view.lastSeen < 500_000_000L);
         }
     }
 
-    private static void closeAll(ClientLevel level) {
+    private static void closeAll(MinecraftServer server) {
         views.values().forEach(view -> {
             ScreenInput.forget(view);
             view.close();
         });
         views.clear();
-        viewsLevel = level;
+        viewsServer = server;
     }
 }

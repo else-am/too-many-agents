@@ -116,7 +116,11 @@ watch and can take over in-game.
   picking up and replacing a screen creates a new identity. `choose_screen` lists the candidates.
 - `screen_open` shows a URL or file; `screen_cdp` drives the page (usually
   `Runtime.evaluate`); `screen_screenshot` shows you what it looks like;
-  `screen_close` makes it idle.
+  `screen_close` turns it off and clears its URL. Screens work outside the player's
+  loaded area. Listing never wakes them; using one wakes its saved URL and keeps
+  the page alive through your active task and a short idle grace period. After
+  sleep, the URL survives but in-memory page state does not. Browser capacity is
+  bounded; `resource_limit` means release a screen or wait for one to sleep.
 - A `leased` screen is in use by another thread for a few seconds. Wait and
   retry, or use another screen.
 - Nothing is retried automatically. After `timeout` the outcome is unknown:

@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.nio.file.Path;
 import java.util.List;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.options.controls.KeyBindsScreen;
@@ -53,6 +54,21 @@ public final class TooManyAgentsSettingsScreen extends SettingsFormScreen {
         choice("Agent screen scale", String.valueOf(Math.min(settings.screenScale(), ScreenScale.max())), scales,
             v -> { settings.setScreenScale(Integer.parseInt(v)); rebuildForm(); }, true)
             .setTooltip(Tooltip.create(Component.literal("GUI scale for the agent sidebar, chat and settings. Agent inventories use the game's scale.")));
+        section("World agents");
+        var distance = new AbstractSliderButton(controlX, 0, controlWidth, 20, Component.empty(),
+                (settings.agentWorkingDistance() / 16.0 - 1) / 5) {
+            { updateMessage(); }
+            private int chunks() { return 1 + (int) Math.round(value * 5); }
+            @Override protected void updateMessage() {
+                setMessage(Component.literal(chunks() + (chunks() == 1 ? " chunk" : " chunks")));
+            }
+            @Override protected void applyValue() {
+                int blocks = chunks() * 16;
+                if (blocks != settings.agentWorkingDistance()) settings.setAgentWorkingDistance(blocks);
+            }
+        };
+        place(distance, row("Render distance"))
+            .setTooltip(Tooltip.create(Component.literal("How far world agents can see and keep active while working. Higher values use more resources.")));
         section("More");
         action("Providers", "Agent providers…", () -> minecraft.setScreen(new ProviderSettingsScreen(back(), access)), true);
         action("Key binds", "Minecraft key binds…", () -> minecraft.setScreen(new KeyBindsScreen(back(), minecraft.options)), true);

@@ -15,6 +15,7 @@ public final class TooManyAgentsClientSettings {
     private final Path path = FMLPaths.CONFIGDIR.get().resolve("too-many-agents-client.json");
     private boolean notificationSound;
     private volatile boolean showAgentCommunication = true;
+    private volatile int agentWorkingDistance = 48;
     // Agent screen GUI scale; 0 follows the game.
     private int screenScale;
     private boolean sidebarCollapsed;
@@ -33,12 +34,15 @@ public final class TooManyAgentsClientSettings {
             if (json.has("showAgentCommunication")) showAgentCommunication = json.get("showAgentCommunication").getAsBoolean();
             if (json.has("screenScale")) screenScale = Math.max(0, json.get("screenScale").getAsInt());
             if (json.has("sidebarCollapsed")) sidebarCollapsed = json.get("sidebarCollapsed").getAsBoolean();
+            if (json.has("agentWorkingDistance")) agentWorkingDistance = Math.clamp(json.get("agentWorkingDistance").getAsInt(), 16, 96);
         } catch (Exception failure) {
             error = "Could not read display settings. Changes will replace the unreadable file.";
         }
     }
 
     public boolean notificationSound() { return notificationSound; }
+    public int agentWorkingDistance() { return agentWorkingDistance; }
+    public void setAgentWorkingDistance(int blocks) { agentWorkingDistance = Math.clamp(blocks, 16, 96); save(); }
     public boolean showAgentCommunication() { return showAgentCommunication; }
     public void setShowAgentCommunication(boolean enabled) { showAgentCommunication = enabled; save(); }
     public int screenScale() { return screenScale; }
@@ -51,6 +55,7 @@ public final class TooManyAgentsClientSettings {
     public JsonObject snapshot() {
         var result = new JsonObject();
         result.addProperty("notificationSound", notificationSound);
+        result.addProperty("agentWorkingDistance", agentWorkingDistance);
         result.addProperty("showAgentCommunication", showAgentCommunication);
         result.addProperty("screenScale", screenScale);
         result.addProperty("sidebarCollapsed", sidebarCollapsed);
@@ -63,6 +68,7 @@ public final class TooManyAgentsClientSettings {
             Files.createDirectories(path.getParent());
             var json = new JsonObject();
             json.addProperty("notificationSound", notificationSound);
+            json.addProperty("agentWorkingDistance", agentWorkingDistance);
             json.addProperty("showAgentCommunication", showAgentCommunication);
             json.addProperty("screenScale", screenScale);
             json.addProperty("sidebarCollapsed", sidebarCollapsed);

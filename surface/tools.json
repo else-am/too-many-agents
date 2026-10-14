@@ -68,7 +68,7 @@
     "name": "minecraft_blocks",
     "minecraft": true,
     "agent": false,
-    "description": "Inspect a loaded inclusive block box, at most 4096 blocks.",
+    "description": "Inspect an inclusive block box, at most 4096 blocks. Prepares unloaded terrain within resource limits.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -264,7 +264,7 @@
   },
   {
     "name": "screen_list",
-    "description": "List the screens you can use, `limit` at a time (`truncated` counts the rest; raise `limit` if you don't find what you need). Your station's screens come first, marked `yours`. Screens linked to any other station, occupied or free, aren't listed and can't be used; a free station's screens wait for an agent spawned there. Shared screens follow, nearest you or the user first, with screens in other dimensions last. `distance` is how far each screen is from the user and from you, useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. `openedByYou` marks pages you opened, including in earlier turns. Each row has a stable UUID `id` and a unique readable `name`. Names can change; keep the UUID for future calls. Pickup ends that identity. A `lease` identifies the thread currently controlling the screen.",
+    "description": "List the screens you can use, `limit` at a time (`truncated` counts the rest; raise `limit` if you don't find what you need). Your station's screens come first, marked `yours`. Screens linked to any other station, occupied or free, aren't listed and can't be used; a free station's screens wait for an agent spawned there. Shared screens follow, nearest you or the user first, with screens in other dimensions last. `distance` is how far each screen is from the user and from you, useful for telling screens apart, e.g. when the user says 'over here' or 'by you'. `openedByYou` marks pages you opened, including in earlier turns. Each row has a stable UUID `id` and a unique readable `name`. Names can change; keep the UUID for future calls. Pickup ends that identity. A `lease` identifies the thread currently controlling the screen. Listing does not wake screens; `awake` reports whether a browser is running.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -316,7 +316,7 @@
   },
   {
     "name": "screen_cdp",
-    "description": "A plain Chrome DevTools Protocol passthrough to a screen's page. To run JS: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }`. Returns the method's result plus the current `{ url, title }`. One call, one result; events aren't streamed. Results are capped at about 64 KB (use `screen_screenshot` for images). Times out after about 30s. Fails with `unavailable` on an idle screen.",
+    "description": "A plain Chrome DevTools Protocol passthrough to a screen's page. To run JS: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }`. Returns the method's result plus the current `{ url, title }`. One call, one result; events aren't streamed. Results are capped at about 64 KB (use `screen_screenshot` for images). Times out after about 30s. Wakes a sleeping screen at its saved URL; a screen with no URL is unavailable.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -341,7 +341,7 @@
   },
   {
     "name": "screen_screenshot",
-    "description": "Capture the frame already painted for a screen, at its viewport size. Saves the PNG and returns `{ path, url, title }`; open the path with your image tool. Doesn't need the lease. Fails with `unavailable` on an idle screen.",
+    "description": "Wake a screen if needed and capture a fresh frame at its viewport size. Saves the PNG and returns `{ path, url, title }`; open the path with your image tool. Doesn't need the lease. Wakes a sleeping screen at its saved URL; a screen with no URL is unavailable.",
     "inputSchema": {
       "type": "object",
       "properties": {

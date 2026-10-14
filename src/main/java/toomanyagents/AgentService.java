@@ -27,6 +27,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private final Set<String> cancelled = new HashSet<>();
     /** Requests that are screen calls, whose cancellation must not stop the body's physical work. */
     private final Set<String> screenScopes = new HashSet<>();
+    private final Set<String> localScreenScopes = new HashSet<>();
 
     private JsonArray projectRows = new JsonArray();
     private Path records;
@@ -276,7 +277,10 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(!currentSession(loadedSession)) return result;
         for(var agent:agents.values()) if(!agent.removed && !agent.archived) {
             String activity=text(snapshot(agent.id),"activity");
-            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity,minecraftAccess(agent),finishedAt(agent)));
+            boolean active = connected && ownsConnection(agent) && (flag(agent.remote,"hasPendingInteraction")
+                || Set.of("active","pending","starting","stopping").contains(text(agent.remote,"status")));
+            result.put(agent.id,new GameAccess.AgentState(agent.projectId,activity,minecraftAccess(agent),finishedAt(agent),
+                agent.body,agent.threadId,active));
         }
         return result;
     }
@@ -550,6 +554,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                 var requestId=UUID.randomUUID().toString();
                 var scope=game.newToolScope(loadedSession);
                 scopes.put(requestId,scope); scopeAgents.put(requestId,agent.id); screenScopes.add(requestId);
+                localScreenScopes.add(requestId);
                 return game.screen(scope,screenCaller(agent),tool,arguments,Long.MAX_VALUE).whenComplete((done,failure) -> screenFinished(requestId,scope));
             }
             String session=loadedSession;
@@ -570,6 +575,7 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
     private synchronized void screenFinished(String requestId,GameAccess.ToolScope scope) {
         if(scopes.remove(requestId)!=null) scope.close("tool_finished");
         scopeAgents.remove(requestId); screenScopes.remove(requestId);
+        localScreenScopes.remove(requestId);
     }
 
     /** Who is calling a screen tool. Screens need no body; one that is present gives distances from it. */
@@ -749,13 +755,17 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         return object("content",content);
     }
     private synchronized void closeScopes(String agentId,String reason) {
-        var keys=scopes.keySet().stream().filter(key -> agentId==null || agentId.equals(scopeAgents.get(key))).toList();
-        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); scopeScripts.remove(key); screenScopes.remove(key); }
+        // Local diagnostics are independent of BB turn activity, like direct world-tool checks.
+        var keys=scopes.keySet().stream().filter(key -> agentId==null || agentId.equals(scopeAgents.get(key)))
+            .filter(key -> !reason.equals("thread_not_active") || !localScreenScopes.contains(key)).toList();
+        for(var key:keys) { scopes.remove(key).close(reason); scopeAgents.remove(key); scopeScripts.remove(key); screenScopes.remove(key); localScreenScopes.remove(key); }
         for(var agent:agents.values()) if(agentId==null || agentId.equals(agent.id)) game.requestActionStop(agent.body,loadedSession);
         // A thread that stops, is archived or loses its connection gives up its screens at once.
         var holder=agentId==null?null:agents.get(agentId);
-        if(agentId==null) game.releaseScreenLeases(null,loadedSession);
-        else if(holder!=null && !holder.threadId.isBlank()) game.releaseScreenLeases(holder.threadId,loadedSession);
+        if (!reason.equals("thread_not_active")) {
+            if(agentId==null) game.releaseScreenLeases(null,loadedSession);
+            else if(holder!=null && !holder.threadId.isBlank()) game.releaseScreenLeases(holder.threadId,loadedSession);
+        }
     }
     synchronized void disconnectBb() {
         connectionId=UUID.randomUUID().toString();

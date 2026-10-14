@@ -66,7 +66,7 @@ public final class PovCapture {
         final String session;
         final Settings settings;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(4);
+        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);
         ClientLevel level;
         boolean encoding;
         Request(UUID body, String session, Settings settings) { this.body = body; this.session = session; this.settings = settings; }
@@ -86,14 +86,16 @@ public final class PovCapture {
         if (!pending.compareAndSet(null, request)) {
             return CompletableFuture.failedFuture(new IllegalStateException("An NPC image is already pending."));
         }
-        request.result.orTimeout(5, TimeUnit.SECONDS).whenComplete((result, failure) -> pending.compareAndSet(request, null));
-        Minecraft.getInstance().execute(() -> {
-            if (request.result.isDone()) return;
-            try {
+        request.result.orTimeout(31, TimeUnit.SECONDS).whenComplete((result, failure) -> pending.compareAndSet(request, null));
+        RemoteTerrain.prepare(bodyUuid, () -> !request.result.isDone() && expectedWorldSession.equals(worldSession.get()))
+            .whenComplete((ready, failure) -> Minecraft.getInstance().execute(() -> {
+                if (request.result.isDone()) return;
+                if (failure != null) { request.result.completeExceptionally(failure); return; }
+                try {
                 request.level = Minecraft.getInstance().level;
                 body(request);
-            } catch (Exception failure) { request.result.completeExceptionally(failure); }
-        });
+                } catch (Exception unavailable) { request.result.completeExceptionally(unavailable); }
+            }));
         return request.result;
     }
 
@@ -106,6 +108,7 @@ public final class PovCapture {
             throw new IllegalStateException("An active local world is required for an NPC image.");
         }
         Entity body = request.level.getEntities().get(request.body);
+        if (body == null) body = RemoteTerrain.entity(request.body);
         if (body == null || body.isRemoved() || !body.isAlive()) {
             throw new IllegalStateException("The NPC body is not loaded in the player's current dimension.");
         }
@@ -113,6 +116,7 @@ public final class PovCapture {
     }
 
     private void frame(RenderFrameEvent.Pre event) {
+        RemoteTerrain.tick();
         Request request = pending.get();
         if (request == null || request.result.isDone() || request.encoding || request.level == null) return;
         try {
@@ -134,6 +138,7 @@ public final class PovCapture {
             frustum.prepare(eye.x, eye.y, eye.z);
             List<SectionRenderDispatcher.RenderSection> sections = sections(renderer, camera, frustum);
             if (sections == null) return;
+            RemoteTerrain.sortTransparency(sections, eye);
             NativeImage image = render(client, camera, projection, view, frustum, sections, request.settings);
             request.encoding = true;
             var metadata = new JsonObject();
@@ -169,10 +174,11 @@ public final class PovCapture {
             if (client.level.isOutsideBuildHeight(origin)) continue;
             var section = renderer.viewArea.getRenderSectionAt(origin);
             var box = new net.minecraft.world.phys.AABB(origin.getX(), origin.getY(), origin.getZ(), origin.getX() + 16, origin.getY() + 16, origin.getZ() + 16);
-            if (!frustum.isVisible(box)) continue;
-            if (section == null || !section.getOrigin().equals(origin) || !client.level.hasChunkAt(origin)) {
-                throw new IllegalStateException("Terrain around the NPC is outside the client's loaded render area. Move closer to the NPC.");
-            }
+            if (!frustum.isVisible(box) || box.distanceToSqr(camera.getPosition()) > RANGE * RANGE) continue;
+            if (client.level.getChunkSource().getChunk(origin.getX() >> 4, origin.getZ() >> 4,
+                net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false) == null)
+                throw new IllegalStateException("Requested POV terrain is not ready at " + origin.toShortString());
+            if (section == null || !section.getOrigin().equals(origin) || RemoteTerrain.remoteOnly(origin)) section = RemoteTerrain.mesh(origin);
             if (section.isDirty() || section.getCompiled() == SectionRenderDispatcher.CompiledSection.UNCOMPILED) {
                 // Vanilla cancels rebuilds without neighboring chunks; waiting cannot produce a mesh.
                 if (!section.hasAllNeighbors()) {
@@ -233,13 +239,20 @@ public final class PovCapture {
             RenderSystem.applyModelViewMatrix();
             RenderSystem.setProjectionMatrix(projection, VertexSorting.DISTANCE_TO_ORIGIN);
             rendering = true;
+            RemoteTerrain.drawing(true);
+            var extra = RemoteTerrain.globalEntities();
+            synchronized (renderer.globalBlockEntities) {
+                extra.removeAll(renderer.globalBlockEntities);
+                renderer.globalBlockEntities.addAll(extra);
+            }
+            state.restore.add(() -> { synchronized (renderer.globalBlockEntities) { renderer.globalBlockEntities.removeAll(extra); } });
             renderer.renderLevel(DeltaTracker.ONE, false, camera, client.gameRenderer, client.gameRenderer.lightTexture(), view, projection);
             image = Screenshot.takeScreenshot(state.target);
             return image;
         } catch (RuntimeException failure) {
             if (image != null) image.close();
             throw failure;
-        } finally { rendering = false; }
+        } finally { rendering = false; RemoteTerrain.drawing(false); }
     }
 
     private void encode(Request request, NativeImage image, JsonObject metadata) {

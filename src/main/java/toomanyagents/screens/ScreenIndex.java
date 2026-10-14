@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -55,7 +56,13 @@ final class ScreenIndex extends SavedData {
     }
     private final Map<String, Lease> leases = new HashMap<>();
 
-    private record Published(MinecraftServer server, JsonObject snapshot) {}
+    static final class Use {
+        int running;
+        long until;
+    }
+    private final Map<String, Map<String, Use>> uses = new HashMap<>();
+    private Set<String> activeThreads = Set.of();
+    private record Published(MinecraftServer server, JsonObject snapshot, Map<UUID, Entry> entries, Set<UUID> awake) {}
     private static volatile Published published;
 
     static ScreenIndex get(MinecraftServer server) {
@@ -70,13 +77,52 @@ final class ScreenIndex extends SavedData {
         return current != null && current.server == server ? current.snapshot.deepCopy() : null;
     }
 
+    static Map<UUID, Entry> visibleRecords(MinecraftServer server) {
+        var value = published;
+        return value != null && value.server == server ? value.entries : Map.of();
+    }
+
+    static boolean awake(MinecraftServer server, UUID id) {
+        var value = published;
+        return value != null && value.server == server && value.awake.contains(id);
+    }
+
+    void active(Set<String> threads) { activeThreads = Set.copyOf(threads); }
+
+    Use use(MinecraftServer server, String id, String thread) {
+        var use = uses.computeIfAbsent(id, ignored -> new HashMap<>()).computeIfAbsent(thread, ignored -> new Use());
+        use.running++;
+        publish(server);
+        return use;
+    }
+
+    void endedUse(MinecraftServer server, String id, String thread, Use use) {
+        var owners = uses.get(id);
+        if (owners == null || owners.get(thread) != use) return;
+        if (--use.running == 0) use.until = System.currentTimeMillis() + Lease.AFTER_MILLIS;
+        publish(server);
+    }
+
+    /** The index owns navigation even while the entity is unloaded. */
+    void edit(MinecraftServer server, String id, java.util.function.UnaryOperator<Screen> change) {
+        var entry = entries.get(id);
+        if (entry == null) throw new ScreenTools.ScreenError("not_found", "The screen was removed.");
+        var record = change.apply(entry.screen);
+        requireName(record.name(), id);
+        entries.put(id, new Entry(entry.entity, record, entry.dimension, entry.pos, entry.facing, entry.up, entry.width, entry.height));
+        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension)));
+        if (level != null && level.getEntity(entry.entity) instanceof ScreenEntity screen) screen.setRecord(record);
+        changed(server);
+    }
+
     void added(ScreenEntity screen) {
         var record = screen.record();
         String id = screen.getUUID().toString();
         var existing = entries.get(id);
         // The index also reserves names for unloaded entities, including names normalized from older saves.
         String name = existing != null ? existing.screen.name() : availableName(record.name(), screen.getUUID());
-        screen.setRecord(new Screen(id, name, record.url(), record.openedBy()));
+        screen.setRecord(new Screen(id, name, existing == null ? record.url() : existing.screen.url(),
+            existing == null ? record.openedBy() : existing.screen.openedBy()));
         // Holders aren't saved, so a screen loaded again shows its lease from here.
         var lease = lease(screen.record().id());
         var entry = entries.get(screen.record().id());
@@ -136,6 +182,7 @@ final class ScreenIndex extends SavedData {
         if (existing == null || !existing.entity.equals(screen.getUUID())) return;
         entries.remove(screen.record().id());
         leases.remove(screen.record().id());
+        uses.remove(screen.record().id());
         changed(screen.getServer());
     }
 
@@ -175,13 +222,24 @@ final class ScreenIndex extends SavedData {
 
     /** Ends every lease a thread holds, or every lease when thread is null. */
     void releaseThread(MinecraftServer server, String thread) {
+        uses.values().forEach(owners -> { if (thread == null) owners.clear(); else owners.remove(thread); });
         for (var id : leases.entrySet().stream().filter(e -> thread == null || e.getValue().thread.equals(thread)).map(Map.Entry::getKey).toList())
             release(server, id);
+        publish(server);
     }
+
+    void releaseUse(MinecraftServer server, String id) { uses.remove(id); publish(server); }
 
     /** Drops leases whose time is up. */
     void expire(MinecraftServer server) {
+        long now = System.currentTimeMillis();
+        uses.values().forEach(owners -> {
+            owners.forEach((thread, use) -> { if (activeThreads.contains(thread)) use.until = now + Lease.AFTER_MILLIS; });
+            owners.values().removeIf(use -> use.running == 0 && use.until <= now);
+        });
+        uses.values().removeIf(Map::isEmpty);
         for (var id : leases.keySet().stream().filter(id -> lease(id) == null).toList()) release(server, id);
+        publish(server);
     }
 
     private void showHolder(MinecraftServer server, String id, String holder) {
@@ -223,7 +281,13 @@ final class ScreenIndex extends SavedData {
             screens.add(row);
         }
         result.add("screens", screens);
-        published = new Published(server, result);
+        var records = new HashMap<UUID, Entry>();
+        var awake = new java.util.HashSet<UUID>();
+        entries.values().forEach(entry -> {
+            records.put(entry.entity, entry);
+            if (uses.containsKey(entry.screen.id())) awake.add(entry.entity);
+        });
+        published = new Published(server, result, Map.copyOf(records), Set.copyOf(awake));
     }
 
     @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {

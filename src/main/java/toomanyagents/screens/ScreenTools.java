@@ -103,6 +103,8 @@ public final class ScreenTools {
 
     private ScreenTools() {}
 
+    public static void activeThreads(MinecraftServer server, Set<String> threads) { ScreenIndex.get(server).active(threads); }
+
     /**
      * Server thread: resolves the call against the screen and station indexes. player is the local player;
      * live says whether the call may still go ahead, checked again at each later step.
@@ -119,24 +121,33 @@ public final class ScreenTools {
             case "screen_open" -> open(server, entry, caller, args, live, waiters);
             case "screen_cdp" -> cdp(entry, args, live, waiters);
             case "screen_close" -> () -> onClient(live, () -> {
-                var view = view(entry);
-                ScreenInput.closing(view);
-                view.shutDown();
+                var view = Screens.existing(entry.entity());
+                if (view != null) {
+                    ScreenInput.closing(view);
+                    view.shutDown();
+                }
                 return null;
             }).thenCompose(ignored -> onServer(server, live, () -> {
                 // Idle in the world record too, and free for anyone, before the call reports success.
                 edit(server, entry, record -> new Screen(record.id(), record.name(), "", ""));
                 index.release(server, id);
+                index.releaseUse(server, id);
                 return result(object("screen", id));
             }));
-            case "screen_screenshot" -> () -> onClient(live, () -> screenshot(entry, view(entry))).thenCompose(shot -> shot);
+            case "screen_screenshot" -> () -> onPage(entry, live, waiters, view -> {
+                return wait(waiters, view.nextFrame(), 5, "The screen did not paint a fresh frame.")
+                    .thenCompose(ignored -> onClient(live, () -> screenshot(entry, view))).thenCompose(shot -> shot);
+            });
             default -> throw new ScreenError("invalid_request", "Unknown screen tool " + tool + ".");
         };
-        if (tool.equals("screen_screenshot")) return new Call(work, () -> {}, waiters);
+        if (tool.equals("screen_screenshot")) {
+            var use = index.use(server, id, caller.threadId());
+            return new Call(work, () -> {
+                if (server.isRunning()) server.execute(() -> index.endedUse(server, id, caller.threadId(), use));
+            }, waiters);
+        }
 
-        // Everything else changes the page, so it needs the screen loaded and its lease.
-        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension())));
-        if (level == null || !(level.getEntity(entry.entity()) instanceof ScreenEntity)) throw notLoaded(id);
+        // Page changes need a lease, but no simulated terrain: the saved index owns the page.
         var lease = index.lease(id);
         if (lease != null && !lease.thread.equals(caller.threadId())) {
             var leased = new JsonObject();
@@ -147,8 +158,12 @@ public final class ScreenTools {
                 object("leased", leased));
         }
         var taken = index.take(server, id, caller.threadId(), caller.name());
+        var use = index.use(server, id, caller.threadId());
         return new Call(work, () -> {
-            if (server.isRunning()) server.execute(() -> index.ended(server, id, taken));
+            if (server.isRunning()) server.execute(() -> {
+                index.ended(server, id, taken);
+                index.endedUse(server, id, caller.threadId(), use);
+            });
         }, waiters);
     }
 
@@ -200,17 +215,14 @@ public final class ScreenTools {
         int truncated = rows.size() - shown.size();
         // Whether the user's client can show each page, and its title, are known only there.
         return () -> onClient(live, () -> {
-            var mc = Minecraft.getInstance();
             boolean trusted = Trust.allowedHere();
-            String here = mc.level == null ? "" : mc.level.dimension().location().toString();
-            var loaded = new HashSet<UUID>();
-            if (mc.level != null) for (var entity : mc.level.entitiesForRendering()) if (entity instanceof ScreenEntity) loaded.add(entity.getUUID());
             var screens = new JsonArray();
             for (var row : shown) {
                 var json = row.json.deepCopy();
                 var view = Screens.existing(row.entry.entity());
                 json.addProperty("title", view != null && !view.url.isBlank() ? view.title : "");
-                json.addProperty("available", trusted && row.entry.dimension().equals(here) && loaded.contains(row.entry.entity()));
+                json.addProperty("available", trusted);
+                json.addProperty("awake", view != null && view.browser != null);
                 screens.add(json);
             }
             var result = new JsonObject();
@@ -222,6 +234,15 @@ public final class ScreenTools {
     }
 
     private record Listed(ScreenIndex.Entry entry, JsonObject json) {}
+
+    private static CompletableFuture<JsonObject> onPage(ScreenIndex.Entry entry, BooleanSupplier live,
+            Set<CompletableFuture<?>> waiters, java.util.function.Function<ScreenView, CompletableFuture<JsonObject>> work) {
+        return onClient(live, () -> {
+            var view = view(entry);
+            return wait(waiters, view.readyPage(), OPEN_SECONDS, "The screen did not wake in time.")
+                .thenCompose(ignored -> onClient(live, () -> work.apply(view))).thenCompose(answer -> answer);
+        }).thenCompose(answer -> answer);
+    }
 
     private static Supplier<CompletableFuture<JsonObject>> open(MinecraftServer server, ScreenIndex.Entry entry, Caller caller, JsonObject args,
                                                                 BooleanSupplier live, Set<CompletableFuture<?>> waiters) {
@@ -260,9 +281,7 @@ public final class ScreenTools {
         if (params != null && !params.isJsonNull() && !params.isJsonObject()) throw invalid("params must be an object.");
         String parameters = params == null || params.isJsonNull() ? "{}" : params.toString();
         String id = entry.screen().id();
-        return () -> onClient(live, () -> {
-            var view = view(entry);
-            if (view.browser == null) throw idle(id);
+        return () -> onPage(entry, live, waiters, view -> {
             long generation = view.generation;
             return wait(waiters, view.devTools(method, parameters), CDP_SECONDS,
                     "DevTools didn't answer in " + CDP_SECONDS + "s. The outcome is unknown; check the page before acting again.")
@@ -282,7 +301,7 @@ public final class ScreenTools {
                     result.add("result", value);
                     return result(result);
                 }));
-        }).thenCompose(answer -> answer);
+        });
     }
 
     /** The frame already painted for the page, at its exact size. */
@@ -518,22 +537,16 @@ public final class ScreenTools {
 
     /** Server thread: changes a placed screen's record, which then reaches every client. */
     private static void edit(MinecraftServer server, ScreenIndex.Entry entry, java.util.function.UnaryOperator<Screen> change) {
-        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension())));
-        if (level == null || !(level.getEntity(entry.entity()) instanceof ScreenEntity screen)) throw notLoaded(entry.screen().id());
-        var record = screen.record();
-        var updated = change.apply(record);
-        if (!updated.equals(record)) screen.setRecord(updated);
+        ScreenIndex.get(server).edit(server, entry.screen().id(), change);
     }
 
     /** The screen's view on the user's client, which must be able to show pages. */
     private static ScreenView view(ScreenIndex.Entry entry) {
         var mc = Minecraft.getInstance();
         String id = entry.screen().id();
-        if (mc.level == null || !mc.level.dimension().location().toString().equals(entry.dimension())) throw notLoaded(id);
+        if (mc.level == null || mc.getSingleplayerServer() == null) throw notLoaded(id);
         if (!Trust.allowedHere()) throw new ScreenError("unavailable", "The user hasn't allowed pages in this world yet.");
-        for (var entity : mc.level.entitiesForRendering())
-            if (entity instanceof ScreenEntity screen && screen.getUUID().equals(entry.entity()) && !screen.isRemoved()) return Screens.view(screen);
-        throw notLoaded(id);
+        return Screens.view(entry);
     }
 
     /** The page a call acted on, unless another page has replaced it since. */

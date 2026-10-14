@@ -32,6 +32,7 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** The entity this view draws; replaced when the same screen is tracked again. */
     ScreenEntity screen;
+    ScreenIndex.Entry entry;
     final Direction facing, right, up;
     final int blocksWide, blocksHigh;
     /** The navigation bar's height across the bottom of the screen, and the page's size above it, in blocks and pixels. */
@@ -67,7 +68,10 @@ final class ScreenView implements ScreenBrowser.View {
     private boolean playerInput, playerNavigating;
     /** Agent calls waiting on this page; closing it fails them. An open waits for its page's load to finish. */
     private final Set<CompletableFuture<?>> pending = ConcurrentHashMap.newKeySet();
+    private final Set<CompletableFuture<Void>> frames = ConcurrentHashMap.newKeySet();
     private CompletableFuture<Void> opening;
+    private CompletableFuture<Void> waking;
+    private boolean pageReady;
     private boolean openingStarted, openingFinished;
     /** The page an open replaced, whose late loads mustn't complete it. */
     private String superseded = "";
@@ -86,13 +90,18 @@ final class ScreenView implements ScreenBrowser.View {
     long lastSeen;
 
     ScreenView(ScreenEntity screen) {
+        this(Screens.entry(screen));
         this.screen = screen;
-        facing = screen.facing();
-        up = screen.up();
+    }
+
+    ScreenView(ScreenIndex.Entry entry) {
+        this.entry = entry;
+        facing = Direction.byName(entry.facing());
+        up = Direction.byName(entry.up());
         right = ScreenEntity.right(facing, up);
         upVector = Vec3.atLowerCornerOf(up.getNormal());
-        blocksWide = screen.width();
-        blocksHigh = screen.height();
+        blocksWide = entry.width();
+        blocksHigh = entry.height();
         pageWidth = blocksWide - 2 * MARGIN;
         barHeight = Math.clamp((blocksHigh - 2 * MARGIN) * 0.08, 0.14, 0.3);
         pageHeight = blocksHigh - 2 * MARGIN - barHeight;
@@ -114,7 +123,7 @@ final class ScreenView implements ScreenBrowser.View {
         menuWidth = Math.min(pageWidth, menuRow * 9);
         menuX = pageWidth - menuWidth;
         menuTop = pageHeight - menuRow * Action.values().length;
-        topLeft = Vec3.atCenterOf(screen.getPos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
+        topLeft = Vec3.atCenterOf(entry.pos()).add(normal.scale(-0.5 + ScreenEntity.DEPTH + 0.002))
             .add(rightVector.scale(-0.5 + MARGIN)).add(upVector.scale(blocksHigh - 0.5 - MARGIN));
     }
 
@@ -126,7 +135,12 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     boolean matches(ScreenEntity other) {
-        return other.width() == blocksWide && other.height() == blocksHigh && other.facing() == facing && other.up() == up && other.getPos().equals(screen.getPos());
+        return matches(Screens.entry(other));
+    }
+
+    boolean matches(ScreenIndex.Entry other) {
+        return other.width() == blocksWide && other.height() == blocksHigh && other.facing().equals(entry.facing())
+            && other.up().equals(entry.up()) && other.pos().equals(entry.pos()) && other.dimension().equals(entry.dimension());
     }
 
     Vec3 center() { return topLeft.add(rightVector.scale(pageWidth / 2)).add(upVector.scale(-pageHeight / 2)); }
@@ -189,7 +203,7 @@ final class ScreenView implements ScreenBrowser.View {
             }
         }
         if (url.isBlank() && browser != null) close();
-        if (browser == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY) {
+        if (browser == null && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
             browser = Chromium.open(this, url, pixelWidth, pixelHeight);
             live = true;
         }
@@ -303,6 +317,26 @@ final class ScreenView implements ScreenBrowser.View {
     /** The page's last painted frame, exactly as painted. Owned by the caller. */
     NativeImage frame() { requirePage(); return page.read(); }
 
+    CompletableFuture<Void> readyPage() {
+        requirePage();
+        if (url.isBlank()) return CompletableFuture.failedFuture(new ScreenTools.ScreenError("unavailable", "Open a page on the screen first."));
+        if (browser != null && pageReady) return CompletableFuture.completedFuture(null);
+        if (waking == null || waking.isDone()) waking = track(new CompletableFuture<Void>());
+        return waking;
+    }
+
+    CompletableFuture<Void> nextFrame() {
+        requirePage();
+        var ready = track(new CompletableFuture<Void>());
+        frames.add(ready);
+        ready.whenComplete((done, failure) -> frames.remove(ready));
+        setLive(true);
+        browser.repaint();
+        return ready;
+    }
+
+    private void paintedFrame() { for (var ready : Set.copyOf(frames)) ready.complete(null); }
+
     private void requirePage() {
         if (crashed) throw new ScreenTools.ScreenError("unavailable", "The page crashed. Reload or open a page before using it again.");
     }
@@ -317,6 +351,7 @@ final class ScreenView implements ScreenBrowser.View {
 
     /** Distant or unseen screens keep their last frame; their pages tick over slowly. */
     void setLive(boolean value) {
+        value = value || !frames.isEmpty();
         if (live == value || browser == null) return;
         live = value;
         browser.setWindowlessFrameRate(value ? Chromium.FPS : 1);
@@ -335,6 +370,7 @@ final class ScreenView implements ScreenBrowser.View {
         devTools = null;
         if (browser != null) Chromium.close(browser);
         browser = null;
+        pageReady = false;
         generation++;
         opening = null;
         title = "";
@@ -357,14 +393,17 @@ final class ScreenView implements ScreenBrowser.View {
         if (!live) return;
         var target = isPopup ? popup : page;
         if (RenderSystem.isOnRenderThread()) {
-            if (source == browser) target.upload(dirty, frame, width, height);
+            if (source == browser) { target.upload(dirty, frame, width, height); if (!isPopup) paintedFrame(); }
             return;
         }
         // The frame is only valid during this call, so copy it before handing it over.
         var copy = MemoryUtil.memAlloc(width * height * 4);
         MemoryUtil.memCopy(MemoryUtil.memAddress(frame), MemoryUtil.memAddress(copy), (long) width * height * 4);
         Minecraft.getInstance().execute(() -> {
-            if (source == browser) target.upload(new Rectangle[] {new Rectangle(0, 0, width, height)}, copy, width, height);
+            if (source == browser) {
+                target.upload(new Rectangle[] {new Rectangle(0, 0, width, height)}, copy, width, height);
+                if (!isPopup) paintedFrame();
+            }
             MemoryUtil.memFree(copy);
         });
     }
@@ -402,6 +441,10 @@ final class ScreenView implements ScreenBrowser.View {
     /** Stopping loading alone can mean the renderer died. Require the main frame to finish too. */
     void loadFinished(ScreenBrowser source, String address) {
         onRender(() -> {
+            if (source == browser && !crashed) {
+                pageReady = true;
+                if (waking != null) waking.complete(null);
+            }
             if (source != browser || crashed || !openingStarted) return;
             String loaded = trimSlash(address);
             if (!loaded.equals(trimSlash(url)) && loaded.equals(trimSlash(superseded))) return;

@@ -67,7 +67,8 @@ final class GameAccess {
      * An agent's project, activity and Minecraft access, published by AgentService. finishedAt is when BB was last
      * read showing its turn finished, or 0 while that isn't known.
      */
-    record AgentState(String projectId, String activity, boolean minecraftAccess, long finishedAt) {}
+    record AgentState(String projectId, String activity, boolean minecraftAccess, long finishedAt, Body body,
+                      String threadId, boolean active) {}
     private record PublishedWorld(String path, String session) {}
 
     private final Supplier<MinecraftServer> server;
@@ -138,7 +139,8 @@ final class GameAccess {
         final Body body;
         final Operation operation;
         final JsonObject args;
-        final long deadline;
+        long deadline;
+        CompletableFuture<Void> terrain;
         final long expiresAt;
         final ScriptStream stream;
         final CompletableFuture<JsonObject> result = new CompletableFuture<>();
@@ -233,7 +235,9 @@ final class GameAccess {
 
     private void drainTools(MinecraftServer current) {
         clientTick();
-        for (int i = 0; i < 256; i++) {
+        int queued;
+        synchronized (queueLock) { queued = toolQueue.size(); }
+        for (int i = 0; i < queued; i++) {
             PendingCall call;
             String rejection = null;
             synchronized (queueLock) {
@@ -250,6 +254,21 @@ final class GameAccess {
             if (call.result.isCancelled()) continue;
             if (rejection != null) { call.result.completeExceptionally(error(rejection)); continue; }
             try {
+                if (call.terrain == null) {
+                    call.terrain = prepareOperation(current, call.body, call.operation, call.args, () -> {
+                        synchronized (queueLock) {
+                            return !call.result.isDone() && call.scope.closed == null && server.get() == current
+                                && Objects.equals(call.scope.session, worldSession.get()) && System.currentTimeMillis() < call.expiresAt;
+                        }
+                    });
+                    synchronized (queueLock) { call.deadline = activeNanos + TimeUnit.SECONDS.toNanos(25); }
+                }
+                if (!call.terrain.isDone()) {
+                    synchronized (queueLock) { toolQueue.addLast(call); call.scope.pending++; }
+                    continue;
+                }
+                call.terrain.join();
+                synchronized (queueLock) { if (call.scope.closed != null) throw error(call.scope.closed); }
                 if (call.operation == Operation.POV) {
                     body(current, call.body);
                     pov.capture(UUID.fromString(call.body.entityUuid()), call.scope.session, POV).whenComplete((result, failure) -> {
@@ -519,7 +538,7 @@ final class GameAccess {
     }
 
     CompletableFuture<JsonObject> inventory(Body ref, String expectedSession) {
-        return schedule(expectedSession, current -> {
+        return prepareBody(ref, expectedSession, null, Long.MAX_VALUE, 0).thenCompose(ready -> schedule(expectedSession, current -> {
             var mob = body(current, ref);
             var controller = actions.get(ref);
             if (controller == null || controller.mob != mob || !Objects.equals(actionSession, expectedSession))
@@ -553,7 +572,7 @@ final class GameAccess {
             result.add("equipment", equipment);
             result.add("carried", inventoryItem(current, hands.containerMenu.getCarried()));
             return result;
-        });
+        }));
     }
 
     private static JsonObject inventoryItem(MinecraftServer current, ItemStack stack) {
@@ -579,7 +598,7 @@ final class GameAccess {
 
     CompletableFuture<Body> updateSettings(Body initialRef, String expectedSession, JsonObject settings) {
         var values = settings.deepCopy();
-        return schedule(expectedSession, current -> {
+        return prepareBody(initialRef, expectedSession, null, Long.MAX_VALUE, 0).thenCompose(ready -> schedule(expectedSession, current -> {
             Body ref = initialRef;
             var mob = body(current, ref);
             String mode = values.has("mode") ? values.get("mode").getAsString() : mob.getPersistentData().getString("too_many_agents_mode");
@@ -618,7 +637,7 @@ final class GameAccess {
             actions(ref,mob).hands.syncBody();
             cacheBody(ref,mob);
             return ref;
-        });
+        }));
     }
 
     private void cacheBody(Body ref, Mob mob) {
@@ -733,7 +752,7 @@ final class GameAccess {
 
     CompletableFuture<Body> spawnNear(String name, String entityType, String agentId, Body parent,
                                       String expectedSession, ToolScope callerScope, long expiresAt) {
-        return schedule(expectedSession, expiresAt, current -> {
+        return prepareBody(parent, expectedSession, callerScope, expiresAt, 16).thenCompose(ready -> schedule(expectedSession, expiresAt, current -> {
             synchronized (queueLock) {
                 if (callerScope != null) {
                     if (callerScope.closed != null) throw error(callerScope.closed);
@@ -749,17 +768,28 @@ final class GameAccess {
             }
             if (!((ServerLevel) anchor.level()).addFreshEntity(mob)) throw error("spawn_rejected");
             return new Body(mob.getStringUUID(), world(current), mob.level().dimension().location().toString());
-        });
+        }));
     }
 
     /**
      * Claims a free station in the agent's project and spawns the body inside its area, as one step: a body that
-     * can't be added leaves the station free. The station must be loaded. A blank entity type uses the station's body,
+     * can't be added leaves the station free. Prepare its terrain before claiming it. A blank entity type uses the station's body,
      * then the given fallback.
      */
     CompletableFuture<Body> spawnAtStation(String name, String entityType, String fallbackType, String agentId, String projectId,
                                            String stationId, String expectedSession, ToolScope callerScope, long expiresAt) {
         return schedule(expectedSession, expiresAt, current -> {
+            var entry = StationIndex.get(current).find(stationId);
+            if (entry == null) throw error("Unknown station: " + stationId);
+            if (!entry.station().projectId().equals(projectId)) throw error("Station belongs to another project.");
+            var level = current.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(entry.dimension())));
+            return RemoteChunks.get(current).prepare(level, entry.pos(), 16, () -> {
+                synchronized (queueLock) {
+                    return server.get() == current && expectedSession.equals(worldSession.get())
+                        && System.currentTimeMillis() < expiresAt && (callerScope == null || callerScope.closed == null);
+                }
+            });
+        }).thenCompose(ready -> ready).thenCompose(ignored -> schedule(expectedSession, expiresAt, current -> {
             synchronized (queueLock) {
                 if (callerScope != null && callerScope.closed != null) throw error(callerScope.closed);
             }
@@ -776,7 +806,7 @@ final class GameAccess {
                 index.release(current, agentId);
                 throw failure;
             }
-        });
+        }));
     }
 
     /** The space on top of the block under the player's crosshair, or null when not looking at a block. */
@@ -886,6 +916,9 @@ final class GameAccess {
     CompletableFuture<JsonObject> call(Body body, String expectedSession, Operation operation, JsonObject args) {
         // Do not allow callers to mutate queued arguments after validation.
         var arguments = args == null ? new JsonObject() : args.deepCopy();
+        return schedule(expectedSession, current -> prepareOperation(current, body, operation, arguments,
+            () -> server.get() == current && Objects.equals(expectedSession, worldSession.get())))
+            .thenCompose(Function.identity()).thenCompose(ready -> {
         if (scriptWait(operation, arguments))
             return schedule(expectedSession, current -> awaitScript(current, body, arguments)).thenCompose(Function.identity());
         if (operation == Operation.POV) {
@@ -893,6 +926,86 @@ final class GameAccess {
                 .thenCompose(id -> pov.capture(id,expectedSession,POV));
         }
         return schedule(expectedSession, current -> executeOperation(current, body, operation, arguments));
+        });
+    }
+
+    private static int workingRadius() { return TooManyAgentsClientSettings.get().agentWorkingDistance(); }
+
+    private CompletableFuture<Void> prepareOperation(MinecraftServer current, Body ref, Operation operation, JsonObject args, BooleanSupplier valid) {
+        int radius = switch (operation) {
+            case SETTINGS, ACTION_STATUS, CANCEL, BEHAVIOR, BLOCKS, POV -> 0;
+            default -> workingRadius();
+        };
+        return prepareBody(current, ref, radius, valid).thenCompose(ready -> {
+            if (!valid.getAsBoolean()) throw error("world_request_cancelled");
+            var mob = body(current, ref);
+            var level = (ServerLevel) mob.level();
+            if (operation == Operation.BLOCKS) {
+                var bounds = blockBounds(level, args);
+                return RemoteChunks.get(current).prepareBox(level, bounds[0], bounds[1], valid);
+            }
+            var action = operation == Operation.ACTION ? args
+                : operation == Operation.SCRIPT && "action".equals(JsonState.text(args,"operation")) ? args.getAsJsonObject("action") : null;
+            if (operation == Operation.COMMAND) return prepareCommand(current, mob, JsonState.text(args,"command"), valid);
+            if (action != null && "chat".equals(JsonState.text(action,"type")) && !action.has("target")
+                && JsonState.text(action,"message").startsWith("/"))
+                return prepareCommand(current, mob, JsonState.text(action,"message"), valid);
+            if (action != null && action.has("position") && !"look".equals(JsonState.text(action, "type"))) {
+                var target = AgentActions.position(action);
+                if (mob.position().distanceToSqr(target) > 64 * 64) throw error("target_outside_navigation_radius_64");
+                var point = BlockPos.containing(target);
+                var from = mob.blockPosition();
+                var min = new BlockPos(Math.min(from.getX(), point.getX()) - 2, Math.min(from.getY(), point.getY()), Math.min(from.getZ(), point.getZ()) - 2);
+                var max = new BlockPos(Math.max(from.getX(), point.getX()) + 2, Math.max(from.getY(), point.getY()), Math.max(from.getZ(), point.getZ()) + 2);
+                return RemoteChunks.get(current).prepareBox(level, min, max, valid);
+            }
+            return CompletableFuture.completedFuture(null);
+        });
+    }
+
+    /** Explicit block commands have bounded coordinates. Selectors and execute redirects retain vanilla semantics. */
+    private CompletableFuture<Void> prepareCommand(MinecraftServer current, Mob mob, String command, BooleanSupplier valid) {
+        if (!BodySettings.mode(mob.getPersistentData().getString("too_many_agents_mode")).commands) throw error("world_commands_disabled");
+        String text = command.strip();
+        if (text.startsWith("/")) text = text.substring(1);
+        String root = text.split(" ", 2)[0];
+        if (!Set.of("setblock", "fill", "data").contains(root)) return CompletableFuture.completedFuture(null);
+        var source = player(current).createCommandSourceStack().withEntity(mob).withLevel((ServerLevel) mob.level())
+            .withPosition(mob.position()).withRotation(mob.getRotationVector());
+        var parsed = current.getCommands().getDispatcher().parse(text, source);
+        if (!parsed.getExceptions().isEmpty() || parsed.getReader().canRead()) return CompletableFuture.completedFuture(null);
+        var points = new ArrayList<BlockPos>();
+        for (var argument : parsed.getContext().getArguments().values())
+            if (argument.getResult() instanceof net.minecraft.commands.arguments.coordinates.Coordinates coordinates)
+                points.add(coordinates.getBlockPos(source));
+        if (points.isEmpty()) return CompletableFuture.completedFuture(null);
+        BlockPos min = points.getFirst(), max = min;
+        for (var point : points) {
+            min = new BlockPos(Math.min(min.getX(), point.getX()), Math.min(min.getY(), point.getY()), Math.min(min.getZ(), point.getZ()));
+            max = new BlockPos(Math.max(max.getX(), point.getX()), Math.max(max.getY(), point.getY()), Math.max(max.getZ(), point.getZ()));
+        }
+        return RemoteChunks.get(current).prepareBox((ServerLevel) mob.level(), min, max, valid);
+    }
+
+    private CompletableFuture<Void> prepareBody(Body ref, String session, ToolScope scope, long expiresAt, int radius) {
+        return schedule(session, expiresAt, current -> prepareBody(current, ref, radius, () -> {
+            synchronized (queueLock) {
+                return server.get() == current && Objects.equals(session, worldSession.get())
+                    && System.currentTimeMillis() < expiresAt && (scope == null || scope.closed == null);
+            }
+        })).thenCompose(Function.identity());
+    }
+
+    private CompletableFuture<Void> prepareBody(MinecraftServer current, Body ref, int radius, BooleanSupplier valid) {
+        if (ref == null || !worldMatches(ref.world(), world(current))) throw error("body_world_mismatch");
+        var level = current.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(ref.dimension())));
+        if (level == null) throw error("body_dimension_unavailable");
+        var id = UUID.fromString(ref.entityUuid());
+        var entity = level.getEntity(id);
+        var location = AgentLocations.get(current).entries.get(id);
+        if (entity == null && (location == null || !worldMatches(location.world(), world(current))
+            || !location.dimension().equals(ref.dimension()))) throw ScriptRequestRejection.bodyUnavailable();
+        return RemoteChunks.get(current).prepare(level, entity == null ? location.center() : entity.blockPosition(), radius, valid);
     }
 
     private static boolean scriptWait(Operation operation, JsonObject args) {
@@ -1062,7 +1175,7 @@ final class GameAccess {
     /** Server thread: the body's agent state, or idle with no project before AgentService has loaded. */
     AgentState agentState(Mob mob) {
         var state = agentStates.get(mob.getPersistentData().getString("too_many_agents_agent"));
-        return state == null ? new AgentState("", "idle", false, 0) : state;
+        return state == null ? new AgentState("", "idle", false, 0, null, "", false) : state;
     }
 
     /** Server thread: the box confining this body, its station's area, or null. */
@@ -1087,6 +1200,7 @@ final class GameAccess {
         mob.setPersistenceRequired();
         mob.setInvulnerable(true);
         behaviors(mob);
+        AgentLocations.get(level.getServer()).observe(mob);
     }
 
     /** Called every ServerTick.Post. No references to live entities escape this method. */
@@ -1094,6 +1208,8 @@ final class GameAccess {
               BiConsumer<String, Body> observed) {
         if (server.get() != current || worldSession.get() == null) return;
         agentStates = states.get();
+        ScreenTools.activeThreads(current, agentStates.values().stream().filter(AgentState::active)
+            .map(AgentState::threadId).filter(id -> !id.isBlank()).collect(java.util.stream.Collectors.toSet()));
         worldInfo = worldSnapshot(current);
         publishedWorld = new PublishedWorld(world(current), worldSession.get());
         drainActionStops();
@@ -1107,6 +1223,23 @@ final class GameAccess {
         }
         var seen = new HashSet<Body>();
         String world = world(current);
+        var locations = AgentLocations.get(current);
+        var chunks = RemoteChunks.get(current);
+        for (var state : agentStates.values()) {
+            if (!state.minecraftAccess() || state.body() == null || !state.body().world().equals(world)
+                || !state.active()) continue;
+            var location = locations.entries.get(UUID.fromString(state.body().entityUuid()));
+            if (location == null || !location.world().equals(world)) continue;
+            var level = current.getLevel(ResourceKey.create(Registries.DIMENSION, ResourceLocation.parse(location.dimension())));
+            if (level == null) continue;
+            var entity = level.getEntity(UUID.fromString(state.body().entityUuid()));
+            try {
+                chunks.retain("body:" + state.body().entityUuid(), level,
+                    entity == null ? location.center() : entity.blockPosition(), workingRadius());
+            } catch (IllegalStateException capacity) {
+                // Tool preparation reports the limit; existing owners keep their area until its grace period ends.
+            }
+        }
         for (var level : current.getAllLevels()) {
             // Actions add/remove entities (fishing hooks, loot, orphaned bodies).
             // Snapshot bodies before running them; the live entity iterator is not mutation-safe.
@@ -1143,11 +1276,17 @@ final class GameAccess {
                     continue;
                 }
                 if (saved.getBoolean("too_many_agents_removing")) continue;
+                locations.observe(mob);
                 var body = new Body(mob.getStringUUID(), world, level.dimension().location().toString());
                 observed.accept(saved.getString("too_many_agents_agent"), body);
                 seen.add(body);
                 try {
                     mob.setNoAi(true);
+                    var physical = actions.get(body);
+                    if (physical != null && physical.busy()) {
+                        try { chunks.retain("body:" + mob.getStringUUID(), level, mob.blockPosition(), workingRadius()); }
+                        catch (IllegalStateException capacity) { /* The current area remains held until its grace period ends. */ }
+                    }
                     if (!paused.getAsBoolean() && level.isPositionEntityTicking(mob.blockPosition())) {
                         var controller = actions(body,mob);
                         drainActionStops();
@@ -1353,7 +1492,7 @@ final class GameAccess {
 
     /** Drop belongings, then save the empty body for restoration after an archive. */
     CompletableFuture<String> saveBody(Body ref, String session) {
-        return schedule(session, current -> {
+        return prepareBody(ref, session, null, Long.MAX_VALUE, 0).thenCompose(ready -> schedule(session, current -> {
             var mob = body(current, ref);
             var controller = actions(ref, mob);
             // Freeze the body while its snapshot is written, including across a failed disk save.
@@ -1365,7 +1504,7 @@ final class GameAccess {
             var tag = new net.minecraft.nbt.CompoundTag();
             if (!mob.save(tag)) throw error("body_save_failed");
             return tag.toString();
-        });
+        }));
     }
 
     CompletableFuture<Void> suspendBody(Body ref, String saved, String session) {
@@ -1425,7 +1564,8 @@ final class GameAccess {
     }
 
     CompletableFuture<Void> removeAgent(Body ref, String expectedSession, String agentId, boolean knownRemoved, ToolScope scope, long expiresAt) {
-        return schedule(expectedSession, expiresAt, current -> {
+        var ready = knownRemoved ? CompletableFuture.<Void>completedFuture(null) : prepareBody(ref, expectedSession, scope, expiresAt, 0);
+        return ready.thenCompose(ignored -> schedule(expectedSession, expiresAt, current -> {
             synchronized(queueLock) { if(scope!=null && scope.closed!=null) throw error(scope.closed); }
             if (ref == null || !worldMatches(ref.world(), world(current))) throw error("body_world_mismatch");
             var bodies = new ArrayList<Mob>();
@@ -1438,7 +1578,7 @@ final class GameAccess {
             if (bodies.isEmpty() && !knownRemoved) throw error("body_missing_or_unloaded");
             for (var mob : bodies) removeBody(mob, current);
             return null;
-        });
+        }));
     }
 
     private void removeBody(Mob mob, MinecraftServer current) {
@@ -1450,6 +1590,8 @@ final class GameAccess {
         bodySnapshots.remove(ref);
         controller.close("agent_removed");
         dropInventory(mob, controller.hands);
+        AgentLocations.get(current).remove(mob.getUUID());
+        RemoteChunks.get(current).release("body:" + mob.getStringUUID());
         mob.discard();
         if (!mob.isRemoved()) throw error("body_removal_not_confirmed");
     }
@@ -1632,7 +1774,7 @@ final class GameAccess {
         return result;
     }
 
-    private static JsonObject blocks(ServerLevel level, JsonObject args) {
+    private static BlockPos[] blockBounds(ServerLevel level, JsonObject args) {
         var min = coordinates(args, "min");
         var max = coordinates(args, "max");
         long dx = (long) max.getX() - min.getX() + 1;
@@ -1644,6 +1786,12 @@ final class GameAccess {
             throw error("y_outside_build_height: " + level.getMinBuildHeight() + ".." + (level.getMaxBuildHeight() - 1));
         }
         if (!level.getWorldBorder().isWithinBounds(min) || !level.getWorldBorder().isWithinBounds(max)) throw error("block_box_outside_world_border");
+        return new BlockPos[]{min, max};
+    }
+
+    private static JsonObject blocks(ServerLevel level, JsonObject args) {
+        var bounds = blockBounds(level, args);
+        var min = bounds[0]; var max = bounds[1];
         if (!level.hasChunksAt(min, max)) throw error("block_box_contains_unloaded_chunks");
         if (args.has("includeAir") && (!args.get("includeAir").isJsonPrimitive()
             || !args.getAsJsonPrimitive("includeAir").isBoolean())) throw error("includeAir_must_be_a_boolean");
@@ -1662,7 +1810,7 @@ final class GameAccess {
         }
         var result = new JsonObject();
         result.addProperty("dimension", level.dimension().location().toString());
-        result.addProperty("volume", dx * dy * dz);
+        result.addProperty("volume", (long) (max.getX() - min.getX() + 1) * (max.getY() - min.getY() + 1) * (max.getZ() - min.getZ() + 1));
         result.addProperty("includeAir", includeAir);
         result.add("blocks", found);
         return result;

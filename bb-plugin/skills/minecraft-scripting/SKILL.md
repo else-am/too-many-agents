@@ -35,7 +35,7 @@ await moving;
 
 ## Rules the types cannot express
 
-- **Movement** works in loaded, simulated chunks, targets within 64 blocks, at most 60 s of game time. Arrival means within 0.9 blocks of the requested cell. It does not dig, build, teleport or load chunks; choose a standable destination. Dismount, wake and end flight/gliding first. Different species navigate differently. Starting during another native action can reject with `action_already_running_cancel_or_wait`.
+- **Movement** prepares terrain independently of the player's location, targets within 64 blocks, at most 60 s of game time. Arrival means within 0.9 blocks of the requested cell. It does not dig, build or teleport; choose a standable destination. Active world agents keep a configurable area simulated around themselves. Resource limits can reject a request; nothing is retried automatically. Dismount, wake and end flight/gliding first. Different species navigate differently. Starting during another native action can reject with `action_already_running_cancel_or_wait`.
 - **Reach**: dig/place/activate/open need reach and do not approach. Workstations are used from their top face; a short body may need it unobstructed.
 - **Queued calls** (`attack`, `activateItem`, `deactivateItem`, `mount`, `dismount`, `updateSign`, `chat`, `whisper`) return immediately; `await bot.waitForTicks(1)` before inspecting. Misuse of these emits an `error` event instead of throwing.
 - **Block reads** cover observed cells only. `null` from `blockAt` means unknown, not air. `waitForChunksToLoad` waits for delivery and never forces loading.

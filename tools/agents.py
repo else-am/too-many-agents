@@ -199,14 +199,15 @@ def main():
         if args.action == 'list' and args.archived and isinstance(result, list):
             result = [agent for agent in result if agent.get('conversationArchived', False)]
         if isinstance(result, dict) and 'imageDataUrl' in result:
-            if args.action == 'dev' and args.operation == 'pov':
+            if args.action == 'dev' and args.operation == 'pov' or args.action == 'tool' and args.name == 'minecraft_pov':
                 image = result['imageDataUrl']
                 if not image.startswith('data:image/png;base64,'):
                     raise ValueError('Unexpected POV image format')
-                target = Path(args.game_dir) / 'too-many-agents/development-pov.png'
+                filename = 'development-pov.png' if args.action == 'dev' else f'{args.id}-pov.png'
+                target = Path(args.game_dir) / 'too-many-agents' / filename
                 target.write_bytes(base64.b64decode(image.split(',', 1)[1], validate=True))
                 result['path'] = str(target.resolve())
-            result.pop('imageDataUrl')  # PNG already saved by the mod; keep its path and metadata readable.
+            result.pop('imageDataUrl')  # Keep the saved PNG's path and metadata readable.
         print(redact(json.dumps(result, indent=2), token))
     except urllib.error.HTTPError as error:
         response = error.read().decode(errors='replace')

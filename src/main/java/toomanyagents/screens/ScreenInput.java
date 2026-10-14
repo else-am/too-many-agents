@@ -187,6 +187,7 @@ public final class ScreenInput {
         Aim best = null;
         double bestDistance = REACH;
         for (var view : Screens.views()) {
+            if (view.screen == null || view.screen.isRemoved() || view.screen.level() != Minecraft.getInstance().level) continue;
             double[] at = view.hit(eye, look);
             if (at == null || at[2] > bestDistance) continue;
             if (!view.onPage(at[0], at[1]) && view.barPart(at[0], at[1]) == null) continue;
@@ -298,7 +299,7 @@ public final class ScreenInput {
         var mc = Minecraft.getInstance();
         return pointing() && mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() && mc.level != null
             && captured.browser != null && !captured.crashed && Trust.allowedHere()
-            && !captured.screen.isRemoved() && Screens.existing(captured.screen.getUUID()) == captured
+            && captured.screen != null && !captured.screen.isRemoved() && Screens.existing(captured.screen.getUUID()) == captured
             && captured.screen.getBoundingBox().distanceToSqr(mc.player.getEyePosition()) <= REACH * REACH;
     }
 
@@ -424,7 +425,7 @@ public final class ScreenInput {
     private static boolean menuStillOpen() {
         var mc = Minecraft.getInstance();
         if (!pointing() || mc.level == null || mc.player.getInventory().selected != menuSlot) return false;
-        if (menu.screen.isRemoved() || Screens.existing(menu.screen.getUUID()) != menu) return false;
+        if (menu.screen == null || menu.screen.isRemoved() || Screens.existing(menu.screen.getUUID()) != menu) return false;
         return menu.screen.getBoundingBox().distanceToSqr(mc.player.getEyePosition()) <= REACH * REACH;
     }
 

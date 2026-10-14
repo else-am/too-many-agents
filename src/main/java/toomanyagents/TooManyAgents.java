@@ -81,6 +81,7 @@ public final class TooManyAgents {
         toomanyagents.mobs.Mobs.register(modBus);
         toomanyagents.screens.Screens.register(modBus);
         toomanyagents.stations.Stations.register(modBus);
+        RemoteChunks.register();
         modBus.addListener((net.neoforged.neoforge.client.event.RegisterMenuScreensEvent event) ->
             event.register(AgentInventoryMenu.TYPE.get(), toomanyagents.ui.AgentInventoryScreen::new));
         controls = new ClientControls(modBus, () -> agents);
@@ -331,6 +332,11 @@ public final class TooManyAgents {
         result.add("entities", entities);
         result.addProperty("entitiesTruncated", nearby.size() > 64);
         result.addProperty("radius", 32);
+        result.add("remoteChunks", RemoteChunks.get(event.getServer()).snapshot());
+        result.addProperty("averageTickMs", event.getServer().getAverageTickTimeNanos() / 1_000_000.0);
+        int loadedChunks = 0;
+        for (var level : event.getServer().getAllLevels()) loadedChunks += level.getChunkSource().getLoadedChunksCount();
+        result.addProperty("loadedChunks", loadedChunks);
         serverSnapshot = result;
     }
 
@@ -348,6 +354,9 @@ public final class TooManyAgents {
         result.addProperty("state", mc.level == null ? "menu" : current == null ? "multiplayer_unsupported" : "world");
         result.addProperty("paused", paused);
         result.addProperty("screen", mc.screen == null ? "game" : mc.screen.getClass().getSimpleName());
+        result.addProperty("fps", mc.getFps());
+        result.addProperty("heapUsedBytes", Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
+        result.add("povResources", RemoteTerrain.snapshot());
         if (current != null && mc.level != null) {
             result.addProperty("session", current.id());
             var authoritative = serverSnapshot;
