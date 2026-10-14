@@ -484,6 +484,7 @@ public final class ScreenInput {
                 }
                 return true;
             }
+            if (pageShortcut(captured, key, action, mods)) return true;
             if (action == GLFW.GLFW_RELEASE) capturedKeys.remove(key); else capturedKeys.add(key);
             ScreenKeys.send(captured, key, scancode, action, mods);
             return true;
@@ -493,7 +494,13 @@ public final class ScreenInput {
             if (action == GLFW.GLFW_PRESS) closeMenu();
             return true;
         }
-        if (typing == null) return false;
+        if (typing == null) {
+            // Selecting ordinary page text does not focus an editable field.
+            if (key == GLFW.GLFW_KEY_C && menu == null && pointing() && aim != null
+                && aim.view.onPage(aim.x, aim.y) && Trust.allowedHere())
+                return pageShortcut(aim.view, key, action, mods);
+            return false;
+        }
         if (Minecraft.getInstance().screen != null) {
             stopTyping(false);
             return false;
@@ -512,20 +519,7 @@ public final class ScreenInput {
             if (action == GLFW.GLFW_PRESS) stopTyping(true);
             return true;
         }
-        if (captured == null && shortcut(mods) && action != GLFW.GLFW_RELEASE) {
-            var frame = browser.getFocusedFrame() != null ? browser.getFocusedFrame() : browser.getMainFrame();
-            boolean handled = true;
-            switch (key) {
-                case GLFW.GLFW_KEY_C -> frame.copy();
-                case GLFW.GLFW_KEY_V -> frame.paste();
-                case GLFW.GLFW_KEY_X -> frame.cut();
-                case GLFW.GLFW_KEY_A -> frame.selectAll();
-                case GLFW.GLFW_KEY_Z -> { if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) frame.redo(); else frame.undo(); }
-                case GLFW.GLFW_KEY_Y -> frame.redo();
-                default -> handled = false;
-            }
-            if (handled) return true;
-        }
+        if (pageShortcut(typing, key, action, mods)) return true;
         int code;
         char character = KeyEvent.CHAR_UNDEFINED;
         switch (key) {
@@ -711,6 +705,26 @@ public final class ScreenInput {
     }
 
     // AWT event details.
+
+    /** Native editing commands also work in captured mode, where synthetic key events alone do not copy on macOS. */
+    private static boolean pageShortcut(ScreenView view, int key, int action, int mods) {
+        if (view.browser == null || !shortcut(mods) || action == GLFW.GLFW_RELEASE) return false;
+        var frame = view.browser.getFocusedFrame();
+        if (frame == null) frame = view.browser.getMainFrame();
+        if (frame == null) return false;
+        switch (key) {
+            case GLFW.GLFW_KEY_C -> frame.copy();
+            case GLFW.GLFW_KEY_V -> frame.paste();
+            case GLFW.GLFW_KEY_X -> frame.cut();
+            case GLFW.GLFW_KEY_A -> frame.selectAll();
+            case GLFW.GLFW_KEY_Z -> { if ((mods & GLFW.GLFW_MOD_SHIFT) != 0) frame.redo(); else frame.undo(); }
+            case GLFW.GLFW_KEY_Y -> frame.redo();
+            default -> { return false; }
+        }
+        view.playerInput();
+        consumedKeys.add(key);
+        return true;
+    }
 
     private static boolean shortcut(int mods) { return (mods & (Minecraft.ON_OSX ? GLFW.GLFW_MOD_SUPER : GLFW.GLFW_MOD_CONTROL)) != 0; }
 
