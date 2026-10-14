@@ -112,7 +112,7 @@ final class ScreenView implements ScreenBrowser.View {
     int cursor;
     Rectangle popupBounds;
     private boolean popupShown;
-    private boolean live = true;
+    private volatile boolean live = true;
     long lastSeen;
 
     ScreenView(ScreenEntity screen) {
@@ -617,6 +617,8 @@ final class ScreenView implements ScreenBrowser.View {
         value = value || !frames.isEmpty();
         if (live == value || browser == null) return;
         live = value;
+        FileWatches.live(access, value);
+        if (!value) FilePages.sleeping(access);
         browser.setWindowlessFrameRate(value ? Chromium.FPS : 1);
         if (value) browser.repaint();
     }
@@ -783,6 +785,7 @@ final class ScreenView implements ScreenBrowser.View {
         onRender(() -> {
             if (source != browser || crashed) return;
             crashed = true;
+            FilePages.cancel(access);
             generation++;
             loading = editable = popupShown = playerNavigating = false;
             popupBounds = null;

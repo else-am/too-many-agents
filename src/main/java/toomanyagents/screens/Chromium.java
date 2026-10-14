@@ -339,6 +339,16 @@ final class Chromium {
         var router = CefMessageRouter.create();
         router.addHandler(new CefMessageRouterHandlerAdapter() {
             @Override public boolean onQuery(CefBrowser browser, CefFrame frame, long id, String request, boolean persistent, CefQueryCallback callback) {
+                if (request.startsWith("screen-files:watch")) {
+                    var view = views.get(browser);
+                    var access = view == null ? null : view.access;
+                    if (persistent || frame == null || !frame.isMain() || !((ScreenBrowser) browser).builtin || access == null
+                        || access.browser() != browser || view.browser != browser || !FilePages.current(view, access)
+                        || !request.equals("screen-files:watch:" + access.document()) || !FilePages.location(frame.getURL()))
+                        callback.failure(1, "Only the current files page can watch files.");
+                    else FileWatches.subscribe(view, access, id, callback);
+                    return true;
+                }
                 if (request.startsWith("screen-capture:")) {
                     var view = views.get(browser);
                     String frameId = frame.getIdentifier();
@@ -358,6 +368,9 @@ final class Chromium {
                 if (view != null) view.editing((ScreenBrowser) browser, request.endsWith("1"));
                 callback.success("");
                 return true;
+            }
+            @Override public void onQueryCanceled(CefBrowser browser, CefFrame frame, long id) {
+                FileWatches.queryCancelled(browser, id);
             }
         }, true);
         client.addMessageRouter(router);

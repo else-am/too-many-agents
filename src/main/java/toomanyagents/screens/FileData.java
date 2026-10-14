@@ -12,6 +12,9 @@ final class FileData implements AutoCloseable {
     private final ConfinedFiles.Root root;
     private final Map<String, Cursor> cursors = new LinkedHashMap<>();
     private final Set<String> notices = new LinkedHashSet<>();
+    private final Map<String, FileWatchInput> watchInputs = new LinkedHashMap<>();
+    private final LinkedHashSet<String> recentFileInputs = new LinkedHashSet<>();
+    private boolean watchInputsLimited;
     private FileRepository repository;
     private boolean discovered;
     private volatile boolean closed;
@@ -22,12 +25,90 @@ final class FileData implements AutoCloseable {
     }
     FileData(ConfinedFiles.Root root) { this.root = root; }
 
+    synchronized List<FileWatchInput> watchInputs() { return List.copyOf(watchInputs.values()); }
+    synchronized boolean watchInputsLimited() { return watchInputsLimited; }
+
+    /** Native notifications are hints. No event path is opened or treated as an authorization. */
+    synchronized void changed(boolean structure, boolean git, boolean rules) {
+        if (closed) return;
+        if (structure || git || rules) {
+            cursors.values().forEach(cursor -> closeQuietly(cursor.value()));
+            cursors.clear();
+        }
+        if (git || rules) {
+            repository = null; discovered = false;
+            watchInputs.values().removeIf(input -> input.kind() == FileWatchInput.Kind.GIT || input.kind() == FileWatchInput.Kind.RULES);
+            notices.clear();
+            if (watchInputsLimited) notices.add("Live updates are limited - refresh to check other paths.");
+        }
+    }
+
+    private void watch(FileWatchInput input) { watch(input, false); }
+
+    private void watch(FileWatchInput input, boolean recentFile) {
+        if (closed) return;
+        String key = input.key();
+        if (recentFile) {
+            recentFileInputs.remove(key);
+            recentFileInputs.add(key);
+            while (recentFileInputs.size() > 128) recentFileInputs.removeFirst();
+        }
+        if (watchInputs.containsKey(key)) return;
+        if (watchInputs.size() >= 512) {
+            watchInputsLimited = true;
+            notices.add("Live updates are limited - refresh to check other paths.");
+            if (!recentFile) return;
+            // Recent previews take precedence over old scan coverage. Prefer to retain Git dependencies.
+            String victim = null;
+            for (var entry : watchInputs.entrySet()) {
+                if (recentFileInputs.contains(entry.getKey())) continue;
+                var old = entry.getValue();
+                if (victim == null) victim = entry.getKey();
+                if (old.kind() == FileWatchInput.Kind.STRUCTURE
+                    || (old.kind() == FileWatchInput.Kind.RULES && old.root() == root)) {
+                    victim = entry.getKey(); break;
+                }
+            }
+            if (victim == null) throw new IllegalStateException("Recent watch inputs exceed their bound");
+            watchInputs.remove(victim);
+        }
+        watchInputs.put(key, input);
+    }
+
+    private void loaded(ConfinedFiles.Info directory) {
+        String path = directory.relative();
+        watch(new FileWatchInput(root, path, true, FileWatchInput.Kind.STRUCTURE));
+        String prefix = path.isEmpty() ? "" : path + "/";
+        watch(new FileWatchInput(root, prefix + ".gitignore", false, FileWatchInput.Kind.RULES));
+        watch(new FileWatchInput(root, prefix + ".gitattributes", false, FileWatchInput.Kind.RULES));
+    }
+
+    private void requestedFile(String path) throws IOException {
+        Path parent = Path.of(path).getParent();
+        for (int depth = 0; depth < 128; depth++) {
+            try {
+                var directory = ConfinedFiles.info(root, parent == null ? "" : parent.toString());
+                if (directory.kind() == ConfinedFiles.Kind.DIRECTORY) {
+                    watch(new FileWatchInput(root, directory.relative(), true, FileWatchInput.Kind.STRUCTURE), true);
+                    watch(new FileWatchInput(root, path, false, FileWatchInput.Kind.CONTENT), true);
+                    loaded(directory);
+                    return;
+                }
+            } catch (java.io.InterruptedIOException cancelled) { throw cancelled; }
+            catch (IOException unavailable) { /* Watch an existing ancestor so missing folders can be recreated. */ }
+            if (parent == null) return;
+            parent = parent.getParent();
+        }
+        watchInputsLimited = true;
+        notices.add("Live updates are limited - refresh to check other paths.");
+    }
+
     synchronized JsonObject data(URI uri, String grantNotice) throws IOException {
         if (closed) throw new IOException("The page changed.");
         expire();
         if (!discovered) {
             discovered = true;
-            try { repository = FileRepository.discover(root); }
+            try { repository = FileRepository.discover(root, this::watch); }
             catch (IOException failure) { notices.add("Git unavailable - " + failure.getMessage()); }
         }
         var params = FilePages.query(uri);
@@ -46,7 +127,7 @@ final class FileData implements AutoCloseable {
         if (operation.equals("/_api/tree")) {
             String query = params.getOrDefault("query", "");
             FileTreeScan scan = (FileTreeScan) take(params, operation, query);
-            if (scan == null) scan = new FileTreeScan(root, repository, query);
+            if (scan == null) scan = new FileTreeScan(root, repository, query, this::loaded);
             try {
                 var page = scan.next();
                 result.add("paths", JSON.toJsonTree(page.paths())); result.add("directories", JSON.toJsonTree(page.directories()));
@@ -68,6 +149,7 @@ final class FileData implements AutoCloseable {
             try {
                 if (listing.rules() != null) listing.rules().beginPage();
                 var batch = listing.directory().next(1000);
+                loaded(batch.info());
                 var entries = new JsonArray();
                 var sorted = new ArrayList<>(batch.entries());
                 sorted.sort(Comparator.comparing((ConfinedFiles.Entry entry) -> entry.kind() != ConfinedFiles.Kind.DIRECTORY)
@@ -102,6 +184,7 @@ final class FileData implements AutoCloseable {
                     if (image != null) result.add("image", JSON.toJsonTree(image));
                 }
             } catch (NoSuchFileException absent) { result.addProperty("path", path); result.addProperty("deleted", true); }
+            requestedFile(path);
             return result;
         }
         if (repository == null) throw new IOException("Git is unavailable for this folder.");
@@ -112,6 +195,7 @@ final class FileData implements AutoCloseable {
             result.add("old", content(repository.baseContent(base, path)));
             try { result.add("new", content(repository.workingContent(path))); }
             catch (NoSuchFileException absent) { result.add("new", JsonNull.INSTANCE); }
+            requestedFile(path);
             return result;
         }
         throw new IOException("Unknown files request.");
@@ -140,6 +224,6 @@ final class FileData implements AutoCloseable {
         long now = System.nanoTime();
         cursors.values().removeIf(cursor -> { if (now - cursor.touched() < 60_000_000_000L) return false; closeQuietly(cursor.value()); return true; });
     }
-    @Override public synchronized void close() { closed = true; cursors.values().forEach(cursor -> closeQuietly(cursor.value())); cursors.clear(); }
+    @Override public synchronized void close() { closed = true; cursors.values().forEach(cursor -> closeQuietly(cursor.value())); cursors.clear(); watchInputs.clear(); recentFileInputs.clear(); }
     private static void closeQuietly(AutoCloseable value) { try { value.close(); } catch (Exception ignored) {} }
 }

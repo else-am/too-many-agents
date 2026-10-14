@@ -10,6 +10,7 @@ final class FileTreeScan implements AutoCloseable {
     private final ConfinedFiles.Root root;
     private final FileRepository.TreeRules rules;
     private final String query;
+    private final java.util.function.Consumer<ConfinedFiles.Info> loaded;
     private final ArrayDeque<String> folders = new ArrayDeque<>();
     private final Set<String> visited = new HashSet<>();
     private final Set<String> notices = new LinkedHashSet<>();
@@ -23,6 +24,12 @@ final class FileTreeScan implements AutoCloseable {
     private static final int MAX_RESULTS = 100_000;
 
     FileTreeScan(ConfinedFiles.Root root, FileRepository repository, String query) throws IOException {
+        this(root, repository, query, ignored -> {});
+    }
+
+    FileTreeScan(ConfinedFiles.Root root, FileRepository repository, String query,
+                 java.util.function.Consumer<ConfinedFiles.Info> loaded) throws IOException {
+        this.loaded = loaded;
         this.root = root;
         this.query = query.toLowerCase(Locale.ROOT);
         FileRepository.TreeRules prepared = null;
@@ -69,6 +76,7 @@ final class FileTreeScan implements AutoCloseable {
             if (firstBatch) {
                 firstBatch = false;
                 if (!visited.add(batch.info().path())) { directory.close(); directory = null; continue; }
+                loaded.accept(batch.info());
                 if (visited.size() > 50_000) { incomplete("Tree folder limit reached. Open folders individually to continue."); directory.close(); directory = null; folders.clear(); break; }
             }
             for (var entry : batch.entries()) {
@@ -86,7 +94,7 @@ final class FileTreeScan implements AutoCloseable {
                     continue;
                 }
                 boolean excluded = entry.name().equals(".git");
-                try { excluded |= rules != null && rules.ignored(path, isDirectory); }
+                try { excluded = excluded || (rules != null && rules.ignored(path, isDirectory)); }
                 catch (IOException unavailable) { incomplete("Some ignore rules could not be read."); }
                 if (matches(path)) {
                     if (!include(path, isDirectory, files, directories)) break;

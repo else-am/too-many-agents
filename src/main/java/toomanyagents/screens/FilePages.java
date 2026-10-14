@@ -129,6 +129,7 @@ final class FilePages {
 
     static void cancel(ScreenView.Access access) {
         if (access == null) return;
+        FileWatches.cancel(access);
         var session = sessions.remove(access);
         if (session != null) session.invalidate();
         var pending = requests.remove(access);
@@ -145,6 +146,8 @@ final class FilePages {
         var result = submit(() -> {
             if (!current(view, access)) throw new IOException("The page changed.");
             JsonObject value = session.data(URI.create(url), access.notice());
+            if (URI.create(url).getPath().equals("/_api/state")) value.addProperty("document", access.document());
+            FileWatches.inputs(view, access, session.watchInputs(), session.watchInputsLimited());
             if (!current(view, access)) throw new IOException("The page changed.");
             return value.toString();
         });
@@ -157,6 +160,25 @@ final class FilePages {
         return result;
     }
 
-    /** Watcher changes discard derived data and close active scans; the next request starts fresh. */
-    static void invalidate(ScreenView.Access access) { cancel(access); }
+    /** Invalidation retains the subscription and grant, but discards derived state before the page refetches. */
+    static CompletableFuture<Void> changed(ScreenView view, ScreenView.Access access, boolean structure, boolean git, boolean rules) {
+        var pending = requests.computeIfAbsent(access, ignored -> ConcurrentHashMap.newKeySet());
+        CompletableFuture<Void> result = submit(() -> {
+            if (!current(view, access)) throw new IOException("The page changed.");
+            var session = sessions.get(access);
+            if (session != null) session.changed(structure, git, rules);
+            if (!current(view, access)) throw new IOException("The page changed.");
+            return null;
+        });
+        pending.add(result);
+        result.whenComplete((ignored, failure) -> pending.remove(result));
+        if (!current(view, access)) { result.cancel(true); cancel(access); }
+        return result;
+    }
+
+    static void sleeping(ScreenView.Access access) {
+        if (access == null) return;
+        var pending = requests.get(access);
+        if (pending != null) for (var request : pending) request.cancel(true);
+    }
 }

@@ -9,6 +9,7 @@ import { marked } from "marked";
 import "./viewer.css";
 
 type State = {
+  document?: number;
   root: string;
   git?: boolean;
   notice?: string;
@@ -36,6 +37,15 @@ type TreeData = {
   notices?: string[];
   git?: boolean;
   cursor?: string;
+};
+type Invalidation = {
+  content?: boolean;
+  structure?: boolean;
+  git?: boolean;
+  rules?: boolean;
+  reconcile?: boolean;
+  limited?: boolean;
+  paths?: string[];
 };
 type Change = { path: string; kind: string; notice?: string };
 type DiffRow = {
@@ -125,6 +135,11 @@ function mount(element: HTMLElement, state: State) {
     searchTimer = 0,
     refreshTimer = 0,
     treeRequest = 0;
+  let pendingRefresh: Invalidation | undefined;
+  let refreshing = false;
+  let contentScrollVersion = 0;
+  let expectedContentScroll = 0;
+  const contentPaths = new Set<string>();
   const diffs = new Map<string, DiffRow>();
   const nearDiffs = new Set<DiffRow>();
   const activeDiffRequests = new Set<AbortController>();
@@ -138,6 +153,8 @@ function mount(element: HTMLElement, state: State) {
   let treeSelectionPending = false;
   let treeScrollPending = false;
   let treeRevealFrame = 0;
+  let treeRefreshAnchor: { path: string; offset: number } | undefined;
+  let treeInteraction = 0;
   let treeLimitReached = false;
   const directoryRequests = new Map<string, AbortController>();
   const pendingDirectories = new Set<string>();
@@ -407,8 +424,10 @@ function mount(element: HTMLElement, state: State) {
     for (const node of fragment.querySelectorAll("img")) {
       const target = relativeResource(node.getAttribute("src") ?? "", path);
       node.removeAttribute("src");
-      if (target && imageType(target)) images.push({ node, path: target });
-      else
+      if (target && imageType(target)) {
+        contentPaths.add(target);
+        images.push({ node, path: target });
+      } else
         node.replaceWith(
           el("span", "fv-muted", node.alt || "Image unavailable"),
         );
@@ -468,6 +487,8 @@ function mount(element: HTMLElement, state: State) {
             );
           } else {
             pixels += nextPixels;
+            image.node.width = data.image!.width;
+            image.node.height = data.image!.height;
             image.node.src = blob(data, data.image!.mime);
           }
         } else
@@ -490,17 +511,50 @@ function mount(element: HTMLElement, state: State) {
     contentScope.abort();
     contentScope = new AbortController();
     const signal = contentScope.signal;
-    const scroll = preserveScroll ? main.scrollTop : 0;
-    status.textContent = "Loading…";
+    contentPaths.clear();
+    contentPaths.add(path);
+    if (!preserveScroll) status.textContent = "Loading…";
     const data = await api<Content>("file", { path }, signal);
-    fileView?.cleanUp();
-    fileView = undefined;
-    revokeImages();
+    const oldView = fileView;
+    const oldBlobs = new Set(blobs);
+    let nextView: CodeFile | undefined;
+    let committed = false;
+    let scroll = 0;
+    let scrollVersion = contentScrollVersion;
+    let restoreFrame = 0;
+    const restoreScroll = () => {
+      cancelAnimationFrame(restoreFrame);
+      restoreFrame = requestAnimationFrame(() => {
+        if (
+          signal.aborted ||
+          !committed ||
+          contentScrollVersion !== scrollVersion
+        )
+          return;
+        main.scrollTop = scroll;
+        expectedContentScroll = main.scrollTop;
+      });
+    };
+    const commit = () => {
+      if (committed || signal.aborted) return;
+      scroll = preserveScroll ? main.scrollTop : 0;
+      scrollVersion = contentScrollVersion;
+      committed = true;
+      oldView?.cleanUp();
+      fileView = nextView;
+      for (const url of oldBlobs) {
+        URL.revokeObjectURL(url);
+        blobs.delete(url);
+      }
+      main.replaceChildren(title, content);
+      main.scrollTop = scroll;
+      expectedContentScroll = main.scrollTop;
+      if (preserveScroll) restoreScroll();
+    };
     const title = el("div", "fv-file-header"),
       name = el("span", "", path),
       content = el("div", "fv-file");
     title.append(name);
-    main.replaceChildren(title, content);
     if (/\.(md|markdown)$/i.test(path)) {
       const toggle = el("button", "", preview ? "Source" : "Preview");
       toggle.onclick = () => {
@@ -525,6 +579,8 @@ function mount(element: HTMLElement, state: State) {
     else if (imageType(path) && safeImage(data)) {
       const img = el("img", "fv-image");
       img.alt = path;
+      img.width = data.image!.width;
+      img.height = data.image!.height;
       img.src = blob(data, data.image!.mime);
       content.append(img);
     } else if (imageType(path) && !/\.svg$/i.test(path))
@@ -546,25 +602,36 @@ function mount(element: HTMLElement, state: State) {
         await markdown(content, source, path, signal);
       else {
         let located = false;
-        fileView = new CodeFile({
+        nextView = new CodeFile({
           ...lineOptions(path),
           disableFileHeader: true,
-          onPostRender: () => {
-            if (fileView && !preserveScroll && !located) {
+          onPostRender: (_host, instance, phase) => {
+            if (phase === "unmount" || signal.aborted || nextView !== instance)
+              return;
+            commit();
+            if (preserveScroll) restoreScroll();
+            else if (!located) {
               located = true;
-              applyLines(fileView, content, true);
+              applyLines(instance, content, true);
             }
           },
         });
-        fileView.render({
+        signal.addEventListener(
+          "abort",
+          () => {
+            cancelAnimationFrame(restoreFrame);
+            if (!committed) nextView?.cleanUp();
+          },
+          { once: true },
+        );
+        nextView.render({
           file: { name: path, contents: source },
           containerWrapper: content,
         });
-        applyLines(fileView, content, !preserveScroll);
       }
     }
     if (!signal.aborted) {
-      main.scrollTop = scroll;
+      if (!nextView) commit();
       status.textContent = "";
       setNotices("file", [data.notice]);
       if (preview && !preserveScroll && location.hash)
@@ -682,9 +749,44 @@ function mount(element: HTMLElement, state: State) {
     } finally {
       updatingTree = false;
     }
+    if (treeRefreshAnchor && tree.getItem(treeRefreshAnchor.path)) {
+      const anchor = treeRefreshAnchor;
+      const interaction = treeInteraction;
+      treeRefreshAnchor = undefined;
+      tree.scrollToPath(anchor.path, { focus: false, offset: "top" });
+      requestAnimationFrame(() => {
+        if (disposed || interaction !== treeInteraction) return;
+        const scroller = treeScroller();
+        if (scroller) scroller.scrollTop += anchor.offset;
+      });
+    }
     treeChanged();
   }
-  function createTree(paths: string[], gitStatus: GitStatusEntry[] = []) {
+  function treeScroller() {
+    return tree
+      ?.getFileTreeContainer()
+      ?.shadowRoot?.querySelector<HTMLElement>(
+        "[data-file-tree-virtualized-scroll]",
+      );
+  }
+  function createTree(
+    paths: string[],
+    gitStatus: GitStatusEntry[] = [],
+    preserveScroll = false,
+  ) {
+    if (preserveScroll && tree && !treeRefreshAnchor) {
+      const scroller = treeScroller();
+      if (scroller) {
+        const height = tree.getItemHeight();
+        const index = Math.floor(scroller.scrollTop / height);
+        const row = tree.getVisibleRows(index, index + 1)[0];
+        if (row)
+          treeRefreshAnchor = {
+            path: row.path,
+            offset: scroller.scrollTop % height,
+          };
+      }
+    }
     treeSelectionPending = Boolean(currentPath);
     updatingTree = true;
     try {
@@ -759,6 +861,7 @@ function mount(element: HTMLElement, state: State) {
     if (
       disposed ||
       directoryBusy ||
+      refreshing ||
       treeLimitReached ||
       mode === "changes" ||
       search.value.trim()
@@ -839,6 +942,125 @@ function mount(element: HTMLElement, state: State) {
         directoryRequests.delete(path);
     }
   }
+  async function refreshTree() {
+    const query = search.value.trim();
+    const signal = scope.signal;
+    const request = ++treeRequest;
+    for (const directoryRequest of directoryRequests.values())
+      directoryRequest.abort();
+    const paths = new Set<string>();
+    const directories = new Set<string>();
+    const ignored = new Set<string>();
+    const messages = new Set<string>();
+    let cursor = "";
+    let partial = false;
+    do {
+      const data = await api<TreeData>(
+        "tree",
+        { query, ...(cursor ? { cursor } : {}) },
+        signal,
+      );
+      if (request !== treeRequest || query !== search.value.trim()) return;
+      if (data.git !== undefined) {
+        state.git = data.git;
+        modes.hidden = !data.git;
+        if (data.git) setNotices("repository", []);
+      }
+      for (const path of data.paths) {
+        if (paths.size + directories.size >= MAX_TREE_PATHS) break;
+        paths.add(path);
+      }
+      for (const path of data.directories) {
+        if (paths.size + directories.size >= MAX_TREE_PATHS) break;
+        directories.add(path);
+      }
+      for (const path of data.ignored) {
+        if (ignored.size >= MAX_TREE_PATHS) break;
+        ignored.add(path);
+      }
+      for (const message of data.notices ?? []) messages.add(message);
+      partial = Boolean(data.partial);
+      if (!data.cursor || data.cursor === cursor) break;
+      if (paths.size + directories.size >= MAX_TREE_PATHS) {
+        messages.add(TREE_LIMIT_NOTICE);
+        break;
+      }
+      cursor = data.cursor;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } while (!signal.aborted);
+    // The index intentionally skips ignored folders. Refresh their expanded contents
+    // before swapping models, so unrelated changes do not briefly hide the selection.
+    if (!query) {
+      for (const expanded of expandedTreePaths) {
+        if (paths.size + directories.size >= MAX_TREE_PATHS) break;
+        const path = expanded.replace(/\/$/, "");
+        let ignoredAncestor = false;
+        for (
+          let parent = path;
+          parent;
+          parent = parent.slice(0, parent.lastIndexOf("/"))
+        ) {
+          if (ignored.has(parent) || ignored.has(parent + "/")) {
+            ignoredAncestor = true;
+            break;
+          }
+          if (!parent.includes("/")) break;
+        }
+        if (!ignoredAncestor) continue;
+        let folderCursor = "";
+        try {
+          do {
+            const listing = await api<{
+              entries: { name: string; kind: string; ignored?: boolean }[];
+              cursor?: string;
+              truncated?: boolean;
+            }>(
+              "list",
+              { path, ...(folderCursor ? { cursor: folderCursor } : {}) },
+              signal,
+            );
+            if (request !== treeRequest || query !== search.value.trim())
+              return;
+            directories.add(path);
+            for (const entry of listing.entries) {
+              if (paths.size + directories.size >= MAX_TREE_PATHS) break;
+              const child = path + "/" + entry.name;
+              if (entry.kind === "directory") directories.add(child);
+              else paths.add(child);
+              if (entry.ignored && ignored.size < MAX_TREE_PATHS)
+                ignored.add(child);
+            }
+            partial ||= Boolean(listing.truncated && !listing.cursor);
+            if (
+              !listing.cursor ||
+              listing.cursor === folderCursor ||
+              paths.size + directories.size >= MAX_TREE_PATHS
+            )
+              break;
+            folderCursor = listing.cursor;
+          } while (!signal.aborted);
+        } catch (error) {
+          if (signal.aborted) throw error;
+          messages.add(
+            error instanceof Error
+              ? error.message
+              : "Folder refresh unavailable",
+          );
+        }
+      }
+    }
+    signal.throwIfAborted();
+    if (request !== treeRequest || query !== search.value.trim()) return;
+    createTree(
+      [...paths, ...[...directories].map((path) => path + "/")],
+      [...ignored].map((path) => ({ path, status: "ignored" })),
+      true,
+    );
+    if (partial) messages.add("Partial results - expand folders to load more");
+    if (treeLimitReached) messages.add(TREE_LIMIT_NOTICE);
+    treeStatus.textContent = [...messages].join(" - ");
+  }
+
   async function loadTree(query = "", signal = scope.signal, cursor = "") {
     treeStatus.textContent = query ? "Searching…" : "Indexing…";
     const request = ++treeRequest;
@@ -848,7 +1070,11 @@ function mount(element: HTMLElement, state: State) {
       signal,
     );
     if (request !== treeRequest) return;
-    if (data.git !== undefined) modes.hidden = !data.git;
+    if (data.git !== undefined) {
+      state.git = data.git;
+      modes.hidden = !data.git;
+      if (data.git) setNotices("repository", []);
+    }
     const paths = [
       ...data.paths,
       ...data.directories.map((path) => path + "/"),
@@ -1098,13 +1324,31 @@ function mount(element: HTMLElement, state: State) {
   }
 
   async function loadChanges(preserveScroll = false) {
-    status.textContent = "Comparing…";
-    const data = await api<{
+    if (!preserveScroll) status.textContent = "Comparing…";
+    const signal = scope.signal;
+    let data: {
       base: string;
       changes: Change[];
       partial?: boolean;
       notices?: string[];
-    }>("changes", { base });
+    };
+    try {
+      data = await api("changes", { base }, signal);
+    } catch (error) {
+      if (signal.aborted) throw error;
+      const current = await api<State>("state", {}, signal);
+      if (current.git !== false) throw error;
+      state.git = false;
+      urlUpdate({ mode: null }, undefined, true);
+      setNotices("repository", [
+        "Git is unavailable for this folder - showing all files",
+      ]);
+      await navigate();
+      return;
+    }
+    state.git = true;
+    modes.hidden = false;
+    setNotices("repository", []);
     const statuses: GitStatusEntry[] = [];
     for (const change of data.changes) {
       if (
@@ -1121,6 +1365,7 @@ function mount(element: HTMLElement, state: State) {
     createTree(
       data.changes.map((change) => change.path),
       statuses,
+      preserveScroll,
     );
     baseSelect.options[0].textContent =
       base === "branch" && data.base === "uncommitted"
@@ -1203,6 +1448,11 @@ function mount(element: HTMLElement, state: State) {
     }
   }
   async function navigate() {
+    clearTimeout(refreshTimer);
+    refreshTimer = 0;
+    pendingRefresh = undefined;
+    treeRefreshAnchor = undefined;
+    treeInteraction++;
     scope.abort();
     scope = new AbortController();
     cancelAnimationFrame(treeRevealFrame);
@@ -1346,6 +1596,53 @@ function mount(element: HTMLElement, state: State) {
       void loadTree(query, signal).catch(report);
     }, 150);
   };
+  function queueRefresh() {
+    if (disposed || refreshing || refreshTimer || !pendingRefresh) return;
+    // Do not reset this timer: continuous writes must still produce updates.
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = 0;
+      const change = pendingRefresh;
+      pendingRefresh = undefined;
+      if (!change || disposed) return;
+      refreshing = true;
+      const full = change.reconcile || change.structure || change.rules;
+      const affected = new Set(change.paths ?? []);
+      let work: Promise<unknown>;
+      if (mode === "changes") {
+        for (const row of diffs.values()) {
+          if (
+            full ||
+            change.git ||
+            affected.has(row.change.path) ||
+            (change.content && !affected.size)
+          ) {
+            row.dirty = true;
+            row.request?.abort();
+            row.request = undefined;
+          }
+        }
+        work = loadChanges(true);
+      } else {
+        const tasks: Promise<unknown>[] = [];
+        if (full || change.git) tasks.push(refreshTree());
+        if (
+          currentPath &&
+          (full ||
+            (change.content &&
+              (!affected.size ||
+                [...contentPaths].some((path) => affected.has(path)))))
+        ) {
+          tasks.push(openFile(currentPath, true));
+        }
+        work = Promise.all(tasks);
+      }
+      void work.catch(report).finally(() => {
+        refreshing = false;
+        pumpDirectories();
+        queueRefresh();
+      });
+    }, 100);
+  }
   const pop = () => {
     void navigate().catch(report);
   };
@@ -1365,13 +1662,28 @@ function mount(element: HTMLElement, state: State) {
     }
   };
   const releasePinned = () => {
+    contentScrollVersion++;
     pinnedDiff = undefined;
     diffAnchor = visibleAnchor();
   };
   const onDiffScroll = () => {
+    if (
+      mode === "files" &&
+      Math.abs(main.scrollTop - expectedContentScroll) > 1
+    ) {
+      contentScrollVersion++;
+      expectedContentScroll = main.scrollTop;
+    }
     if (!pinnedDiff) diffAnchor = visibleAnchor();
     scheduleDiffs();
   };
+  const treeInteracted = () => {
+    treeInteraction++;
+    treeRefreshAnchor = undefined;
+  };
+  sidebar.addEventListener("wheel", treeInteracted, { passive: true });
+  sidebar.addEventListener("pointerdown", treeInteracted);
+  sidebar.addEventListener("keydown", treeInteracted);
   main.addEventListener("wheel", releasePinned, { passive: true });
   main.addEventListener("touchstart", releasePinned, { passive: true });
   main.addEventListener("pointerdown", releasePinned);
@@ -1381,24 +1693,31 @@ function mount(element: HTMLElement, state: State) {
   window.addEventListener("hashchange", hash);
   void navigate().catch(report);
   return {
-    refresh() {
-      clearTimeout(refreshTimer);
-      refreshTimer = window.setTimeout(() => {
-        if (disposed) return;
-        if (mode === "changes") {
-          scope.abort();
-          scope = new AbortController();
-          for (const row of diffs.values()) {
-            row.dirty = true;
-            row.request?.abort();
-            row.request = undefined;
-          }
-          void loadChanges(true).catch(report);
-        } else {
-          void loadTree(search.value.trim()).catch(report);
-          if (currentPath) void openFile(currentPath, true).catch(report);
-        }
-      }, 100);
+    refresh(change: Invalidation = { reconcile: true }) {
+      setNotices(
+        "watch",
+        change.limited
+          ? [
+              "Live updates have limited coverage - periodic refresh remains active",
+            ]
+          : [],
+      );
+      const previous = pendingRefresh;
+      const wildcard =
+        (previous?.content && !previous.paths?.length) ||
+        (change.content && !change.paths?.length);
+      const paths = [
+        ...new Set([...(previous?.paths ?? []), ...(change.paths ?? [])]),
+      ];
+      pendingRefresh = {
+        content: previous?.content || change.content,
+        structure: previous?.structure || change.structure,
+        git: previous?.git || change.git,
+        rules: previous?.rules || change.rules,
+        reconcile: previous?.reconcile || change.reconcile,
+        paths: wildcard || paths.length > MAX_TREE_PATHS ? [] : paths,
+      };
+      queueRefresh();
     },
     dispose() {
       disposed = true;
@@ -1417,6 +1736,9 @@ function mount(element: HTMLElement, state: State) {
       cancelAnimationFrame(treeRevealFrame);
       revokeImages();
       diffResize.disconnect();
+      sidebar.removeEventListener("wheel", treeInteracted);
+      sidebar.removeEventListener("pointerdown", treeInteracted);
+      sidebar.removeEventListener("keydown", treeInteracted);
       main.removeEventListener("wheel", releasePinned);
       main.removeEventListener("touchstart", releasePinned);
       main.removeEventListener("pointerdown", releasePinned);

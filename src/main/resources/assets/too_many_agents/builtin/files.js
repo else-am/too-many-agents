@@ -10,8 +10,14 @@ const order = (a, b) => Number(a.kind !== 'directory') - Number(b.kind !== 'dire
   || a.name.localeCompare(b.name, undefined, {sensitivity: 'base'}) || a.name.localeCompare(b.name);
 let home = '', entries = [], selected = -1, completion = 0, viewer, viewerBundle;
 let scope = new AbortController(), completing;
-let listingFrame = 0;
-const notice = text => { $('notice').textContent = text; };
+let listingFrame = 0, watchId, watchGeneration = 0, pickerTimer = 0;
+let pickerRefreshing = false, pickerDirty = false, watchNotice = '';
+let lastRevision = 0;
+let pageNotice = '';
+const notice = text => {
+  pageNotice = text;
+  $('notice').textContent = [pageNotice, watchNotice].filter(Boolean).join(' - ');
+};
 const join = (folder, name) => `${folder.replace(/\/$/, '')}/${name}`;
 function address(path, pick) {
   let full = slash(path);
@@ -191,6 +197,108 @@ async function loadViewer(signal) {
   signal.throwIfAborted();
   if (typeof window.tmaFilesViewer !== 'function') throw Error('The file viewer did not initialize.');
 }
+async function loadListing(refresh, signal = scope.signal) {
+  let cursor = '', limited = false, truncated = false;
+  const next = new Map();
+  do {
+    const listing = await api('list', '', cursor, signal);
+    for (const item of listing.entries) {
+      if (next.size >= MAX_ENTRIES && !next.has(item.name)) { limited = true; break; }
+      next.set(item.name, item);
+    }
+    if (!refresh) append(listing.entries);
+    if (listing.cursor && listing.cursor === cursor) throw Error('Folder listing stopped advancing. Reopen the folder to refresh.');
+    cursor = listing.cursor || '';
+    truncated = listing.truncated;
+    if (limited || next.size >= MAX_ENTRIES && (cursor || truncated)) { limited = true; break; }
+    if (!refresh && cursor) notice(`${next.size.toLocaleString()} names - loading…`);
+    if (cursor) await new Promise(resolve => setTimeout(resolve, 0));
+    signal.throwIfAborted();
+  } while (cursor);
+  signal.throwIfAborted();
+  if (refresh) {
+    const listing = $('listing');
+    const chosen = entries[selected]?.name;
+    const anchor = entries[Math.floor(listing.scrollTop / ROW)]?.name;
+    const scroll = listing.scrollTop, offset = scroll % ROW;
+    entries = [...next.values()].sort(order);
+    selected = chosen === undefined ? -1 : entries.findIndex(item => item.name === chosen);
+    const anchorIndex = anchor === undefined ? -1 : entries.findIndex(item => item.name === anchor);
+    renderRows();
+    listing.scrollTop = anchorIndex >= 0 ? anchorIndex * ROW + offset : scroll;
+    renderRows();
+  }
+  notice(limited ? `Showing ${MAX_ENTRIES.toLocaleString()} names - listing incomplete. Type a path or use Tab completion to reach other names.`
+    : truncated ? 'Listing incomplete - enter a path or reopen the folder.' : entries.length ? '' : 'This folder is empty.');
+}
+function queuePickerRefresh() {
+  pickerDirty = true;
+  if (pickerTimer || pickerRefreshing || scope.signal.aborted) return;
+  pickerTimer = setTimeout(async () => {
+    pickerTimer = 0;
+    pickerDirty = false;
+    pickerRefreshing = true;
+    try { await loadListing(true); }
+    catch (error) { if (error.name !== 'AbortError') notice(error.message); }
+    finally {
+      pickerRefreshing = false;
+      if (pickerDirty) queuePickerRefresh();
+    }
+  }, 100);
+}
+function stopWatch() {
+  watchGeneration++;
+  if (watchId !== undefined) window.cefQueryCancel?.({request_id: watchId});
+  watchId = undefined;
+  clearTimeout(pickerTimer); pickerTimer = 0; pickerDirty = false;
+}
+function startWatch(documentEpoch) {
+  stopWatch();
+  if (typeof window.cefQuery !== 'function' || scope.signal.aborted || !Number.isSafeInteger(documentEpoch)) return;
+  const generation = watchGeneration;
+  function arm() {
+    if (generation !== watchGeneration || scope.signal.aborted) return;
+    watchId = window.cefQuery({
+      request: `screen-files:watch:${documentEpoch}`,
+      persistent: false,
+      onSuccess: response => {
+        if (generation !== watchGeneration || scope.signal.aborted) return;
+        watchId = undefined;
+        let change;
+        try {
+          change = JSON.parse(response);
+          if (!Number.isSafeInteger(change.revision)) throw Error('Invalid watch revision');
+        } catch {
+          watchNotice = 'Live updates unavailable - reopen this page to refresh';
+          notice(pageNotice);
+          return;
+        }
+        // JCEF consumes each callback once. Rearm before refreshing, without recursive callbacks.
+        queueMicrotask(() => {
+          if (generation !== watchGeneration || scope.signal.aborted) return;
+          arm();
+          if (change.revision <= lastRevision) return;
+          lastRevision = change.revision;
+          watchNotice = change.limited ? 'Live updates have limited coverage - periodic refresh remains active' : '';
+          if (viewer) {
+            watchNotice = '';
+            viewer.refresh(change);
+          } else if (change.reconcile || change.structure || change.rules) {
+            queuePickerRefresh();
+          }
+          notice(pageNotice);
+        });
+      },
+      onFailure: (_code, message) => {
+        if (generation !== watchGeneration || scope.signal.aborted) return;
+        watchId = undefined;
+        watchNotice = message || 'Live updates unavailable - reopen this page to refresh';
+        notice(pageNotice);
+      }
+    });
+  }
+  arm();
+}
 async function start() {
   const signal = scope.signal;
   try {
@@ -199,22 +307,7 @@ async function start() {
     notice(state.notice || '');
     if (new URLSearchParams(location.search).has('pick')) {
       $('picker').hidden = false;
-      let cursor = '';
-      do {
-        const listing = await api('list', '', cursor, signal);
-        const limited = append(listing.entries);
-        if (listing.cursor && listing.cursor === cursor) throw Error('Folder listing stopped advancing. Reopen the folder to refresh.');
-        cursor = listing.cursor || '';
-        if (limited || entries.length >= MAX_ENTRIES && (cursor || listing.truncated)) {
-          notice(`Showing ${MAX_ENTRIES.toLocaleString()} names - listing incomplete. Type a path or use Tab completion to reach other names.`);
-          break;
-        }
-        notice(cursor ? `${entries.length.toLocaleString()} names - loading…` : listing.truncated
-          ? 'Listing incomplete - enter a path or reopen the folder.' : entries.length ? '' : 'This folder is empty.');
-        // Yield between batches so navigation and scrolling stay responsive.
-        if (cursor) await new Promise(resolve => setTimeout(resolve, 0));
-        signal.throwIfAborted();
-      } while (cursor);
+      await loadListing(entries.length > 0, signal);
     } else {
       document.body.classList.add('showing-viewer');
       $('viewer').hidden = false;
@@ -223,9 +316,11 @@ async function start() {
       viewer = window.tmaFilesViewer($('viewer'), state);
       notice('');
     }
+    startWatch(state.document);
   } catch (error) { if (error.name !== 'AbortError') notice(error.message); }
 }
 window.addEventListener('pagehide', () => {
+  stopWatch();
   scope.abort(); completing?.abort(); completion++;
   viewer?.dispose(); viewer = undefined;
   cancelAnimationFrame(listingFrame); listingFrame = 0;
@@ -233,7 +328,7 @@ window.addEventListener('pagehide', () => {
 });
 window.addEventListener('pageshow', event => {
   if (!event.persisted) return;
-  scope = new AbortController(); entries = []; selected = -1;
+  scope = new AbortController();
   resizing.observe($('listing'));
   void start();
 });

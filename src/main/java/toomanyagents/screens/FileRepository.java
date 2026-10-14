@@ -40,8 +40,10 @@ public final class FileRepository {
     private final ConfinedFiles.Root common;
     private final String repositoryRoot;
     private final String prefix;
+    private final java.util.function.Consumer<FileWatchInput> watches;
 
-    private FileRepository(ConfinedFiles.Root scope, ConfinedFiles.Root git, ConfinedFiles.Root common, Path root) {
+    private FileRepository(ConfinedFiles.Root scope, ConfinedFiles.Root git, ConfinedFiles.Root common, Path root, java.util.function.Consumer<FileWatchInput> watches) {
+        this.watches = watches;
         this.scope = scope;
         this.git = git;
         this.common = common;
@@ -57,13 +59,21 @@ public final class FileRepository {
 
     /** Finds a containing repository. A returned repository never changes the supplied content grant. */
     public static FileRepository discover(ConfinedFiles.Root scope) throws IOException {
+        return discover(scope, ignored -> {});
+    }
+
+    static FileRepository discover(ConfinedFiles.Root scope, java.util.function.Consumer<FileWatchInput> watches) throws IOException {
         var budget = new Budget();
         for (Path ancestor = Path.of(scope.path()); ancestor != null; ancestor = ancestor.getParent()) {
             budget.step();
             var parent = ConfinedFiles.grantExact(ancestor);
             ConfinedFiles.Info marker;
             try { marker = ConfinedFiles.info(parent, ".git"); }
-            catch (NoSuchFileException missing) { continue; }
+            catch (NoSuchFileException missing) {
+                watches.accept(new FileWatchInput(parent, ".git", false, FileWatchInput.Kind.GIT));
+                continue;
+            }
+            watches.accept(new FileWatchInput(parent, ".git", marker.kind() == ConfinedFiles.Kind.DIRECTORY, FileWatchInput.Kind.GIT));
             var expected = ancestor.resolve(".git");
             if (!marker.path().equals(expected.toString())) throw new IOException("Git metadata redirects through a symbolic link");
             ConfinedFiles.Root git, common;
@@ -91,7 +101,15 @@ public final class FileRepository {
                     || !text(ConfinedGitObjects.read(git, "commondir", 4096, budget)).trim().equals(commonLink))
                     throw new IOException("Worktree metadata changed during discovery");
             } else throw new IOException("Unsupported Git metadata entry");
-            var found = new FileRepository(scope, git, common, ancestor);
+            var found = new FileRepository(scope, git, common, ancestor, watches);
+            for (String name : List.of("HEAD", "index", "config.worktree", "commondir", "gitdir"))
+                watches.accept(new FileWatchInput(git, name, false, FileWatchInput.Kind.GIT));
+            for (String name : List.of("config", "packed-refs", "objects/info/alternates", "objects/info/http-alternates"))
+                watches.accept(new FileWatchInput(common, name, false, FileWatchInput.Kind.GIT));
+            for (String name : List.of("refs", "objects/pack"))
+                watches.accept(new FileWatchInput(common, name, true, FileWatchInput.Kind.GIT));
+            for (String name : List.of("info/exclude", "info/attributes"))
+                watches.accept(new FileWatchInput(common, name, false, FileWatchInput.Kind.RULES));
             found.config(budget);
             return found;
         }
@@ -99,7 +117,7 @@ public final class FileRepository {
     }
 
     private Config config(Budget budget) throws IOException {
-        var user = userConfig(ConfinedFiles.grant(Path.of(System.getProperty("user.home"))), budget, new LinkedHashSet<>());
+        var user = userConfig(ConfinedFiles.grant(Path.of(System.getProperty("user.home"))), budget, new LinkedHashSet<>(), watches);
         var defaults = new Config();
         // Only these data-only settings can affect comparisons. User helpers/includes never reach JGit.
         for (String key : List.of("autocrlf", "eol", "filemode")) {
@@ -327,6 +345,7 @@ public final class FileRepository {
         ConfinedFiles.Listing listing;
         try { listing = ConfinedFiles.list(common, folder, ConfinedFiles.MAX_ENTRIES); }
         catch (NoSuchFileException missing) { return; }
+        watches.accept(new FileWatchInput(common, folder, true, FileWatchInput.Kind.GIT));
         if (listing.truncated()) throw new Limit("Ref list is incomplete");
         for (var entry : listing.entries()) {
             budget.step();
@@ -413,6 +432,7 @@ public final class FileRepository {
             budget.step();
             if (!name.equals("HEAD") && !Repository.isValidRefName(name)) throw new IOException("Invalid Git ref");
             if (!seen.add(name)) throw new IOException("Cyclic symbolic Git ref");
+            watches.accept(new FileWatchInput(name.equals("HEAD") ? git : common, name, false, FileWatchInput.Kind.GIT));
             byte[] bytes = optional(name.equals("HEAD") ? git : common, name, 4096, budget);
             if (bytes == null) return packedRefs(budget).get(name);
             String value = text(bytes).trim();
@@ -531,6 +551,7 @@ public final class FileRepository {
         if (folder.split("/").length > 128) throw new Limit("Indexing incomplete - directory depth limit reached");
         var listing = ConfinedFiles.list(scope, folder.isEmpty() ? "." : folder, ConfinedFiles.MAX_ENTRIES);
         if (!visited.add(listing.info().path())) return;
+        watches.accept(new FileWatchInput(scope, listing.info().relative(), true, FileWatchInput.Kind.STRUCTURE));
         if (listing.truncated()) throw new Limit("Indexing incomplete - folder entry limit reached");
         for (var entry : listing.entries()) {
             budget.step();
@@ -580,6 +601,8 @@ public final class FileRepository {
                 String relative = "";
                 while (!directory.equals(Path.of(scope.path()))) {
                     var root = ConfinedFiles.grantExact(directory);
+                    watches.accept(new FileWatchInput(root, ".gitignore", false, FileWatchInput.Kind.RULES));
+                    watches.accept(new FileWatchInput(root, ".gitattributes", false, FileWatchInput.Kind.RULES));
                     var ignore = new IgnoreNode();
                     var attributes = new AttributesNode();
                     bytes = optional(root, ".gitignore", ConfinedFiles.MAX_BYTES, budget);
@@ -608,7 +631,7 @@ public final class FileRepository {
         /** Only user-owned config selects a global file. Repository config can never select a home-directory read. */
         private void loadUserRules() throws IOException {
             ConfinedFiles.Root home = ConfinedFiles.grant(Path.of(System.getProperty("user.home")));
-            Config user = userConfig(home, budget, notices);
+            Config user = userConfig(home, budget, notices, watches);
             String directory = userGitDirectory(home, notices);
             String excludes = user.getString("core", null, "excludesFile");
             byte[] bytes = excludes != null ? userFile(home, excludes)
@@ -626,7 +649,7 @@ public final class FileRepository {
                 notices.add("User Git rule file outside the home directory is not loaded");
                 return null;
             }
-            try { return userRuleBytes(home, target.toString(), budget); }
+            try { return userRuleBytes(home, target.toString(), budget, watches); }
             catch (ConfinedFiles.OutsideRoot outside) {
                 notices.add("User Git rule file outside the home directory is not loaded");
                 return null;
@@ -735,7 +758,7 @@ public final class FileRepository {
         }
     }
 
-    private static Config userConfig(ConfinedFiles.Root home, Budget budget, Set<String> notices) throws IOException {
+    private static Config userConfig(ConfinedFiles.Root home, Budget budget, Set<String> notices, java.util.function.Consumer<FileWatchInput> watches) throws IOException {
         Config user = new Config();
         String directory = userGitDirectory(home, notices);
         var names = new ArrayList<String>();
@@ -743,7 +766,7 @@ public final class FileRepository {
         names.add(".gitconfig");
         for (String name : names) {
             byte[] bytes;
-            try { bytes = userRuleBytes(home, name, budget); }
+            try { bytes = userRuleBytes(home, name, budget, watches); }
             catch (ConfinedFiles.OutsideRoot outside) {
                 notices.add("User Git configuration outside the home directory is not loaded");
                 continue;
@@ -777,13 +800,17 @@ public final class FileRepository {
         return target;
     }
 
-    private static byte[] userRuleBytes(ConfinedFiles.Root home, String path, Budget budget) throws IOException {
+    private static byte[] userRuleBytes(ConfinedFiles.Root home, String path, Budget budget, java.util.function.Consumer<FileWatchInput> watches) throws IOException {
         try {
             var content = ConfinedFiles.read(home, path);
             if (content.bytes() == null) throw new Limit("User Git rule file exceeds 2 MB");
             budget.bytes(content.bytes().length);
+            watches.accept(new FileWatchInput(home, path, false, FileWatchInput.Kind.RULES));
             return content.bytes();
-        } catch (NoSuchFileException missing) { return null; }
+        } catch (NoSuchFileException missing) {
+            watches.accept(new FileWatchInput(home, path, false, FileWatchInput.Kind.RULES));
+            return null;
+        }
     }
 
     private record WorkingHash(ObjectId id, long size, boolean executable, String sha256) {}
@@ -846,6 +873,7 @@ public final class FileRepository {
     }
 
     private byte[] workingOptional(String path, Budget budget) throws IOException {
+        watches.accept(new FileWatchInput(scope, path, false, FileWatchInput.Kind.RULES));
         try { return workingBytes(path, ConfinedFiles.MAX_BYTES, budget); }
         catch (NoSuchFileException missing) { return null; }
     }

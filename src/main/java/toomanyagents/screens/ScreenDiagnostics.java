@@ -144,6 +144,7 @@ public final class ScreenDiagnostics {
             browsers.add(browser);
         }
         result.add("browserViews", browsers);
+        result.add("fileWatches", FileWatches.diagnostics());
         result.addProperty("deniedNavigations", Chromium.deniedNavigations());
         result.addProperty("deniedRequests", Chromium.deniedRequests());
         result.add("placement", ScreenPlacement.state());
