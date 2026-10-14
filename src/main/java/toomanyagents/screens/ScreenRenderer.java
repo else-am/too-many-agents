@@ -69,7 +69,15 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         if (status != null) {
             // Scales with the screen, narrowed to fit its width.
             double size = Math.min(Math.clamp(h * 0.05, 0.08, 0.2), w * 0.8 * 9 / Minecraft.getInstance().font.width(status));
-            text(pose, buffers, status, w / 2, h / 2 - size / 2, size, STATUS, true, -0.002);
+            double y = h / 2 - size / 2;
+            if (view.url.isBlank()) {
+                // Below the blank page's buttons, kept inside the page.
+                var lower = view.blankBounds(ScreenView.BlankAction.ADDRESS);
+                double below = lower.y() + lower.height(), gap = lower.height() * 0.25;
+                size = Math.min(size, Math.max(0, h - below - gap * 2));
+                y = below + gap;
+            }
+            text(pose, buffers, status, w / 2, y, size, STATUS, true, -0.002);
         }
         if (view.url.isBlank()) blankButtons(pose, buffers, view);
         bar(pose, buffers, view);
@@ -118,20 +126,28 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     }
 
     private static void blankButtons(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
-        for (var action : ScreenView.BlankAction.values()) {
+        var font = Minecraft.getInstance().font;
+        var actions = ScreenView.BlankAction.values();
+        // One text size for both, narrowed so the longer label fits.
+        var first = view.blankBounds(actions[0]);
+        double size = first.height() * 0.36;
+        for (var action : actions) size = Math.min(size, first.width() * 0.85 * 9 / font.width(blankLabel(action)));
+        for (var action : actions) {
             var b = view.blankBounds(action);
             rect(buffers, pose.last().pose(), b.x(), b.y(), b.x() + b.width(), b.y() + b.height(), -0.002, FIELD);
-            double size = Math.min(b.height() * 0.4, b.width() * 0.2);
-            text(pose, buffers, action == ScreenView.BlankAction.ADDRESS ? "Address" : "Files",
-                b.x() + b.width() / 2, b.y() + (b.height() - size) / 2, size, TEXT, true, -0.003);
+            text(pose, buffers, blankLabel(action), b.x() + b.width() / 2, b.y() + (b.height() - size) / 2, size, TEXT, true, -0.003);
         }
+    }
+
+    private static String blankLabel(ScreenView.BlankAction action) {
+        return action == ScreenView.BlankAction.FILES ? "Open a file or folder" : "Open a URL or search";
     }
 
     private static void bar(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
         pose.pushPose();
         pose.translate(0, view.pageHeight, 0);
         var matrix = pose.last().pose();
-        double bar = view.barHeight, pad = bar * 0.16;
+        double bar = view.barHeight, pad = bar * 0.16, size = bar * TEXT_SIZE;
         rect(buffers, matrix, 0, 0, view.pageWidth, bar, -0.002, BAR);
         var font = Minecraft.getInstance().font;
 
@@ -141,31 +157,27 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         String naming = ScreenInput.fieldText(view, ScreenView.Part.NAME);
         if (naming != null) field(pose, buffers, nameX + pad, nameW - pad, bar, pad, naming, "", DIM);
         else {
-            double size = bar * 0.42, y = (bar - size) / 2, x = nameX + pad * 1.5;
+            double y = (bar - size) / 2, x = nameX + pad * 1.5;
             int room = (int) ((nameW - pad * 2.5) / (size / 9));
             // While an agent holds the screen's lease, its name follows the screen's.
             String holder = view.screen.holder(), label = holder.isEmpty() ? record.name() : record.name().isEmpty() ? holder : record.name() + " - " + holder;
             text(pose, buffers, font.plainSubstrByWidth(label, room), x, y, size, TEXT, false, -0.003);
         }
 
-        double glyph = Math.min(bar * 0.5, view.unit * 0.7);
-        var buttons = new ScreenView.Part[] {ScreenView.Part.BACK, ScreenView.Part.FORWARD, ScreenView.Part.RELOAD};
-        String[] glyphs = {"←", "→", "⟳"};
-        boolean[] enabled = {view.canGoBack, view.canGoForward, view.browser != null};
-        for (int i = 0; i < 3; i++) {
+        // Toolbar icons are BAR_ICON pixels square, centred in their buttons.
+        double pixel = Math.min(bar * 0.5, view.unit * 0.6) / BAR_ICON, iconY = (bar - BAR_ICON * pixel) / 2;
+        var buttons = new ScreenView.Part[] {ScreenView.Part.BACK, ScreenView.Part.FORWARD, ScreenView.Part.RELOAD, ScreenView.Part.MENU};
+        boolean[] enabled = {view.canGoBack, view.canGoForward, view.browser != null, true};
+        for (int i = 0; i < buttons.length; i++) {
             double center = (view.start(buttons[i]) + view.end(buttons[i])) / 2;
-            text(pose, buffers, glyphs[i], center, (bar - glyph) / 2, glyph, enabled[i] ? TEXT : DIM, true, -0.003);
+            int color = buttons[i] == ScreenView.Part.MENU && ScreenInput.menuOpen(view) ? ID : enabled[i] ? TEXT : DIM;
+            icon(buffers, matrix, BAR_ICONS[i], center - BAR_ICON * pixel / 2, iconY, pixel, color, -0.003);
         }
 
         double addressX = view.start(ScreenView.Part.ADDRESS), addressW = view.end(ScreenView.Part.ADDRESS) - addressX;
         String typed = ScreenInput.fieldText(view, ScreenView.Part.ADDRESS);
         if (view.url.isBlank()) field(pose, buffers, addressX, addressW, bar, pad, typed, "Enter an address", DIM);
         else field(pose, buffers, addressX, addressW, bar, pad, typed, view.url, TEXT);
-        // ⋯ opens the menu.
-        double cx = (view.start(ScreenView.Part.MENU) + view.end(ScreenView.Part.MENU)) / 2, dot = Math.min(bar, view.unit) * 0.09;
-        for (int i = -1; i <= 1; i++)
-            rect(buffers, matrix, cx + i * dot * 2.6 - dot / 2, bar / 2 - dot / 2, cx + i * dot * 2.6 + dot / 2, bar / 2 + dot / 2, -0.003,
-                ScreenInput.menuOpen(view) ? ID : TEXT);
         pose.popPose();
     }
 
@@ -195,6 +207,49 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
             text(pose, buffers, font.plainSubstrByWidth(label, (int) ((x0 + width - pad - labelX) / pixel)), labelX, textY, size, color, false, z - 0.002);
         }
     }
+
+    /** Bar text's capital height, as a share of the bar. */
+    private static final double TEXT_SIZE = 0.4;
+
+    /** The bar's icons as pixel art, in button order: back, forward, reload, and the menu's three dots. */
+    private static final int BAR_ICON = 9;
+    private static final String[][] BAR_ICONS = {
+        {".........",
+         "....#....",
+         "...#.....",
+         "..#......",
+         ".#######.",
+         "..#......",
+         "...#.....",
+         "....#....",
+         "........."},
+        {".........",
+         "....#....",
+         ".....#...",
+         "......#..",
+         ".#######.",
+         "......#..",
+         ".....#...",
+         "....#....",
+         "........."},
+        {"...###..#",
+         ".##....##",
+         ".#....###",
+         "#.......#",
+         "#.......#",
+         "#.......#",
+         ".#.....#.",
+         ".##...##.",
+         "...###..."},
+        {".........",
+         ".........",
+         ".........",
+         ".........",
+         "#...#...#",
+         ".........",
+         ".........",
+         ".........",
+         "........."}};
 
     /** The menu's icons as pixel art, in the menu's row order: power, an arrow rising out of a tray, a circular arrow. */
     private static final int ICON = 7;
@@ -231,7 +286,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     private static void field(PoseStack pose, MultiBufferSource buffers, double fieldX, double fieldW, double bar, double pad, String editing, String resting, int restingColor) {
         var matrix = pose.last().pose();
         rect(buffers, matrix, fieldX, pad, fieldX + fieldW, bar - pad, -0.003, FIELD);
-        double size = bar * 0.42, inset = pad * 1.5, textY = (bar - size) / 2;
+        double size = bar * TEXT_SIZE, inset = pad * 1.5, textY = (bar - size) / 2;
         var font = Minecraft.getInstance().font;
         int room = Math.max(0, (int) ((fieldW - 2 * inset) / (size / 9)));
         if (editing != null) {

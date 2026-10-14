@@ -129,7 +129,7 @@ final class ScreenView implements ScreenBrowser.View {
         blocksWide = entry.width();
         blocksHigh = entry.height();
         pageWidth = blocksWide - 2 * MARGIN;
-        barHeight = Math.clamp((blocksHigh - 2 * MARGIN) * 0.08, 0.14, 0.3);
+        barHeight = barHeight(blocksHigh);
         pageHeight = blocksHigh - 2 * MARGIN - barHeight;
         var pixels = viewport(blocksWide, blocksHigh);
         pixelWidth = pixels[0];
@@ -153,9 +153,12 @@ final class ScreenView implements ScreenBrowser.View {
             .add(rightVector.scale(-0.5 + MARGIN)).add(upVector.scale(blocksHigh - 0.5 - MARGIN));
     }
 
+    /** The navigation bar's height in blocks: a thin strip that grows a little on tall screens. */
+    static double barHeight(int blocksHigh) { return Math.clamp((blocksHigh - 2 * MARGIN) * 0.06, 0.11, 0.22); }
+
     /** The page's size in pixels for a screen this many blocks across and high. */
     static int[] viewport(int blocksWide, int blocksHigh) {
-        double width = blocksWide - 2 * MARGIN, height = blocksHigh - 2 * MARGIN - Math.clamp((blocksHigh - 2 * MARGIN) * 0.08, 0.14, 0.3);
+        double width = blocksWide - 2 * MARGIN, height = blocksHigh - 2 * MARGIN - barHeight(blocksHigh);
         double scale = Math.min(1, Math.sqrt(MAX_PIXELS / (width * height * PIXELS_PER_BLOCK * PIXELS_PER_BLOCK)));
         return new int[] {(int) Math.round(width * PIXELS_PER_BLOCK * scale), (int) Math.round(height * PIXELS_PER_BLOCK * scale)};
     }
@@ -219,11 +222,11 @@ final class ScreenView implements ScreenBrowser.View {
         boolean contains(double px, double py) { return px >= x && py >= y && px < x + width && py < y + height; }
     }
 
+    /** The blank page's two buttons, stacked and centred on the page: Files above Address. */
     Bounds blankBounds(BlankAction action) {
-        double width = Math.min(pageWidth * 0.34, barHeight * 3.5), height = Math.min(pageHeight * 0.3, barHeight * 1.2);
-        double gap = barHeight * 0.3;
-        return new Bounds(pageWidth / 2 - width - gap / 2 + action.ordinal() * (width + gap),
-            pageHeight - height - barHeight * 0.5, width, height);
+        double width = Math.min(pageWidth * 0.8, barHeight * 9), height = Math.min(pageHeight * 0.2, barHeight * 1.6);
+        double gap = height * 0.25, top = (pageHeight - 2 * height - gap) / 2;
+        return new Bounds((pageWidth - width) / 2, top + (action == BlankAction.FILES ? 0 : height + gap), width, height);
     }
 
     BlankAction blankAction(double x, double y) {
