@@ -205,6 +205,10 @@ public final class FileRepository {
                         if (pointer != null && lfsMatches(pointer, actual.sha256(), actual.size()) && !modeChanged) continue;
                         notice = "LFS content is local only - no download or filter is run";
                     }
+                    if (modeChanged) {
+                        String modeNotice = old.mode() == FileMode.SYMLINK.getBits() ? "File type changed" : "Executable bit changed";
+                        notice = notice == null ? modeNotice : notice + " - " + modeNotice;
+                    }
                     if (modeChanged || !actual.id().equals(old.id())) changes.add(new Change(path, "modified", notice));
                 } catch (NoSuchFileException missing) {
                     if (old != null) changes.add(new Change(path, "deleted", null));
@@ -224,6 +228,11 @@ public final class FileRepository {
     /** Reads current content with the same display cap as the ordinary viewer. */
     public Content workingContent(String path) throws IOException {
         path = checkedPath(path);
+        try {
+            byte[] target = ConfinedFiles.readLink(scope, path);
+            return new Content(path, target, target.length, "Symbolic link");
+        } catch (InterruptedIOException cancelled) { throw cancelled; }
+        catch (IOException notLink) { /* Ordinary files use the checked content handle below. */ }
         var content = ConfinedFiles.read(scope, path);
         var budget = new Budget();
         Config config = config(budget);
@@ -286,6 +295,30 @@ public final class FileRepository {
         path = checkedPath(path);
         var budget = new Budget();
         return new Policy(config(budget), budget, new LinkedHashSet<>()).ignored(path, directory);
+    }
+
+    /** One tree scan reuses its parsed ignore rules instead of reopening Git metadata for every entry. */
+    public TreeRules treeRules() throws IOException {
+        var budget = new Budget();
+        var notices = new LinkedHashSet<String>();
+        var tracked = new TreeSet<String>();
+        var index = readIndex(tracked, budget, notices);
+        return new TreeRules(List.copyOf(tracked), new Policy(config(budget), budget, notices), !index.complete(), notices);
+    }
+
+    public final class TreeRules {
+        private final List<String> tracked;
+        private final Policy policy;
+        private final boolean partial;
+        private final Set<String> notices;
+        private TreeRules(List<String> tracked, Policy policy, boolean partial, Set<String> notices) {
+            this.tracked = tracked; this.policy = policy; this.partial = partial; this.notices = notices;
+        }
+        public List<String> trackedPaths() { return tracked; }
+        public boolean partial() { return partial; }
+        public List<String> notices() { return List.copyOf(notices); }
+        public void beginPage() { policy.budget = new Budget(); }
+        public boolean ignored(String path, boolean directory) throws IOException { return policy.ignored(checkedPath(path), directory); }
     }
 
     private void collectRefs(String folder, Set<String> names, Budget budget) throws IOException {
@@ -514,7 +547,8 @@ public final class FileRepository {
     private final class Policy {
         private final ObjectReader reader;
         private final Map<String, ObjectId> indexed;
-        private final Budget budget;
+        private Budget budget;
+        private int ignoreBytes;
         private final Set<String> notices;
         private final Map<String, IgnoreNode> ignores = new HashMap<>();
         private final Map<String, AttributesNode> attributes = new HashMap<>();
@@ -624,7 +658,10 @@ public final class FileRepository {
                 if (node == null) {
                     node = new IgnoreNode();
                     byte[] bytes = workingOptional(folder + ".gitignore", budget);
-                    if (bytes != null) node.parse(new ByteArrayInputStream(bytes));
+                    if (ignores.size() >= 512 || ignoreBytes + (bytes == null ? 0 : bytes.length) > 8 * 1024 * 1024) {
+                        ignores.clear(); ignoreBytes = 0;
+                    }
+                    if (bytes != null) { node.parse(new ByteArrayInputStream(bytes)); ignoreBytes += bytes.length; }
                     ignores.put(folder, node);
                 }
                 next = node.checkIgnored(path.substring(folder.length()), directory);

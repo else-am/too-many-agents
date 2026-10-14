@@ -197,8 +197,8 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 ### To confirm while building
 
-- `@pierre/trees` provides an expand event to load folders lazily (otherwise wrap it).
-- Large-file and large-repo performance of `@pierre/trees` and `@pierre/diffs`.
+- ~~`@pierre/trees` provides an expand event to load folders lazily (otherwise wrap it).~~ Its public subscription and directory state support bounded lazy loading.
+- ~~Large-file and large-repo performance of `@pierre/trees` and `@pierre/diffs`.~~ Packaged checks cover search/selection and picker completion beyond 12,000 files, plus a 201-file change set with bounded nearby rendering. Selecting the last diff, retaining its filter, switching split/unified, wheel scrolling and dragging the scrollbar keep a stable view. Larger inputs expose explicit limits.
 - ~~JNA is available at runtime.~~ Minecraft ships JNA and jna-platform 5.14; the macOS and Linux x86_64 held-handle probes passed. Linux was exercised in a local container; Linux arm64 and Windows still need runtime checks.
 
 ### Not supported
@@ -210,8 +210,8 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 
 1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS and Linux x86_64; root-scoped serving acceptance and Linux arm64/Windows runtime validation remain.
 2. ~~Picker, address-bar paths and blank-screen buttons.~~ Packaged-client checks cover home/Tab completion, folder history, file-to-repository promotion, typed paths, ownership changes and saved-world restoration. Built-in-first startup and early stylesheet requests are handled using stock JCEF callbacks and per-browser request contexts. Agent data access remains disabled pending provider read-policy support.
-3. Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews, bounded loading and agent `kind:file`.
-4. Changes mode and base picker using the validated Git path. Agent `kind:changes`.
+3. ~~Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews and bounded loading.~~ Packaged-client checks cover syntax, line ranges, sanitized previews, binary/size/deleted states, and selection/search/Tab completion past 12,000 files. Native directory cursors passed macOS and Linux x86_64 replacement probes. Agent `kind:file` data access remains pending provider read-policy support.
+4. ~~Changes mode and base picker using the validated Git path.~~ Packaged checks cover Branch, Uncommitted, explicit/invalid refs, unborn HEAD and unified/split rendering. Agent `kind:changes` remains pending provider read-policy support.
 5. Watcher and live updates.
 6. Closing on archive and full lifecycle/acceptance checks.
 

@@ -1,14 +1,11 @@
 package toomanyagents.screens;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.Base64;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +16,11 @@ final class FilePages {
     private static final ThreadPoolExecutor WORK = new ThreadPoolExecutor(2, 2, 30, TimeUnit.SECONDS,
         new ArrayBlockingQueue<>(32), task -> { var thread = new Thread(task, "screen-files"); thread.setDaemon(true); return thread; });
     private static final Map<ScreenView.Access, Set<CompletableFuture<?>>> requests = new ConcurrentHashMap<>();
+    private static final Map<ScreenView.Access, FileData> sessions = new ConcurrentHashMap<>();
+    private static final ScheduledExecutorService CLEANUP = Executors.newSingleThreadScheduledExecutor(task -> {
+        var thread = new Thread(task, "screen-files-cleanup"); thread.setDaemon(true); return thread;
+    });
+    static { CLEANUP.scheduleWithFixedDelay(() -> sessions.values().forEach(FileData::expire), 15, 15, TimeUnit.SECONDS); }
     record Opened(ConfinedFiles.Root root, String url, String notice) {}
 
     private FilePages() {}
@@ -127,72 +129,34 @@ final class FilePages {
 
     static void cancel(ScreenView.Access access) {
         if (access == null) return;
+        var session = sessions.remove(access);
+        if (session != null) session.invalidate();
         var pending = requests.remove(access);
         if (pending != null) for (var request : pending) request.cancel(true);
+        if (session != null) CLEANUP.execute(session::close);
     }
 
     static CompletableFuture<String> request(ScreenView view, ScreenView.Access access, String url) {
         if (!current(view, access)) return CompletableFuture.failedFuture(new IOException("The page changed."));
+        if (access.root() == null || access.provenance() != ScreenView.Provenance.HUMAN)
+            return CompletableFuture.failedFuture(new IOException("Use the screen's address bar or Files button to open a folder. Agent file access is not enabled."));
+        var session = sessions.computeIfAbsent(access, ignored -> new FileData(access.root()));
         var pending = requests.computeIfAbsent(access, ignored -> ConcurrentHashMap.newKeySet());
         var result = submit(() -> {
             if (!current(view, access)) throw new IOException("The page changed.");
-            JsonObject value = data(access, URI.create(url));
+            JsonObject value = session.data(URI.create(url), access.notice());
             if (!current(view, access)) throw new IOException("The page changed.");
             return value.toString();
         });
         pending.add(result);
         result.whenComplete((value, failure) -> { pending.remove(result); });
-        if (!current(view, access)) result.cancel(true);
+        if (!current(view, access)) {
+            result.cancel(true);
+            cancel(access);
+        }
         return result;
     }
 
-    private static JsonObject data(ScreenView.Access access, URI uri) throws IOException {
-        if (access.root() == null || access.provenance() != ScreenView.Provenance.HUMAN)
-            throw new IOException("Use the screen's address bar or Files button to open a folder. Agent file access is not enabled.");
-        String operation = uri.getPath();
-        var result = new JsonObject();
-        result.addProperty("root", access.root().path());
-        if (operation.equals("/_api/state")) {
-            result.addProperty("home", System.getProperty("user.home"));
-            result.addProperty("human", true);
-            result.addProperty("notice", access.notice());
-            return result;
-        }
-        String path = query(uri).getOrDefault("path", "");
-        // API paths never select a different grant, even if they are absolute or contain '..'.
-        if (Path.of(path).isAbsolute() || (java.io.File.separatorChar == '\\' ? path.replace('\\', '/') : path).matches("(^|.*/)\\.\\.(/.*|$)")) throw new IOException("Use a path inside the viewed folder.");
-        if (operation.equals("/_api/list")) {
-            var listing = ConfinedFiles.list(access.root(), path, 2000);
-            result.addProperty("path", listing.info().relative());
-            result.addProperty("truncated", listing.truncated());
-            var entries = new JsonArray();
-            listing.entries().stream().sorted(Comparator.comparing((ConfinedFiles.Entry item) -> item.kind() != ConfinedFiles.Kind.DIRECTORY)
-                .thenComparing(ConfinedFiles.Entry::name, String.CASE_INSENSITIVE_ORDER)).forEach(item -> {
-                    var entry = new JsonObject();
-                    entry.addProperty("name", item.name());
-                    entry.addProperty("kind", item.kind().name().toLowerCase(java.util.Locale.ROOT));
-                    entry.addProperty("hidden", item.name().startsWith("."));
-                    entries.add(entry);
-                });
-            result.add("entries", entries);
-            return result;
-        }
-        if (operation.equals("/_api/file")) {
-            ConfinedFiles.Content file;
-            try { file = ConfinedFiles.read(access.root(), path); }
-            catch (java.nio.file.NoSuchFileException deleted) {
-                result.addProperty("path", path);
-                result.addProperty("deleted", true);
-                return result;
-            }
-            result.addProperty("deleted", false);
-            result.addProperty("path", file.info().relative());
-            result.addProperty("size", file.info().size());
-            result.addProperty("tooLarge", file.bytes() == null);
-            // Bytes are data, never executable HTML/SVG served on the privileged origin.
-            if (file.bytes() != null) result.addProperty("base64", Base64.getEncoder().encodeToString(file.bytes()));
-            return result;
-        }
-        throw new IOException("Unknown files request.");
-    }
+    /** Watcher changes discard derived data and close active scans; the next request starts fresh. */
+    static void invalidate(ScreenView.Access access) { cancel(access); }
 }

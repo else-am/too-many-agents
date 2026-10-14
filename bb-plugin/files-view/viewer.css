@@ -1,0 +1,241 @@
+.files-view {
+  height: 100%;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  background: #141415;
+  color: #dedee3;
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color-scheme: dark;
+}
+.files-view * {
+  box-sizing: border-box;
+}
+.files-view button,
+.files-view input,
+.files-view select {
+  font: inherit;
+  color: inherit;
+  background: #202023;
+  border: 1px solid #38383d;
+  border-radius: 5px;
+  padding: 5px 9px;
+}
+.files-view button {
+  cursor: pointer;
+}
+.files-view button:hover {
+  background: #303035;
+}
+.files-view button[aria-pressed="true"] {
+  background: #38383f;
+  border-color: #63636c;
+}
+.files-view :focus-visible {
+  outline: 2px solid #91b9f3;
+  outline-offset: 1px;
+}
+.files-view [hidden] {
+  display: none !important;
+}
+.fv-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #303034;
+  min-height: 49px;
+  flex-wrap: wrap;
+}
+.fv-controls {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+}
+.fv-controls input {
+  width: 180px;
+}
+.fv-status {
+  color: #a9a9b3;
+  flex: 1;
+  min-width: 80px;
+  font-size: 12px;
+}
+.fv-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.fv-sidebar {
+  width: 250px;
+  min-width: 150px;
+  max-width: 40%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #303034;
+  padding: 10px 6px 0;
+}
+.fv-search {
+  width: calc(100% - 8px);
+  margin: 0 4px 8px;
+}
+.fv-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.fv-tree-status {
+  font-size: 11px;
+  color: #a9a9b3;
+  padding: 0 8px;
+}
+.fv-tree-status:empty {
+  display: none;
+}
+.fv-content {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  overflow-anchor: auto;
+}
+.fv-file-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 10px 15px;
+  background: #1b1b1e;
+  border-bottom: 1px solid #303034;
+  overflow-wrap: anywhere;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.fv-file-header button {
+  padding: 3px 9px;
+}
+.fv-file {
+  min-height: 80px;
+}
+.fv-placeholder {
+  padding: 50px 24px 12px;
+  color: #aaaab4;
+  text-align: center;
+}
+.fv-size {
+  text-align: center;
+  color: #858591;
+  padding: 0 24px 35px;
+}
+.fv-image {
+  display: block;
+  max-width: min(100%, 1600px);
+  max-height: 1600px;
+  margin: 24px auto;
+  object-fit: contain;
+}
+.fv-muted {
+  color: #858591;
+  font-size: 12px;
+}
+.fv-diff {
+  border-bottom: 1px solid #3b3b40;
+  scroll-margin-top: 8px;
+}
+.fv-diff-body:not([data-settled]) {
+  min-height: 180px;
+}
+.fv-empty-diff {
+  padding: 10px 15px;
+  color: #a9a9b3;
+}
+.fv-markdown {
+  padding: 24px 32px;
+  max-width: 900px;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+.fv-markdown img {
+  max-width: 100%;
+  max-height: 800px;
+  object-fit: contain;
+}
+.fv-markdown pre {
+  overflow: auto;
+  padding: 16px;
+  background: #202023;
+  border-radius: 5px;
+}
+.fv-markdown code {
+  font-family: ui-monospace, monospace;
+}
+.fv-markdown a {
+  color: #a8c7f5;
+}
+.fv-markdown table {
+  border-collapse: collapse;
+}
+.fv-markdown th,
+.fv-markdown td {
+  border: 1px solid #38383d;
+  padding: 6px 12px;
+}
+.fv-markdown blockquote {
+  border-left: 2px solid #62626d;
+  margin-left: 0;
+  padding-left: 20px;
+  color: #b1b1bc;
+}
+@media (max-width: 650px) {
+  .fv-sidebar {
+    width: 185px;
+  }
+  .fv-header {
+    gap: 8px;
+  }
+  .fv-controls input {
+    width: 120px;
+  }
+  .fv-markdown {
+    padding: 18px;
+  }
+}
+.fv-notices {
+  position: relative;
+  color: #a9a9b3;
+  font-size: 12px;
+}
+.fv-notices summary {
+  cursor: pointer;
+}
+.fv-notice-list {
+  position: absolute;
+  right: 0;
+  top: 25px;
+  z-index: 3;
+  width: min(420px, 75vw);
+  padding: 12px;
+  background: #202023;
+  border: 1px solid #38383d;
+  border-radius: 5px;
+}
+.fv-notice-list > div + div {
+  margin-top: 8px;
+}
+.fv-note {
+  padding: 7px 15px;
+  font-size: 12px;
+  color: #a9a9b3;
+  background: #1b1b1e;
+  overflow-wrap: anywhere;
+}
+.fv-note:empty {
+  display: none;
+}
+
+.fv-content.fv-changes {
+  overflow-anchor: none;
+}

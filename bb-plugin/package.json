@@ -26,11 +26,16 @@
     "mojangson": "2.1.0",
     "typescript": "^5.9.3",
     "vec3": "0.1.10",
-    "zod": "4.6.5"
+    "zod": "4.6.5",
+    "@pierre/trees": "1.0.0-beta.6",
+    "@pierre/diffs": "1.5.2",
+    "dompurify": "3.4.17",
+    "marked": "18.1.1"
   },
   "scripts": {
     "build:scripting": "node scripting/build.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:files-view": "node files-view/build.mjs"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "2.6.2",
@@ -43,5 +48,10 @@
     "protodef": "1.19.0",
     "quickjs-emscripten": "0.32.0",
     "smart-buffer": "4.2.0"
+  },
+  "overrides": {
+    "@pierre/trees": {
+      "@pierre/theming": "1.0.1"
+    }
   }
 }

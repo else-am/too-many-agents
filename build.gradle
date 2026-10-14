@@ -170,6 +170,7 @@ def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
     outputs.file(file('bb-plugin/dist/server.js'))
     outputs.file(file('bb-plugin/dist/scripting/bot.js'))
     outputs.file(file('bb-plugin/dist/scripting/licenses.txt'))
+    outputs.dir(layout.buildDirectory.dir('generated/files-view'))
     outputs.file(file('bb-plugin/node_modules/.package-lock.json'))
     commandLine 'python3', 'tools/package-plugin'
 }
@@ -177,6 +178,7 @@ def packageBbPlugin = tasks.register('packageBbPlugin', Exec) {
 tasks.named('processResources', ProcessResources) {
     dependsOn packageBbPlugin
     from(layout.buildDirectory.file('bb-plugin.zip')) { into 'too_many_agents' }
+    from(layout.buildDirectory.dir('generated/files-view'))
     inputs.property 'version', project.version
     from('surface') { into 'too_many_agents/surface' }
     from('LICENSE')

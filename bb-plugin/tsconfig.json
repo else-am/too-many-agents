@@ -9,6 +9,7 @@
     "resolveJsonModule": true
   },
   "include": [
-    "server.ts"
+    "server.ts",
+    "files-view/**/*.ts"
   ]
 }

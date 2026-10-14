@@ -26,7 +26,7 @@ final class Builtin {
     static final String SCHEME = "tma";
     private static final String ASSETS = "/assets/too_many_agents/builtin/";
     /** Only our own bundled code runs, and the page can't be framed or send its contents anywhere else. */
-    private static final String POLICY = "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; "
+    private static final String POLICY = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; "
         + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
     private Builtin() {}

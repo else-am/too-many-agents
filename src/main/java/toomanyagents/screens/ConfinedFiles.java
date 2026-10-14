@@ -227,6 +227,54 @@ public final class ConfinedFiles {
         }
     }
 
+    /** A bounded batch from a retained directory handle. The last full batch may require one empty read for done. */
+    public record DirectoryBatch(Info info, List<Entry> entries, boolean done) {}
+
+    public static Directory directory(Root root, String path) throws IOException {
+        Handle handle = openInside(root, path);
+        try {
+            var found = info(root, path, handle);
+            if (found.kind() != Kind.DIRECTORY) throw new FileSystemException(path, null, "not a folder");
+            return new Directory(root, path, handle, handle.entries());
+        } catch (Throwable failure) { handle.close(); throw failure; }
+    }
+
+    /** Owns both the original verified handle and its enumeration cursor. Callers must close it. */
+    public static final class Directory implements AutoCloseable {
+        private final Root root;
+        private final String path;
+        private final Handle handle;
+        private final EntryCursor cursor;
+        private boolean closed;
+        private Directory(Root root, String path, Handle handle, EntryCursor cursor) {
+            this.root = root; this.path = path; this.handle = handle; this.cursor = cursor;
+        }
+        public synchronized DirectoryBatch next(int max) throws IOException {
+            if (closed) throw new ClosedChannelException();
+            if (max < 1 || max > MAX_ENTRIES) throw new IllegalArgumentException("maxEntries " + max);
+            cancelled();
+            var found = info(root, path, handle);
+            var entries = cursor.next(max);
+            for (int i = 0; i < entries.size(); i++) {
+                var entry = entries.get(i);
+                if (entry.kind() == null) entries.set(i, new Entry(entry.name(), childKind(root, found.path(), entry.name())));
+            }
+            checkInside(root, path, handle);
+            return new DirectoryBatch(found, List.copyOf(entries), cursor.done());
+        }
+        @Override public synchronized void close() throws IOException {
+            if (closed) return;
+            closed = true;
+            try { cursor.close(); } finally { handle.close(); }
+        }
+    }
+
+    private interface EntryCursor extends AutoCloseable {
+        List<Entry> next(int max) throws IOException;
+        boolean done();
+        @Override void close() throws IOException;
+    }
+
     private static Kind childKind(Root root, String folder, String name) throws InterruptedIOException {
         try {
             return info(root, Path.of(folder).resolve(name).toString()).kind();
@@ -311,7 +359,11 @@ public final class ConfinedFiles {
         byte[] read(int limit) throws IOException;
 
         /** Up to {@code max} entries; a null kind means the filesystem didn't say. */
-        List<Entry> list(int max) throws IOException;
+        default List<Entry> list(int max) throws IOException {
+            try (var cursor = entries()) { return cursor.next(max); }
+        }
+
+        EntryCursor entries() throws IOException;
 
         @Override
         void close();
@@ -484,63 +536,62 @@ public final class ConfinedFiles {
         }
 
         @Override
-        public List<Entry> list(int max) throws IOException {
-            return os.mac ? listMac(max) : listLinux(max);
-        }
+        public EntryCursor entries() throws IOException { return os.mac ? entriesMac() : entriesLinux(); }
 
-        /** Reads entries from a duplicate of this descriptor, so the folder can't change underneath us. */
-        private List<Entry> listMac(int max) throws IOException {
+        private EntryCursor entriesMac() throws IOException {
             int copy = Posix.LIBC.dup(fd);
             if (copy < 0) throw error(requested, Native.getLastError(), true);
             Pointer dir = Posix.LIBC.fdopendir(copy);
             if (dir == null) {
-                int errno = Native.getLastError();
-                Posix.LIBC.close(copy);
-                throw error(requested, errno, true);
+                int errno = Native.getLastError(); Posix.LIBC.close(copy); throw error(requested, errno, true);
             }
-            try {
-                var entries = new ArrayList<Entry>();
-                while (entries.size() < max) {
-                    cancelled();
-                    Native.setLastError(0);
-                    Pointer entry = Posix.LIBC.readdir(dir);
-                    if (entry == null) {
-                        if (Native.getLastError() != 0) throw error(requested, Native.getLastError(), true);
-                        break;
+            return new EntryCursor() {
+                private boolean done;
+                @Override public List<Entry> next(int max) throws IOException {
+                    var entries = new ArrayList<Entry>();
+                    while (!done && entries.size() < max) {
+                        cancelled(); Native.setLastError(0);
+                        Pointer entry = Posix.LIBC.readdir(dir);
+                        if (entry == null) {
+                            if (Native.getLastError() != 0) throw error(requested, Native.getLastError(), true);
+                            done = true; break;
+                        }
+                        // Darwin dirent64: name length at 18, type at 20, name at 21.
+                        var name = new String(entry.getByteArray(21, entry.getShort(18) & 0xffff), StandardCharsets.UTF_8);
+                        if (name.equals(".") || name.equals("..")) continue;
+                        int type = entry.getByte(20) & 255;
+                        entries.add(new Entry(name, type == DT_UNKNOWN ? null : type == DT_DIR ? Kind.DIRECTORY
+                            : type == DT_REG ? Kind.FILE : type == DT_LNK ? Kind.LINK : Kind.OTHER));
                     }
-                    // struct dirent with 64-bit inodes: d_namlen is a u16 at 18, d_type a byte at 20, d_name at 21.
-                    int length = entry.getShort(18) & 0xffff;
-                    var name = new String(entry.getByteArray(21, length), StandardCharsets.UTF_8);
-                    if (name.equals(".") || name.equals("..")) continue;
-                    int type = entry.getByte(20) & 0xff;
-                    entries.add(new Entry(name, type == DT_UNKNOWN ? null
-                        : type == DT_DIR ? Kind.DIRECTORY : type == DT_REG ? Kind.FILE : type == DT_LNK ? Kind.LINK : Kind.OTHER));
+                    return entries;
                 }
-                return entries;
-            } finally {
-                Posix.LIBC.closedir(dir);
-            }
+                @Override public boolean done() { return done; }
+                @Override public void close() { Posix.LIBC.closedir(dir); }
+            };
         }
 
-        /** /proc/self/fd/N opens this very folder, and child lookups go through it rather than the original path. */
-        private List<Entry> listLinux(int max) throws IOException {
-            var entries = new ArrayList<Entry>();
-            try (var stream = Files.newDirectoryStream(self())) {
-                for (var child : stream) {
-                    if (entries.size() >= max) break;
-                    cancelled();
-                    Kind kind;
-                    try {
-                        var attributes = Files.readAttributes(child, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-                        kind = attributes.isSymbolicLink() ? Kind.LINK : attributes.isDirectory() ? Kind.DIRECTORY
-                            : attributes.isRegularFile() ? Kind.FILE : Kind.OTHER;
-                    } catch (NoSuchFileException e) {
-                        continue;
+        private EntryCursor entriesLinux() throws IOException {
+            var stream = Files.newDirectoryStream(self());
+            var iterator = stream.iterator();
+            return new EntryCursor() {
+                private boolean done;
+                @Override public List<Entry> next(int max) throws IOException {
+                    var entries = new ArrayList<Entry>();
+                    while (entries.size() < max) {
+                        cancelled();
+                        if (!iterator.hasNext()) { done = true; break; }
+                        var child = iterator.next();
+                        try {
+                            var attributes = Files.readAttributes(child, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+                            entries.add(new Entry(child.getFileName().toString(), attributes.isSymbolicLink() ? Kind.LINK
+                                : attributes.isDirectory() ? Kind.DIRECTORY : attributes.isRegularFile() ? Kind.FILE : Kind.OTHER));
+                        } catch (NoSuchFileException removed) { /* A concurrent removal contributes no entry. */ }
                     }
-                    entries.add(new Entry(child.getFileName().toString(), kind));
+                    return entries;
                 }
-            }
-            return entries;
+                @Override public boolean done() { return done; }
+                @Override public void close() throws IOException { stream.close(); }
+            };
         }
 
         @Override
@@ -686,33 +737,43 @@ public final class ConfinedFiles {
             return out.toByteArray();
         }
 
-        /** Enumerates through the folder handle itself. */
-        @Override
-        public List<Entry> list(int max) throws IOException {
-            var entries = new ArrayList<Entry>();
-            var buffer = new Memory(64 * 1024);
-            boolean first = true;
-            while (entries.size() < max) {
-                cancelled();
-                if (!Kernel32.INSTANCE.GetFileInformationByHandleEx(handle,
-                    first ? WinBase.FileFullDirectoryRestartInfo : WinBase.FileFullDirectoryInfo, buffer, new WinDef.DWORD(buffer.size()))) {
-                    int error = Kernel32.INSTANCE.GetLastError();
-                    if (error == 18 /* ERROR_NO_MORE_FILES */) break;
-                    throw windowsError(requested, error);
+        /** Retains unread records from the native buffer across page boundaries. */
+        @Override public EntryCursor entries() {
+            return new EntryCursor() {
+                private final Memory buffer = new Memory(64 * 1024);
+                private final java.util.ArrayDeque<Entry> pending = new java.util.ArrayDeque<>();
+                private boolean first = true, done;
+                @Override public List<Entry> next(int max) throws IOException {
+                    var entries = new ArrayList<Entry>();
+                    while (entries.size() < max) {
+                        cancelled();
+                        if (!pending.isEmpty()) { entries.add(pending.removeFirst()); continue; }
+                        if (done) break;
+                        if (!Kernel32.INSTANCE.GetFileInformationByHandleEx(handle,
+                            first ? WinBase.FileFullDirectoryRestartInfo : WinBase.FileFullDirectoryInfo,
+                            buffer, new WinDef.DWORD(buffer.size()))) {
+                            int error = Kernel32.INSTANCE.GetLastError();
+                            if (error == 18) { done = true; break; }
+                            throw windowsError(requested, error);
+                        }
+                        first = false;
+                        for (long offset = 0;;) {
+                            int next = buffer.getInt(offset);
+                            int length = buffer.getInt(offset + 60);
+                            if (length < 0 || offset + 68L + length > buffer.size()) throw new IOException("Invalid directory record");
+                            var name = new String(buffer.getCharArray(offset + 68, length / 2));
+                            if (!name.equals(".") && !name.equals(".."))
+                                pending.add(new Entry(name, windowsKind(buffer.getInt(offset + 56), buffer.getInt(offset + 64))));
+                            if (next == 0) break;
+                            if (next < 68 || offset + next + 68 > buffer.size()) throw new IOException("Invalid directory record");
+                            offset += next;
+                        }
+                    }
+                    return entries;
                 }
-                first = false;
-                // FILE_FULL_DIR_INFO: NextEntryOffset at 0, FileAttributes at 56, FileNameLength (bytes) at 60,
-                // EaSize at 64 (the reparse tag for reparse points), FileName (UTF-16) at 68.
-                for (long offset = 0; entries.size() < max; ) {
-                    int next = buffer.getInt(offset);
-                    int attributes = buffer.getInt(offset + 56);
-                    var name = new String(buffer.getCharArray(offset + 68, buffer.getInt(offset + 60) / 2));
-                    if (!name.equals(".") && !name.equals("..")) entries.add(new Entry(name, windowsKind(attributes, buffer.getInt(offset + 64))));
-                    if (next == 0) break;
-                    offset += next;
-                }
-            }
-            return entries;
+                @Override public boolean done() { return done && pending.isEmpty(); }
+                @Override public void close() { pending.clear(); buffer.close(); }
+            };
         }
 
         @Override
