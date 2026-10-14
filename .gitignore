@@ -17,3 +17,5 @@ bb-plugin/surface/tools.json
 .vscode/
 *.iml
 .DS_Store
+.agents/
+skills-lock.json

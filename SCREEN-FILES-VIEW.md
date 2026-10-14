@@ -1,0 +1,270 @@
+# Screen files view
+
+In-world screens that show files and git changes, so a Minecraft screen covers what the Claude Code / Codex desktop apps show beside a conversation: files, changes, a terminal and a browser. Screens already handle the browser. This plan covers files and changes together. Terminals come next and use the same groundwork.
+
+## Principle: agents open, humans use
+
+Files, changes and terminals are human views. Agents already reach the same things through their own CLI tools, in a form better suited to them, and inside their sandbox. So agents can **open, close, screenshot and read the URL of** these views, but never drive them:
+
+- Driving them would add nothing an agent can't already do.
+- The game process runs outside the agent's sandbox. Anything an agent could steer inside it (reading files, typing into a terminal, running git) would be a way around the sandbox.
+
+Today's `screen_open kind:file` loads a raw `file://` page in the game's Chromium. That already lets an agent read any file the game can read (through a screenshot or `screen_cdp`), and `screen_cdp` on any web page can navigate to `file://`. This plan removes both.
+
+Use supported CEF/JCEF APIs and ordinary application code. No CEF fork, custom native browser extensions, or browser patches to maintain. Security work must preserve the intended human experience: the picker, previews, links, back/forward, copy, live updates and ordinary web browsing. Do not add routine permission prompts or silently remove these features to simplify enforcement. Resolve any conflict with these constraints before building on the affected mechanism.
+
+## `tma://` built-in pages
+
+Built-in views are pages on our own `tma://` scheme. The mod serves them from inside Chromium (CEF), with no network port:
+
+- `tma://files/…`: the files and changes viewer (this plan)
+- `tma://terminal/<id>`: a BB terminal (next)
+
+For every `tma://` page:
+
+- Native code binds each built-in browser instance to its screen, authorized root and current navigation generation. A URL is display state, never proof of permission. The page server and message router check that native authorization and the requesting frame before serving data or accepting a query; requests without a recognized browser/frame are denied.
+- A web page can't load `tma://` content through navigation, an iframe, `fetch` or an image. One screen cannot borrow another screen's authorization.
+- Chromium blocks all `file:` navigation, and blocks any switch between web pages and `tma:`. Only `screen_open`, the address bar and the viewer's own controls move a screen between the two.
+- Crossing between a web page and a built-in view replaces the browser instance and isolates the built-in request context from web content. This discards CDP-installed scripts, bindings and other page instrumentation. Keep the screen identity and user-visible back/forward history across that replacement; stale callbacks and pending commands cannot reach the replacement browser.
+- `screen_cdp` on a `tma://` page returns `view_only`. Screenshots are allowed.
+- Archiving a thread closes every `tma://` screen linked to that thread's station. Loose screens are left alone.
+
+### Terminals (after this)
+
+`tma://terminal/<bb terminal id>` runs xterm.js, connected to the BB terminal: it shows output from a given sequence number on and sends what the human types.
+
+- The human types into it. The agent can open it and screenshot it, but can't send input.
+- When the BB terminal ends on its own, the page shows "terminal closed" and keeps its last output. It isn't closed automatically.
+- Agents can open only terminals in their own environment.
+
+## Behavior
+
+### Opening
+
+- A blank screen shows two buttons beside the address bar: **Address** (focuses it) and **Files** (opens the picker at home: `/Users/<you>`, `/home/<you>`, `C:\Users\<you>`).
+- Typing an absolute or `~/…` path in the address bar opens the viewer.
+- Agents use `screen_open`:
+  - `kind: "file"`: a file or folder.
+  - `kind: "changes"`: changes mode, with an optional `base`.
+  - Relative targets resolve against the agent's environment.
+
+### Picker
+
+A deliberately small file and folder picker: an editable path field above a flat listing of one folder.
+
+```
+┌─────────────────────────────────────────┐
+│ ~/Else/█                         [Open] │
+├─────────────────────────────────────────┤
+│ ▸ ai4research                           │
+│ ▸ brand                                 │
+│ ▸ too-many-agents                       │
+│   AGENTS.md                             │
+└─────────────────────────────────────────┘
+```
+
+- **Path field:**
+  - Typing `Else/` goes there.
+  - `~`, `/…`, and drive letters on Windows (`D:/`) work.
+  - Tab completes the next segment.
+  - Enter enters a folder or opens a file.
+- **List:**
+  - Folders first. Hidden files are dimmed.
+  - Click a folder to enter it. Click a file to open it in the viewer.
+  - Up/Down and Enter work too.
+- **Open** opens the viewer rooted at the current folder.
+- Each folder is a history entry, so the screen's own back and forward buttons work.
+- The picker is for humans only. Agents never see it.
+
+### Viewer
+
+A Pierre file tree on the left, content on the right, in Pierre's default dark theme. The header has:
+
+- a path button (back to the picker at this root)
+- the **All files / Changes** toggle (only in a git repo)
+- the base picker and unified/split toggle (in changes mode)
+
+**Root:** opening a file roots the viewer at its git top level, or at its folder outside a repo, and selects the file. Opening a folder roots it there. For an agent, clamp a repository root above its environment to the environment root; file listings and changes stay scoped to that root.
+
+**All files:**
+
+- Everything is shown, ignored paths included.
+- Tracked and untracked paths load up front up to a bounded budget. Large trees load progressively, with a visible indexing state. Search covers tracked and untracked paths through a bounded background search even when the tree is not fully loaded; incomplete results are marked as such.
+- Ignored folders (`node_modules/`, `build/`) show dimmed and collapsed, and load when expanded.
+- Outside a repo, the tree loads up front to a cap. Folders past the cap load when expanded.
+
+**Changes:**
+
+- All changed files stacked, Codex-style. The tree lists only changed paths, and clicking one scrolls to it. Load and render diffs near the viewport, keeping stable scroll anchors while other diffs load.
+- Untracked files count as added.
+- Unified by default, with a split toggle.
+- Base options:
+  - **Branch:** the merge base of `HEAD` and the default branch, compared with the current working tree. Includes committed branch changes and the net staged/unstaged changes. This is the default.
+  - **Uncommitted:** `HEAD` compared with the current working tree, including the net staged/unstaged changes.
+  - **Any ref**, typed in: that commit compared with the current working tree, without implicitly taking a merge base.
+- Use the configured upstream remote's default branch, then `origin`'s default branch when available, without fetching automatically. If no default branch or merge base is available, fall back to Uncommitted with a short explanation and leave the ref picker available. An unborn `HEAD` compares against an empty tree. An invalid explicit ref shows an error rather than silently changing the comparison.
+
+**Content:**
+
+- Text is highlighted with Shiki.
+- Markdown has a Source/Preview toggle.
+- HTML files display as source. Markdown previews are sanitized; repository content never executes as viewer code.
+- Images render as images. SVG uses a non-scriptable image rendering path, never an inline document in the viewer.
+- Other binary files show a placeholder with size and type.
+- Files over 2 MB show a placeholder with a notice.
+
+**Lines:** `#L20-L40` highlights and scrolls to those lines. Clicking or shift-clicking line numbers writes `#L…` into the URL.
+
+**Live:**
+
+- Updates are debounced by about 100 ms; this is a scheduling target, not a guarantee that every scan or diff completes in that time. Scroll position and selection are kept. Expensive updates show a quiet loading state and replace old content when ready.
+- Deleted files show "deleted".
+- Changes mode updates in place without jumping.
+
+**Input:** mouse for the tree, list and line numbers. The keyboard for path fields, picker navigation and copy.
+
+**Read-only.** Humans can edit in a terminal.
+
+### The URL is the shared state
+
+The shared location lives in the URL: root, `mode`, `base`, `open` and `#L`. The page updates it as you click. An agent sees that location through `screen_list`. Reloads and saved worlds restore the location against the current files, not an exact visual snapshot. Split/unified, Markdown source/preview, expanded folders and arbitrary scroll position are local presentation state, outside this URL restoration promise. A human pointing at lines, or an agent opening a file at `#L…`, is "look at this" in either direction, with no new tool.
+
+```
+tma://files/Users/scott/?pick
+tma://files/Users/scott/Else/too-many-agents/
+tma://files/Users/scott/Else/too-many-agents/?open=bb-plugin/screens.ts#L12-L22
+tma://files/Users/scott/Else/too-many-agents/?mode=changes&base=origin/main
+tma://files/C:/Users/scott/Else/
+tma://files/_app/viewer.js            (bundled page, served from the JAR)
+```
+
+### Who can see what
+
+| Opened by | Paths | Picker |
+| --- | --- | --- |
+| Human (`openedBy` empty) | Anything | Yes |
+| Agent | Only inside the agent's own environment | No |
+
+- **Agent check at open time:** the plugin resolves the environment and requested path, clamps any repository-root promotion, and requires the resulting root to be inside the canonical environment path. Pass the authorized scope through the trusted plugin callback, not through agent-supplied fields or URL parameters. An environment boundary is not a substitute for any narrower provider read restrictions; resolve how those restrictions are honored before enabling agent opens.
+- **Check when serving:** Java pins the authorized root independently of the URL and enforces it for listings, files, previews, searches, diffs and watcher notifications. Do not re-resolve a moved root into a broader grant. Canonicalization followed by a separate file open is insufficient against concurrent symlink replacement: choose and validate a race-safe reading strategy for each supported platform before enabling file serving. Keep normal in-root symlinks usable; out-of-root targets stay inaccessible in that view.
+- **Restore:** persisted URLs and `openedBy` values do not grant access. After the existing world-trust gate, re-establish native authorization; agent-owned views must revalidate their environment before loading.
+- **Taking over an agent's viewer:** a human who leaves it through the path button makes it their own page (`openedBy` cleared). Browsing inside it doesn't change ownership.
+- **Allowed to show the agent more:** human-opened views may show things outside an agent's environment, and the agent may screenshot them. That's the human choosing to show them.
+
+## Security
+
+- **Repository content is untrusted, even in a human-opened viewer.** Escape text and filenames, sanitize rendered Markdown with a maintained sanitizer, and allow only bundled viewer code to execute under a restrictive Content Security Policy. Disallow executable embeds and script URLs. Relative images go through the same authorized file reader. External links remain usable through explicit human navigation; remote preview resources must not become a channel for leaking local content. Never serve repository HTML or SVG as an executable document on the viewer origin.
+- **Git runs outside the agent's sandbox, and repository configuration and attributes can change during a request.** Before implementing either Git-backed tree discovery or changes mode, settle a small, explicit set of commands and how each avoids command execution, unintended writes, network access and reads beyond its authorized scope:
+  - Use `ProcessBuilder` argument arrays, a controlled environment, bounded output and timeouts. Use command-specific option terminators and validated refs; resolve refs to commit IDs before diffing.
+  - Disable external diff and text conversion on diff commands, and fsmonitor wherever relevant. These are command-specific protections, not a universal flag string.
+  - Do not enumerate configured drivers and then assume overriding that list is safe: configuration, includes and attributes can change before the next process reads them. Use an execution path that cannot activate repository-defined filters/helpers even under concurrent edits. If the chosen Git invocation cannot provide that, change the invocation or use a controlled metadata/object-reading approach before proceeding.
+  - Account for system/global configuration, conditional includes, inherited `GIT_*` variables, worktree metadata and repository redirects. Git metadata outside a worktree is a narrowly defined metadata dependency, not permission to expose arbitrary external files in the viewer.
+  - Preserve ordinary diff usefulness, including staged/unstaged changes and binary placeholders; verify the resulting semantics rather than assuming disabled filters produce the same comparison.
+- **CDP isolation is a prerequisite.** Test ordinary-page CDP for cross-browser access (`Target.*`), filesystem access (including uploads/downloads), persistent scripts/bindings, and commands racing navigation. Deny unsafe capabilities while retaining ordinary page interaction. Combine this with fresh built-in browser instances and separate request contexts; a check of the current URL alone is insufficient.
+- Raw `file://` pages are removed.
+
+## Implementation
+
+- **Java (`screens/`):**
+  - Register `tma` as a standard scheme, with a handler serving:
+    - `_app/*`: the page bundle
+    - `_api/list`, `tree`, `file`, `changes`, `diff`, `refs`
+  - Navigation rules, the CDP refusal, path mapping in the address bar, the blank-screen buttons, and closing on archive.
+- **Git:** `ProcessBuilder`, off the game thread, hardened as above. Tree sources:
+  - `git ls-files -z -co --exclude-standard`
+  - `git ls-files -z -oi --exclude-standard --directory` for ignored entries, returned as collapsed folders
+  - Parse paths as NUL-delimited records and scope results to the viewer root.
+- **Budgets:** bound tree enumeration, searches, subprocess output, image decoding and total diff work, not just individual file size. Cancel work on navigation/close and discard obsolete results. Large repositories stay navigable while work progresses; expose partial results and limits rather than freezing or silently omitting paths.
+- **Watching:**
+  - One recursive watcher per root while a screen showing it is loaded, shared by screens with the same root, and stopped when they sleep or close.
+  - Resolve each repository's actual Git directory and common Git directory, including linked worktrees. Watch the relevant `HEAD`, index, refs, `packed-refs` and configuration/ignore inputs there as well as working-tree changes. Refresh watches if the metadata location changes; keep their access scoped to the authorized repository metadata.
+  - Changes are debounced to about 100 ms, with bounded background work and recovery from watcher overflow. Do not recursively traverse huge ignored trees just to maintain the initial view; watch loaded content and refresh lazy folders as they are opened.
+  - Updates reach the page over a persistent `CefMessageRouter` query, and the page re-fetches only what's affected.
+  - The JDK's `WatchService` polls on macOS, so this uses `io.methvin:directory-watcher` (native FSEvents through JNA; confirm Minecraft ships JNA).
+- **Page:**
+  - esbuild in `bb-plugin`.
+  - Vanilla `@pierre/trees` and `@pierre/diffs` (no React), bundled Shiki grammars and a small markdown renderer.
+  - Our own picker, header and URL handling.
+  - Built by `tools/build` into a JAR resource.
+- **Tool schema (`surface/tools.json`):**
+  - `screen_open` kinds become `url | file | changes`, with optional `base`.
+  - The `screen_cdp` description notes `view_only`.
+  - The environment check lives in the plugin (`bb-plugin/screens.ts`).
+
+### Resolve before depending on it
+
+- Prove the browser authorization, context isolation, fresh-instance transition and CDP restrictions with stock CEF/JCEF, including seamless back/forward navigation. No browser fork or custom native extension.
+- Prove file access under concurrent root/path/symlink replacement on supported platforms, and establish how agent read restrictions reach the viewer. A second path check alone is not proof.
+- Specify and exercise the exact Git command set against malicious and concurrently changing configuration before using it for the tree or changes mode.
+
+### To confirm while building
+
+- `@pierre/trees` provides an expand event to load folders lazily (otherwise wrap it).
+- Large-file and large-repo performance of `@pierre/trees` and `@pierre/diffs`.
+- JNA is available at runtime.
+
+### Not supported
+
+- Editing.
+- UNC network paths on Windows (`\\server\share`).
+
+## Order
+
+1. Prove browser/CDP isolation and race-safe file access using supported APIs. Implement the scheme, native authorization, `file:` block, safe navigation and content policy.
+2. Picker, address-bar paths and blank-screen buttons.
+3. Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews, bounded loading and agent `kind:file`.
+4. Changes mode and base picker using the validated Git path. Agent `kind:changes`.
+5. Watcher and live updates.
+6. Closing on archive and full lifecycle/acceptance checks.
+
+## Acceptance tests
+
+On a dev client (`tools/dev start alpha`), through `tools/game` UI hooks, agent tools and screenshots.
+
+**Opening and navigation**
+- Blank screen → **Files** opens the picker at home. Type `Else/`, then Tab to complete, then Enter: it lands in the right folder.
+- Back and forward step through the picker's folders.
+- Picking a file opens the viewer at its repo root, with the file selected.
+- Picking a non-repo folder shows no changes toggle.
+- Typing `~/Else/too-many-agents` in the address bar opens the viewer.
+- An agent opens `kind:file` with a relative path, and `kind:changes` with and without `base`.
+- Opening a file in an environment nested inside a repository clamps the root and keeps both modes within that scope.
+- Switching between web pages and built-in views, including back/forward, preserves normal navigation without extra prompts or leaked page instrumentation.
+
+**Viewing**
+- Text, markdown (both toggles), an image, a binary file and a file over 2 MB each render as expected.
+- `node_modules/` shows dimmed and expands when clicked.
+- Search finds tracked and untracked files.
+- `#L20-L40` from an agent highlights and scrolls. A human shift-clicking lines updates the URL, and the agent reads it back from `screen_list`.
+- Branch, Uncommitted and a typed ref each show the right file set. Untracked files show as added. The unified/split toggle works.
+- Compare committed, staged and unstaged changes together, including changes that cancel each other. Exercise an unborn branch, missing default branch, unrelated histories and an invalid typed ref.
+- A large repository and a large change set remain usable during loading and search. Partial results are identified, navigation cancels stale work, and loading diffs does not jump the scroll position.
+
+**Live**
+- An agent edits the open file: the page updates without losing scroll position.
+- An agent creates, deletes and renames files: the tree and changes update. A deleted open file shows "deleted".
+- A commit changes the Uncommitted set.
+- Leaving and returning (screen asleep, then awake) shows current state.
+- In a linked worktree, commits, staging, branch switches and shared/packed ref changes refresh the view. Ignore/configuration changes and watcher overflow recover without reopening the screen.
+
+**Persistence and lifecycle**
+- Save, quit and reload: every screen restores its shared location (root, mode, base, file, lines) against current files, after revalidating access. Presentation toggles and arbitrary scroll position need not be restored.
+- Archiving a thread closes the `tma://` screens linked to its station, and leaves its loose screens and web pages open.
+- A human leaving an agent's viewer through the path button clears `openedBy`.
+
+**Escape attempts (all must fail)**
+- An agent opens `../`, an absolute path outside its environment, or a symlink to `~/.ssh`.
+- Swap a root or child symlink after opening and repeatedly during reads, listings, search and preview loading. No external content is returned. Ordinary in-root symlinks still work.
+- `screen_cdp` on a viewer.
+- Install CDP scripts/bindings on a web page, then enter a built-in view through human navigation and back/forward. They never run in the built-in view. Pending commands cannot act on the replacement browser.
+- Use ordinary-page CDP to target another browser, upload local files or write downloads. It cannot bypass screen access or filesystem restrictions.
+- `Page.navigate` to `file:///etc/hosts` or `tma://files/...` from a web page.
+- An iframe, `fetch` or `<img>` pointing at `tma://` from a web page.
+- Script-bearing Markdown, HTML, SVG, filenames and links cannot execute code, query privileged APIs or leak local content. Ordinary Markdown formatting, safe images, links and copy still work.
+- Forge root/query parameters or router messages, including requests from a different screen or an obsolete frame. No request gains broader access.
+- A repo whose configuration sets fsmonitor, filters and diff helpers, each touching a marker file. Cover included/global config and concurrent configuration/attribute changes. Open both modes, search, refresh and switch bases: no marker appears and no helper/network activity occurs.
+- A base ref of `--output=/tmp/x`.
+- A downloaded (untrusted) world containing a forged human-opened `tma://files/~/.ssh/…` screen waits for the trust click before loading.
+
+**Cross-platform**
+- Paths with a Windows drive letter, and home detection on macOS, Linux and Windows.
