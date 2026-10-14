@@ -66,6 +66,7 @@ public final class StationIndex extends SavedData {
     private Map<String, String> projects = Map.of();
     /** The project ids each BB instance last listed, so a project deleted in BB, even while the game was closed, is noticed. */
     private final Map<String, Set<String>> catalogs = new HashMap<>();
+    private final Set<StationBlockEntity> residentStationBlocks = Collections.newSetFromMap(new WeakHashMap<>());
     private final Set<ProjectBlockEntity> loadedProjectBlocks = Collections.newSetFromMap(new WeakHashMap<>());
     private boolean orphansReleased;
 
@@ -99,6 +100,7 @@ public final class StationIndex extends SavedData {
      * fresh id, unless its saved id is free (the index lost it). A copy of a known station never takes its occupant.
      */
     void added(StationBlockEntity block) {
+        residentStationBlocks.add(block);
         var station = block.station();
         if (removedProjects.contains(station.projectId())) station = station.withProject("");
         String dimension = block.dimension();
@@ -128,6 +130,7 @@ public final class StationIndex extends SavedData {
 
     /** The block is gone: broken, replaced, or removed by a command. Unloading keeps it listed. */
     void removed(StationBlockEntity block) {
+        residentStationBlocks.remove(block);
         var existing = entries.get(block.station().id());
         if (existing == null || !existing.pos.equals(block.getBlockPos()) || !existing.dimension.equals(block.dimension())) return;
         entries.remove(block.station().id());
@@ -162,6 +165,12 @@ public final class StationIndex extends SavedData {
         var level = level(server, entry);
         if (level != null && level.isLoaded(entry.pos) && level.getBlockEntity(entry.pos) instanceof StationBlockEntity block
             && block.station().id().equals(id)) block.adopt(updated.station);
+        // Losing FULL tickets does not immediately discard the block entity. If unloading is
+        // canceled, that same object returns without onLoad, so keep its occupant current too.
+        for (var block : residentStationBlocks) {
+            if (!block.isRemoved() && block.station().id().equals(id) && block.dimension().equals(entry.dimension)
+                && block.getBlockPos().equals(entry.pos) && !block.station().equals(updated.station)) block.adopt(updated.station);
+        }
         changed(server);
         return updated;
     }

@@ -58,6 +58,8 @@ def main():
     game.command(f"tp @s {player['x']} {player['y']} {player['z']}")
     native.wait_for(lambda state: any(row['id'] == args.screen and not row['url']
         and not row['browser'] for row in state['screens']), timeout=30)
+    restored = game.station('read', pos=station['pos'])
+    assert not restored['blockEntity']['station'].get('agentId'), restored['blockEntity']
     print('PASS: archive closes linked built-ins; linked web and loose built-ins keep their locations', flush=True)
     if args.unloaded:
         print('PASS: unloaded screen record stays closed when its chunk returns', flush=True)

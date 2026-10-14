@@ -43,8 +43,12 @@ public final class StationBlockEntity extends BlockEntity {
     /** Takes a record without consulting the index. */
     void adopt(Station station) {
         this.station = station;
-        setChanged();
-        if (level != null) level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        // A resident block can be outside the loaded-ticket range during a canceled unload.
+        // Its record must still change, but neighbor notifications must not load that chunk.
+        if (level != null && level.isLoaded(worldPosition)) {
+            setChanged();
+            level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
+        }
     }
 
     String dimension() { return level.dimension().location().toString(); }
