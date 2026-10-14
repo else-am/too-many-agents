@@ -211,9 +211,9 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 1. ~~Prove browser/CDP isolation using supported APIs; implement the scheme, browser-instance authorization, `file:` block, safe navigation and content policy.~~ Verified-handle file access is implemented and race-tested on macOS and Linux x86_64; root-scoped serving acceptance and Linux arm64/Windows runtime validation remain.
 2. ~~Picker, address-bar paths and blank-screen buttons.~~ Packaged-client checks cover home/Tab completion, folder history, file-to-repository promotion, typed paths, ownership changes and saved-world restoration. Built-in-first startup and early stylesheet requests are handled using stock JCEF callbacks and per-browser request contexts. Agent data access remains disabled pending provider read-policy support.
 3. ~~Validate Git hardening before Git-backed discovery. Viewer in files mode, safe previews and bounded loading.~~ Packaged-client checks cover syntax, line ranges, sanitized previews, binary/size/deleted states, and selection/search/Tab completion past 12,000 files. Native directory cursors passed macOS and Linux x86_64 replacement probes. Agent `kind:file` data access remains pending provider read-policy support.
-4. ~~Changes mode and base picker using the validated Git path.~~ Packaged checks cover Branch, Uncommitted, explicit/invalid refs, unborn HEAD and unified/split rendering. Agent `kind:changes` remains pending provider read-policy support.
+4. ~~Changes mode and base picker using the validated Git path.~~ Packaged checks cover Branch, Uncommitted, explicit/invalid refs, unborn HEAD and unified/split rendering. The `kind:changes` and `base` tool contract is implemented; agent file data remains disabled pending provider read-policy support.
 5. Watcher and live updates.
-6. Closing on archive and full lifecycle/acceptance checks.
+6. ~~Closing on archive.~~ A packaged check archives a fixture thread while its screen chunk is unloaded: its station-linked built-in closes, while linked web and loose built-in locations survive. Full lifecycle/acceptance checks remain.
 
 ## Acceptance tests
 

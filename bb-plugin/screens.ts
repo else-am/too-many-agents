@@ -29,7 +29,7 @@ export function screenTools(bb: BbPluginApi, worlds: MinecraftWorlds) {
     try {
       let args = object(input);
       const { live, agent } = await abortable(() => worlds.caller(ctx.threadId, true), signal);
-      if (tool === "screen_open" && args.kind === "file" && typeof args.target === "string")
+      if (tool === "screen_open" && (args.kind === "file" || args.kind === "changes") && typeof args.target === "string")
         args = { ...args, target: await abortable(() => filePath(ctx.threadId, args.target as string), signal) };
       // toolCallback checks the signal first, so nothing is sent after a timeout.
       result = (await worlds.toolCallback(live, { ...ctx, signal }, "screen", {

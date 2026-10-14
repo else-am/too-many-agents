@@ -282,7 +282,7 @@
   },
   {
     "name": "screen_open",
-    "description": "Show something on a screen: a URL, or a file path. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Screens always have a unique name. Rename one when its name no longer describes what you are using it for; otherwise leave it alone.",
+    "description": "Show a URL, file/folder, or Git changes on a screen. File views currently require the human to authorize a folder on the screen; an agent open does not grant file access. Built-in views can be listed, captured and closed, but not driven through CDP. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Rename a screen when its name no longer describes its use; otherwise leave it alone.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -294,12 +294,19 @@
           "type": "string",
           "enum": [
             "url",
-            "file"
+            "file",
+            "changes"
           ]
         },
         "target": {
           "type": "string",
           "description": "URL, or file path (relative paths resolve from your working directory)."
+        },
+        "base": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "description": "For kind changes: branch (default), uncommitted, or an explicit Git ref. Branch uses the merge base with the default branch; an explicit ref compares directly."
         },
         "name": {
           "type": "string",
@@ -316,7 +323,7 @@
   },
   {
     "name": "screen_cdp",
-    "description": "A plain Chrome DevTools Protocol passthrough to a screen's page. To run JS: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }`. Returns the method's result plus the current `{ url, title }`. One call, one result; events aren't streamed. Results are capped at about 64 KB (use `screen_screenshot` for images). Times out after about 30s. Wakes a sleeping screen at its saved URL; a screen with no URL is unavailable.",
+    "description": "Page-level Chrome DevTools Protocol for ordinary web screens. Built-in file and changes views return `view_only`; cross-browser and local filesystem capabilities are refused. To run JS: `Runtime.evaluate { expression, awaitPromise: true, returnByValue: true }`. Returns the method's result plus `{ url, title }`. One call, one result; events aren't streamed. Results are capped at about 64 KB (use `screen_screenshot` for images). Times out after about 30s. Wakes a sleeping screen at its saved URL; a screen with no URL is unavailable.",
     "inputSchema": {
       "type": "object",
       "properties": {

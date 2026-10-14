@@ -414,6 +414,17 @@ final class GameAccess {
         return schedule(expectedSession, current -> { StationIndex.get(current).release(current, agentId); return null; });
     }
 
+    /** Close the archived occupant's built-in pages before its station loses that association. */
+    CompletableFuture<Void> releaseArchivedStation(String agentId, String expectedSession) {
+        return schedule(expectedSession, current -> {
+            var stations = StationIndex.get(current);
+            var station = stations.occupiedBy(agentId);
+            if (station != null) ScreenTools.closeStationBuiltins(current, station.station().id());
+            stations.release(current, agentId);
+            return null;
+        });
+    }
+
     /** A BB project was removed: its stations and project blocks become blank. */
     CompletableFuture<Void> projectRemoved(String projectId, String expectedSession) {
         return schedule(expectedSession, current -> { StationIndex.get(current).projectRemoved(current, projectId); return null; });

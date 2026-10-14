@@ -251,8 +251,16 @@ public final class ScreenTools {
         String url = switch (kind) {
             case "url" -> webAddress(target.strip());
             case "file" -> fileAddress(target);
-            default -> throw invalid("kind must be url or file.");
+            case "changes" -> fileAddress(target) + "?mode=changes";
+            default -> throw invalid("kind must be url, file or changes.");
         };
+        if (args.has("base")) {
+            String base = string(args, "base");
+            if (!kind.equals("changes") || base == null || base.isBlank() || base.length() > 1024)
+                throw invalid("base must be a nonblank Git ref of at most 1024 characters, for kind changes.");
+            url += "&base=" + FilePages.encode(base);
+        }
+        String destination = url;
         String name = args.has("name") ? name(args) : null;
         String id = entry.screen().id(), thread = caller.threadId();
         if (name != null) ScreenIndex.get(server).requireName(name, id);
@@ -263,11 +271,11 @@ public final class ScreenTools {
         }).thenCompose(ignored -> onClient(live, () -> {
             var view = view(entry);
             if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
-            var loaded = wait(waiters, view.open(url, thread), OPEN_SECONDS,
+            var loaded = wait(waiters, view.open(destination, thread), OPEN_SECONDS,
                 "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
             return new Opened(view, view.generation, loaded);
         })).thenCompose(opened -> onServer(server, live, () -> {
-            edit(server, entry, record -> new Screen(record.id(), record.name(), url, thread));
+            edit(server, entry, record -> new Screen(record.id(), record.name(), destination, thread));
             return opened;
         })).thenCompose(opened -> opened.loaded.thenCompose(ignored -> onClient(live, () -> result(page(opened.view, opened.generation, id)))));
     }
@@ -465,6 +473,20 @@ public final class ScreenTools {
             if (station != null) links.add(new Link(entry.screen().id(), entry.screen().name(), station.station().id()));
         }
         return links;
+    }
+
+    /** Server thread: archiving closes only built-in pages linked to this station, including unloaded panels. */
+    public static void closeStationBuiltins(MinecraftServer server, String stationId) {
+        var index = ScreenIndex.get(server);
+        var stations = StationIndex.get(server).entries();
+        for (var entry : List.copyOf(index.entries())) {
+            if (!Chromium.builtin(entry.screen().url())) continue;
+            var station = linked(entry, stations);
+            if (station == null || !station.station().id().equals(stationId)) continue;
+            index.edit(server, entry.screen().id(), record -> new Screen(record.id(), record.name(), "", ""));
+            index.release(server, entry.screen().id());
+            index.releaseUse(server, entry.screen().id());
+        }
     }
 
     /** The station whose area holds any part of the panel, nearest its center, ties going to the lower id. */

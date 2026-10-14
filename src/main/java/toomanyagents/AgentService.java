@@ -122,17 +122,18 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
             if(!running) closeScopes(agent.id,"thread_not_active");
             boolean archived=agent.localArchive!=null ? agent.localArchive : state.equals("suspended");
             agent.archived=archived;
-            if(agent.removed) return CompletableFuture.completedFuture(null);
             if(archived) {
-                if(agent.suspended) return CompletableFuture.completedFuture(null);
+                var released=game.releaseArchivedStation(agent.id,session);
+                if(agent.removed || agent.suspended) return released;
                 var captured=agent.suspendedBody.isBlank()?game.saveBody(agent.body,session):CompletableFuture.completedFuture(agent.suspendedBody);
-                return game.releaseStation(agent.id,session).thenCompose(released -> captured).thenCompose(saved -> {
+                return released.thenCompose(done -> captured).thenCompose(saved -> {
                     synchronized(this) { requireCurrent(agent,session); agent.suspendedBody=saved; }
                     // Inventory has been dropped; persist the empty body before despawning it.
                     return save();
                 }).thenCompose(done -> game.suspendBody(agent.body,agent.suspendedBody,session))
                     .thenAccept(done -> { synchronized(this) { requireCurrent(agent,session); agent.suspended=true; } });
             }
+            if(agent.removed) return CompletableFuture.completedFuture(null);
             if(!agent.suspendedBody.isBlank()) {
                 return game.restoreSavedBody(agent.body,agent.suspendedBody,session).thenCompose(done -> {
                     synchronized(this) { requireCurrent(agent,session); agent.suspendedBody=""; agent.suspended=false; agent.lost=false; }
@@ -156,7 +157,8 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         loadedSession=session; loadedWorldId=worldId;
         for(var agent:agents.values()) {
             settleKind(agent,agent.settings);
-            if(agent.archived || agent.removed || agent.deleted) game.releaseStation(agent.id,session);
+            if(agent.archived) game.releaseArchivedStation(agent.id,session);
+            else if(agent.removed || agent.deleted) game.releaseStation(agent.id,session);
         }
         save();
     }
@@ -647,7 +649,9 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
                     if(!project.isBlank() && !project.equals(agent.projectId)) {
                         agent.projectId=project;
                         settleKind(agent,agent.settings);
-                        return game.releaseStation(agent.id,session).thenCompose(done -> save())
+                        boolean archived=agent.localArchive!=null ? agent.localArchive : text(request,"state").equals("suspended");
+                        var released=archived ? game.releaseArchivedStation(agent.id,session) : game.releaseStation(agent.id,session);
+                        return released.thenCompose(done -> save())
                             .thenCompose(done -> applyBodyState(agent,text(request,"state"),flag(request,"running"),session))
                             .thenApply(done -> new JsonObject());
                     }
