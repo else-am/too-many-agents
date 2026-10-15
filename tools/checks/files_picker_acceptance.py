@@ -179,7 +179,7 @@ def main():
     native.aim(*map(float, at.split(',')))
     native.ui('dev_scroll', y=-3)
     assert row()['picker']['scroll'] > 0, 'Wheel did not scroll the list'
-    native.ui('dev_key', key=257, modifiers=3)
+    native.ui('dev_mouse', button=0, modifiers=4)
     native.wait_for(lambda s: s['input'] == 'captured')
     before = native.ui('screens')['player']
     native.ui('dev_key', key=269)  # End
@@ -188,7 +188,7 @@ def main():
                                 and not item['loading'] and 'file-1204.txt' in item['url'] for item in s['screens']), timeout=30)
     assert native.ui('screens')['player'] == before
     if native.ui('screens')['input'] == 'captured':
-        native.ui('dev_key', key=257, modifiers=3)
+        native.ui('dev_mouse', button=0, modifiers=4)
     elif native.ui('screens')['input'] == 'typing':
         native.ui('dev_key', key=256)
     native.screen_control(screen, 'back')

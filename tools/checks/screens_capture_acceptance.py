@@ -62,11 +62,16 @@ def main():
         aim(*map(float, center.split(',')))
         ui('dev_focus', active=True)
         time.sleep(.3)
-        ui('dev_key', key=257, modifiers=3)  # Ctrl+Shift+Enter
+        player = ui('screens')['player']
+        point = (page()['x'], page()['y'])
+        ui('dev_mouse', button=0, modifiers=4)  # Option/Alt-click
         wait_for(lambda s: s['input'] == 'captured')
+        assert ui('screens')['player'] == player, 'Capture moved the camera'
+        assert abs(page()['x'] - point[0]) <= 1 and abs(page()['y'] - point[1]) <= 1, 'Capture moved the cursor from the aim point'
 
     assert page()['bridgeAtLoad'], 'Pointer-lock bridge must precede page scripts'
     capture()
+    assert not page()['locked'] and page()['buttons'] == 0, 'Capture click reached the page'
     before = ui('screens')['player']
     ui('dev_key', key=87, phase='press')
     ui('dev_key', key=32)
@@ -93,19 +98,25 @@ def main():
     assert result['dy'] == initial['dy'] - 3000, result
     assert (result['x'], result['y']) == (initial['x'], initial['y']), result
     assert ui('screens')['player'] == before
+    ui('dev_mouse', button=0, modifiers=4)
+    wait_for(lambda s: s['input'] not in ('captured', 'pointer_locked'))
+    wait_page(lambda p: not p['locked'])
+    capture()
+    click(0)
+    wait_for(lambda s: s['input'] == 'pointer_locked')
     ui('dev_key', key=85)  # U
     wait_for(lambda s: s['input'] == 'captured')
-    print('PASS: Pointer lock delivers unbounded relative movement and page-initiated unlock works', flush=True)
+    print('PASS: Pointer lock delivers unbounded movement; Option/Alt-click release and page-initiated unlock work', flush=True)
 
     ui('dev_key', key=87, phase='press')
-    ui('dev_mouse', button=0, phase='press')
+    ui('dev_mouse', button=1, phase='press')
     ui('dev_key', key=256)
     assert ui('screens')['input'] == 'captured'
     wait_page(lambda p: 'Escape' in p['keys'])
-    ui('dev_key', key=257, modifiers=3)  # The capture toggle releases held inputs too
+    ui('dev_mouse', button=0, modifiers=4)  # The capture toggle releases held inputs too
     wait_page(lambda p: not p['down'] and p['buttons'] == 0)
     ui('dev_key', key=87, phase='release')
-    ui('dev_mouse', button=0, phase='release')
+    ui('dev_mouse', button=1, phase='release')
     assert ui('widgets')['screen'] == 'game'
     assert ui('screens')['input'] not in ('captured', 'pointer_locked', 'typing')
     print('PASS: Escape reaches the page; capture toggle releases held keys/buttons without opening pause', flush=True)

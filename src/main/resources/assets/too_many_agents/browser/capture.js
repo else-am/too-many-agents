@@ -1,4 +1,4 @@
-// CEF's windowless renderer denies native pointer lock. This bridge is enabled only by the player's capture key.
+// CEF's windowless renderer denies native pointer lock. This bridge is enabled only by the player's Option/Alt-click.
 (() => {
   if (window.__screenCapture) { window.__screenCapture.report(); return; }
   let enabled = false, locked = null;

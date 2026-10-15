@@ -6,9 +6,6 @@ import java.awt.event.MouseEvent;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import com.mojang.blaze3d.platform.InputConstants;
-import net.neoforged.neoforge.client.settings.KeyConflictContext;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import java.util.Set;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
@@ -50,11 +47,11 @@ public final class ScreenInput {
     private static ScreenView clicked;
     private static int lastClickButton = -1;
 
-    // Keep the modifiers fixed when rebinding the key: an ordinary typed character must never capture a screen.
-    private static final KeyMapping captureKey = new KeyMapping("Toggle screen capture (Ctrl+Shift)", KeyConflictContext.IN_GAME,
-        InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, "Too Many Agents");
+    /** The supplied 9x9 Option symbol, used instead of the word on macOS. */
+    private static final String[] OPTION_ICON = {
+        ".........", "###..####", "...#.....", "...#.....", "....#....",
+        "....#....", ".....#...", ".....#...", "......###"};
     private static ScreenView captured;
-    private static int captureTrigger = -1;
     private static double cursorX, cursorY;
     private static String lockedFrame;
     private static final Set<Integer> capturedKeys = new HashSet<>();
@@ -77,7 +74,6 @@ public final class ScreenInput {
     private ScreenInput() {}
 
     static void register(IEventBus modBus) {
-        modBus.addListener((RegisterKeyMappingsEvent event) -> event.register(captureKey));
         NeoForge.EVENT_BUS.addListener((RenderFrameEvent.Pre event) -> frame(event.getPartialTick().getGameTimeDeltaPartialTick(true)));
         NeoForge.EVENT_BUS.addListener(ScreenInput::mouseButton);
         NeoForge.EVENT_BUS.addListener(ScreenInput::scroll);
@@ -243,6 +239,16 @@ public final class ScreenInput {
             return;
         }
         if (event.getAction() != GLFW.GLFW_PRESS) return;
+        // Option/Alt-click captures at the crosshair, or releases from anywhere, including a locked pointer.
+        int chord = event.getModifiers() & (GLFW.GLFW_MOD_ALT | GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SHIFT | GLFW.GLFW_MOD_SUPER);
+        if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT && chord == GLFW.GLFW_MOD_ALT && Minecraft.getInstance().screen == null
+                && (captured != null || menu == null && aim != null && aim.view.onPage(aim.x, aim.y)
+                    && aim.view.awake() && !aim.view.crashed && Trust.allowedHere())) {
+            event.setCanceled(true);
+            consumedButtons.add(button);
+            if (captured == null) startCapture(); else stopCapture();
+            return;
+        }
         // Captured clicks bypass vanilla's swing along with its attack/use handling.
         if (captured == null && (menu != null || aim != null)) {
             var player = Minecraft.getInstance().player;
@@ -497,18 +503,6 @@ public final class ScreenInput {
         if (consumedKeys.contains(key)) {
             if (action == GLFW.GLFW_RELEASE) {
                 consumedKeys.remove(key);
-                if (captureTrigger == key) captureTrigger = -1;
-            }
-            return true;
-        }
-        if (captureKey.matches(key, scancode) && mods == (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SHIFT)
-                && Minecraft.getInstance().screen == null
-                && (captured != null || field == null && menu == null && aim != null && aim.view.onPage(aim.x, aim.y)
-                    && aim.view.awake() && !aim.view.crashed && Trust.allowedHere())) {
-            if (action == GLFW.GLFW_PRESS) {
-                consumedKeys.add(key);
-                captureTrigger = key;
-                if (captured == null) startCapture(); else stopCapture();
             }
             return true;
         }
@@ -575,7 +569,6 @@ public final class ScreenInput {
 
     /** Called from the keyboard handler for typed text. True when the text went to a screen. */
     public static boolean charTyped(int codePoint, int mods) {
-        if (captureTrigger != -1) return true;
         if (typing == null || Minecraft.getInstance().screen != null) return false;
         if (menu != null) return true;
         if (captured != null && field == null) {
@@ -709,16 +702,22 @@ public final class ScreenInput {
         if (Minecraft.getInstance().screen != null) return;
         if (typing == null && (aim == null || !aim.view.awake() || !aim.view.onPage(aim.x, aim.y))) return;
         var font = Minecraft.getInstance().font;
-        String toggle = "Ctrl+Shift+" + captureKey.getTranslatedKeyMessage().getString();
-        String text = captured != null ? "Screen captured - " + toggle + " to release"
-            : typing != null ? "Typing on screen, press Esc to release"
-            : toggle + " - Capture keyboard and mouse";
+        String prefix = captured != null ? "Screen captured - " : typing != null ? "Typing - " : "";
+        String suffix = captured != null ? "-click to release" : "-click to capture";
+        int modifierWidth = Minecraft.ON_OSX ? 9 : font.width("Alt");
+        int width = font.width(prefix) + modifierWidth + font.width(suffix);
         var pose = graphics.pose();
         pose.pushPose();
         pose.translate(graphics.guiWidth() / 2f, graphics.guiHeight() - 52, 0);
-        int x = -font.width(text) / 2;
-        graphics.fill(x - 5, -4, x + font.width(text) + 5, 12, 0xB0101114);
-        graphics.drawString(font, text, x, 0, 0xFFE6E8EB, false);
+        int x = -width / 2, color = 0xFFE6E8EB;
+        graphics.fill(x - 5, -4, x + width + 5, 12, 0xB0101114);
+        graphics.drawString(font, prefix, x, 0, color, false);
+        x += font.width(prefix);
+        if (Minecraft.ON_OSX) {
+            for (int row = 0; row < OPTION_ICON.length; row++) for (int col = 0; col < OPTION_ICON[row].length(); col++)
+                if (OPTION_ICON[row].charAt(col) == '#') graphics.fill(x + col, row, x + col + 1, row + 1, color);
+        } else graphics.drawString(font, "Alt", x, 0, color, false);
+        graphics.drawString(font, suffix, x + modifierWidth, 0, color, false);
         pose.popPose();
     }
 

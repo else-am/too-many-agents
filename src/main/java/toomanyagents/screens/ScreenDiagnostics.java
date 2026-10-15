@@ -291,9 +291,10 @@ public final class ScreenDiagnostics {
                 new Vec3(request.get("x").getAsDouble(), request.get("y").getAsDouble(), request.get("z").getAsDouble()));
             case "dev_mouse" -> {
                 int button = request.has("button") ? request.get("button").getAsInt() : 0;
+                int modifiers = request.has("modifiers") ? request.get("modifiers").getAsInt() : 0;
                 String phase = request.has("phase") ? request.get("phase").getAsString() : "click";
-                if (!phase.equals("release")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, 0);
-                if (!phase.equals("press")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, 0);
+                if (!phase.equals("release")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_PRESS, modifiers);
+                if (!phase.equals("press")) mc.mouseHandler.onPress(window, button, GLFW.GLFW_RELEASE, modifiers);
             }
             case "dev_mouse_move" -> {
                 double dx = request.get("x").getAsDouble(), dy = request.get("y").getAsDouble();

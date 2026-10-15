@@ -63,12 +63,12 @@ def main():
     def capture():
         native.aim(*map(float, row()['pageCenter'].split(',')))
         native.ui('dev_focus', active=True)
-        native.ui('dev_key', key=257, modifiers=3)
+        native.ui('dev_mouse', button=0, modifiers=4)
         assert native.ui('screens')['input'] == 'captured'
 
     def release():
         if native.ui('screens')['input'] in ('captured', 'pointer_locked'):
-            native.ui('dev_key', key=257, modifiers=3)
+            native.ui('dev_mouse', button=0, modifiers=4)
         else: native.ui('dev_key', key=256)
 
     def command(text):
