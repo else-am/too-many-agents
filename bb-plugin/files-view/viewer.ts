@@ -119,7 +119,7 @@ const rangeFromURL = (): SelectedLineRange | null => {
   return { start, end };
 };
 
-/** Returns lifecycle hooks for the picker shell and its native watcher. */
+/** Returns lifecycle hooks for the file viewer and its native watcher. */
 function mount(element: HTMLElement, state: State) {
   let disposed = false,
     mode = "",
@@ -168,29 +168,20 @@ function mount(element: HTMLElement, state: State) {
   const allButton = el("button", "", "All files"),
     changesButton = el("button", "", "Changes");
   modes.append(allButton, changesButton);
-  const baseControls = el("form", "fv-controls");
+  const baseControls = el("div", "fv-controls");
   const baseSelect = el("select");
   baseSelect.setAttribute("aria-label", "Comparison base");
   for (const [value, label] of [
     ["branch", "Branch"],
     ["uncommitted", "Uncommitted"],
-    ["ref", "Any ref"],
   ]) {
     const option = el("option", "", label);
     option.value = value;
     baseSelect.append(option);
   }
-  const ref = el("input");
-  ref.placeholder = "Commit or ref";
-  ref.setAttribute("aria-label", "Commit or ref");
-  ref.setAttribute("list", "fv-refs");
-  const refs = el("datalist");
-  refs.id = "fv-refs";
-  const compare = el("button", "", "Compare");
-  compare.type = "submit";
   const splitButton = el("button", "", "Split");
   splitButton.type = "button";
-  baseControls.append(baseSelect, ref, refs, compare, splitButton);
+  baseControls.append(baseSelect, splitButton);
   const status = el("div", "fv-status");
   status.setAttribute("role", "status");
   const notices = el("details", "fv-notices");
@@ -1436,12 +1427,8 @@ function mount(element: HTMLElement, state: State) {
       }
     }
     restoreAnchor(anchor);
-    status.textContent = [
-      data.partial ? "Partial comparison" : "",
-      ...(data.notices ?? []),
-    ]
-      .filter(Boolean)
-      .join(" - ");
+    setNotices("comparison", data.notices ?? []);
+    status.textContent = data.partial ? "Partial comparison" : "";
     if (currentPath && !preserveScroll) {
       lineScrollPending = Boolean(rangeFromURL());
       revealDiff(currentPath);
@@ -1483,8 +1470,8 @@ function mount(element: HTMLElement, state: State) {
     expandedTreePaths.clear();
     main.replaceChildren();
     search.value = "";
-    setNotices("refs", []);
     setNotices("file", []);
+    setNotices("comparison", []);
     baseSelect.options[0].textContent = "Branch";
     const url = new URL(location.href);
     mode = url.searchParams.get("mode") === "changes" ? "changes" : "files";
@@ -1503,29 +1490,16 @@ function mount(element: HTMLElement, state: State) {
     baseControls.hidden = mode !== "changes";
     allButton.setAttribute("aria-pressed", String(mode === "files"));
     changesButton.setAttribute("aria-pressed", String(mode === "changes"));
-    baseSelect.value = ["branch", "uncommitted"].includes(base) ? base : "ref";
-    ref.value = baseSelect.value === "ref" ? base : "";
-    ref.hidden = compare.hidden = baseSelect.value !== "ref";
+    // Explicit comparison links still work, without adding a ref editor to the UI.
+    while (baseSelect.options.length > 2) baseSelect.remove(2);
+    if (!["branch", "uncommitted"].includes(base)) {
+      const option = el("option", "", `Compared with ${base}`);
+      option.value = base;
+      option.disabled = true;
+      baseSelect.append(option);
+    }
+    baseSelect.value = base;
     if (mode === "changes") {
-      void api<{ names: string[]; partial?: boolean; notices?: string[] }>(
-        "refs",
-      )
-        .then((data) => {
-          setNotices("refs", [
-            data.partial
-              ? "Ref suggestions are incomplete - type any ref to compare"
-              : "",
-            ...(data.notices ?? []),
-          ]);
-          refs.replaceChildren(
-            ...data.names.map((name) => {
-              const option = el("option");
-              option.value = name;
-              return option;
-            }),
-          );
-        })
-        .catch(report);
       await loadChanges();
     } else {
       await Promise.all([
@@ -1547,18 +1521,8 @@ function mount(element: HTMLElement, state: State) {
     void navigate().catch(report);
   };
   baseSelect.onchange = () => {
-    ref.hidden = compare.hidden = baseSelect.value !== "ref";
-    if (baseSelect.value !== "ref") {
-      urlUpdate({ base: baseSelect.value });
-      void navigate().catch(report);
-    } else ref.focus();
-  };
-  baseControls.onsubmit = (event) => {
-    event.preventDefault();
-    if (ref.value.trim()) {
-      urlUpdate({ base: ref.value.trim() });
-      void navigate().catch(report);
-    }
+    urlUpdate({ base: baseSelect.value });
+    void navigate().catch(report);
   };
   splitButton.onclick = () => {
     diffAnchor ??= visibleAnchor();

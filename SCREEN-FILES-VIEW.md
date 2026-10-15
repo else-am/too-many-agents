@@ -91,8 +91,8 @@ A Pierre file tree on the left, content on the right, in Pierre's default dark t
 - Base options:
   - **Branch:** the merge base of `HEAD` and the default branch, compared with the current working tree. Includes committed branch changes and the net staged/unstaged changes. This is the default.
   - **Uncommitted:** `HEAD` compared with the current working tree, including the net staged/unstaged changes.
-  - **Any ref**, typed in: that commit compared with the current working tree, without implicitly taking a merge base.
-- Use the configured upstream remote's default branch, then `origin`'s default branch when available, without fetching automatically. If no default branch or merge base is available, fall back to Uncommitted with a short explanation and leave the ref picker available. An unborn `HEAD` compares against an empty tree. An invalid explicit ref shows an error rather than silently changing the comparison.
+  - Explicit comparison links may name a commit or ref; the viewer shows that comparison without offering a ref editor.
+- Use the configured upstream remote's default branch, then `origin`'s default branch when available, without fetching automatically. If no default branch or merge base is available, fall back to Uncommitted with a short explanation. An unborn `HEAD` compares against an empty tree. An invalid explicit ref shows an error rather than silently changing the comparison.
 
 **Content:**
 

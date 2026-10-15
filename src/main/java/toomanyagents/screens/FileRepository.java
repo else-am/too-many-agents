@@ -778,7 +778,7 @@ public final class FileRepository {
             user = next;
         }
         if (user.getSections().contains("include") || user.getSections().contains("includeIf"))
-            notices.add("Git configuration includes are not followed");
+            notices.add("Settings from extra Git config files are not loaded - ignore rules and line-ending handling may differ from Git");
         return user;
     }
 

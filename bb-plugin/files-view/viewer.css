@@ -55,9 +55,6 @@
   gap: 5px;
   margin: 0;
 }
-.fv-controls input {
-  width: 180px;
-}
 .fv-status {
   color: #a9a9b3;
   flex: 1;
@@ -195,9 +192,6 @@
   }
   .fv-header {
     gap: 8px;
-  }
-  .fv-controls input {
-    width: 120px;
   }
   .fv-markdown {
     padding: 18px;
