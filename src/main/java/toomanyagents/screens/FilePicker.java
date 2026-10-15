@@ -42,7 +42,7 @@ final class FilePicker {
     /** The path field's longest text, which keeps measuring it cheap. */
     private static final int MAX_FIELD = 4096;
     private static final long REFRESH_NANOS = 2_000_000_000L, TYPE_AHEAD_NANOS = 1_000_000_000L;
-    private static final String HIDDEN_LABEL = "Show hidden files", OPEN_LABEL = "Open this folder", GONE = "This folder no longer exists.";
+    private static final String PARENT_LABEL = "Parent", HIDDEN_LABEL = "Show hidden files", OPEN_LABEL = "Open this folder", GONE = "This folder no longer exists.";
     /** Sizes in the picker's own units, each scale() pixels of the page. Text is the font's 9 units tall. */
     private static final int BAR = 15, ROW = 12, MAX_WIDTH = 360, TRACK = 5;
     private static final int HOVER = 0xFF1B1E23, CHOSEN = 0xFF243447, BUTTON_HOVER = 0xFF30343B, FILE = 0xFF9AA0A9;
@@ -191,7 +191,7 @@ final class FilePicker {
         double[] at = units(x, y);
         view.fileError = "";
         notice = "";
-        if (layout.back.contains(at[0], at[1])) view.back();
+        if (layout.back.contains(at[0], at[1])) parent();
         else if (layout.path.contains(at[0], at[1])) {
             focus = Focus.PATH;
             caret = anchor = caretAt(layout, at[0]);
@@ -249,7 +249,7 @@ final class FilePicker {
             case GLFW.GLFW_KEY_HOME -> select(0);
             case GLFW.GLFW_KEY_END -> select(shown.size() - 1);
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (selected >= 0) activate(selected); }
-            case GLFW.GLFW_KEY_BACKSPACE -> view.back();
+            case GLFW.GLFW_KEY_BACKSPACE -> parent();
             case GLFW.GLFW_KEY_TAB -> focusPath();
             default -> {}
         }
@@ -359,6 +359,14 @@ final class FilePicker {
 
     private String query() { return hidden ? "?pick&hidden" : "?pick"; }
 
+    boolean hasParent() { return Path.of(folder).getParent() != null; }
+
+    /** Opens the containing folder through the same human grant as a typed path. */
+    private void parent() {
+        Path parent = Path.of(folder).getParent();
+        if (parent != null) view.choose(Builtin.files(parent) + query());
+    }
+
     /** Opens the typed path: a folder here, a file in the viewer. */
     private void go() {
         var path = typedPath(field.toString());
@@ -427,7 +435,7 @@ final class FilePicker {
         return Math.max(1, (int) Math.round(view.barHeight * 0.4 * pixelsPerBlock / 8));
     }
 
-    /** A centred column: Back and the path, the names, a status line, then the options, stacked when they don't fit side by side. */
+    /** A centred column: Parent and the path, the names, a status line, then the options, stacked when they don't fit side by side. */
     Layout layout() {
         int s = scale(), w = view.pixelWidth / s, h = view.pixelHeight / s;
         int margin = Math.clamp(h / 14, 4, 18), width = Math.min(w - 2 * margin, MAX_WIDTH), x = (w - width) / 2;
@@ -435,8 +443,9 @@ final class FilePicker {
         int hiddenWidth = Math.min(width, 13 + font.width(HIDDEN_LABEL)), openWidth = Math.min(width, font.width(OPEN_LABEL) + 12);
         boolean stacked = hiddenWidth + openWidth + 8 > width;
         int last = h - margin - BAR, footer = stacked ? last - BAR - 2 : last;
-        var back = new Box(x, margin, BAR, BAR);
-        var path = new Box(x + BAR + 4, margin, width - BAR - 4, BAR);
+        int parentWidth = font.width(PARENT_LABEL) + 27;
+        var back = new Box(x, margin, parentWidth, BAR);
+        var path = new Box(x + parentWidth + 4, margin, width - parentWidth - 4, BAR);
         var hiddenBox = new Box(x, footer, hiddenWidth, BAR);
         var open = new Box(stacked ? x : x + width - openWidth, last, openWidth, BAR);
         var status = new Box(x, footer - 13, width, 11);
@@ -532,7 +541,7 @@ final class FilePicker {
         if (!refreshing && view.live() && System.nanoTime() - listedAt > REFRESH_NANOS) load(true);
         boolean typing = ScreenInput.pageTyping(view);
         var look = new Look(hovered(), hoveredRow(), focus, typing, typing && focus == Focus.PATH && Util.getMillis() / 530 % 2 == 0,
-            view.canGoBack, view.fileError, shown, scroll, selected, field.toString(), caret, anchor, loading, error, notice, truncated, hidden);
+            hasParent(), view.fileError, shown, scroll, selected, field.toString(), caret, anchor, loading, error, notice, truncated, hidden);
         if (!force && look.equals(drawn) && target != null) {
             // Keep the latest list reference so an unchanged refresh is compared only once.
             drawn = look;
@@ -593,12 +602,13 @@ final class FilePicker {
         g.fill(0, 0, l.width, l.height, ScreenRenderer.SURFACE);
         var over = look.over();
 
-        // Back walks the screen's own history, the same as the bar's.
-        if (look.back() && over == Control.BACK) fill(g, l.back, BUTTON_HOVER);
+        // The picker arrow opens the parent folder; the screen bar keeps navigation history.
+        fill(g, l.back, look.back() && over == Control.BACK ? BUTTON_HOVER : ScreenRenderer.FIELD);
         var arrow = ScreenRenderer.BAR_ICONS[0];
         int arrowColor = look.back() ? ScreenRenderer.TEXT : ScreenRenderer.DIM;
         for (int j = 0; j < arrow.length; j++) for (int i = 0; i < arrow[j].length(); i++)
-            if (arrow[j].charAt(i) == '#') g.fill(l.back.x() + 3 + i, l.back.y() + 3 + j, l.back.x() + 4 + i, l.back.y() + 4 + j, arrowColor);
+            if (arrow[j].charAt(i) == '#') g.fill(l.back.x() + 6 + i, l.back.y() + 3 + j, l.back.x() + 7 + i, l.back.y() + 4 + j, arrowColor);
+        g.drawString(font, PARENT_LABEL, l.back.x() + 21, l.back.y() + 4, arrowColor, false);
 
         // The path field: while it has the keyboard, the caret stays in view; at rest it shows the path's end.
         var p = l.path;

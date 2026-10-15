@@ -53,7 +53,7 @@ For every `tma://` page:
 
 A native Minecraft folder browser on the in-world screen, independent of the viewer's HTML page and header. Use the Minecraft font, minimal controls, and a width-capped container centered on the screen with left-aligned, truncated filenames.
 
-- **Back** follows visited locations, rather than moving to the parent directory. The screen toolbar's Back/Forward also works.
+- The picker's **Parent** button opens the parent directory and is disabled at the filesystem root. Backspace in the list does the same. The screen toolbar's Back/Forward follows visited locations.
 - **Path field:**
   - Relative paths, `~`, `/…`, and drive letters on Windows (`D:/`) work.
   - Tab completes the next segment.

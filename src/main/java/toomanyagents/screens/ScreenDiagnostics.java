@@ -109,7 +109,7 @@ public final class ScreenDiagnostics {
                 for (var control : FilePicker.Control.values()) {
                     var json = layout == null ? new JsonObject() : area(view, picker.blocks(layout.control(control)));
                     json.addProperty("visible", picker != null);
-                    json.addProperty("enabled", picker != null && (control != FilePicker.Control.BACK || view.canGoBack));
+                    json.addProperty("enabled", picker != null && (control != FilePicker.Control.BACK || picker.hasParent()));
                     controls.add("picker_" + control.name().toLowerCase(java.util.Locale.ROOT), json);
                 }
                 if (picker == null) screen.add("picker", JsonNull.INSTANCE);
