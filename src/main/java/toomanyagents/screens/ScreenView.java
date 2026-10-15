@@ -222,7 +222,7 @@ final class ScreenView implements ScreenBrowser.View {
         return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(upVector.scale(-(pageHeight + barHeight / 2)));
     }
 
-    enum BlankAction { FILES, TERMINAL, ADDRESS }
+    enum BlankAction { TERMINAL, FILES, ADDRESS }
     record Bounds(double x, double y, double width, double height) {
         boolean contains(double px, double py) { return px >= x && py >= y && px < x + width && py < y + height; }
     }

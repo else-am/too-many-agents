@@ -134,19 +134,39 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         // One text size for all buttons, narrowed so the longest label fits.
         var first = view.blankBounds(actions[0]);
         double size = first.height() * 0.36;
-        for (var action : actions) size = Math.min(size, first.width() * 0.85 * 9 / font.width(blankLabel(action)));
+        for (var action : actions) size = Math.min(size, first.width() * 0.85 * 9 / (13 + font.width(blankLabel(action))));
         for (var action : actions) {
             var b = view.blankBounds(action);
             rect(buffers, pose.last().pose(), b.x(), b.y(), b.x() + b.width(), b.y() + b.height(), -0.002, FIELD);
-            text(pose, buffers, blankLabel(action), b.x() + b.width() / 2, b.y() + (b.height() - size) / 2, size, TEXT, true, -0.003);
+            String label = blankLabel(action);
+            double pixel = size / 9, x = b.x() + (b.width() - (13 + font.width(label)) * pixel) / 2;
+            double y = b.y() + (b.height() - size) / 2;
+            var mask = switch (action) {
+                case TERMINAL -> FilePicker.TERMINAL_ICON;
+                case FILES -> FilePicker.FILES_ICON;
+                case ADDRESS -> WEB_ICON;
+            };
+            icon(buffers, pose.last().pose(), mask, x, y, pixel, TEXT, -0.003);
+            text(pose, buffers, label, x + 13 * pixel, y, size, TEXT, false, -0.003);
         }
     }
+
+    private static final String[] WEB_ICON = {
+        "..#####..",
+        ".#.#.#.#.",
+        "#.#...#.#",
+        "#########",
+        "#.#...#.#",
+        "#########",
+        "#.#...#.#",
+        ".#.#.#.#.",
+        "..#####.."};
 
     private static String blankLabel(ScreenView.BlankAction action) {
         return switch (action) {
             case FILES -> "Open a file or folder";
             case TERMINAL -> "Open a terminal";
-            case ADDRESS -> "Open a URL or search";
+            case ADDRESS -> "Open a URL or search the web";
         };
     }
 

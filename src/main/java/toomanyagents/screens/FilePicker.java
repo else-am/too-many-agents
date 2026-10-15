@@ -62,7 +62,7 @@ final class FilePicker {
         Action(String label, String[] icon) { this.label = label; this.icon = icon; }
     }
     /** The supplied 9x9 icons, pixel for pixel. */
-    private static final String[] FILES_ICON = {
+    static final String[] FILES_ICON = {
         ".###.....",
         "#...###..",
         "#......#.",
@@ -72,7 +72,7 @@ final class FilePicker {
         "##.....#.",
         "##.....#.",
         ".######.."};
-    private static final String[] TERMINAL_ICON = {
+    static final String[] TERMINAL_ICON = {
         ".#######.",
         "#.......#",
         "#.#.....#",
