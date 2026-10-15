@@ -34,7 +34,8 @@ declare global {
 }
 
 const FONT = '"Pixel Code"';
-const FONT_SIZE = 18;
+// Small and narrow panels need denser text. Keep Pixel Code's native 9px size as the floor.
+const fontSize = () => Math.round(Math.max(9, Math.min(18, Math.min(innerWidth, innerHeight) / 40)));
 const ACTIVE_POLL = 100;
 const HIDDEN_POLL = 1000;
 const MAX_RETRY = 4000;
@@ -146,7 +147,7 @@ const updateSession = (next: Session) => {
 
 const term = new Terminal({
   fontFamily: `${FONT}, monospace`,
-  fontSize: FONT_SIZE,
+  fontSize: fontSize(),
   fontWeight: "normal",
   fontWeightBold: "normal",
   lineHeight: 1,
@@ -266,6 +267,8 @@ const syncSize = async () => {
   if (!stopped && `${term.cols}x${term.rows}` !== sentSize) void syncSize();
 };
 const fitGrid = () => {
+  const size = fontSize();
+  if (term.options.fontSize !== size) term.options.fontSize = size;
   const dimensions = fit.proposeDimensions();
   if (dimensions) term.resize(Math.max(2, Math.min(500, dimensions.cols)), Math.max(1, Math.min(200, dimensions.rows)));
 };
@@ -360,7 +363,7 @@ addEventListener("pagehide", stop, { once: true });
 async function start() {
   setStatus("Connecting");
   // Measure cells with the real font, or the grid is sized for the fallback.
-  await document.fonts.load(`${FONT_SIZE}px ${FONT}`).catch(() => undefined);
+  await document.fonts.load(`${fontSize()}px ${FONT}`).catch(() => undefined);
   if (stopped) return;
   term.open(host);
   term.textarea?.addEventListener("focus", () => reportEditing(true));
