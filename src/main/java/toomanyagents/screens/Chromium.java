@@ -41,8 +41,8 @@ import org.lwjgl.glfw.GLFW;
 import org.slf4j.Logger;
 
 /**
- * The one embedded Chromium shared by every screen. It is installed and started on first use, off the render thread:
- * on macOS its startup waits on the main thread, which the render thread keeps pumping.
+ * The one embedded Chromium shared by every screen. It is installed and started on first use, off the render thread.
+ * macOS loads its native library on the main thread before asynchronous startup, which needs the main event loop.
  */
 final class Chromium {
     private static final Logger LOG = LogUtils.getLogger();
@@ -147,7 +147,8 @@ final class Chromium {
         try {
             var contextReady = new java.util.concurrent.CompletableFuture<Void>();
             var builder = new CefAppBuilder();
-            builder.setInstallDir(HOME.resolve(MANAGED ? "cef-152.0.6" : "cef").toFile());
+            Path installDir = HOME.resolve(MANAGED ? "cef-152.0.6" : "cef");
+            builder.setInstallDir(installDir.toFile());
             builder.setProgressHandler((state, percent) -> progress = switch (state) {
                 case DOWNLOADING -> percent >= 0 ? "Installing browser " + Math.round(percent) + "%" : "Installing browser";
                 case EXTRACTING, INSTALL -> "Installing browser";
@@ -185,8 +186,18 @@ final class Chromium {
                      var lock = file.lock()) {
                     builder.install();
                 }
-                builder.setSkipInstallation(true);
+            } else builder.install();
+            builder.setSkipInstallation(true);
+            if (System.getProperty("os.name", "").startsWith("Mac")) {
+                // JCEF's +load installs a mouse listener before its C++ globals are constructed. Loading on the
+                // event thread prevents mouse events from reaching that half-initialized listener (SIGSEGV).
+                // Only load the library here: builder.build() waits on the main loop and must stay off-thread.
+                Minecraft.getInstance().submit(() -> {
+                    if (phase == Phase.STARTING)
+                        System.load(installDir.resolve("libjcef.dylib").toAbsolutePath().toString());
+                }).get();
             }
+            if (phase != Phase.STARTING) return;
             long started = System.nanoTime();
             var app = builder.build();
             var client = app.createClient();
