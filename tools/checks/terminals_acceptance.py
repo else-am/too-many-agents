@@ -63,14 +63,27 @@ def main():
     def capture():
         native.aim(*map(float, row()['pageCenter'].split(',')))
         native.ui('dev_focus', active=True)
-        native.ui('dev_key', key=82)
+        native.ui('dev_key', key=257, modifiers=3)
         assert native.ui('screens')['input'] == 'captured'
 
-    def release(): native.ui('dev_key', key=256)
+    def release():
+        if native.ui('screens')['input'] in ('captured', 'pointer_locked'):
+            native.ui('dev_key', key=257, modifiers=3)
+        else: native.ui('dev_key', key=256)
 
     def command(text):
         native.ui('dev_char', text=text)
         native.ui('dev_key', key=257)
+
+    def type_keys(text):
+        # Exercise GLFW's real order, rather than inserting text without any held key.
+        shifted = dict(zip('!@#$%^&*()_+{}|:"<>?~', '1234567890-=[]\\;\',./`'))
+        for char in text:
+            key = ord(shifted.get(char, char).upper())
+            mods = 1 if char in shifted or char.isupper() else 0
+            native.ui('dev_key', key=key, modifiers=mods, phase='press')
+            native.ui('dev_char', text=char)
+            native.ui('dev_key', key=key, modifiers=mods, phase='release')
 
     def screenshot(name):
         _, result = call(agent, 'screen_screenshot', screen=screen)
@@ -143,6 +156,16 @@ def main():
         session = bb('terminal', 'show', terminal)
         assert session['initialCwd'] == str(folder.resolve())
         time.sleep(1)
+        native.ui('dev_focus', active=True)
+        native.aim(*map(float, row()['pageCenter'].split(',')))
+        native.click(0)
+        wait(lambda _: native.ui('screens')['input'] == 'typing', 'Terminal click did not take keyboard focus')
+        sample = 'r R !@#$%^&*()_+{}|:<>?~'
+        native.ui('dev_char', text="printf 'TYPING[%s]\\n' '")
+        type_keys(sample)
+        command("'")
+        output(terminal, 'TYPING[' + sample + ']\r\n')
+        assert native.ui('screens')['input'] == 'typing', 'Typing r unexpectedly captured the screen'
         capture()
         command("printf 'NATIVE_%s\\n' INPUT_OK; pwd")
         output(terminal, 'NATIVE_INPUT_OK\r\n')

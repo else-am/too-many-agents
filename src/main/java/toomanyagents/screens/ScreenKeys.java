@@ -18,6 +18,7 @@ final class ScreenKeys {
         } else {
             switch (key) {
                 case GLFW.GLFW_KEY_SPACE -> { code = "Space"; virtualKey = 32; }
+                case GLFW.GLFW_KEY_ESCAPE -> { code = "Escape"; virtualKey = 27; }
                 case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { code = key == GLFW.GLFW_KEY_ENTER ? "Enter" : "NumpadEnter"; virtualKey = 13; }
                 case GLFW.GLFW_KEY_TAB -> { code = "Tab"; virtualKey = 9; }
                 case GLFW.GLFW_KEY_BACKSPACE -> { code = "Backspace"; virtualKey = 8; }
@@ -95,7 +96,16 @@ final class ScreenKeys {
 
     static void text(ScreenView view, String text) {
         var params = new JsonObject();
+        // Chromium's char event rejects supplementary Unicode; IME-style insertion handles those code points.
+        if (text.length() > 1) {
+            params.addProperty("text", text);
+            view.playerInput("Input.insertText", params);
+            return;
+        }
+        params.addProperty("type", "char");
+        params.addProperty("key", text);
         params.addProperty("text", text);
-        view.playerInput("Input.insertText", params);
+        params.addProperty("unmodifiedText", text);
+        view.playerInput("Input.dispatchKeyEvent", params);
     }
 }

@@ -63,7 +63,7 @@ A native Minecraft folder browser on the in-world screen, independent of the vie
   - Folders first; no expandable tree.
   - Click a folder to enter it. Click a file to open it in the viewer.
   - Hovered or selected folder rows show icon-and-text **Files** and **Terminal** actions. Tab reaches these actions from the selected folder.
-  - Keyboard navigation and scrolling work in pointing and R capture modes.
+  - Keyboard navigation and scrolling work in pointing and keyboard/mouse capture modes (Ctrl+Shift+Enter toggles capture; Esc reaches the captured page).
 - **Show hidden files** defaults to off.
 - **Open this folder** opens the viewer rooted at the current folder. **Open terminal** starts a BB shell there. Both use the supplied icons with text.
 - The picker is controlled by the player. Agent opens cannot enter it or inherit its authority.

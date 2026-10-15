@@ -190,6 +190,10 @@ term.parser.registerOscHandler(52, () => true);
 // Ctrl-Shift-C/V copy and paste.
 const mac = /Mac/.test(navigator.platform);
 term.attachCustomKeyEventHandler((event) => {
+  // GLFW supplies the actual character separately. Let keypress handle printable keys so Space,
+  // shifted punctuation and keyboard layouts use that character rather than the physical key name.
+  if (event.type === "keydown" && event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey)
+    return false;
   if (mac || !event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) return true;
   const key = event.key.toLowerCase();
   if (key === "c") {
@@ -200,7 +204,7 @@ term.attachCustomKeyEventHandler((event) => {
   return key !== "v";
 });
 
-const marks = ["keydown", "keyup", "beforeinput", "input", "paste", "compositionend", "mousedown", "mouseup", "mousemove", "wheel", "touchstart", "touchend"];
+const marks = ["keydown", "keypress", "keyup", "beforeinput", "input", "paste", "compositionend", "mousedown", "mouseup", "mousemove", "wheel", "touchstart", "touchend"];
 const markUser = (event: Event) => {
   if (!event.isTrusted) return;
   lastUserInput = performance.now();

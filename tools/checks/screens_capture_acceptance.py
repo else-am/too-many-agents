@@ -62,7 +62,7 @@ def main():
         aim(*map(float, center.split(',')))
         ui('dev_focus', active=True)
         time.sleep(.3)
-        ui('dev_key', key=82)  # R
+        ui('dev_key', key=257, modifiers=3)  # Ctrl+Shift+Enter
         wait_for(lambda s: s['input'] == 'captured')
 
     assert page()['bridgeAtLoad'], 'Pointer-lock bridge must precede page scripts'
@@ -99,13 +99,16 @@ def main():
 
     ui('dev_key', key=87, phase='press')
     ui('dev_mouse', button=0, phase='press')
-    ui('dev_key', key=256)  # Escape releases held inputs too
+    ui('dev_key', key=256)
+    assert ui('screens')['input'] == 'captured'
+    wait_page(lambda p: 'Escape' in p['keys'])
+    ui('dev_key', key=257, modifiers=3)  # The capture toggle releases held inputs too
     wait_page(lambda p: not p['down'] and p['buttons'] == 0)
     ui('dev_key', key=87, phase='release')
     ui('dev_mouse', button=0, phase='release')
     assert ui('widgets')['screen'] == 'game'
     assert ui('screens')['input'] not in ('captured', 'pointer_locked', 'typing')
-    print('PASS: Escape releases held keys/buttons and returns to the game without opening pause', flush=True)
+    print('PASS: Escape reaches the page; capture toggle releases held keys/buttons without opening pause', flush=True)
 
     capture()
     ui('dev_focus', active=False)

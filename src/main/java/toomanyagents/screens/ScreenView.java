@@ -726,7 +726,13 @@ final class ScreenView implements ScreenBrowser.View {
         if (browser == null || crashed) return;
         playerInput();
         var source = browser;
-        browser.devTools(method, params.toString()).exceptionally(error -> {
+        // Keep surrogate pairs escaped in JSON: JCEF's JNI string conversion otherwise corrupts emoji.
+        var json = new StringBuilder();
+        for (char c : params.toString().toCharArray()) {
+            if (Character.isSurrogate(c)) json.append(String.format("\\u%04x", (int) c));
+            else json.append(c);
+        }
+        browser.devTools(method, json.toString()).exceptionally(error -> {
             onRender(() -> { if (browser == source) ScreenInput.closing(this); });
             com.mojang.logging.LogUtils.getLogger().warn("Screen input failed", error);
             return null;

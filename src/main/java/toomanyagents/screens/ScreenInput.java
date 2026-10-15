@@ -50,8 +50,9 @@ public final class ScreenInput {
     private static ScreenView clicked;
     private static int lastClickButton = -1;
 
-    private static final KeyMapping captureKey = new KeyMapping("Capture screen keyboard and mouse", KeyConflictContext.IN_GAME,
-        InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_R, "Too Many Agents");
+    // Keep the modifiers fixed when rebinding the key: an ordinary typed character must never capture a screen.
+    private static final KeyMapping captureKey = new KeyMapping("Toggle screen capture (Ctrl+Shift)", KeyConflictContext.IN_GAME,
+        InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_ENTER, "Too Many Agents");
     private static ScreenView captured;
     private static int captureTrigger = -1;
     private static double cursorX, cursorY;
@@ -500,24 +501,22 @@ public final class ScreenInput {
             }
             return true;
         }
-        if (captured == null && captureKey.matches(key, scancode) && Minecraft.getInstance().screen == null
-                && (field == null && menu == null && aim != null && aim.view.onPage(aim.x, aim.y)
+        if (captureKey.matches(key, scancode) && mods == (GLFW.GLFW_MOD_CONTROL | GLFW.GLFW_MOD_SHIFT)
+                && Minecraft.getInstance().screen == null
+                && (captured != null || field == null && menu == null && aim != null && aim.view.onPage(aim.x, aim.y)
                     && aim.view.awake() && !aim.view.crashed && Trust.allowedHere())) {
             if (action == GLFW.GLFW_PRESS) {
                 consumedKeys.add(key);
                 captureTrigger = key;
-                startCapture();
+                if (captured == null) startCapture(); else stopCapture();
             }
-            return true;
-        }
-        if (captured != null && key == GLFW.GLFW_KEY_ESCAPE) {
-            if (action == GLFW.GLFW_PRESS) { consumedKeys.add(key); stopCapture(); }
             return true;
         }
         if (captured != null) {
             if (field != null || menu != null) {
                 if (action != GLFW.GLFW_RELEASE) {
                     if (field != null) fieldKey(key, mods);
+                    else if (key == GLFW.GLFW_KEY_ESCAPE) closeMenu();
                     if (field == null) consumedKeys.add(key);
                 }
                 return true;
@@ -710,9 +709,10 @@ public final class ScreenInput {
         if (Minecraft.getInstance().screen != null) return;
         if (typing == null && (aim == null || !aim.view.awake() || !aim.view.onPage(aim.x, aim.y))) return;
         var font = Minecraft.getInstance().font;
-        String text = captured != null ? "Screen captured - Esc to release"
+        String toggle = "Ctrl+Shift+" + captureKey.getTranslatedKeyMessage().getString();
+        String text = captured != null ? "Screen captured - " + toggle + " to release"
             : typing != null ? "Typing on screen, press Esc to release"
-            : captureKey.getTranslatedKeyMessage().getString() + " - Capture keyboard and mouse";
+            : toggle + " - Capture keyboard and mouse";
         var pose = graphics.pose();
         pose.pushPose();
         pose.translate(graphics.guiWidth() / 2f, graphics.guiHeight() - 52, 0);
