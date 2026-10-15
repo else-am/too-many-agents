@@ -272,5 +272,6 @@ not bundled into the Minecraft mod JAR.
 
 The JAR bundles CommonMark Java (BSD-2-Clause), the autolink library (MIT),
 TwelveMonkeys ImageIO (BSD-3-Clause), and [Pixel Code 2.2](https://github.com/qwerasd205/PixelCode/tree/v2.2) (OFL-1.1).
+Terminal screens use xterm.js and its fit addon (MIT), with license notices in the bundled assets.
 The plugin uses beautiful-mermaid (MIT) and resvg (MPL-2.0). Their license files remain
 in the bundled JARs, npm packages, and font asset directories.

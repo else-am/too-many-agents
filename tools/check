@@ -19,6 +19,7 @@ CHECKS = {
     'screens': ('screens_acceptance.py', 'Native screen placement, browser controls and persistence'),
     'screen-tools': ('screens_tools_acceptance.py', 'Screen tools and ownership; requires fixture agents/screens'),
     'screen-capture': ('screens_capture_acceptance.py', 'Real browser frame capture'),
+    'terminals': ('terminals_acceptance.py', 'Native picker terminal actions, BB sessions, human input and agent access'),
     'files-picker': ('files_picker_acceptance.py', 'Native human files picker, scoped grants and persistence'),
     'files-view': ('files_view_acceptance.py', 'Native file selection, large search, previews and changes'),
     'files-agent': ('files_agent_acceptance.py', 'Agent environment boundary, nested repositories and saved-view revalidation'),

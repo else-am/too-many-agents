@@ -282,7 +282,7 @@
   },
   {
     "name": "screen_open",
-    "description": "Show a URL, file/folder, or Git changes on a screen. File and changes views are read-only and confined to your local environment folder; paths and symlinks outside it are refused. Built-in views can be listed, captured and closed, but not driven through CDP. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Rename a screen when its name no longer describes its use; otherwise leave it alone.",
+    "description": "Show a URL, file/folder, Git changes, or an existing BB terminal on a screen. Terminal sessions must belong to your own local environment; agents cannot type into them. File and changes views are read-only and confined to your local environment folder; paths and symlinks outside it are refused. Built-in views can be listed, captured and closed, but not driven through CDP. Waits for the page to load (up to about 15s), then returns `{ screen, url, title }`. Rename a screen when its name no longer describes its use; otherwise leave it alone.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -295,12 +295,13 @@
           "enum": [
             "url",
             "file",
-            "changes"
+            "changes",
+            "terminal"
           ]
         },
         "target": {
           "type": "string",
-          "description": "For kind url: an http/https URL. For file/changes: a raw file path (relative paths resolve from your working directory) or an explicit tma://files/absolute/root?open=relative/file#L20-L40 location. Raw paths keep literal ? and #. Kind file preserves a location's mode/base; kind changes forces Changes, and base overrides the location's base. Picker/internal URLs and other query keys are refused. File locations do not grant access."
+          "description": "For kind terminal: an existing BB terminal ID or tma://terminal/<id>, in your environment. For kind url: an http/https URL. For file/changes: a raw file path (relative paths resolve from your working directory) or an explicit tma://files/absolute/root?open=relative/file#L20-L40 location. Raw paths keep literal ? and #. Kind file preserves a location's mode/base; kind changes forces Changes, and base overrides the location's base. Picker/internal URLs and other query keys are refused. File locations do not grant access."
         },
         "base": {
           "type": "string",

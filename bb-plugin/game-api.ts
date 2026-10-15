@@ -5,6 +5,7 @@ import type { MinecraftWorlds } from "./minecraft.js";
 import type { MinecraftThreads } from "./threads.js";
 import { chatAssets } from "./chat-assets.js";
 import { environmentFolder } from "./screens.js";
+import { terminalScreens } from "./terminals.js";
 import { MOD_VERSION, type Development } from "./discovery.js";
 import {
   ApiError,
@@ -32,6 +33,7 @@ export function registerGameApi(
   development: Development,
 ) {
   const chat = chatAssets(bb);
+  const terminals = terminalScreens(bb);
   async function dispatch(data: ObjectValue): Promise<unknown> {
     checkVersion(data);
     const op = string(data.op, "op");
@@ -162,6 +164,16 @@ export function registerGameApi(
         return agent && !agent.threadId ? {} : bb.sdk.threads.stop({ threadId: threadId() });
       case "agent.environment":
         return environmentFolder(bb, string(requireAgent().threadId, "threadId"));
+      case "terminal.create":
+        return terminals.create(live, data);
+      case "terminal.access":
+        return terminals.access(live, data, agent);
+      case "terminal.output":
+        return terminals.output(live, data);
+      case "terminal.input":
+        return terminals.input(live, data);
+      case "terminal.resize":
+        return terminals.resize(live, data);
       case "agent.archive":
         return agents.archive(live(), requireAgent(), data.archived === true);
       case "timeline":

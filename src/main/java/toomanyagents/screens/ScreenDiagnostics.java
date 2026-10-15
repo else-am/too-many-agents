@@ -132,6 +132,7 @@ public final class ScreenDiagnostics {
                     json.addProperty("notice", picker.notice);
                     json.addProperty("truncated", picker.truncated);
                     json.addProperty("painted", picker.painted());
+                    json.addProperty("action", picker.action == null ? "" : picker.action.name().toLowerCase(java.util.Locale.ROOT));
                     json.addProperty("scale", layout.scale());
                     int hoveredRow = picker.hoveredRow();
                     var rows = new JsonArray();
@@ -144,6 +145,11 @@ public final class ScreenDiagnostics {
                         row.addProperty("link", entry.link());
                         row.addProperty("selected", index == picker.selected);
                         row.addProperty("hovered", index == hoveredRow);
+                        if (entry.directory()) for (var action : FilePicker.Action.values()) {
+                            var button = area(view, picker.blocks(picker.actionBox(layout, index, action)));
+                            button.addProperty("visible", picker.showsActions(index, hoveredRow));
+                            row.add(action.name().toLowerCase(java.util.Locale.ROOT), button);
+                        }
                         rows.add(row);
                     }
                     json.add("rows", rows);

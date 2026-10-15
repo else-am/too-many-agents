@@ -252,13 +252,14 @@ public final class ScreenTools {
         if (args.has("base") && (!kind.equals("changes") || baseOverride == null || baseOverride.isBlank() || baseOverride.length() > 1024
             || baseOverride.chars().anyMatch(Character::isISOControl)))
             throw invalid("base must be a nonblank Git ref of at most 1024 characters, for kind changes.");
-        if (!Set.of("url", "file", "changes").contains(kind)) throw invalid("kind must be url, file or changes.");
-        String web = kind.equals("url") ? webAddress(target.strip()) : null;
+        if (!Set.of("url", "file", "changes", "terminal").contains(kind)) throw invalid("kind must be url, file, changes or terminal.");
+        String web = kind.equals("url") ? webAddress(target.strip()) : kind.equals("terminal") ? TerminalPages.address(target) : null;
         String name = args.has("name") ? name(args) : null;
         String id = entry.screen().id(), thread = caller.threadId();
         if (name != null) ScreenIndex.get(server).requireName(name, id);
         // Files are granted inside the agent's environment before the screen changes, so a refusal leaves it as it was.
-        return () -> files(thread, web == null ? environment -> fileAddress(target, environment, kind.equals("changes"), baseOverride) : null, waiters)
+        return () -> (kind.equals("terminal") ? terminalAccess(web, thread, waiters)
+                : files(thread, web == null ? environment -> fileAddress(target, environment, kind.equals("changes"), baseOverride) : null, waiters))
             .thenCompose(files -> onServer(server, live, () -> {
                 // Reserve the name before navigating, so a conflicting rename cannot change the page.
                 if (name != null) edit(server, entry, record -> new Screen(record.id(), name, record.url(), record.openedBy()));
@@ -281,6 +282,16 @@ public final class ScreenTools {
 
     private record Opened(ScreenView view, long generation, String url, CompletableFuture<Void> loaded) {}
 
+    private static CompletableFuture<FilePages.Opened> terminalAccess(String target, String owner, Set<CompletableFuture<?>> waiters) {
+        var granted = TerminalPages.authorize(target, owner);
+        if (granted == null) throw new ScreenError("unavailable", "Minecraft isn't connected to BB yet.");
+        var checked = granted.handle((session, failure) -> {
+            if (failure != null) throw new ScreenError("no_access", reason(failure));
+            return session;
+        });
+        return wait(waiters, checked, OPEN_SECONDS, "Checking terminal access timed out.").thenApply(session -> null);
+    }
+
     private static CompletableFuture<FilePages.Opened> files(String thread, java.util.function.Function<Path, String> address, Set<CompletableFuture<?>> waiters) {
         if (address == null) return CompletableFuture.completedFuture(null);
         var granted = agentFiles(thread, address);
@@ -292,6 +303,13 @@ public final class ScreenTools {
     private static volatile java.util.function.Function<String, CompletableFuture<String>> environments = thread -> null;
 
     public static void environments(java.util.function.Function<String, CompletableFuture<String>> resolver) { environments = resolver; }
+
+    @FunctionalInterface
+    public interface TerminalRpc {
+        CompletableFuture<JsonObject> call(String op, JsonObject args, String owner);
+    }
+    static volatile TerminalRpc terminalRpc = (op, args, owner) -> CompletableFuture.failedFuture(new IllegalStateException("BB is not connected."));
+    public static void terminals(TerminalRpc rpc) { terminalRpc = rpc; }
 
     /**
      * Grants an agent's files location inside its environment folder, freshly reported by its plugin. address builds the

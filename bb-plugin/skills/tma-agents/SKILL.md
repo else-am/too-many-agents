@@ -91,9 +91,10 @@ Use one to show the user something, or to work on a page together; they can take
   targets. Relative paths resolve from that folder. You can reopen a shared
   `tma://files/…?open=relative/file#L20-L40` location within that boundary.
   Use `kind: changes` and optional `base` for a Git comparison.
+  Use `kind: terminal` with an existing BB terminal ID to show a terminal from your own environment. Only the player can type into it; closing its screen leaves the terminal session running.
 - `screen_cdp` drives web pages (usually
   `Runtime.evaluate`); `screen_screenshot` shows you what it looks like;
-  built-in file views return `view_only` to CDP. `screen_close` turns a screen off
+  built-in file and terminal views return `view_only` to CDP. `screen_close` turns a screen off
   and clears its URL. Screens work outside the player's
   loaded area. Listing never wakes them; using one wakes its saved URL and keeps
   the page alive through your active task and a short idle grace period. After

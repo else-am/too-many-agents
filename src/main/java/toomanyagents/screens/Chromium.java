@@ -278,6 +278,13 @@ final class Chromium {
                         view.follow(screen, request.getURL());
                     return true;
                 }
+                if (view != null && frame.isMain() && screen.builtin && screen.ready() && TerminalPages.location(request.getURL())) {
+                    var access = view.access;
+                    if (access == null || !TerminalPages.id(request.getURL()).equals(access.terminal())) {
+                        deniedNavigations.incrementAndGet();
+                        return true;
+                    }
+                }
                 if (view != null && frame.isMain() && screen.builtin && screen.ready() && FilePages.location(request.getURL())) {
                     if (userGesture && !redirect) {
                         view.filesIntent(screen, request.getURL());
@@ -339,6 +346,11 @@ final class Chromium {
         var router = CefMessageRouter.create();
         router.addHandler(new CefMessageRouterHandlerAdapter() {
             @Override public boolean onQuery(CefBrowser browser, CefFrame frame, long id, String request, boolean persistent, CefQueryCallback callback) {
+                if (request.startsWith("screen-terminal:")) {
+                    if (persistent) callback.failure(1, "Terminal requests must be one-shot.");
+                    else TerminalPages.query(views.get(browser), (ScreenBrowser) browser, frame, request.substring("screen-terminal:".length()), callback);
+                    return true;
+                }
                 if (request.startsWith("screen-files:watch")) {
                     var view = views.get(browser);
                     var access = view == null ? null : view.access;

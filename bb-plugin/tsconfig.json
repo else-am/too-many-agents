@@ -10,6 +10,7 @@
   },
   "include": [
     "server.ts",
-    "files-view/**/*.ts"
+    "files-view/**/*.ts",
+    "terminal-view/**/*.ts"
   ]
 }

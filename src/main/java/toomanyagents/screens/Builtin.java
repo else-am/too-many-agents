@@ -26,7 +26,7 @@ final class Builtin {
     static final String SCHEME = "tma";
     private static final String ASSETS = "/assets/too_many_agents/builtin/";
     /** Only our own bundled code runs, and the page can't be framed or send its contents anywhere else. */
-    private static final String POLICY = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; connect-src 'self'; "
+    private static final String POLICY = "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob:; font-src 'self'; connect-src 'self'; "
         + "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 
     private Builtin() {}
@@ -117,8 +117,15 @@ final class Builtin {
     private static byte[] body(String url, StringRef type) throws IOException {
         var uri = URI.create(url);
         String path = uri.getPath() == null ? "" : uri.getPath();
-        if (!"files".equals(uri.getHost())) return null;
-        String name = path.startsWith("/_app/") ? path.substring(6) : "files.html";
+        boolean terminal = "terminal".equals(uri.getHost());
+        if (!terminal && !"files".equals(uri.getHost())) return null;
+        if (terminal && path.equals("/_app/pixel-code.ttf")) {
+            type.set("font/ttf");
+            try (InputStream stream = Builtin.class.getResourceAsStream("/assets/too_many_agents/font/pixel_code.ttf")) {
+                return stream == null ? null : stream.readAllBytes();
+            }
+        }
+        String name = path.startsWith("/_app/") ? path.substring(6) : terminal ? "terminal.html" : "files.html";
         if (!name.matches("[a-z0-9-]+\\.(html|js|css)")) return null;
         type.set(switch (name.substring(name.lastIndexOf('.') + 1)) {
             case "html" -> "text/html";

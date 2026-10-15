@@ -66,18 +66,21 @@ final class ScreenView implements ScreenBrowser.View {
      * for; the authorized root joins it with the files view. Null on the web and for every browser but the current one.
      */
     enum Provenance { HUMAN, AGENT }
-    record Grant(ConfinedFiles.Root root, Provenance provenance, String notice, String owner) {}
+    record Grant(ConfinedFiles.Root root, Provenance provenance, String notice, String owner, String terminal) {
+        Grant(ConfinedFiles.Root root, Provenance provenance, String notice, String owner) { this(root, provenance, notice, owner, ""); }
+    }
     private static final java.util.concurrent.atomic.AtomicLong nextDocument = new java.util.concurrent.atomic.AtomicLong();
-    record Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner, long document) {
-        Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner) {
-            this(browser, generation, root, provenance, notice, owner, nextDocument.incrementAndGet());
+    record Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner, String terminal, long document) {
+        Access(ScreenBrowser browser, long generation, ConfinedFiles.Root root, Provenance provenance, String notice, String owner, String terminal) {
+            this(browser, generation, root, provenance, notice, owner, terminal, nextDocument.incrementAndGet());
         }
     }
     private Grant fileGrant;
-    private CompletableFuture<FilePages.Opened> granting;
+    private CompletableFuture<?> granting;
     private String grantAttempt = "";
     String fileError = "";
     volatile Access access;
+    int terminalPending;
     /** Addresses outside the current native history, nearest first. Crossing browser kinds always reopens fresh. */
     final LinkedList<Entry> behind = new LinkedList<>(), ahead = new LinkedList<>();
     record Entry(String url, String title, Grant grant) {}
@@ -259,8 +262,11 @@ final class ScreenView implements ScreenBrowser.View {
         }
         if (url.isBlank() && awake()) close();
         // A saved location is granted afresh before its page starts. An agent's waits until its environment can be checked.
-        boolean grantDue = trusted && FilePages.location(url) && fileGrant == null && !url.equals(grantAttempt);
-        if (grantDue) openFiles(url, false, entry.screen().openedBy());
+        boolean grantDue = trusted && (FilePages.location(url) || TerminalPages.location(url)) && fileGrant == null && !url.equals(grantAttempt);
+        if (grantDue) {
+            if (TerminalPages.location(url)) openTerminal(url, false, entry.screen().openedBy());
+            else openFiles(url, false, entry.screen().openedBy());
+        }
         // The picker needs no browser; its location shows only once granted.
         if (browser == null && departing == null && granting == null && !grantDue && trusted && !url.isBlank() && !FilePages.picker(url)
                 && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
@@ -269,6 +275,7 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     void navigate(String target) {
+        if (TerminalPages.location(target)) { openTerminal(target, true, ""); return; }
         if (FilePages.location(target)) { openFiles(target, true); return; }
         // A typed script runs in the page rather than becoming the screen's address. Built-in pages run only their own.
         if (target.regionMatches(true, 0, "javascript:", 0, 11)) {
@@ -400,25 +407,60 @@ final class ScreenView implements ScreenBrowser.View {
                 fileError = cause.getMessage() == null ? "Could not open this location." : cause.getMessage();
                 return;
             }
-            var previous = picker == null ? null : new Entry(url, title, fileGrant);
-            fileGrant = new Grant(opened.root(), owner.isEmpty() ? Provenance.HUMAN : Provenance.AGENT, opened.notice(), owner);
-            url = opened.url();
-            grantAttempt = url;
-            crashed = false;
-            // Each folder the picker visits is a step in the screen's history, like crossing to another browser.
-            if (previous != null) {
-                if (!previous.url().equals(url)) {
-                    push(behind, previous);
-                    drop(ahead);
-                }
-                if (!picking()) closePicker();
-                showLocation();
-            } else if (browser != null) {
-                // The picker or the new browser appears once the old browser's history is read.
-                drop(ahead);
-                leave(behind, false);
-            } else showLocation();
-            Screens.saveUrl(this, url, takeover);
+            showGranted(opened.url(), new Grant(opened.root(), owner.isEmpty() ? Provenance.HUMAN : Provenance.AGENT, opened.notice(), owner), takeover);
+        }));
+    }
+
+    /** Applies a completed native grant, keeping the old location in history. */
+    private void showGranted(String target, Grant grant, boolean takeover) {
+        var previous = picker == null ? null : new Entry(url, title, fileGrant);
+        fileGrant = grant;
+        url = grantAttempt = target;
+        crashed = false;
+        if (previous != null) {
+            if (!previous.url().equals(url)) { push(behind, previous); drop(ahead); }
+            if (!picking()) closePicker();
+            showLocation();
+        } else if (browser != null) {
+            drop(ahead);
+            leave(behind, false);
+        } else showLocation();
+        Screens.saveUrl(this, url, takeover);
+    }
+
+    /** The native picker's Terminal action starts a BB shell at the folder the player chose. */
+    void terminal(java.nio.file.Path folder) {
+        if (granting != null) return;
+        if (!Screens.canOpen()) { fileError = "All screen browsers are in use."; return; }
+        fileError = "";
+        var request = TerminalPages.create(folder);
+        granting = request;
+        request.whenComplete((session, failure) -> onRender(() -> {
+            if (granting != request) return;
+            granting = null;
+            if (failure != null) { fileError = TerminalPages.message(failure); return; }
+            String id = session.get("id").getAsString();
+            showGranted(TerminalPages.url(id), new Grant(null, Provenance.HUMAN, "", "", id), true);
+        }));
+    }
+
+    /** A saved or typed terminal address is reauthorized through BB before it is shown. */
+    private void openTerminal(String target, boolean takeover, String owner) {
+        var request = TerminalPages.authorize(target, owner);
+        if (request == null) {
+            if (takeover) fileError = "Minecraft is not connected to BB yet.";
+            return;
+        }
+        cancelGrant();
+        grantAttempt = target;
+        fileError = "";
+        granting = request;
+        request.whenComplete((session, failure) -> onRender(() -> {
+            if (granting != request) return;
+            granting = null;
+            if (failure != null) { fileError = TerminalPages.message(failure); return; }
+            String id = session.get("id").getAsString();
+            showGranted(TerminalPages.url(id), new Grant(null, owner.isEmpty() ? Provenance.HUMAN : Provenance.AGENT, "", owner, id), takeover);
         }));
     }
 
@@ -447,7 +489,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** Loads a page in this browser, or in a new one when it moves between web and built-in content. */
     private void load(String target) {
         if (browser == null) return;
-        if (Chromium.builtin(target) == browser.builtin && (!browser.builtin || access == null || access.root() == (fileGrant == null ? null : fileGrant.root()))) {
+        if (Chromium.builtin(target) == browser.builtin && (!browser.builtin || access == null || access.root() == (fileGrant == null ? null : fileGrant.root()) && access.terminal().equals(fileGrant == null ? "" : fileGrant.terminal()))) {
             authorize();
             browser.loadURL(target);
             return;
@@ -458,7 +500,7 @@ final class ScreenView implements ScreenBrowser.View {
 
     private void authorize() {
         setAccess(browser != null && browser.builtin ? new Access(browser, generation,
-            fileGrant == null ? null : fileGrant.root(), fileGrant == null ? Provenance.AGENT : fileGrant.provenance(), fileGrant == null ? "" : fileGrant.notice(), fileGrant == null ? entry.screen().openedBy() : fileGrant.owner()) : null);
+            fileGrant == null ? null : fileGrant.root(), fileGrant == null ? Provenance.AGENT : fileGrant.provenance(), fileGrant == null ? "" : fileGrant.notice(), fileGrant == null ? entry.screen().openedBy() : fileGrant.owner(), fileGrant == null ? "" : fileGrant.terminal()) : null);
     }
 
     private void setAccess(Access value) {
@@ -479,7 +521,7 @@ final class ScreenView implements ScreenBrowser.View {
             previous = access;
             if (source != browser || previous == null || previous.browser() != source || previous.generation() != generation) return;
             // A document boundary keeps the pinned permission, but has its own cancellation identity.
-            access = new Access(source, generation, previous.root(), previous.provenance(), previous.notice(), previous.owner());
+            access = new Access(source, generation, previous.root(), previous.provenance(), previous.notice(), previous.owner(), previous.terminal());
         }
         FilePages.cancel(previous);
     }
@@ -501,7 +543,7 @@ final class ScreenView implements ScreenBrowser.View {
     private void leave(LinkedList<Entry> stack, boolean back) {
         var old = browser;
         String oldTitle = title;
-        var oldGrant = access == null ? null : new Grant(access.root(), access.provenance(), access.notice(), access.owner());
+        var oldGrant = access == null ? null : new Grant(access.root(), access.provenance(), access.notice(), access.owner(), access.terminal());
         ScreenInput.pageLoading(this);
         failCommands("The page moved to another browser before DevTools answered. The outcome is unknown; check the page before acting again.");
         setAccess(null);
@@ -603,6 +645,10 @@ final class ScreenView implements ScreenBrowser.View {
             openFiles(url, false, entry.screen().openedBy());
             return;
         }
+        if (TerminalPages.location(url) && (fileGrant == null || fileGrant.terminal().isEmpty())) {
+            openTerminal(url, false, entry.screen().openedBy());
+            return;
+        }
         authorize();
         if (browser != null) browser.reload();
         if (browser == null || !browser.builtin) Screens.edit(this, record -> new Screen(record.id(), record.name(), record.url(), ""));
@@ -657,7 +703,7 @@ final class ScreenView implements ScreenBrowser.View {
         agentInput();
         leavePicker();
         cancelGrant();
-        fileGrant = new Grant(files == null ? null : files.root(), Provenance.AGENT, files == null ? "" : files.notice(), owner);
+        fileGrant = new Grant(files == null ? null : files.root(), Provenance.AGENT, files == null ? "" : files.notice(), owner, TerminalPages.location(target) ? TerminalPages.id(target) : "");
         grantAttempt = target;
         fileError = "";
         if (opening != null) opening.completeExceptionally(new ScreenTools.ScreenError("unavailable", "Another page was opened on this screen."));
@@ -909,7 +955,7 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** Same-page navigations skip the gesture check, so a click just before still counts. */
-    private boolean recentInput() { return playerInput && System.nanoTime() - inputAt < 1_000_000_000L; }
+    boolean recentInput() { return playerInput && System.nanoTime() - inputAt < 1_000_000_000L; }
 
     void crashed(ScreenBrowser source) {
         onRender(() -> {

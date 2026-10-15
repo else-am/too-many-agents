@@ -1,0 +1,39 @@
+@import "@xterm/xterm/css/xterm.css";
+
+@font-face {
+  font-family: "Pixel Code";
+  src: url("/_app/pixel-code.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: #101113;
+  color: #d6d5cf;
+}
+
+#terminal {
+  position: absolute;
+  inset: 8px;
+}
+
+.xterm { height: 100%; }
+.xterm .xterm-viewport { scrollbar-color: #3d3f43 #101113; }
+
+#status {
+  position: fixed;
+  right: 12px;
+  bottom: 8px;
+  max-width: calc(100% - 40px);
+  padding: 4px 8px;
+  margin: 0;
+  background: #202226;
+  color: #d6d5cf;
+  font: 14px "Pixel Code", monospace;
+  pointer-events: none;
+}

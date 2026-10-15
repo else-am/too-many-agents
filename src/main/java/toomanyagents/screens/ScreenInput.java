@@ -727,6 +727,9 @@ public final class ScreenInput {
     /** Native editing commands also work in captured mode, where synthetic key events alone do not copy on macOS. */
     private static boolean pageShortcut(ScreenView view, int key, int action, int mods) {
         if (view.browser == null || !shortcut(mods) || action == GLFW.GLFW_RELEASE) return false;
+        // Terminal Ctrl-C/A/Z belong to the shell. On Windows/Linux, copying and pasting use Ctrl-Shift-C/V.
+        if (TerminalPages.location(view.url) && !Minecraft.ON_OSX
+                && ((mods & GLFW.GLFW_MOD_SHIFT) == 0 || key != GLFW.GLFW_KEY_C && key != GLFW.GLFW_KEY_V)) return false;
         var frame = view.browser.getFocusedFrame();
         if (frame == null) frame = view.browser.getMainFrame();
         if (frame == null) return false;

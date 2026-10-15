@@ -20,6 +20,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeoutException;
 import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -31,8 +32,9 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
 /**
- * The page a screen shows for a files location ending in ?pick: Back and the folder's path, the folder's contents with
- * folders first, then Show hidden files and Open this folder. It lists only the folder its pinned human grant names;
+ * The page a screen shows for a files location ending in ?pick: Parent and the folder's path, the folder's contents with
+ * folders first, each folder offering Files and Terminal, then Show hidden files, Open this folder and Open terminal.
+ * It lists only the folder its pinned human grant names;
  * every choice goes back through the view's native grant and history. Drawn with Minecraft's font into one texture that
  * both the panel and screenshots use, redrawn only when what it shows changes. Render thread only, except listing.
  */
@@ -42,28 +44,60 @@ final class FilePicker {
     /** The path field's longest text, which keeps measuring it cheap. */
     private static final int MAX_FIELD = 4096;
     private static final long REFRESH_NANOS = 2_000_000_000L, TYPE_AHEAD_NANOS = 1_000_000_000L;
-    private static final String PARENT_LABEL = "Parent", HIDDEN_LABEL = "Show hidden files", OPEN_LABEL = "Open this folder", GONE = "This folder no longer exists.";
+    private static final String PARENT_LABEL = "Parent", HIDDEN_LABEL = "Show hidden files", OPEN_LABEL = "Open this folder",
+        TERMINAL_LABEL = "Open terminal", GONE = "This folder no longer exists.";
     /** Sizes in the picker's own units, each scale() pixels of the page. Text is the font's 9 units tall. */
     private static final int BAR = 15, ROW = 12, MAX_WIDTH = 360, TRACK = 5;
     private static final int HOVER = 0xFF1B1E23, CHOSEN = 0xFF243447, BUTTON_HOVER = 0xFF30343B, FILE = 0xFF9AA0A9;
     private static final MultiBufferSource.BufferSource BUFFERS = MultiBufferSource.immediate(new ByteBufferBuilder(1 << 16));
     private static int nextId;
 
-    enum Control { BACK, PATH, HIDDEN, OPEN_FOLDER }
+    enum Control { BACK, PATH, HIDDEN, OPEN_FOLDER, TERMINAL }
+    /** A folder row's own buttons: open it in the files view, or open a terminal there. */
+    enum Action {
+        FILES("Files", FILES_ICON), TERMINAL("Terminal", TERMINAL_ICON);
+
+        final String label;
+        final String[] icon;
+        Action(String label, String[] icon) { this.label = label; this.icon = icon; }
+    }
+    /** The supplied 9x9 icons, pixel for pixel. */
+    private static final String[] FILES_ICON = {
+        ".###.....",
+        "#...###..",
+        "#......#.",
+        "#..######",
+        "#.#.....#",
+        "#.#.....#",
+        "##.....#.",
+        "##.....#.",
+        ".######.."};
+    private static final String[] TERMINAL_ICON = {
+        ".#######.",
+        "#.......#",
+        "#.#.....#",
+        "#..#....#",
+        "#...#...#",
+        "#..#....#",
+        "#.#.###.#",
+        "#.......#",
+        ".#######."};
     enum Focus { NONE, PATH, LIST }
     /** A link is one that leads outside this folder, so its kind is unknown here. */
     record Row(String name, boolean directory, boolean link) {}
     record Box(int x, int y, int width, int height) {
         boolean contains(double px, double py) { return px >= x && py >= y && px < x + width && py < y + height; }
     }
-    record Layout(int scale, int width, int height, Box back, Box path, Box list, Box track, Box status, Box hidden, Box open, int rows) {
+    record Layout(int scale, int width, int height, Box back, Box path, Box list, Box track, Box status, Box hidden, Box open, Box terminal, int rows) {
         Box control(Control control) {
-            return switch (control) { case BACK -> back; case PATH -> path; case HIDDEN -> hidden; case OPEN_FOLDER -> open; };
+            return switch (control) {
+                case BACK -> back; case PATH -> path; case HIDDEN -> hidden; case OPEN_FOLDER -> open; case TERMINAL -> terminal;
+            };
         }
     }
     private record Listing(List<Row> rows, boolean truncated) {}
     /** Everything drawn; the texture is redrawn only when this changes. */
-    private record Look(Control over, int overRow, Focus focus, boolean typing, boolean caretOn, boolean back, String fileError,
+    private record Look(Control over, int overRow, Action overAction, Action action, Focus focus, boolean typing, boolean caretOn, boolean back, String fileError,
                         List<Row> shown, int scroll, int selected, String field, int caret, int anchor, boolean loading,
                         String error, String notice, boolean truncated, boolean hidden) {}
 
@@ -76,6 +110,8 @@ final class FilePicker {
     String error = "", notice = "";
     int scroll, selected = -1;
     Focus focus = Focus.LIST;
+    /** The selected folder's button the keyboard is on, or null for the row itself. */
+    Action action;
     /** The path field, its caret, and the other end of its selection. */
     final StringBuilder field = new StringBuilder();
     int caret, anchor;
@@ -101,6 +137,7 @@ final class FilePicker {
         all = shown = List.of();
         scroll = 0;
         selected = -1;
+        action = null;
         grabbed = -1;
         error = notice = "";
         truncated = false;
@@ -180,6 +217,7 @@ final class FilePicker {
         shown = hidden ? all : all.stream().filter(row -> !row.name().startsWith(".")).toList();
         selected = -1;
         if (chosen != null) for (int i = 0; i < shown.size(); i++) if (shown.get(i).name().equals(chosen)) selected = i;
+        if (selected < 0 || !shown.get(selected).directory()) action = null;
         scroll = Math.clamp(scroll, 0, maxScroll(layout()));
     }
 
@@ -198,6 +236,7 @@ final class FilePicker {
             return true;
         } else if (layout.hidden.contains(at[0], at[1])) toggleHidden();
         else if (layout.open.contains(at[0], at[1])) view.choose(Builtin.files(Path.of(folder)));
+        else if (layout.terminal.contains(at[0], at[1])) view.terminal(Path.of(folder));
         else if (layout.track.contains(at[0], at[1]) && maxScroll(layout) > 0) {
             // The thumb drags; the track above or below it pages.
             var thumb = thumb(layout);
@@ -209,7 +248,10 @@ final class FilePicker {
             if (row >= 0) {
                 focus = Focus.LIST;
                 selected = row;
-                activate(row);
+                var chosen = actionAt(layout, row, at[0], at[1]);
+                action = chosen;
+                if (chosen != null) act(row, chosen);
+                else activate(row);
                 return true;
             } else if (layout.list.contains(at[0], at[1])) {
                 focus = Focus.LIST;
@@ -241,6 +283,7 @@ final class FilePicker {
         view.fileError = "";
         if (focus == Focus.PATH) { fieldKey(key, mods); return; }
         int page = Math.max(1, layout().rows - 1);
+        boolean shift = (mods & GLFW.GLFW_MOD_SHIFT) != 0;
         switch (key) {
             case GLFW.GLFW_KEY_UP -> { if (selected <= 0) focusPath(); else select(selected - 1); }
             case GLFW.GLFW_KEY_DOWN -> select(selected + 1);
@@ -248,11 +291,27 @@ final class FilePicker {
             case GLFW.GLFW_KEY_PAGE_DOWN -> select(Math.max(0, selected) + page);
             case GLFW.GLFW_KEY_HOME -> select(0);
             case GLFW.GLFW_KEY_END -> select(shown.size() - 1);
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> { if (selected >= 0) activate(selected); }
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+                if (selected >= 0 && action != null) act(selected, action);
+                else if (selected >= 0) activate(selected);
+            }
             case GLFW.GLFW_KEY_BACKSPACE -> parent();
-            case GLFW.GLFW_KEY_TAB -> focusPath();
+            case GLFW.GLFW_KEY_TAB -> tab(shift);
             default -> {}
         }
+    }
+
+    /** Tab steps from a selected folder to its Files and Terminal buttons, then to the path; Shift-Tab steps back. */
+    private void tab(boolean back) {
+        boolean folder = selected >= 0 && selected < shown.size() && shown.get(selected).directory();
+        if (!folder) { action = null; focusPath(); return; }
+        if (back) {
+            if (action == Action.TERMINAL) action = Action.FILES;
+            else if (action == Action.FILES) action = null;
+            else focusPath();
+        } else if (action == null) action = Action.FILES;
+        else if (action == Action.FILES) action = Action.TERMINAL;
+        else { action = null; focusPath(); }
     }
 
     /** Typed text: into the path field, or in the list, a jump to the next name starting with what was typed. */
@@ -292,7 +351,10 @@ final class FilePicker {
             case GLFW.GLFW_KEY_BACKSPACE -> { if (low == high) anchor = step(caret, -1); insert(""); }
             case GLFW.GLFW_KEY_DELETE -> { if (low == high) anchor = step(caret, 1); insert(""); }
             case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> go();
-            case GLFW.GLFW_KEY_TAB -> complete();
+            case GLFW.GLFW_KEY_TAB -> {
+                if (shift) { focus = Focus.LIST; select(Math.max(selected, 0)); }
+                else complete();
+            }
             case GLFW.GLFW_KEY_DOWN -> { focus = Focus.LIST; select(Math.max(selected, 0)); }
             default -> {}
         }
@@ -339,6 +401,7 @@ final class FilePicker {
     private void select(int index) {
         if (shown.isEmpty()) return;
         selected = Math.clamp(index, 0, shown.size() - 1);
+        action = null;
         int rows = Math.max(1, layout().rows);
         if (selected < scroll) scroll = selected;
         else if (selected >= scroll + rows) scroll = selected - rows + 1;
@@ -355,6 +418,13 @@ final class FilePicker {
         var row = shown.get(index);
         String target = Builtin.files(Path.of(folder).resolve(row.name()));
         view.choose(row.directory() || row.link() ? target + query() : target);
+    }
+
+    /** A folder row's button, only ever from the player's own click or key. */
+    private void act(int index, Action chosen) {
+        Path path = Path.of(folder).resolve(shown.get(index).name());
+        if (chosen == Action.FILES) view.choose(Builtin.files(path));
+        else view.terminal(path);
     }
 
     private String query() { return hidden ? "?pick&hidden" : "?pick"; }
@@ -440,19 +510,74 @@ final class FilePicker {
         int s = scale(), w = view.pixelWidth / s, h = view.pixelHeight / s;
         int margin = Math.clamp(h / 14, 4, 18), width = Math.min(w - 2 * margin, MAX_WIDTH), x = (w - width) / 2;
         var font = Minecraft.getInstance().font;
-        int hiddenWidth = Math.min(width, 13 + font.width(HIDDEN_LABEL)), openWidth = Math.min(width, font.width(OPEN_LABEL) + 12);
-        boolean stacked = hiddenWidth + openWidth + 8 > width;
-        int last = h - margin - BAR, footer = stacked ? last - BAR - 2 : last;
+        int hiddenWidth = Math.min(width, 13 + font.width(HIDDEN_LABEL));
+        int openWidth = Math.min(width, font.width(OPEN_LABEL) + 25), terminalWidth = Math.min(width, font.width(TERMINAL_LABEL) + 25);
+        // One footer row when everything fits; otherwise the buttons share a row below the checkbox, or each takes its own.
+        int last = h - margin - BAR, step = BAR + 2;
+        boolean pair = openWidth + 4 + terminalWidth <= width, single = pair && hiddenWidth + 8 + openWidth + 4 + terminalWidth <= width;
+        Box open, terminal, hiddenBox;
+        if (single) {
+            terminal = new Box(x + width - terminalWidth, last, terminalWidth, BAR);
+            open = new Box(terminal.x() - 4 - openWidth, last, openWidth, BAR);
+            hiddenBox = new Box(x, last, hiddenWidth, BAR);
+        } else if (pair) {
+            open = new Box(x, last, openWidth, BAR);
+            terminal = new Box(x + openWidth + 4, last, terminalWidth, BAR);
+            hiddenBox = new Box(x, last - step, hiddenWidth, BAR);
+        } else {
+            terminal = new Box(x, last, terminalWidth, BAR);
+            open = new Box(x, last - step, openWidth, BAR);
+            hiddenBox = new Box(x, last - 2 * step, hiddenWidth, BAR);
+        }
         int parentWidth = font.width(PARENT_LABEL) + 27;
         var back = new Box(x, margin, parentWidth, BAR);
         var path = new Box(x + parentWidth + 4, margin, width - parentWidth - 4, BAR);
-        var hiddenBox = new Box(x, footer, hiddenWidth, BAR);
-        var open = new Box(stacked ? x : x + width - openWidth, last, openWidth, BAR);
-        var status = new Box(x, footer - 13, width, 11);
+        var status = new Box(x, hiddenBox.y() - 13, width, 11);
         int top = margin + BAR + 6;
         var list = new Box(x, top, width, Math.max(0, status.y() - 2 - top));
         var track = new Box(list.x() + list.width() - TRACK, list.y(), TRACK, list.height());
-        return new Layout(s, w, h, back, path, list, track, status, hiddenBox, open, list.height() / ROW);
+        return new Layout(s, w, h, back, path, list, track, status, hiddenBox, open, terminal, list.height() / ROW);
+    }
+
+    /** Whether a row shows its Files and Terminal buttons: a folder under the pointer or chosen. */
+    boolean showsActions(int row, int hoveredRow) {
+        return row >= 0 && row < shown.size() && shown.get(row).directory() && (row == selected || row == hoveredRow);
+    }
+
+    /** A folder row's button box, right-aligned in the row. Icons only when labels would crowd the name. */
+    Box actionBox(Layout layout, int row, Action action) {
+        var box = rowBox(layout, row);
+        var font = Minecraft.getInstance().font;
+        boolean labels = box.width() - actionWidth(font, true) >= 40;
+        int right = box.x() + box.width();
+        for (int i = Action.values().length - 1; i >= 0; i--) {
+            var each = Action.values()[i];
+            int width = labels ? font.width(each.label) + 18 : 15;
+            if (each == action) return new Box(right - width, box.y(), width, ROW);
+            right -= width + 2;
+        }
+        throw new IllegalArgumentException();
+    }
+
+    private static int actionWidth(Font font, boolean labels) {
+        int width = 0;
+        for (var action : Action.values()) width += (labels ? font.width(action.label) + 18 : 15) + 2;
+        return width;
+    }
+
+    /** The folder row button under a point, or null. Any folder row under the pointer is showing its buttons. */
+    private Action actionAt(Layout layout, int row, double x, double y) {
+        if (!shown.get(row).directory()) return null;
+        for (var each : Action.values()) if (actionBox(layout, row, each).contains(x, y)) return each;
+        return null;
+    }
+
+    Action hoveredAction() {
+        var at = pointer();
+        if (at == null) return null;
+        var layout = layout();
+        int row = rowAt(layout, at[0], at[1]);
+        return row < 0 ? null : actionAt(layout, row, at[0], at[1]);
     }
 
     private int maxScroll(Layout layout) { return Math.max(0, shown.size() - layout.rows); }
@@ -540,7 +665,7 @@ final class FilePicker {
         if (closed) return false;
         if (!refreshing && view.live() && System.nanoTime() - listedAt > REFRESH_NANOS) load(true);
         boolean typing = ScreenInput.pageTyping(view);
-        var look = new Look(hovered(), hoveredRow(), focus, typing, typing && focus == Focus.PATH && Util.getMillis() / 530 % 2 == 0,
+        var look = new Look(hovered(), hoveredRow(), hoveredAction(), action, focus, typing, typing && focus == Focus.PATH && Util.getMillis() / 530 % 2 == 0,
             hasParent(), view.fileError, shown, scroll, selected, field.toString(), caret, anchor, loading, error, notice, truncated, hidden);
         if (!force && look.equals(drawn) && target != null) {
             // Keep the latest list reference so an unchanged refresh is compared only once.
@@ -640,6 +765,17 @@ final class FilePicker {
             else if (row == look.overRow()) fill(g, box, HOVER);
             String name = entry.directory() ? entry.name() + "/" : entry.link() ? entry.name() + " - link" : entry.name();
             int width = box.width() - 6;
+            if (showsActions(row, look.overRow())) {
+                for (var each : Action.values()) {
+                    var button = actionBox(l, row, each);
+                    boolean keyed = row == selected && look.action() == each && look.typing() && focus == Focus.LIST;
+                    fill(g, button, row == look.overRow() && look.overAction() == each ? BUTTON_HOVER : ScreenRenderer.FIELD);
+                    if (keyed) g.renderOutline(button.x(), button.y(), button.width(), button.height(), ScreenRenderer.TEXT);
+                    icon(g, each.icon, button.x() + 3, button.y() + 1, ScreenRenderer.TEXT);
+                    if (button.width() > 15) g.drawString(font, each.label, button.x() + 15, button.y() + 2, ScreenRenderer.TEXT, false);
+                }
+                width = actionBox(l, row, Action.FILES).x() - box.x() - 6;
+            }
             if (font.width(name) > width) name = font.plainSubstrByWidth(name, width - font.width("...")) + "...";
             int color = entry.directory() ? ScreenRenderer.TEXT : entry.link() ? ScreenRenderer.DIM : FILE;
             g.drawString(font, name, box.x() + 3, box.y() + 2, color, false);
@@ -659,7 +795,7 @@ final class FilePicker {
         }
         g.drawString(font, font.plainSubstrByWidth(status, l.status.width()), l.status.x(), l.status.y() + 2, statusColor, false);
 
-        // Show hidden files, and Open this folder.
+        // Show hidden files, Open this folder and Open terminal.
         var box = l.hidden;
         int check = over == Control.HIDDEN ? ScreenRenderer.TEXT : ScreenRenderer.STATUS;
         int cx = box.x(), cy = box.y() + 3;
@@ -667,9 +803,20 @@ final class FilePicker {
         g.fill(cx + 1, cy + 1, cx + 8, cy + 8, ScreenRenderer.SURFACE);
         if (hidden) g.fill(cx + 2, cy + 2, cx + 7, cy + 7, ScreenRenderer.TEXT);
         g.drawString(font, font.plainSubstrByWidth(HIDDEN_LABEL, box.width() - 13), cx + 13, box.y() + 4, check, false);
-        var open = l.open;
-        fill(g, open, over == Control.OPEN_FOLDER ? BUTTON_HOVER : ScreenRenderer.FIELD);
-        g.drawString(font, font.plainSubstrByWidth(OPEN_LABEL, open.width() - 12), open.x() + 6, open.y() + 4, ScreenRenderer.TEXT, false);
+        button(g, font, l.open, FILES_ICON, OPEN_LABEL, over == Control.OPEN_FOLDER);
+        button(g, font, l.terminal, TERMINAL_ICON, TERMINAL_LABEL, over == Control.TERMINAL);
+    }
+
+    /** A footer button: icon, then label. */
+    private static void button(GuiGraphics g, Font font, Box box, String[] icon, String label, boolean over) {
+        fill(g, box, over ? BUTTON_HOVER : ScreenRenderer.FIELD);
+        icon(g, icon, box.x() + 6, box.y() + 3, ScreenRenderer.TEXT);
+        g.drawString(font, font.plainSubstrByWidth(label, box.width() - 25), box.x() + 19, box.y() + 4, ScreenRenderer.TEXT, false);
+    }
+
+    private static void icon(GuiGraphics g, String[] mask, int x, int y, int color) {
+        for (int j = 0; j < mask.length; j++) for (int i = 0; i < mask[j].length(); i++)
+            if (mask[j].charAt(i) == '#') g.fill(x + i, y + j, x + i + 1, y + j + 1, color);
     }
 
     private static void fill(GuiGraphics g, Box box, int color) { g.fill(box.x(), box.y(), box.x() + box.width(), box.y() + box.height(), color); }

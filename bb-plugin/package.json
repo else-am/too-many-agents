@@ -20,17 +20,19 @@
   ],
   "devDependencies": {
     "@get-bb/plugin-sdk": "0.6.37",
+    "@pierre/diffs": "1.5.2",
+    "@pierre/trees": "1.0.0-beta.6",
     "@types/node": "^22.0.0",
+    "@xterm/addon-fit": "0.11.0",
+    "@xterm/xterm": "6.0.0",
+    "dompurify": "3.4.17",
     "esbuild": "0.25.12",
     "events": "3.3.0",
+    "marked": "18.1.1",
     "mojangson": "2.1.0",
     "typescript": "^5.9.3",
     "vec3": "0.1.10",
-    "zod": "4.6.5",
-    "@pierre/trees": "1.0.0-beta.6",
-    "@pierre/diffs": "1.5.2",
-    "dompurify": "3.4.17",
-    "marked": "18.1.1"
+    "zod": "4.6.5"
   },
   "scripts": {
     "build:scripting": "node scripting/build.mjs",

@@ -1,6 +1,6 @@
 # Screen files view
 
-In-world screens that show files and git changes, so a Minecraft screen covers what the Claude Code / Codex desktop apps show beside a conversation: files, changes, a terminal and a browser. Screens already handle the browser. This plan covers files and changes together. Terminals come next and use the same groundwork.
+In-world screens that show files and git changes, so a Minecraft screen covers what the Claude Code / Codex desktop apps show beside a conversation: files, changes, a terminal and a browser. Screens already handle the browser. Files and changes share one viewer. Terminals use the same isolated built-in page boundary.
 
 ## Principle: agents open, humans use
 
@@ -29,13 +29,14 @@ For every `tma://` page:
 - `screen_cdp` on a `tma://` page returns `view_only`. Screenshots are allowed.
 - Archiving a thread closes every `tma://` screen linked to that thread's station. Loose screens are left alone.
 
-### Terminals (after this)
+### Terminals
 
-`tma://terminal/<bb terminal id>` runs xterm.js, connected to the BB terminal: it shows output from a given sequence number on and sends what the human types.
+`tma://terminal/<bb terminal id>` runs xterm.js, connected to the BB terminal, with the bundled Pixel Code font. It shows bounded output from a given sequence number on and sends what the human types.
 
 - The human types into it. The agent can open it and screenshot it, but can't send input.
 - When the BB terminal ends on its own, the page shows "terminal closed" and keeps its last output. It isn't closed automatically.
-- Agents can open only terminals in their own environment.
+- Agents can open only existing terminals in their own local environment, with `screen_open kind: terminal`. They cannot create a terminal through the screen, send input, or use CDP.
+- The human opens a shell from the native picker, in the chosen directory. Closing the screen detaches it; BB keeps the terminal session. Saved screens reconnect to the same session after trust and fresh authorization.
 
 ## Behavior
 
@@ -61,9 +62,10 @@ A native Minecraft folder browser on the in-world screen, independent of the vie
 - **Flat list:**
   - Folders first; no expandable tree.
   - Click a folder to enter it. Click a file to open it in the viewer.
+  - Hovered or selected folder rows show icon-and-text **Files** and **Terminal** actions. Tab reaches these actions from the selected folder.
   - Keyboard navigation and scrolling work in pointing and R capture modes.
 - **Show hidden files** defaults to off.
-- **Open this folder** opens the viewer rooted at the current folder.
+- **Open this folder** opens the viewer rooted at the current folder. **Open terminal** starts a BB shell there. Both use the supplied icons with text.
 - The picker is controlled by the player. Agent opens cannot enter it or inherit its authority.
 
 ### Viewer

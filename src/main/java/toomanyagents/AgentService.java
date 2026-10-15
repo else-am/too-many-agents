@@ -591,6 +591,18 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(agent==null) return failed("This agent is no longer active in this world.");
         return agentRpc("agent.environment",agent.id,new JsonObject()).thenApply(value -> text(value.getAsJsonObject(),"path"));
     }
+    /** Terminal transport is called only by the native screen adapter; agent access is a read-only lookup. */
+    synchronized CompletableFuture<JsonObject> terminal(String op, JsonObject args, String owner) {
+        if (!connected) return null;
+        if (!Set.of("terminal.create", "terminal.access", "terminal.output", "terminal.input", "terminal.resize").contains(op))
+            return failed("Unknown terminal operation.");
+        if (owner.isEmpty()) return rpc(op, args).thenApply(JsonElement::getAsJsonObject);
+        if (!op.equals("terminal.access")) return failed("Agents cannot drive terminal sessions.");
+        var agent = agents.values().stream().filter(row -> row.threadId.equals(owner) && !row.deleted && !row.archived).findFirst().orElse(null);
+        if (agent == null) return failed("This agent is no longer active in this world.");
+        return agentRpc(op, agent.id, args).thenApply(JsonElement::getAsJsonObject);
+    }
+
     /** Who is calling a screen tool. Screens need no body; one that is present gives distances from it. */
     private ScreenTools.Caller screenCaller(Agent agent) {
         var threads=new HashMap<String,String>();
