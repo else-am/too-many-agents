@@ -45,7 +45,7 @@ final class FilePicker {
     private static final String HIDDEN_LABEL = "Show hidden files", OPEN_LABEL = "Open this folder", GONE = "This folder no longer exists.";
     /** Sizes in the picker's own units, each scale() pixels of the page. Text is the font's 9 units tall. */
     private static final int BAR = 15, ROW = 12, MAX_WIDTH = 360, TRACK = 5;
-    private static final int HOVER = 0xFF1B1E23, CHOSEN = 0xFF243447, BUTTON_HOVER = 0xFF30343B, FILE = 0xFFC3C8CF;
+    private static final int HOVER = 0xFF1B1E23, CHOSEN = 0xFF243447, BUTTON_HOVER = 0xFF30343B, FILE = 0xFF9AA0A9;
     private static final MultiBufferSource.BufferSource BUFFERS = MultiBufferSource.immediate(new ByteBufferBuilder(1 << 16));
     private static int nextId;
 
