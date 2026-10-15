@@ -222,7 +222,7 @@ public final class ScreenTools {
                 var view = Screens.existing(row.entry.entity());
                 json.addProperty("title", view != null && !view.url.isBlank() ? view.title : "");
                 json.addProperty("available", trusted);
-                json.addProperty("awake", view != null && view.browser != null);
+                json.addProperty("awake", view != null && view.awake());
                 screens.add(json);
             }
             var result = new JsonObject();
@@ -266,6 +266,9 @@ public final class ScreenTools {
             })).thenCompose(files -> onClient(live, () -> {
                 var view = view(entry);
                 if (Chromium.phase() == Chromium.Phase.FAILED) throw new ScreenError("unavailable", "The browser failed to start.");
+                // A screen showing the native picker has no browser yet; replacing it needs one.
+                if (view.browser == null && !Screens.canOpen())
+                    throw new ScreenError("resource_limit", "All screen browsers are in use. Release a screen before opening another.");
                 String destination = files == null ? web : files.url();
                 var loaded = wait(waiters, view.open(destination, thread, files), OPEN_SECONDS,
                     "The page didn't finish loading in " + OPEN_SECONDS + "s. It may still load; check the screen before acting again.");
@@ -369,7 +372,7 @@ public final class ScreenTools {
     /** The frame already painted for the page, at its exact size. */
     private static CompletableFuture<JsonObject> screenshot(ScreenIndex.Entry entry, ScreenView view) {
         String id = entry.screen().id();
-        if (view.browser == null) throw idle(id);
+        if (!view.awake()) throw idle(id);
         if (!view.painted()) throw new ScreenError("unavailable", "Screen " + id + " hasn't painted its page yet.");
         var image = view.frame();
         var metadata = page(view, view.generation, id);

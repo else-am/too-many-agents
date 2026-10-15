@@ -47,6 +47,7 @@ final class FilePages {
     }
 
     static boolean picker(String url) {
+        if (!location(url)) return false;
         try { return query(URI.create(url)).containsKey("pick"); }
         catch (RuntimeException invalid) { return false; }
     }

@@ -1,86 +1,50 @@
-// Bundled controls choose locations through native, human-gesture navigation. Data requests never grant roots.
+// The viewer's header leads to the native picker through human-gesture navigation. Data requests never grant roots.
 const $ = id => document.getElementById(id);
 const current = decodeURIComponent(location.pathname);
 const windows = /^\/[a-z]:\//i.test(current);
 const nativePath = value => windows && /^\/[a-z]:\//i.test(value) ? value.slice(1) : value;
 const slash = value => windows ? value.replaceAll('\\', '/') : value;
 const root = slash(nativePath(current)).replace(/\/$/, '') || '/';
-let home = '', viewer, picker;
-const bundles = {};
+let viewer, bundle;
 let scope = new AbortController();
-let watchId, watchGeneration = 0, pickerTimer = 0;
-let pickerRefreshing = false, pickerDirty = false, watchNotice = '';
+let watchId, watchGeneration = 0, watchNotice = '';
 let lastRevision = 0;
 let pageNotice = '';
 const notice = text => {
   pageNotice = text;
   $('notice').textContent = [pageNotice, watchNotice].filter(Boolean).join(' - ');
 };
-const join = (folder, name) => `${folder.replace(/\/$/, '')}/${name}`;
-function address(path, pick, hidden) {
-  let full = slash(path);
-  if (full === '~' || full.startsWith('~/')) full = home + full.slice(1);
-  if (!full.startsWith('/') && !/^[a-z]:\//i.test(full)) full = join(root, full);
-  const parts = [];
-  for (const part of full.split('/')) {
-    if (!part || part === '.') continue;
-    if (part === '..') parts.pop(); else parts.push(part);
-  }
-  return `tma://files/${parts.map(encodeURIComponent).join('/')}${pick ? hidden ? '?pick&hidden' : '?pick' : ''}`;
-}
-async function api(operation, path = '', cursor = '', signal = scope.signal) {
+async function api(operation, path = '', signal = scope.signal) {
   const params = new URLSearchParams({path});
-  if (cursor) params.set('cursor', cursor);
   const response = await fetch(`/_api/${operation}?${params}`, {cache: 'no-store', signal});
   const value = await response.json();
   if (!response.ok || value.error) throw Error(value.error || 'Could not read this folder.');
   return value;
 }
 $('location').textContent = nativePath(current);
-$('location').href = address(root, true);
+$('location').href = `tma://files/${root.split('/').filter(Boolean).map(encodeURIComponent).join('/')}?pick`;
 
-// Each page mode loads only its own bundle; the picker never downloads syntax highlighting.
-function load(name, styles) {
+// The viewer's bundle loads once per document.
+function loadViewer() {
   return Promise.all([
-    styles && new Promise((resolve, reject) => {
+    new Promise((resolve, reject) => {
       const link = document.createElement('link');
-      link.rel = 'stylesheet'; link.href = `/_app/${name}.css`;
-      link.onload = resolve; link.onerror = () => reject(Error(`Could not load ${name} styles.`));
+      link.rel = 'stylesheet'; link.href = '/_app/viewer.css';
+      link.onload = resolve; link.onerror = () => reject(Error('Could not load viewer styles.'));
       document.head.append(link);
     }),
     new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = `/_app/${name}.js`;
-      script.onload = resolve; script.onerror = () => reject(Error(`Could not load the ${name}.`));
+      script.src = '/_app/viewer.js';
+      script.onload = resolve; script.onerror = () => reject(Error('Could not load the viewer.'));
       document.head.append(script);
     })
   ]);
-}
-async function bundle(name, styles, init, signal) {
-  await (bundles[name] ??= load(name, styles));
-  signal.throwIfAborted();
-  if (typeof window[init] !== 'function') throw Error(`The ${name} did not initialize.`);
-}
-function queuePickerRefresh() {
-  pickerDirty = true;
-  if (pickerTimer || pickerRefreshing || scope.signal.aborted) return;
-  pickerTimer = setTimeout(async () => {
-    pickerTimer = 0;
-    pickerDirty = false;
-    pickerRefreshing = true;
-    try { await picker?.refresh(); }
-    catch (error) { if (error.name !== 'AbortError') notice(error.message); }
-    finally {
-      pickerRefreshing = false;
-      if (pickerDirty) queuePickerRefresh();
-    }
-  }, 100);
 }
 function stopWatch() {
   watchGeneration++;
   if (watchId !== undefined) window.cefQueryCancel?.({request_id: watchId});
   watchId = undefined;
-  clearTimeout(pickerTimer); pickerTimer = 0; pickerDirty = false;
 }
 function startWatch(documentEpoch) {
   stopWatch();
@@ -109,13 +73,8 @@ function startWatch(documentEpoch) {
           arm();
           if (change.revision <= lastRevision) return;
           lastRevision = change.revision;
-          watchNotice = change.limited ? 'Live updates have limited coverage - periodic refresh remains active' : '';
-          if (viewer) {
-            watchNotice = '';
-            viewer.refresh(change);
-          } else if (change.reconcile || change.structure || change.rules) {
-            queuePickerRefresh();
-          }
+          watchNotice = '';
+          viewer?.refresh(change);
           notice(pageNotice);
         });
       },
@@ -132,21 +91,14 @@ function startWatch(documentEpoch) {
 async function start() {
   const signal = scope.signal;
   try {
-    const state = await api('state', '', '', signal);
-    home = slash(state.home);
+    const state = await api('state', '', signal);
     notice(state.notice || '');
-    if (new URLSearchParams(location.search).has('pick')) {
-      $('picker').hidden = false;
-      await bundle('picker', false, 'tmaFilesPicker', signal);
-      picker = window.tmaFilesPicker({root, home, api, address, notice});
-    } else {
-      document.body.classList.add('showing-viewer');
-      $('viewer').hidden = false;
-      notice('Loading viewer…');
-      await bundle('viewer', true, 'tmaFilesViewer', signal);
-      viewer = window.tmaFilesViewer($('viewer'), state);
-      notice('');
-    }
+    notice('Loading viewer…');
+    await (bundle ??= loadViewer());
+    signal.throwIfAborted();
+    if (typeof window.tmaFilesViewer !== 'function') throw Error('The viewer did not initialize.');
+    viewer = window.tmaFilesViewer($('viewer'), state);
+    notice(state.notice || '');
     startWatch(state.document);
   } catch (error) { if (error.name !== 'AbortError') notice(error.message); }
 }
@@ -154,7 +106,6 @@ window.addEventListener('pagehide', () => {
   stopWatch();
   scope.abort();
   viewer?.dispose(); viewer = undefined;
-  picker?.dispose(); picker = undefined;
 });
 window.addEventListener('pageshow', event => {
   if (!event.persisted) return;

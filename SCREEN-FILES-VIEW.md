@@ -41,7 +41,7 @@ For every `tma://` page:
 
 ### Opening
 
-- A blank screen shows two buttons beside the address bar: **Address** (focuses it) and **Files** (opens the picker at home: `/Users/<you>`, `/home/<you>`, `C:\Users\<you>`).
+- A blank screen shows two centered, stacked buttons: **Open a file or folder** opens the picker at home (`/Users/<you>`, `/home/<you>`, `C:\Users\<you>`); **Open a URL or search** focuses the address bar.
 - Typing an absolute or `~/…` path in the address bar opens the viewer.
 - Agents use `screen_open`:
   - `kind: "file"`: a file or folder.
@@ -51,31 +51,20 @@ For every `tma://` page:
 
 ### Picker
 
-A deliberately small file and folder picker: an editable path field above a flat listing of one folder.
+A native Minecraft folder browser on the in-world screen, independent of the viewer's HTML page and header. Use the Minecraft font, minimal controls, and a width-capped container centered on the screen with left-aligned, truncated filenames.
 
-```
-┌─────────────────────────────────────────┐
-│ ~/Else/█                         [Open] │
-├─────────────────────────────────────────┤
-│ ▸ ai4research                           │
-│ ▸ brand                                 │
-│ ▸ too-many-agents                       │
-│   AGENTS.md                             │
-└─────────────────────────────────────────┘
-```
-
+- **Back** follows visited locations, rather than moving to the parent directory. The screen toolbar's Back/Forward also works.
 - **Path field:**
-  - Typing `Else/` goes there.
-  - `~`, `/…`, and drive letters on Windows (`D:/`) work.
+  - Relative paths, `~`, `/…`, and drive letters on Windows (`D:/`) work.
   - Tab completes the next segment.
   - Enter enters a folder or opens a file.
-- **List:**
-  - Folders first. Hidden files are dimmed.
+- **Flat list:**
+  - Folders first; no expandable tree.
   - Click a folder to enter it. Click a file to open it in the viewer.
-  - Up/Down and Enter work too.
-- **Open** opens the viewer rooted at the current folder.
-- Each folder is a history entry, so the screen's own back and forward buttons work.
-- The picker is for humans only. Agents never see it.
+  - Keyboard navigation and scrolling work in pointing and R capture modes.
+- **Show hidden files** defaults to off.
+- **Open this folder** opens the viewer rooted at the current folder.
+- The picker is controlled by the player. Agent opens cannot enter it or inherit its authority.
 
 ### Viewer
 
@@ -183,7 +172,7 @@ tma://files/_app/viewer.js            (bundled page, served from the JAR)
 - **Page:**
   - esbuild in `bb-plugin`.
   - Vanilla `@pierre/trees` and `@pierre/diffs` (no React), bundled Shiki grammars and a small markdown renderer.
-  - Our own picker, header and URL handling.
+  - The viewer's header and URL handling. The picker is native Java UI.
   - Built by `tools/build` into a JAR resource.
 - **Tool schema (`surface/tools.json`):**
   - `screen_open` kinds become `url | file | changes`, with optional `base`.

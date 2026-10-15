@@ -59,6 +59,8 @@ public final class Screens {
         modBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> event.registerEntityRenderer(ENTITY.get(), ScreenRenderer::new));
         NeoForge.EVENT_BUS.addListener((ClientTickEvent.Post event) -> tick());
         ScreenInput.register(modBus);
+        // After ScreenInput's own frame step, so pickers draw with this frame's pointer.
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Pre event) -> views.values().forEach(ScreenView::renderPicker));
         ScreenPlacement.register();
         // Leases run out on the server's clock.
         NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post event) -> {
@@ -85,8 +87,8 @@ public final class Screens {
         view.entry = ScreenIndex.visibleRecords(server).getOrDefault(screen.getUUID(), entry(screen));
         boolean trusted = Trust.allowedHere();
         view.sync(view.entry.screen().url(), trusted);
-        // An idle screen needs no browser, so it never starts Chromium.
-        if (trusted && !view.url.isBlank()) Chromium.start();
+        // An idle screen, or one showing the native file picker, needs no browser, so it never starts Chromium.
+        if (trusted && !view.url.isBlank() && !FilePages.picker(view.url)) Chromium.start();
         view.lastSeen = System.nanoTime();
         return view;
     }
@@ -107,11 +109,13 @@ public final class Screens {
             views.remove(entry.entity());
             view = null;
         }
-        if ((view == null || view.browser == null) && !canOpen())
+        // The file picker is drawn natively, so the browser limit doesn't apply to it.
+        boolean picker = FilePages.picker(entry.screen().url()) || (view != null && view.picker != null);
+        if ((view == null || view.browser == null) && !picker && !canOpen())
             throw new ScreenTools.ScreenError("resource_limit", "All screen browsers are in use. Release a screen before opening another.");
         if (view == null) { view = new ScreenView(entry); views.put(entry.entity(), view); }
         view.entry = entry;
-        if (!entry.screen().url().isBlank()) Chromium.start();
+        if (!entry.screen().url().isBlank() && !FilePages.picker(entry.screen().url())) Chromium.start();
         view.sync(entry.screen().url(), Trust.allowedHere());
         return view;
     }

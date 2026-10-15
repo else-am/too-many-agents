@@ -103,6 +103,52 @@ public final class ScreenDiagnostics {
                     control.addProperty("z", center.z());
                     controls.add("blank_" + action.name().toLowerCase(java.util.Locale.ROOT), control);
                 }
+                // The native file picker's controls and visible rows, where they are whether or not it's shown.
+                var picker = view.picker;
+                var layout = picker == null ? null : picker.layout();
+                for (var control : FilePicker.Control.values()) {
+                    var json = layout == null ? new JsonObject() : area(view, picker.blocks(layout.control(control)));
+                    json.addProperty("visible", picker != null);
+                    json.addProperty("enabled", picker != null && (control != FilePicker.Control.BACK || view.canGoBack));
+                    controls.add("picker_" + control.name().toLowerCase(java.util.Locale.ROOT), json);
+                }
+                if (picker == null) screen.add("picker", JsonNull.INSTANCE);
+                else {
+                    var json = new JsonObject();
+                    json.addProperty("path", picker.folder);
+                    json.addProperty("field", picker.field.toString());
+                    json.addProperty("caret", picker.caret);
+                    json.addProperty("anchor", picker.anchor);
+                    json.addProperty("focus", picker.focus.name().toLowerCase(java.util.Locale.ROOT));
+                    json.addProperty("loading", picker.loading);
+                    json.addProperty("hidden", picker.hidden);
+                    json.addProperty("scroll", picker.scroll);
+                    json.addProperty("scrollMax", Math.max(0, picker.shown.size() - layout.rows()));
+                    json.addProperty("visibleRows", layout.rows());
+                    json.addProperty("total", picker.shown.size());
+                    json.addProperty("selected", picker.selected);
+                    json.addProperty("selectedName", picker.selected >= 0 && picker.selected < picker.shown.size() ? picker.shown.get(picker.selected).name() : "");
+                    json.addProperty("error", picker.error.isEmpty() ? view.fileError : picker.error);
+                    json.addProperty("notice", picker.notice);
+                    json.addProperty("truncated", picker.truncated);
+                    json.addProperty("painted", picker.painted());
+                    json.addProperty("scale", layout.scale());
+                    int hoveredRow = picker.hoveredRow();
+                    var rows = new JsonArray();
+                    for (int index = picker.scroll; index < picker.shown.size() && index < picker.scroll + layout.rows(); index++) {
+                        var entry = picker.shown.get(index);
+                        var row = area(view, picker.blocks(picker.rowBox(layout, index)));
+                        row.addProperty("index", index);
+                        row.addProperty("name", entry.name());
+                        row.addProperty("directory", entry.directory());
+                        row.addProperty("link", entry.link());
+                        row.addProperty("selected", index == picker.selected);
+                        row.addProperty("hovered", index == hoveredRow);
+                        rows.add(row);
+                    }
+                    json.add("rows", rows);
+                    screen.add("picker", json);
+                }
                 screen.addProperty("fileError", view.fileError);
                 screen.addProperty("fileGrant", view.access != null && view.access.root() != null);
                 screen.add("controls", controls);
@@ -132,6 +178,7 @@ public final class ScreenDiagnostics {
             browser.addProperty("screen", view.entry.screen().id());
             browser.addProperty("tracked", view.screen != null && !view.screen.isRemoved());
             browser.addProperty("browser", view.browser != null);
+            browser.addProperty("picker", view.picker != null);
             browser.addProperty("ready", view.browser != null && view.browser.ready());
             browser.addProperty("builtin", view.browser != null && view.browser.builtin);
             browser.addProperty("browserId", view.browser == null ? -1 : view.browser.getIdentifier());
@@ -187,6 +234,20 @@ public final class ScreenDiagnostics {
         }
         result.add("droppedItems", dropped);
         return result;
+    }
+
+    /** A page area, left, top, width and height in blocks, with its world-space centre for aiming real clicks. */
+    private static JsonObject area(ScreenView view, double[] box) {
+        var center = view.topLeft.add(view.rightVector.scale(box[0] + box[2] / 2)).add(view.upVector.scale(-(box[1] + box[3] / 2)));
+        var json = new JsonObject();
+        json.addProperty("left", box[0]);
+        json.addProperty("top", box[1]);
+        json.addProperty("width", box[2]);
+        json.addProperty("height", box[3]);
+        json.addProperty("x", center.x);
+        json.addProperty("y", center.y);
+        json.addProperty("z", center.z);
+        return json;
     }
 
     /** A screen item: what it saves, exactly as stored, and its tooltip as the player sees it. */

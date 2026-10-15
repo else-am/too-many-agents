@@ -19,9 +19,9 @@ import org.joml.Matrix4f;
 
 /** Draws a screen: its panel, the page, any open dropdown, status, and the navigation bar. */
 final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
-    private static final int PANEL = 0xFF08090B, SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
+    static final int PANEL = 0xFF08090B, SURFACE = 0xFF0E1013, BAR = 0xFF15171B, FIELD = 0xFF24272D, SELECTION = 0xFF35618F;
     private static final int BEZEL_HOVER = 0xFF383838, BEZEL_TYPING = 0xFF909090;
-    private static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B, ID = 0xFFE2D4A7, MENU = 0xFF1C1F24, WARN = 0xFFE8A27C;
+    static final int TEXT = 0xFFE6E8EB, STATUS = 0xFF9AA0A9, DIM = 0xFF6B717B, ID = 0xFFE2D4A7, MENU = 0xFF1C1F24, WARN = 0xFFE8A27C;
     private static final int LIGHT = LightTexture.FULL_BRIGHT;
     /** Like vanilla's text type, but filtered smoothly with mipmaps so distant pages don't shimmer. */
     private static final Function<ResourceLocation, RenderType> PAGE = Util.memoize(texture -> RenderType.create(
@@ -57,12 +57,13 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         boolean trusted = Trust.allowedHere();
         panel(buffers, matrix, view, light);
 
-        if (trusted && view.painted() && view.browser != null && !view.crashed) texture(buffers, matrix, view.pageTexture(), 0, 0, w, h, 0);
+        if (trusted && view.picker != null && view.picker.painted()) texture(buffers, matrix, view.picker.texture(), 0, 0, w, h, 0, true);
+        else if (trusted && view.picker == null && view.painted() && view.browser != null && !view.crashed) texture(buffers, matrix, view.pageTexture(), 0, 0, w, h, 0, false);
         else rect(buffers, matrix, 0, 0, w, h, 0, SURFACE);
         if (trusted && view.popupVisible()) {
             var b = view.popupBounds;
             double sx = w / view.pixelWidth, sy = h / view.pixelHeight;
-            texture(buffers, matrix, view.popupTexture(), b.x * sx, b.y * sy, (b.x + b.width) * sx, (b.y + b.height) * sy, -0.001);
+            texture(buffers, matrix, view.popupTexture(), b.x * sx, b.y * sy, (b.x + b.width) * sx, (b.y + b.height) * sy, -0.001, false);
         }
 
         String status = status(view, trusted);
@@ -115,6 +116,8 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     }
 
     private static String status(ScreenView view, boolean trusted) {
+        // The picker shows its own errors and needs no browser.
+        if (trusted && view.picker != null) return null;
         if (!view.fileError.isEmpty()) return view.fileError;
         if (view.url.isBlank()) return null;
         if (!trusted) return "Click to load pages in this world";
@@ -167,7 +170,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         // Toolbar icons are BAR_ICON pixels square, centred in their buttons.
         double pixel = Math.min(bar * 0.5, view.unit * 0.6) / BAR_ICON, iconY = (bar - BAR_ICON * pixel) / 2;
         var buttons = new ScreenView.Part[] {ScreenView.Part.BACK, ScreenView.Part.FORWARD, ScreenView.Part.RELOAD, ScreenView.Part.MENU};
-        boolean[] enabled = {view.canGoBack, view.canGoForward, view.browser != null, true};
+        boolean[] enabled = {view.canGoBack, view.canGoForward, view.awake(), true};
         for (int i = 0; i < buttons.length; i++) {
             double center = (view.start(buttons[i]) + view.end(buttons[i])) / 2;
             int color = buttons[i] == ScreenView.Part.MENU && ScreenInput.menuOpen(view) ? ID : enabled[i] ? TEXT : DIM;
@@ -213,7 +216,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
 
     /** The bar's icons as pixel art, in button order: back, forward, reload, and the menu's three dots. */
     private static final int BAR_ICON = 9;
-    private static final String[][] BAR_ICONS = {
+    static final String[][] BAR_ICONS = {
         {".........",
          "....#....",
          "...#.....",
@@ -301,13 +304,15 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
         }
     }
 
-    private static void texture(MultiBufferSource buffers, Matrix4f m, ResourceLocation texture, double x0, double y0, double x1, double y1, double z) {
+    /** flipped is for textures drawn by OpenGL, whose first row is the bottom; Chromium's frames start at the top. */
+    private static void texture(MultiBufferSource buffers, Matrix4f m, ResourceLocation texture, double x0, double y0, double x1, double y1, double z, boolean flipped) {
         var out = buffers.getBuffer(PAGE.apply(texture));
+        float top = flipped ? 1 : 0, bottom = 1 - top;
         // Counter-clockwise as seen from the front.
-        out.addVertex(m, (float) x0, (float) y0, (float) z).setColor(-1).setUv(0, 0).setLight(LIGHT);
-        out.addVertex(m, (float) x0, (float) y1, (float) z).setColor(-1).setUv(0, 1).setLight(LIGHT);
-        out.addVertex(m, (float) x1, (float) y1, (float) z).setColor(-1).setUv(1, 1).setLight(LIGHT);
-        out.addVertex(m, (float) x1, (float) y0, (float) z).setColor(-1).setUv(1, 0).setLight(LIGHT);
+        out.addVertex(m, (float) x0, (float) y0, (float) z).setColor(-1).setUv(0, top).setLight(LIGHT);
+        out.addVertex(m, (float) x0, (float) y1, (float) z).setColor(-1).setUv(0, bottom).setLight(LIGHT);
+        out.addVertex(m, (float) x1, (float) y1, (float) z).setColor(-1).setUv(1, bottom).setLight(LIGHT);
+        out.addVertex(m, (float) x1, (float) y0, (float) z).setColor(-1).setUv(1, top).setLight(LIGHT);
     }
 
     private static void rect(MultiBufferSource buffers, Matrix4f m, double x0, double y0, double x1, double y1, double z, int color) {

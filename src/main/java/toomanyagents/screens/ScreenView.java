@@ -59,6 +59,8 @@ final class ScreenView implements ScreenBrowser.View {
     final double menuX, menuTop, menuWidth, menuRow;
 
     volatile ScreenBrowser browser;
+    /** Shown instead of a browser for a human-granted ?pick location. */
+    FilePicker picker;
     /**
      * What the current built-in browser may load, bound to that native browser and the page generation it was granted
      * for; the authorized root joins it with the files view. Null on the web and for every browser but the current one.
@@ -251,14 +253,17 @@ final class ScreenView implements ScreenBrowser.View {
                 grantAttempt = "";
                 url = value;
                 crashed = false;
-                if (browser != null && !url.isBlank()) load(url);
+                closePicker();
+                if (browser != null && !url.isBlank() && !FilePages.picker(url)) load(url);
             }
         }
-        if (url.isBlank() && browser != null) close();
+        if (url.isBlank() && awake()) close();
         // A saved location is granted afresh before its page starts. An agent's waits until its environment can be checked.
         boolean grantDue = trusted && FilePages.location(url) && fileGrant == null && !url.equals(grantAttempt);
         if (grantDue) openFiles(url, false, entry.screen().openedBy());
-        if (browser == null && departing == null && granting == null && !grantDue && trusted && !url.isBlank() && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
+        // The picker needs no browser; its location shows only once granted.
+        if (browser == null && departing == null && granting == null && !grantDue && trusted && !url.isBlank() && !FilePages.picker(url)
+                && Chromium.phase() == Chromium.Phase.READY && Screens.canOpen()) {
             start(url);
         }
     }
@@ -271,11 +276,13 @@ final class ScreenView implements ScreenBrowser.View {
             return;
         }
         if (Chromium.place(target) == Chromium.Place.NOWHERE) return;
+        leavePicker();
         cancelGrant();
         fileGrant = null;
         fileError = "";
         url = target;
         crashed = false;
+        if (browser == null) Chromium.start();
         load(target);
         Screens.saveUrl(this, target, true);
     }
@@ -284,6 +291,81 @@ final class ScreenView implements ScreenBrowser.View {
     void files() {
         Trust.allow(Minecraft.getInstance().getSingleplayerServer());
         openFiles(Builtin.files(java.nio.file.Path.of(System.getProperty("user.home"))) + "?pick", true);
+    }
+
+    /** The picker's choices are native human navigation, like the bar's address field. */
+    void choose(String target) {
+        fileError = "";
+        openFiles(target, true);
+    }
+
+    /** Show hidden files changes only how the picker's location is saved, never its grant. */
+    void pickerHidden(boolean hidden) {
+        if (!picking()) return;
+        url = grantAttempt = Builtin.files(java.nio.file.Path.of(fileGrant.root().path())) + (hidden ? "?pick&hidden" : "?pick");
+        Screens.saveUrl(this, url, true);
+    }
+
+    boolean awake() { return browser != null || picker != null; }
+
+    /** A human grant for a ?pick location; agents' grants never keep ?pick. */
+    private boolean picking() {
+        return fileGrant != null && fileGrant.provenance() == Provenance.HUMAN && fileGrant.root() != null && FilePages.picker(url);
+    }
+
+    /** Shows the picker at the granted folder, in place of any browser, which must already have left. */
+    private void showPicker() {
+        if (picker == null) picker = new FilePicker(this);
+        picker.open(fileGrant.root(), FilePages.query(java.net.URI.create(url)).containsKey("hidden"));
+        var name = java.nio.file.Path.of(fileGrant.root().path()).getFileName();
+        title = name == null ? fileGrant.root().path() : name.toString();
+        generation++;
+        crashed = loading = pageReady = browserBack = browserForward = editable = popupShown = false;
+        // A browser shown after the picker starts blank rather than with an older page's pixels.
+        page.release();
+        popup.release();
+        history();
+    }
+
+    private void closePicker() {
+        if (picker == null) return;
+        picker.close();
+        picker = null;
+        ScreenInput.pickerClosed(this);
+        generation++;
+        history();
+    }
+
+    /** Leaving the picker for another page records it as one step back, like leaving a browser. */
+    private void leavePicker() {
+        if (picker == null) return;
+        push(behind, new Entry(url, title, fileGrant));
+        drop(ahead);
+        closePicker();
+    }
+
+    /** What follows a browser's departure, or replaces nothing: the granted picker, or a browser for any other page. */
+    private void showLocation() {
+        if (picking()) showPicker();
+        else if (!url.isBlank() && !FilePages.picker(url)) {
+            if (browser == null && departing == null) Chromium.start();
+        }
+    }
+
+    /** Draws the picker before the world renders, while the screen is watched or a screenshot waits for it. */
+    void renderPicker() {
+        if (picker == null || !Trust.allowedHere()) return;
+        // A screenshot waiting for a fresh frame redraws it even when nothing changed.
+        boolean force = !frames.isEmpty();
+        if (!live && !force && picker.painted()) return;
+        if (!picker.render(force)) return;
+        if (waking != null) waking.complete(null);
+        paintedFrame();
+    }
+
+    private void push(LinkedList<Entry> stack, Entry value) {
+        stack.push(value);
+        while (stack.size() > HISTORY) stack.removeLast();
     }
 
     private void cancelGrant() {
@@ -318,14 +400,24 @@ final class ScreenView implements ScreenBrowser.View {
                 fileError = cause.getMessage() == null ? "Could not open this location." : cause.getMessage();
                 return;
             }
+            var previous = picker == null ? null : new Entry(url, title, fileGrant);
             fileGrant = new Grant(opened.root(), owner.isEmpty() ? Provenance.HUMAN : Provenance.AGENT, opened.notice(), owner);
             url = opened.url();
             grantAttempt = url;
             crashed = false;
-            if (browser != null) {
+            // Each folder the picker visits is a step in the screen's history, like crossing to another browser.
+            if (previous != null) {
+                if (!previous.url().equals(url)) {
+                    push(behind, previous);
+                    drop(ahead);
+                }
+                if (!picking()) closePicker();
+                showLocation();
+            } else if (browser != null) {
+                // The picker or the new browser appears once the old browser's history is read.
                 drop(ahead);
                 leave(behind, false);
-            } else Chromium.start();
+            } else showLocation();
             Screens.saveUrl(this, url, takeover);
         }));
     }
@@ -445,23 +537,32 @@ final class ScreenView implements ScreenBrowser.View {
                 while (stack.size() > HISTORY) stack.removeLast();
                 Chromium.close(old);
                 departing = null;
-                if (!url.isBlank()) start(url);
+                if (picking()) showPicker();
+                else if (!url.isBlank() && !FilePages.picker(url)) start(url);
             }));
     }
 
     private void drop(LinkedList<Entry> stack) { stack.clear(); }
 
-    /** Returns to an address outside this browser's history, as the player's own navigation. */
+    /** Returns to an address outside this browser's history, as the player's own navigation, with its pinned grant. */
     private void restore(LinkedList<Entry> from, boolean back) {
         var entry = from.pop();
+        var current = picker == null ? null : new Entry(url, title, fileGrant);
         cancelGrant();
         fileGrant = entry.grant();
         url = entry.url();
+        fileError = "";
         playerNavigating = false;
         String owner = fileGrant == null ? "" : fileGrant.owner();
         String restoredUrl = url;
         Screens.edit(this, record -> new Screen(record.id(), record.name(), restoredUrl, owner));
-        leave(back ? ahead : behind, back);
+        if (current == null) {
+            leave(back ? ahead : behind, back);
+            return;
+        }
+        push(back ? ahead : behind, current);
+        if (!picking()) closePicker();
+        showLocation();
     }
 
     /** Chromium's index controls traversal; the bootstrap page never becomes a Back destination. */
@@ -497,7 +598,8 @@ final class ScreenView implements ScreenBrowser.View {
      */
     void reload() {
         crashed = false;
-        if (browser != null && FilePages.location(url) && (fileGrant == null || fileGrant.root() == null)) {
+        if (picker != null) { picker.reload(); return; }
+        if ((browser != null || FilePages.picker(url)) && FilePages.location(url) && (fileGrant == null || fileGrant.root() == null)) {
             openFiles(url, false, entry.screen().openedBy());
             return;
         }
@@ -507,16 +609,16 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     void back() {
-        if (browser == null || !canGoBack) return;
+        if (!awake() || !canGoBack) return;
         playerNavigating = true;
-        if (browserBack) browser.goBack();
+        if (browser != null && browserBack) browser.goBack();
         else restore(behind, true);
     }
 
     void forward() {
-        if (browser == null || !canGoForward) return;
+        if (!awake() || !canGoForward) return;
         playerNavigating = true;
-        if (browserForward) browser.goForward();
+        if (browser != null && browserForward) browser.goForward();
         else restore(ahead, false);
     }
 
@@ -553,6 +655,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** An agent shows a page here, with files already granted for a files location. Completes once that page has loaded. */
     CompletableFuture<Void> open(String target, String owner, FilePages.Opened files) {
         agentInput();
+        leavePicker();
         cancelGrant();
         fileGrant = new Grant(files == null ? null : files.root(), Provenance.AGENT, files == null ? "" : files.notice(), owner);
         grantAttempt = target;
@@ -587,6 +690,7 @@ final class ScreenView implements ScreenBrowser.View {
     /** Runs one DevTools method on the page. */
     CompletableFuture<String> devTools(String method, String params) {
         requirePage();
+        if (picker != null) throw new ScreenTools.ScreenError("view_only", "The file picker is view-only. Use screen_screenshot to see it.");
         if (browser == null) throw new ScreenTools.ScreenError("unavailable", "Open a page on the screen first.");
         if (browser.builtin) throw new ScreenTools.ScreenError("view_only", "Built-in pages are view-only. Use screen_screenshot to see them.");
         ScreenTools.refuseUnsafe(method, com.google.gson.JsonParser.parseString(params));
@@ -602,12 +706,12 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** The page's last painted frame, exactly as painted. Owned by the caller. */
-    NativeImage frame() { requirePage(); return page.read(); }
+    NativeImage frame() { requirePage(); return picker != null ? picker.read() : page.read(); }
 
     CompletableFuture<Void> readyPage() {
         requirePage();
         if (url.isBlank()) return CompletableFuture.failedFuture(new ScreenTools.ScreenError("unavailable", "Open a page on the screen first."));
-        if (browser != null && pageReady) return CompletableFuture.completedFuture(null);
+        if (picker != null ? picker.painted() : browser != null && pageReady) return CompletableFuture.completedFuture(null);
         if (waking == null || waking.isDone()) waking = track(new CompletableFuture<Void>());
         return waking;
     }
@@ -618,11 +722,11 @@ final class ScreenView implements ScreenBrowser.View {
         frames.add(ready);
         ready.whenComplete((done, failure) -> frames.remove(ready));
         setLive(true);
-        browser.repaint();
+        if (browser != null) browser.repaint();
         return ready;
     }
 
-    private void paintedFrame() { for (var ready : Set.copyOf(frames)) ready.complete(null); }
+    void paintedFrame() { for (var ready : Set.copyOf(frames)) ready.complete(null); }
 
     private void requirePage() {
         if (crashed) throw new ScreenTools.ScreenError("unavailable", "The page crashed. Reload or open a page before using it again.");
@@ -639,8 +743,9 @@ final class ScreenView implements ScreenBrowser.View {
     /** Distant or unseen screens keep their last frame; their pages tick over slowly. */
     void setLive(boolean value) {
         value = value || !frames.isEmpty();
-        if (live == value || browser == null) return;
+        if (live == value) return;
         live = value;
+        if (browser == null) return;
         FileWatches.live(access, value);
         if (!value) FilePages.sleeping(access);
         browser.setWindowlessFrameRate(value ? Chromium.FPS : 1);
@@ -648,7 +753,7 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     boolean live() { return live; }
-    boolean painted() { return page.width > 0; }
+    boolean painted() { return picker != null ? picker.painted() : page.width > 0; }
     boolean popupVisible() { return popupShown && popupBounds != null && popup.width > 0; }
     ResourceLocation pageTexture() { return page.location; }
     ResourceLocation popupTexture() { return popup.location; }
@@ -660,6 +765,7 @@ final class ScreenView implements ScreenBrowser.View {
         var old = departing;
         browser = null;
         departing = null;
+        closePicker();
         setAccess(null);
         fileGrant = null;
         grantAttempt = "";

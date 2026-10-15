@@ -42,6 +42,8 @@ public final class ScreenInput {
     private record Aim(ScreenView view, double x, double y) {}
     private static Aim aim;
     private static ScreenView hovered, pressed;
+    /** The held press went to a file picker rather than a browser. */
+    private static boolean pressedPicker;
     private static final Set<Integer> pressedButtons = new HashSet<>(), consumedButtons = new HashSet<>();
     private static int lastX = -1, lastY = -1, clicks;
     private static long lastClickAt;
@@ -94,6 +96,7 @@ public final class ScreenInput {
     static String fieldText(ScreenView view, ScreenView.Part part) { return typing == view && field == part ? fieldText.toString() : null; }
     static boolean fieldSelected() { return fieldSelected; }
     static boolean typing(ScreenView view) { return typing == view && Minecraft.getInstance().screen == null; }
+    static boolean pageTyping(ScreenView view) { return typing(view) && field == null && menu != view; }
     static boolean pointing(ScreenView view) { return aim != null && aim.view == view && pointing(); }
 
     /** A page is closing under the player: stop typing into it. */
@@ -107,9 +110,20 @@ public final class ScreenInput {
         if (menu == view) closeMenu();
         if (typing == view) typing = null;
         if (hovered == view) hovered = null;
-        if (pressed == view) { pressed = null; pressedButtons.clear(); }
+        if (pressed == view) { pressed = null; pressedPicker = false; pressedButtons.clear(); }
         if (clicked == view) clicked = null;
         if (aim != null && aim.view == view) aim = null;
+    }
+
+    /** Where the player points on this view's page, in blocks from its top-left, or null. */
+    static double[] pagePoint(ScreenView view) {
+        if (aim == null || aim.view != view || menu != null || !view.onPage(aim.x, aim.y)) return null;
+        return new double[] {aim.x, aim.y};
+    }
+
+    /** The picker went away; its keyboard doesn't pass to whatever page comes next. */
+    static void pickerClosed(ScreenView view) {
+        if (typing == view && captured != view && field == null) stopTyping(false);
     }
 
     static boolean menuOpen(ScreenView view) { return menu == view; }
@@ -202,6 +216,10 @@ public final class ScreenInput {
     }
 
     private static void move(ScreenView view, double x, double y) {
+        if (pressedPicker) {
+            if (view == pressed && view.picker != null) view.picker.drag(x, y);
+            return;
+        }
         if (view.browser == null) return;
         int px = view.pixelX(x), py = view.pixelY(y);
         if (px == lastX && py == lastY) return;
@@ -216,9 +234,10 @@ public final class ScreenInput {
         if (event.getAction() == GLFW.GLFW_RELEASE) {
             if (pressedButtons.remove(button)) {
                 event.setCanceled(true);
-                if (pressed != null && pressed.browser != null)
+                if (pressedPicker) { if (pressed != null && pressed.picker != null) pressed.picker.release(); }
+                else if (pressed != null && pressed.browser != null)
                     pressed.browser.mouse(MouseEvent.MOUSE_RELEASED, lastX, lastY, awtButton(button), modifiers() | buttonMask(), clicks);
-                if (pressedButtons.isEmpty()) pressed = null;
+                if (pressedButtons.isEmpty()) { pressed = null; pressedPicker = false; }
             } else if (consumedButtons.remove(button)) event.setCanceled(true);
             return;
         }
@@ -238,10 +257,26 @@ public final class ScreenInput {
             return;
         }
         if (field != null && (aim == null || aim.view != typing || aim.view.barPart(aim.x, aim.y) != field)) stopTyping(false);
+        // Clicking away from a picker gives the keyboard back to the game.
+        if (aim == null && typing != null && captured == null && typing.picker != null) stopTyping(false);
         if (aim == null) return;
         event.setCanceled(true);
         var view = aim.view;
         var part = view.barPart(aim.x, aim.y);
+        if (part == null && view.picker != null && Trust.allowedHere()) {
+            if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT || !pressedButtons.isEmpty()) { consumedButtons.add(button); return; }
+            if (typing != null && typing != view) stopTyping(false);
+            pressed = view;
+            pressedPicker = true;
+            pressedButtons.add(button);
+            // Clicking the path or list gives its keyboard navigation focus, just like a browser control.
+            if (view.picker.press(aim.x, aim.y) && captured == null) {
+                if (typing == null) KeyMapping.releaseAll();
+                typing = view;
+                field = null;
+            }
+            return;
+        }
         if (part != null || view.url.isBlank() || !Trust.allowedHere() || view.crashed || view.browser == null) {
             // Our own controls; the page never sees these clicks.
             consumedButtons.add(button);
@@ -283,6 +318,11 @@ public final class ScreenInput {
             event.setCanceled(true);
             return;
         }
+        if (aim.view.picker != null && aim.view.onPage(aim.x, aim.y)) {
+            event.setCanceled(true);
+            aim.view.picker.scroll(event.getScrollDeltaY());
+            return;
+        }
         if (aim.view.browser == null || aim.view.barPart(aim.x, aim.y) != null) return;
         event.setCanceled(true);
         double delta = event.getScrollDeltaY() != 0 ? event.getScrollDeltaY() : event.getScrollDeltaX();
@@ -295,7 +335,7 @@ public final class ScreenInput {
     private static boolean captureValid() {
         var mc = Minecraft.getInstance();
         return pointing() && mc.isWindowActive() && mc.mouseHandler.isMouseGrabbed() && mc.level != null
-            && captured.browser != null && !captured.crashed && Trust.allowedHere()
+            && captured.awake() && !captured.crashed && Trust.allowedHere()
             && captured.screen != null && !captured.screen.isRemoved() && Screens.existing(captured.screen.getUUID()) == captured
             && captured.screen.getBoundingBox().distanceToSqr(mc.player.getEyePosition()) <= REACH * REACH;
     }
@@ -321,11 +361,13 @@ public final class ScreenInput {
         captureScript(view, "window.__screenCapture?.enable(false)");
         if (pressed == view) {
             for (int button : pressedButtons) {
-                if (view.browser != null) view.browser.mouse(MouseEvent.MOUSE_RELEASED, lastX, lastY, awtButton(button), 0, clicks);
+                if (pressedPicker) { if (view.picker != null) view.picker.release(); }
+                else if (view.browser != null) view.browser.mouse(MouseEvent.MOUSE_RELEASED, lastX, lastY, awtButton(button), 0, clicks);
                 consumedButtons.add(button);
             }
             pressedButtons.clear();
             pressed = null;
+            pressedPicker = false;
         }
         releaseCapturedKeys();
         captured = null;
@@ -460,7 +502,7 @@ public final class ScreenInput {
         }
         if (captured == null && captureKey.matches(key, scancode) && Minecraft.getInstance().screen == null
                 && (field == null && menu == null && aim != null && aim.view.onPage(aim.x, aim.y)
-                    && aim.view.browser != null && !aim.view.crashed && Trust.allowedHere())) {
+                    && aim.view.awake() && !aim.view.crashed && Trust.allowedHere())) {
             if (action == GLFW.GLFW_PRESS) {
                 consumedKeys.add(key);
                 captureTrigger = key;
@@ -478,6 +520,10 @@ public final class ScreenInput {
                     if (field != null) fieldKey(key, mods);
                     if (field == null) consumedKeys.add(key);
                 }
+                return true;
+            }
+            if (captured.picker != null) {
+                if (action != GLFW.GLFW_RELEASE) captured.picker.key(key, mods);
                 return true;
             }
             if (pageShortcut(captured, key, action, mods)) return true;
@@ -505,6 +551,13 @@ public final class ScreenInput {
             if (action != GLFW.GLFW_RELEASE) fieldKey(key, mods);
             return true;
         }
+        if (typing.picker != null) {
+            if (action != GLFW.GLFW_RELEASE) {
+                if (key == GLFW.GLFW_KEY_ESCAPE) stopTyping(false);
+                else typing.picker.key(key, mods);
+            }
+            return true;
+        }
         var browser = typing.browser;
         if (browser == null) {
             stopTyping(false);
@@ -527,13 +580,18 @@ public final class ScreenInput {
         if (typing == null || Minecraft.getInstance().screen != null) return false;
         if (menu != null) return true;
         if (captured != null && field == null) {
-            ScreenKeys.text(captured, new String(Character.toChars(codePoint)));
+            if (captured.picker != null) captured.picker.typed(codePoint);
+            else ScreenKeys.text(captured, new String(Character.toChars(codePoint)));
             return true;
         }
         if (field != null) {
             if (fieldSelected) fieldText.setLength(0);
             fieldSelected = false;
             if (field != ScreenView.Part.NAME || fieldText.length() < MAX_NAME) fieldText.appendCodePoint(codePoint);
+            return true;
+        }
+        if (typing.picker != null) {
+            typing.picker.typed(codePoint);
             return true;
         }
         if (typing.browser == null) return false;
@@ -641,6 +699,8 @@ public final class ScreenInput {
         var part = view.barPart(aim.x, aim.y);
         if (view.blankAction(aim.x, aim.y) != null) return Cursor.HAND_CURSOR;
         if (menu != null) return menuHovered(view) != null ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR;
+        if (part == null && view.picker != null && view.onPage(aim.x, aim.y))
+            return view.picker.hovered() == FilePicker.Control.PATH ? Cursor.TEXT_CURSOR : view.picker.overAction() ? Cursor.HAND_CURSOR : Cursor.DEFAULT_CURSOR;
         if (part == ScreenView.Part.ADDRESS || part == ScreenView.Part.NAME || (part == null && view.url.isBlank())) return Cursor.TEXT_CURSOR;
         if (part != null || view.browser == null || view.crashed || !Trust.allowedHere()) return Cursor.HAND_CURSOR;
         return view.cursor;
@@ -648,7 +708,7 @@ public final class ScreenInput {
 
     private static void hint(GuiGraphics graphics) {
         if (Minecraft.getInstance().screen != null) return;
-        if (typing == null && (aim == null || aim.view.browser == null || !aim.view.onPage(aim.x, aim.y))) return;
+        if (typing == null && (aim == null || !aim.view.awake() || !aim.view.onPage(aim.x, aim.y))) return;
         var font = Minecraft.getInstance().font;
         String text = captured != null ? "Screen captured - Esc to release"
             : typing != null ? "Typing on screen, press Esc to release"
@@ -684,7 +744,7 @@ public final class ScreenInput {
         return true;
     }
 
-    private static boolean shortcut(int mods) { return (mods & (Minecraft.ON_OSX ? GLFW.GLFW_MOD_SUPER : GLFW.GLFW_MOD_CONTROL)) != 0; }
+    static boolean shortcut(int mods) { return (mods & (Minecraft.ON_OSX ? GLFW.GLFW_MOD_SUPER : GLFW.GLFW_MOD_CONTROL)) != 0; }
 
     private static int awtButton(int button) {
         return switch (button) {
