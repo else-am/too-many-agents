@@ -591,6 +591,22 @@ final class AgentService implements AgentUiAccess, AutoCloseable {
         if(agent==null) return failed("This agent is no longer active in this world.");
         return agentRpc("agent.environment",agent.id,new JsonObject()).thenApply(value -> text(value.getAsJsonObject(),"path"));
     }
+
+    /** Starting folder for a player's workstation screen, using the server's published station links. */
+    synchronized CompletableFuture<String> screenFolder(String screenId) {
+        if (!currentSession(loadedSession)) return null;
+        var world = game.worldInfo();
+        String stationId = "";
+        for (var link : array(world, "screenLinks"))
+            if (text(link.getAsJsonObject(), "screenId").equals(screenId)) stationId = text(link.getAsJsonObject(), "stationId");
+        if (stationId.isBlank()) return null;
+        for (var station : array(world, "stations")) {
+            if (!text(station.getAsJsonObject(), "id").equals(stationId)) continue;
+            var agent = agents.get(text(station.getAsJsonObject(), "agentId"));
+            if (agent != null && !agent.deleted && !agent.archived && !agent.removed) return environment(agent.threadId);
+        }
+        return null;
+    }
     /** Terminal transport is called only by the native screen adapter; agent access is a read-only lookup. */
     synchronized CompletableFuture<JsonObject> terminal(String op, JsonObject args, String owner) {
         if (!connected) return null;

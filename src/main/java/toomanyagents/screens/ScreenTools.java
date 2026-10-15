@@ -304,6 +304,21 @@ public final class ScreenTools {
 
     public static void environments(java.util.function.Function<String, CompletableFuture<String>> resolver) { environments = resolver; }
 
+    private static volatile java.util.function.Function<String, CompletableFuture<String>> screenFolders = screen -> null;
+    public static void screenFolders(java.util.function.Function<String, CompletableFuture<String>> resolver) { screenFolders = resolver; }
+
+    /** A player's initial location follows the workstation agent when available; otherwise it is home. */
+    static CompletableFuture<Path> startFolder(String screen) {
+        Path home = Path.of(System.getProperty("user.home"));
+        var request = screenFolders.apply(screen);
+        if (request == null) return CompletableFuture.completedFuture(home);
+        return request.handle((folder, failure) -> {
+            if (failure != null || folder == null || folder.isBlank()) return home;
+            try { return Path.of(folder).isAbsolute() ? Path.of(folder) : home; }
+            catch (RuntimeException invalid) { return home; }
+        }).completeOnTimeout(home, 5, TimeUnit.SECONDS);
+    }
+
     @FunctionalInterface
     public interface TerminalRpc {
         CompletableFuture<JsonObject> call(String op, JsonObject args, String owner);

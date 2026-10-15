@@ -147,6 +147,7 @@ public final class TooManyAgents {
                 game.setPov(new PovCapture(this::currentSession));
                 agents = new AgentService(game, this::currentSession);
                 ScreenTools.environments(agents::environment);
+                ScreenTools.screenFolders(agents::screenFolder);
                 ScreenTools.terminals(agents::terminal);
                 var bridge = new LocalBridge(directory, () -> snapshot, this::command, this::agentRoute);
                 agents.bridgeConnection(bridge.url(),bridge.token());

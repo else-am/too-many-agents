@@ -289,6 +289,7 @@ public final class ScreenInput {
             consumedButtons.add(button);
             if (button != GLFW.GLFW_MOUSE_BUTTON_LEFT) return;
             if (view.blankAction(aim.x, aim.y) == ScreenView.BlankAction.FILES) view.files();
+            else if (view.blankAction(aim.x, aim.y) == ScreenView.BlankAction.TERMINAL) view.terminal();
             else if (part == ScreenView.Part.NAME) startField(view, ScreenView.Part.NAME, view.screen.record().name());
             else if (part == ScreenView.Part.BACK) view.back();
             else if (part == ScreenView.Part.FORWARD) view.forward();

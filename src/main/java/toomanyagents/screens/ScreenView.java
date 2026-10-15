@@ -222,16 +222,17 @@ final class ScreenView implements ScreenBrowser.View {
         return topLeft.add(rightVector.scale((start(part) + end(part)) / 2)).add(upVector.scale(-(pageHeight + barHeight / 2)));
     }
 
-    enum BlankAction { ADDRESS, FILES }
+    enum BlankAction { FILES, TERMINAL, ADDRESS }
     record Bounds(double x, double y, double width, double height) {
         boolean contains(double px, double py) { return px >= x && py >= y && px < x + width && py < y + height; }
     }
 
-    /** The blank page's two buttons, stacked and centred on the page: Files above Address. */
+    /** The blank page's buttons, stacked and centred on the page. */
     Bounds blankBounds(BlankAction action) {
         double width = Math.min(pageWidth * 0.8, barHeight * 9), height = Math.min(pageHeight * 0.2, barHeight * 1.6);
-        double gap = height * 0.25, top = (pageHeight - 2 * height - gap) / 2;
-        return new Bounds((pageWidth - width) / 2, top + (action == BlankAction.FILES ? 0 : height + gap), width, height);
+        int count = BlankAction.values().length;
+        double gap = height * 0.25, top = (pageHeight - count * height - (count - 1) * gap) / 2;
+        return new Bounds((pageWidth - width) / 2, top + action.ordinal() * (height + gap), width, height);
     }
 
     BlankAction blankAction(double x, double y) {
@@ -295,9 +296,23 @@ final class ScreenView implements ScreenBrowser.View {
     }
 
     /** Native human controls are the only live source of broader file grants. */
-    void files() {
+    void files() { openStart(BlankAction.FILES); }
+
+    void terminal() { openStart(BlankAction.TERMINAL); }
+
+    private void openStart(BlankAction action) {
+        if (granting != null) return;
         Trust.allow(Minecraft.getInstance().getSingleplayerServer());
-        openFiles(Builtin.files(java.nio.file.Path.of(System.getProperty("user.home"))) + "?pick", true);
+        fileError = "";
+        var request = ScreenTools.startFolder(entry.screen().id());
+        granting = request;
+        request.whenComplete((folder, failure) -> onRender(() -> {
+            if (granting != request) return;
+            granting = null;
+            if (failure != null) { fileError = TerminalPages.message(failure); return; }
+            if (action == BlankAction.TERMINAL) terminal(folder);
+            else openFiles(Builtin.files(folder) + "?pick", true);
+        }));
     }
 
     /** The picker's choices are native human navigation, like the bar's address field. */

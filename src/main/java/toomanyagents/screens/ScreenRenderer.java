@@ -131,7 +131,7 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     private static void blankButtons(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
         var font = Minecraft.getInstance().font;
         var actions = ScreenView.BlankAction.values();
-        // One text size for both, narrowed so the longer label fits.
+        // One text size for all buttons, narrowed so the longest label fits.
         var first = view.blankBounds(actions[0]);
         double size = first.height() * 0.36;
         for (var action : actions) size = Math.min(size, first.width() * 0.85 * 9 / font.width(blankLabel(action)));
@@ -143,7 +143,11 @@ final class ScreenRenderer extends EntityRenderer<ScreenEntity> {
     }
 
     private static String blankLabel(ScreenView.BlankAction action) {
-        return action == ScreenView.BlankAction.FILES ? "Open a file or folder" : "Open a URL or search";
+        return switch (action) {
+            case FILES -> "Open a file or folder";
+            case TERMINAL -> "Open a terminal";
+            case ADDRESS -> "Open a URL or search";
+        };
     }
 
     private static void bar(PoseStack pose, MultiBufferSource buffers, ScreenView view) {
